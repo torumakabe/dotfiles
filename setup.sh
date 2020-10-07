@@ -7,6 +7,11 @@ files="bashrc bash_profile zshrc gitconfig"
 mkdir -p $olddir
 cd $dir
 
+for file in $files; do
+    mv ~/.$file ~/dotfiles_old/
+    ln -s $dir/$file ~/.$file
+done
+
 # Install brew
 /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 
@@ -25,16 +30,13 @@ brew install azure-cli
 brew install go
 brew install python3
 brew install n
-brew install tmux
 brew install htop
-brew install reattach-to-user-namespace
 brew install kubernetes-cli
 brew install kubernetes-helm
 brew install graphviz
 brew install direnv
 brew install peco
 brew install ghq
-brew install hub
 brew install zsh-completions
 brew install jq
 brew install fluxctl
@@ -46,8 +48,6 @@ brew install hashicorp/tap/terraform
 
 brew tap azure/functions
 brew install azure-functions-core-tools
-
-brew tap homebrew/cask-cask
 
 brew tap microsoft/git
 brew cask install git-credential-manager-core
