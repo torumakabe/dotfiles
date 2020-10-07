@@ -1,17 +1,16 @@
-# Configure WSL tools
+# Configure macOS tools
 
-## Setup Windows by Boxstarter
-
+## Install GCM and Login
 ```
-Set-ExecutionPolicy RemoteSigned
-. { iwr -useb http://boxstarter.org/bootstrapper.ps1 } | iex; get-boxstarter -Force
-Install-BoxstarterPackage -PackageName "https://raw.githubusercontent.com/ToruMakabe/dotfiles/wsl/boxstarter.txt"  -DisableReboots
+brew tap microsoft/git
+brew cask install git-credential-manager-core
 ```
 
-## Setup (in WSL)
+## Setup
 
 ```
 git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
 cd ~/dotfiles
+git switch macos
 ./setup.sh
 ```

@@ -1,14 +1,15 @@
 [ghq]
-	root = /mnt/c/Users/tomakabe/workspace
+	root = /Users/tomakabe/workspace/
 	user = ToruMakabe
 [user]
 	name = ToruMakabe
 	email = tomakabe@microsoft.com
-[credential]
-	helper = /mnt/c/Program\\ Files/Git/mingw64/libexec/git-core/git-credential-manager.exe
-	helper = cache --timeout 30000
 [core]
 	autocrlf = input
 	fileMode = false
 [pull]
 	rebase = true
+[credential "https://dev.azure.com"]
+	useHttpPath = true
+[credential]
+	helper = manager-core

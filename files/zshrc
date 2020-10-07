@@ -1,7 +1,16 @@
 PROMPT="%m@%n "
 
-if [ -e $HOME/zsh-completions/src ]; then
-  fpath=($HOME/zsh-completions/src $fpath)
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+
+if [ -e /usr/local/share/zsh-completions ]; then
+    fpath=(/usr/local/share/zsh-completions $fpath)
+fi
+
+if type brew &>/dev/null; then
+  FPATH=$(brew --prefix)/share/zsh/site-functions:$FPATH
+
+  autoload -Uz compinit
+  compinit
 fi
 
 autoload -Uz +X compinit && compinit -u
@@ -12,8 +21,8 @@ export DOCKER_BUILDKIT=1
 
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
-export LC_ALL=C.UTF-8
-export LANG=C.UTF-8
+export PATH=$PATH:$HOME/.cargo/bin
+export PATH=$PATH:/usr/local/texlive/2020/bin/x86_64-darwin
 export FLUX_FORWARD_NAMESPACE=flux
 
 alias ll="ls -asl"
@@ -36,4 +45,6 @@ export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 source <(helm completion zsh)
 
-complete -o nospace -C /usr/bin/terraform terraform
+complete -o nospace -C /usr/local/bin/terraform terraform
+
+export PATH="$PATH:/Users/tomakabe/.dotnet/tools"
