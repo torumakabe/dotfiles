@@ -1,11 +1,5 @@
 # Configure macOS tools
 
-## Install GCM and Login
-```
-brew tap microsoft/git
-brew cask install git-credential-manager-core
-```
-
 ## Setup
 
 ```

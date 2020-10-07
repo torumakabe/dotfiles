@@ -35,12 +35,9 @@ brew install direnv
 brew install peco
 brew install ghq
 brew install hub
-brew install zsh
 brew install zsh-completions
 brew install jq
 brew install fluxctl
-brew install gpg
-brew install pinentry-mac
 brew install watch
 
 brew install github/gh/gh
@@ -51,6 +48,9 @@ brew tap azure/functions
 brew install azure-functions-core-tools
 
 brew tap homebrew/cask-cask
+
+brew tap microsoft/git
+brew cask install git-credential-manager-core
 
 brew cask install google-chrome
 brew cask install docker
