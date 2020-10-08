@@ -12,16 +12,29 @@ for file in $files; do
     ln -s $dir/$file ~/.$file
 done
 
+if [ $# = 0 ]
+then
+  echo ''
+  echo "Setup completed! (Link only)"
+  exit 0
+fi
+
+if [ $1 != "install-tools" ]
+then
+  echo ''
+  echo "Invalid parameter"
+  exit 1
+fi
+
 echo "Updating package lists..."
 sudo apt-get update
 
 # Installing & config git
-if [ $(lsb_release -is) = "Ubuntu" ]
-then
-  echo ''
-  echo "Now installing git..."
-  sudo apt-get install git -y
-fi
+
+echo ''
+echo "Now installing git..."
+sudo apt-get install git -y
+
 
 # Installing bash completion
 echo ''
@@ -53,22 +66,19 @@ echo ''
 echo "Now installing kubectl..."
 sudo apt-get install -y apt-transport-https
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee -a /etc/apt/sources.list.d/kubernetes.list
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 sudo apt-get update
 sudo apt-get install -y kubectl
 
 # Docker CE Install
-if [ $(lsb_release -is) = "Ubuntu" ]
-then
-  echo ''
-  echo "Now installing Docker Client..."
-  sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common gnupg-agent
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-  sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-  sudo apt-get update
-  sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-  sudo usermod -aG docker $USER
-fi
+echo ''
+echo "Now installing Docker Client..."
+sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common gnupg-agent
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+sudo usermod -aG docker $USER
 
 # Golang Install
 echo ''

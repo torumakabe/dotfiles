@@ -5,8 +5,8 @@
 	name = ToruMakabe
 	email = tomakabe@microsoft.com
 [credential]
-	helper = /mnt/c/Program\\ Files/Git/mingw64/libexec/git-core/git-credential-manager.exe
 	helper = cache --timeout 30000
+	helper = /mnt/c/Program\\ Files/Git/mingw64/libexec/git-core/git-credential-manager.exe
 [core]
 	autocrlf = input
 	fileMode = false
