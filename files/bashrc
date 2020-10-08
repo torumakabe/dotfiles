@@ -115,24 +115,3 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
-
-export DOCKER_HOST=tcp://0.0.0.0:2375
-
-export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:~/.local/bin
-export LC_ALL=C.UTF-8
-export LANG=C.UTF-8
-
-function peco-cd-ghq {
-  cd "$( ghq list --full-path | peco)"
-}
-
-alias pcd='peco-cd-ghq'
-alias phist='history | peco'
-
-PS1='$ '
-
-source <(kubectl completion bash)
-source <(helm completion bash)
-complete -o nospace -C /usr/local/bin/terraform terraform
-eval "$(direnv hook bash)"
