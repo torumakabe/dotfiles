@@ -1,4 +1,4 @@
-# Configure WSL/GitHub Codespaces tools
+# Configure WSL
 
 ## Setup Windows by Boxstarter
 
