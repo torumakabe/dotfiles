@@ -1,7 +1,5 @@
 PROMPT="%m@%n "
 
-export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/usr/local/sbin:/sbin
-
 if [ -e /usr/local/share/zsh-completions ]; then
     fpath=(/usr/local/share/zsh-completions $fpath)
 fi
@@ -16,16 +14,18 @@ fi
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
 
-#export DOCKER_HOST=tcp://0.0.0.0:2375
-export DOCKER_BUILDKIT=1
+alias ll="ls -asl"
 
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/usr/local/sbin:/sbin
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$HOME/.cargo/bin
+export PATH=$PATH:$HOME/.dotnet/tools
 export PATH=$PATH:/usr/local/texlive/2020/bin/x86_64-darwin
 export FLUX_FORWARD_NAMESPACE=flux
 
-alias ll="ls -asl"
+#export DOCKER_HOST=tcp://0.0.0.0:2375
+export DOCKER_BUILDKIT=1
 
 function peco-cd-ghq {
   cd "$( ghq list --full-path | peco)"
@@ -44,5 +44,3 @@ export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 source <(helm completion zsh)
 
 complete -o nospace -C /usr/local/bin/terraform terraform
-
-export PATH="$PATH:/Users/tomakabe/.dotnet/tools"
