@@ -7,8 +7,7 @@ fi
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
 
-#export DOCKER_HOST=tcp://0.0.0.0:2375
-export DOCKER_BUILDKIT=1
+alias ll="ls -asl"
 
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
@@ -16,7 +15,8 @@ export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 export FLUX_FORWARD_NAMESPACE=flux
 
-alias ll="ls -asl"
+#export DOCKER_HOST=tcp://0.0.0.0:2375
+export DOCKER_BUILDKIT=1
 
 function peco-cd-ghq {
   cd "$( ghq list --full-path | peco)"
