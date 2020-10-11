@@ -9,10 +9,11 @@ autoload -Uz +X bashcompinit && bashcompinit
 
 alias ll="ls -asl"
 
-export GOPATH=$HOME/go
-export PATH=$PATH:$GOPATH/bin
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:$HOME/.cargo/bin
 export FLUX_FORWARD_NAMESPACE=flux
 
 #export DOCKER_HOST=tcp://0.0.0.0:2375
