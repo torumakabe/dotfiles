@@ -19,13 +19,6 @@ export FLUX_FORWARD_NAMESPACE=flux
 #export DOCKER_HOST=tcp://0.0.0.0:2375
 export DOCKER_BUILDKIT=1
 
-function peco-cd-ghq {
-  cd "$( ghq list --full-path | peco)"
-}
-
-alias pcd='peco-cd-ghq'
-alias phist='history | peco'
-
 source /etc/bash_completion.d/azure-cli
 
 source <(kubectl completion zsh)
