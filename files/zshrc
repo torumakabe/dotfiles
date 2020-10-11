@@ -29,8 +29,6 @@ source /etc/bash_completion.d/azure-cli
 
 source <(kubectl completion zsh)
 alias k=kubectl
-# Workaround https://github.com/docker/for-win/issues/6391
-alias kubectl="/usr/bin/kubectl"
 complete -o default -F __start_kubectl k
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
