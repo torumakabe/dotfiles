@@ -13,3 +13,7 @@
 	useHttpPath = true
 [credential]
 	helper = manager-core
+[fetch]
+	prune = true
+[format]
+	signoff = true
