@@ -11,3 +11,7 @@
 	fileMode = false
 [pull]
 	rebase = true
+[fetch]
+	prune = true
+[format]
+	signoff = true
