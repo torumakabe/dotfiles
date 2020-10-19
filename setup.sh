@@ -28,8 +28,6 @@ then
   exit 1
 fi
 
-sudo cp ./wsl.conf /etc/wsl.conf
-
 echo "Updating package lists..."
 sudo apt-get update
 
