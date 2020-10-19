@@ -85,7 +85,7 @@ sudo usermod -aG docker $USER
 # Golang Install
 echo ''
 echo "Now installing golang..."
-#sudo add-apt-repository ppa:longsleep/golang-backports -y
+sudo add-apt-repository ppa:longsleep/golang-backports -y
 sudo sudo apt-get install golang-go -y
 
 # GitHub CLI Install
