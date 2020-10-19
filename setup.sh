@@ -8,7 +8,9 @@ mkdir -p $olddir
 cd $dir
 
 for file in $files; do
-    mv ~/.$file ~/dotfiles_old/
+    if [ -f ~/.$file ]; then
+      mv ~/.$file ~/dotfiles_old/
+    fi
     ln -s $dir/$file ~/.$file
 done
 
