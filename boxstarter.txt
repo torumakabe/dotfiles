@@ -41,7 +41,6 @@ choco install microsoftazurestorageexplorer
 choco install graphviz
 choco install googlechrome
 choco install firefox
-choco install docker-desktop
 choco install microsoft-teams
 choco install slack
 choco install vscode
