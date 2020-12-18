@@ -37,14 +37,10 @@ choco install nodejs
 choco install dotnetcore-sdk
 choco install kubernetes-cli
 choco install azure-cli
-choco install microsoftazurestorageexplorer
 choco install graphviz
 choco install googlechrome
-choco install firefox
 choco install microsoft-teams
 choco install slack
-choco install vscode
-choco install terraform
 choco install postman
 choco install cascadiamonopl
 
