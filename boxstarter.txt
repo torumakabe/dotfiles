@@ -39,7 +39,6 @@ choco install kubernetes-cli
 choco install azure-cli
 choco install graphviz
 choco install googlechrome
-choco install microsoft-teams
 choco install slack
 choco install postman
 choco install cascadiamonopl
