@@ -15,9 +15,9 @@ Add-WindowsCapability -Online -Name OpenSSH.Client
 #
 # Check it before the next installation
 #
-choco install Microsoft-Hyper-V-All -source windowsFeatures
-choco install Microsoft-Windows-Subsystem-Linux -source windowsfeatures
-choco install VirtualMachinePlatform -source windowsfeatures
+# choco install Microsoft-Hyper-V-All -source windowsFeatures
+# choco install Microsoft-Windows-Subsystem-Linux -source windowsfeatures
+# choco install VirtualMachinePlatform -source windowsfeatures
 # choco install containers -source windowsfeatures
 # Exclude the following steps about installing Ubuntu when something error happened (still in flux)
 # Invoke-WebRequest -Uri https://aka.ms/wsl-ubuntu-1804 -OutFile ~/Ubuntu.appx -UseBasicParsing
