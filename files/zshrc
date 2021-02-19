@@ -1,4 +1,4 @@
-PROMPT="%m@%n "
+PROMPT="%n@%m "
 
 if [ -e $HOME/zsh-completions/src ]; then
   fpath=($HOME/zsh-completions/src $fpath)
