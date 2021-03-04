@@ -41,7 +41,6 @@ choco install graphviz
 choco install googlechrome
 choco install slack
 choco install postman
-choco install cascadiamonopl
 
 #--- Config Git ---
 git config --global core.autocrlf input
