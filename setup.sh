@@ -52,7 +52,6 @@ brew tap azure/functions
 brew install azure-functions-core-tools
 
 brew tap microsoft/git
-brew cask install git-credential-manager-core
 
 brew cask install google-chrome
 brew cask install docker
