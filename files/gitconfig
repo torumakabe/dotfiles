@@ -9,10 +9,6 @@
 	fileMode = false
 [pull]
 	rebase = true
-[credential "https://dev.azure.com"]
-	useHttpPath = true
-[credential]
-	helper = manager-core
 [fetch]
 	prune = true
 [format]
