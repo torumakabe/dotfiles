@@ -2,7 +2,7 @@
 
 dir=~/dotfiles/files
 olddir=~/dotfiles_old
-files="bashrc bash_profile zshrc gitconfig"
+files="bashrc bash_profile zshrc zprofile gitconfig"
 
 mkdir -p $olddir
 cd $dir
@@ -43,23 +43,20 @@ brew install zsh-completions
 brew install jq
 brew install fluxctl
 brew install watch
-
-brew install github/gh/gh
+brew install gh
 
 brew install hashicorp/tap/terraform
 
 brew tap azure/functions
-brew install azure-functions-core-tools
+brew install azure-functions-core-tools@3
 
-brew tap microsoft/git
-
-brew cask install google-chrome
-brew cask install docker
-brew cask install visual-studio-code
-brew cask install slack
-brew cask install postman
-brew cask install microsoft-azure-storage-explorer
-brew cask install dotnet-sdk
+brew install --cask google-chrome
+brew install --cask docker
+brew install --cask visual-studio-code
+brew install --cask slack
+brew install --cask postman
+brew install --cask microsoft-azure-storage-explorer
+brew install --cask dotnet-sdk
 ln -s /usr/local/share/dotnet/dotnet /usr/local/bin/
 
 echo ''
