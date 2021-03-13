@@ -27,7 +27,6 @@ brew install git && brew install bash-completion
 
 # Setup other brew packages
 echo "Now installing and configuring other brew packages..."
-brew install hugo
 brew install azure-cli
 brew install go
 brew install python3
@@ -35,8 +34,6 @@ brew install n
 brew install htop
 brew install kubernetes-cli
 brew install kubernetes-helm
-brew install graphviz
-brew install direnv
 brew install peco
 brew install ghq
 brew install zsh-completions
@@ -44,9 +41,10 @@ brew install jq
 brew install fluxctl
 brew install watch
 brew install gh
+brew install terraform
 
-brew install hashicorp/tap/terraform
-
+# temporarily disable for M1
+<< 'MULTILINE-COMMENT'
 brew tap azure/functions
 brew install azure-functions-core-tools@3
 
@@ -58,6 +56,7 @@ brew install --cask postman
 brew install --cask microsoft-azure-storage-explorer
 brew install --cask dotnet-sdk
 ln -s /usr/local/share/dotnet/dotnet /usr/local/bin/
+MULTILINE-COMMENT
 
 echo ''
 echo 'Setup completed!'
