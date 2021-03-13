@@ -37,7 +37,6 @@ choco install nodejs
 choco install dotnetcore-sdk
 choco install kubernetes-cli
 choco install azure-cli
-choco install graphviz
 choco install googlechrome
 choco install slack
 choco install postman
