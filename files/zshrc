@@ -17,17 +17,17 @@ fi
 
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
+if [ -f "$HOME/.zsh/completions/az.completion" ]; then
+  source $HOME/.zsh/completions/az.completion
+fi
 
 alias ll="ls -asl"
 
-export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/usr/local/sbin:/sbin
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$HOME/.cargo/bin
-export PATH=$PATH:$HOME/.dotnet/tools
 export FLUX_FORWARD_NAMESPACE=flux
 
-#export DOCKER_HOST=tcp://0.0.0.0:2375
 export DOCKER_BUILDKIT=1
 
 function peco-cd-ghq {
@@ -36,8 +36,6 @@ function peco-cd-ghq {
 
 alias pcd='peco-cd-ghq'
 alias phist='history | peco'
-
-source /etc/bash_completion.d/azure-cli
 
 source <(kubectl completion zsh)
 alias k=kubectl

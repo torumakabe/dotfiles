@@ -21,15 +21,16 @@ brew update
 echo ''
 echo "Now installing git and bash-completion..."
 brew install git && brew install bash-completion
+mkdir -p ~/.zsh/completions
+curl https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion -o ~/.zsh/completions/az.completion
 
 # Setup other brew packages
 echo "Now installing and configuring other brew packages..."
+brew install python3
 brew install azure-cli
 brew install go
-brew install python3
 brew install n
 brew install htop
-brew install kubernetes-cli
 brew install kubernetes-helm
 brew install peco
 brew install ghq
@@ -42,6 +43,8 @@ brew install terraform
 
 # temporarily disable for M1
 << 'MULTILINE-COMMENT'
+brew install kubernetes-cli
+
 brew tap azure/functions
 brew install azure-functions-core-tools@3
 
@@ -50,9 +53,6 @@ brew install --cask docker
 brew install --cask visual-studio-code
 brew install --cask slack
 brew install --cask postman
-brew install --cask microsoft-azure-storage-explorer
-brew install --cask dotnet-sdk
-ln -s /usr/local/share/dotnet/dotnet /usr/local/bin/
 MULTILINE-COMMENT
 
 echo ''
