@@ -40,7 +40,6 @@ alias phist='history | peco'
 source <(kubectl completion zsh)
 alias k=kubectl
 complete -o default -F __start_kubectl k
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 source <(helm completion zsh)
 
