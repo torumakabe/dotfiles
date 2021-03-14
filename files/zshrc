@@ -17,7 +17,6 @@ export PATH=$PATH:$HOME/.cargo/bin
 export PATH=$PATH:$HOME/.dotnet/tools
 export FLUX_FORWARD_NAMESPACE=flux
 
-#export DOCKER_HOST=tcp://0.0.0.0:2375
 export DOCKER_BUILDKIT=1
 
 function peco-cd-ghq {
@@ -34,7 +33,6 @@ alias k=kubectl
 # Workaround https://github.com/docker/for-win/issues/6391
 alias kubectl="/usr/bin/kubectl"
 complete -o default -F __start_kubectl k
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 source <(helm completion zsh)
 
