@@ -14,9 +14,6 @@ for file in $files; do
     ln -s $dir/$file ~/.$file
 done
 
-# Install brew
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
 echo "Updating package lists..."
 brew update
 
