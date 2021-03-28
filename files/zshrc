@@ -1,4 +1,15 @@
-PROMPT="%m@%n "
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:$HOME/.cargo/bin
+export FLUX_FORWARD_NAMESPACE=flux
+export DOCKER_BUILDKIT=1
+
+PROMPT="%# "
+
+alias ll="ls -asl"
+alias k=kubectl
 
 if [ -e $HOME/zsh-completions/src ]; then
   fpath=($HOME/zsh-completions/src $fpath)
@@ -7,22 +18,9 @@ fi
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
 
-alias ll="ls -asl"
-
-export LC_ALL=C.UTF-8
-export LANG=C.UTF-8
-export GOPATH=$HOME/go
-export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:$HOME/.cargo/bin
-export FLUX_FORWARD_NAMESPACE=flux
-
-#export DOCKER_HOST=tcp://0.0.0.0:2375
-export DOCKER_BUILDKIT=1
-
 source /etc/bash_completion.d/azure-cli
 
 source <(kubectl completion zsh)
-alias k=kubectl
 complete -o default -F __start_kubectl k
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
