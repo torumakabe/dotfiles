@@ -1,4 +1,24 @@
-PROMPT="%n@%m "
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:$HOME/.cargo/bin
+export PATH=$PATH:$HOME/.dotnet/tools
+export FLUX_FORWARD_NAMESPACE=flux
+export DOCKER_BUILDKIT=1
+
+function peco-cd-ghq {
+  cd "$( ghq list --full-path | peco)"
+}
+
+PROMPT="%# "
+
+alias ll="ls -asl"
+alias pcd='peco-cd-ghq'
+alias phist='history | peco'
+alias k=kubectl
+# Workaround https://github.com/docker/for-win/issues/6391
+alias kubectl="/usr/bin/kubectl"
 
 if [ -e $HOME/zsh-completions/src ]; then
   fpath=($HOME/zsh-completions/src $fpath)
@@ -7,31 +27,9 @@ fi
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
 
-alias ll="ls -asl"
-
-export LC_ALL=C.UTF-8
-export LANG=C.UTF-8
-export GOPATH=$HOME/go
-export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:$HOME/.cargo/bin
-export PATH=$PATH:$HOME/.dotnet/tools
-export FLUX_FORWARD_NAMESPACE=flux
-
-export DOCKER_BUILDKIT=1
-
-function peco-cd-ghq {
-  cd "$( ghq list --full-path | peco)"
-}
-
-alias pcd='peco-cd-ghq'
-alias phist='history | peco'
-
 source /etc/bash_completion.d/azure-cli
 
 source <(kubectl completion zsh)
-alias k=kubectl
-# Workaround https://github.com/docker/for-win/issues/6391
-alias kubectl="/usr/bin/kubectl"
 complete -o default -F __start_kubectl k
 
 source <(helm completion zsh)
