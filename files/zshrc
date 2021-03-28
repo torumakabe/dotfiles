@@ -1,8 +1,23 @@
 alias arm="exec arch -arch arm64e /bin/zsh --login"
 alias x64="exec arch -arch x86_64 /bin/zsh --login"
 
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:$HOME/.cargo/bin
+export FLUX_FORWARD_NAMESPACE=flux
+export DOCKER_BUILDKIT=1
+
+function peco-cd-ghq {
+  cd "$( ghq list --full-path | peco)"
+}
+
 ARCH=$(uname -m)
 PROMPT="${ARCH} %# "
+
+alias ll="ls -asl"
+alias pcd='peco-cd-ghq'
+alias phist='history | peco'
+alias k=kubectl
 
 if [ -e /usr/local/share/zsh-completions ]; then
     fpath=(/usr/local/share/zsh-completions $fpath)
@@ -22,24 +37,7 @@ if [ -f "$HOME/.zsh/completions/az.completion" ]; then
   source $HOME/.zsh/completions/az.completion
 fi
 
-alias ll="ls -asl"
-
-export GOPATH=$HOME/go
-export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:$HOME/.cargo/bin
-export FLUX_FORWARD_NAMESPACE=flux
-
-export DOCKER_BUILDKIT=1
-
-function peco-cd-ghq {
-  cd "$( ghq list --full-path | peco)"
-}
-
-alias pcd='peco-cd-ghq'
-alias phist='history | peco'
-
 source <(kubectl completion zsh)
-alias k=kubectl
 complete -o default -F __start_kubectl k
 
 source <(helm completion zsh)
