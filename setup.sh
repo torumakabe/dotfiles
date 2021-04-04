@@ -16,5 +16,7 @@ for file in $files; do
     ln -s $dir/$file ~/.$file
 done
 
+sudo chsh -s /usr/bin/zsh codespace
+
 echo ''
 echo 'Setup completed!'
