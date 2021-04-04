@@ -4,6 +4,7 @@ dir=~/dotfiles/files
 olddir=~/dotfiles_old
 files="bash_profile zshrc gitconfig"
 
+mkdir -p $dir
 mkdir -p $olddir
 cd $dir
 
