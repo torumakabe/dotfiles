@@ -1,9 +1,3 @@
-# Configure basic dotfiles
+# For GitHub Codespaces
 
-## Setup
-
-```
-git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
-cd ~/dotfiles
-./setup.sh
-```
+For other platform such as macOS and WSL, see each branch.
