@@ -6,9 +6,15 @@ export PATH=$PATH:$HOME/.cargo/bin
 export FLUX_FORWARD_NAMESPACE=flux
 export DOCKER_BUILDKIT=1
 
+function peco-cd-ghq {
+  cd "$( ghq list --full-path | peco)"
+}
+
 PROMPT="%# "
 
 alias ll="ls -asl"
+alias pcd='peco-cd-ghq'
+alias phist='history | peco'
 alias k=kubectl
 
 if [ -e $HOME/zsh-completions/src ]; then
@@ -22,7 +28,6 @@ source /etc/bash_completion.d/azure-cli
 
 source <(kubectl completion zsh)
 complete -o default -F __start_kubectl k
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 source <(helm completion zsh)
 
