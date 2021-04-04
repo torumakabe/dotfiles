@@ -3,7 +3,6 @@ export LANG=C.UTF-8
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 export PATH=$PATH:$HOME/.cargo/bin
-export PATH=$PATH:$HOME/.dotnet/tools
 export FLUX_FORWARD_NAMESPACE=flux
 export DOCKER_BUILDKIT=1
 
