@@ -1,4 +1,4 @@
-# Configure GitHub Codespaces tools
+# Configure basic dotfiles
 
 ## Setup
 
