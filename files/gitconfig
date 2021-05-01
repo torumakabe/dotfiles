@@ -13,3 +13,5 @@
 	prune = true
 [format]
 	signoff = true
+[init]
+	defaultBranch = main
