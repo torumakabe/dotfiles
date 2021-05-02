@@ -3,7 +3,6 @@ alias x64="exec arch -arch x86_64 /bin/zsh --login"
 
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
-export PATH=$PATH:$HOME/.cargo/bin
 export FLUX_FORWARD_NAMESPACE=flux
 export DOCKER_BUILDKIT=1
 
@@ -43,3 +42,5 @@ complete -o default -F __start_kubectl k
 source <(helm completion zsh)
 
 complete -o nospace -C /usr/local/bin/terraform terraform
+
+. "$HOME/.cargo/env"
