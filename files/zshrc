@@ -11,7 +11,7 @@ function peco-cd-ghq {
 
 PROMPT="%# "
 
-alias ll="ls -asl"
+alias ll="ls -aslh"
 alias pcd='peco-cd-ghq'
 alias phist='history | peco'
 alias k=kubectl
