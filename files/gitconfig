@@ -21,4 +21,4 @@
 	autocorrect = 20
 [alias]
 	s = status
-	d = status
+	d = diff
