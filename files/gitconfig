@@ -15,3 +15,8 @@
 	signoff = true
 [init]
 	defaultBranch = main
+[help]
+	autocorrect = 20
+[alias]
+	s = status
+	d = diff
