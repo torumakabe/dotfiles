@@ -1,3 +1,6 @@
+setopt autocd
+setopt autopushd
+
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 export GOPATH=$HOME/go
@@ -11,7 +14,7 @@ function peco-cd-ghq {
 
 PROMPT="%# "
 
-alias ll="ls -aslh"
+alias ll="ls -alh"
 alias pcd='peco-cd-ghq'
 alias phist='history | peco'
 alias k=kubectl
