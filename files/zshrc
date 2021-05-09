@@ -1,6 +1,9 @@
 alias arm="exec arch -arch arm64e /bin/zsh --login"
 alias x64="exec arch -arch x86_64 /bin/zsh --login"
 
+setopt autocd
+setopt autopushd
+
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 export FLUX_FORWARD_NAMESPACE=flux
@@ -13,7 +16,7 @@ function peco-cd-ghq {
 ARCH=$(uname -m)
 PROMPT="${ARCH} %# "
 
-alias ll="ls -aslh"
+alias ll="ls -alh"
 alias pcd='peco-cd-ghq'
 alias phist='history | peco'
 alias k=kubectl
