@@ -20,6 +20,7 @@ alias phist='history | peco'
 alias k=kubectl
 # Workaround https://github.com/docker/for-win/issues/6391
 alias kubectl="/usr/bin/kubectl"
+alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
 if [ -e $HOME/zsh-completions/src ]; then
   fpath=($HOME/zsh-completions/src $fpath)
