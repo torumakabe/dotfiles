@@ -39,3 +39,5 @@ source <(helm completion zsh)
 complete -o nospace -C /usr/bin/terraform terraform
 
 . "$HOME/.cargo/env"
+
+command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
