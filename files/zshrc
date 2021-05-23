@@ -5,6 +5,7 @@ export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
+export PATH=$PATH:'/mnt/c/Users/tomakabe/AppData/Local/Programs/Microsoft VS Code/bin'
 export DOCKER_BUILDKIT=1
 
 function peco-cd-ghq {
