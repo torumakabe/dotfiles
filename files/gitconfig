@@ -9,6 +9,7 @@
 [core]
 	autocrlf = input
 	fileMode = false
+	editor = vim -c \"set fenc=utf-8\"
 [pull]
 	rebase = true
 [fetch]
