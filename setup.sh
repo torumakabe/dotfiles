@@ -31,6 +31,7 @@ brew install azure-cli
 brew install go
 brew install n
 brew install htop
+brew install kubernetes-cli
 brew install kubernetes-helm
 brew install peco
 brew install ghq
@@ -44,8 +45,6 @@ brew install fluxcd/tap/flux
 
 # temporarily disable for M1
 << 'MULTILINE-COMMENT'
-brew install kubernetes-cli
-
 brew tap azure/functions
 brew install azure-functions-core-tools@3
 
