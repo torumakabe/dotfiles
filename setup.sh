@@ -36,10 +36,11 @@ brew install peco
 brew install ghq
 brew install zsh-completions
 brew install jq
-brew install fluxctl
 brew install watch
 brew install gh
 brew install terraform
+
+brew install fluxcd/tap/flux
 
 # temporarily disable for M1
 << 'MULTILINE-COMMENT'
