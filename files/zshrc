@@ -39,6 +39,11 @@ if [ -f "$HOME/.zsh/completions/az.completion" ]; then
   source $HOME/.zsh/completions/az.completion
 fi
 
+if [ -f "$HOME/.zfunc/_rustup" ]; then
+  FPATH=$HOME/.zfunc:$FPATH
+  compinit
+fi
+
 source <(kubectl completion zsh)
 complete -o default -F __start_kubectl k
 
