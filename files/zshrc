@@ -25,14 +25,8 @@ if [ -e /usr/local/share/zsh-completions ]; then
     fpath=(/usr/local/share/zsh-completions $fpath)
 fi
 
-autoload -Uz +X compinit && compinit -u
-autoload -Uz +X bashcompinit && bashcompinit
-
 if type brew &>/dev/null; then
   FPATH=$(brew --prefix)/share/zsh/site-functions:$FPATH
-
-  autoload -Uz compinit
-  compinit
 fi
 
 if [ -f "$HOME/.zsh/completions/az.completion" ]; then
@@ -41,8 +35,10 @@ fi
 
 if [ -f "$HOME/.zfunc/_rustup" ]; then
   FPATH=$HOME/.zfunc:$FPATH
-  compinit
 fi
+
+autoload -Uz +X compinit && compinit -u
+autoload -Uz +X bashcompinit && bashcompinit
 
 source <(kubectl completion zsh)
 complete -o default -F __start_kubectl k
