@@ -8,23 +8,10 @@ export PATH=$PATH:$GOPATH/bin
 export DOCKER_BUILDKIT=1
 export EDITOR=vim
 
-function peco-cd-ghq {
-  cd "$( ghq list --full-path | peco)"
-}
-
 PROMPT="%# "
 
 alias ll="ls -alh"
-alias pcd='peco-cd-ghq'
-alias phist='history | peco'
 alias k=kubectl
-
-if [ -e $HOME/zsh-completions/src ]; then
-  fpath=($HOME/zsh-completions/src $fpath)
-fi
-
-autoload -Uz +X compinit && compinit -u
-autoload -Uz +X bashcompinit && bashcompinit
 
 source /etc/bash_completion.d/azure-cli
 
@@ -32,7 +19,3 @@ source <(kubectl completion zsh)
 complete -o default -F __start_kubectl k
 
 source <(helm completion zsh)
-
-complete -o nospace -C /usr/bin/terraform terraform
-
-. "$HOME/.cargo/env"
