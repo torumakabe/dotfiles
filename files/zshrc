@@ -29,16 +29,16 @@ if type brew &>/dev/null; then
   FPATH=$(brew --prefix)/share/zsh/site-functions:$FPATH
 fi
 
-if [ -f "$HOME/.zsh/completions/az.completion" ]; then
-  source $HOME/.zsh/completions/az.completion
-fi
-
 if [ -f "$HOME/.zfunc/_rustup" ]; then
   FPATH=$HOME/.zfunc:$FPATH
 fi
 
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
+
+if [ -f "$HOME/.zsh/completions/az.completion" ]; then
+  source $HOME/.zsh/completions/az.completion
+fi
 
 source <(kubectl completion zsh)
 complete -o default -F __start_kubectl k
