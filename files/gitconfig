@@ -21,3 +21,4 @@
 [alias]
 	s = status
 	d = diff
+	l = log --oneline
