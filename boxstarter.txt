@@ -1,0 +1,49 @@
+# Learn more: http://boxstarter.org/Learn/WebLauncher
+# Install manually (VS, Azure PS, 1Password, Driver Management Tool)
+
+#--- Windows Settings ---
+Disable-GameBarTips
+
+Set-WindowsExplorerOptions -EnableShowHiddenFilesFoldersDrives -EnableShowFileExtensions
+Set-TaskbarOptions -Size Small -Dock Bottom -Combine Full -Lock
+
+Set-ItemProperty -Path HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced -Name NavPaneShowAllFolders -Value 1
+
+Add-WindowsCapability -Online -Name OpenSSH.Client
+
+#--- Windows Subsystems/Features ---
+#
+# Check it before the next installation
+#
+# choco install Microsoft-Hyper-V-All -source windowsFeatures
+# choco install Microsoft-Windows-Subsystem-Linux -source windowsfeatures
+# choco install VirtualMachinePlatform -source windowsfeatures
+# choco install containers -source windowsfeatures
+# Exclude the following steps about installing Ubuntu when something error happened (still in flux)
+# Invoke-WebRequest -Uri https://aka.ms/wsl-ubuntu-1804 -OutFile ~/Ubuntu.appx -UseBasicParsing
+# Add-AppxPackage -Path ~/Ubuntu.appx
+# RefreshEnv
+# Ubuntu1804 install --root
+# Ubuntu1804 run apt update
+# Ubuntu1804 run apt upgrade -y
+
+#--- Tools & Apps ---
+choco install git.install
+choco install sysinternals
+choco install 7zip
+choco install powershell-core
+choco install golang
+choco install nodejs
+choco install dotnetcore-sdk
+choco install kubernetes-cli
+choco install azure-cli
+choco install googlechrome
+choco install slack
+choco install postman
+
+#--- Config Git ---
+git config --global core.autocrlf input
+
+#--- Restore Temporary Settings ---
+Enable-MicrosoftUpdate
+Install-WindowsUpdate -acceptEula
