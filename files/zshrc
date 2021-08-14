@@ -46,7 +46,7 @@ complete -o default -F __start_kubectl k
 
 source <(helm completion zsh)
 
-complete -o nospace -C /usr/local/bin/terraform terraform
+complete -o nospace -C /opt/homebrew/bin/terraform terraform
 
 . "$HOME/.cargo/env"
 
