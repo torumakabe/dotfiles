@@ -46,7 +46,11 @@ complete -o default -F __start_kubectl k
 
 source <(helm completion zsh)
 
+if [ "$ARCH" = "arm64e" ]; then
 complete -o nospace -C /opt/homebrew/bin/terraform terraform
+else
+complete -o nospace -C /usr/local/bin/terraform terraform
+fi
 
 . "$HOME/.cargo/env"
 
