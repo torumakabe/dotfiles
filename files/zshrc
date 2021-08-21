@@ -21,6 +21,7 @@ alias ll="ls -alh"
 alias jgit='jump-to-ghq-dir'
 alias phist='history | peco'
 alias k=kubectl
+alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
 if [ -e /usr/local/share/zsh-completions ]; then
     fpath=(/usr/local/share/zsh-completions $fpath)
