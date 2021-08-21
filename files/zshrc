@@ -10,14 +10,14 @@ export DOCKER_BUILDKIT=1
 export EDITOR=vim
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
-function peco-cd-ghq {
+function jump-to-ghq-dir {
   cd "$( ghq list --full-path | peco)"
 }
 
 PROMPT="%# "
 
 alias ll="ls -alh"
-alias pcd='peco-cd-ghq'
+alias jgit='jump-to-ghq-dir'
 alias phist='history | peco'
 alias k=kubectl
 # Workaround https://github.com/docker/for-win/issues/6391
@@ -26,6 +26,14 @@ alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terr
 
 if [ -e $HOME/.zsh-completions/src ]; then
   fpath=($HOME/.zsh-completions/src $fpath)
+fi
+
+if [ -f "$HOME/.zfunc/_rustup" ]; then
+  FPATH=$HOME/.zfunc:$FPATH
+fi
+
+if [ -s "$HOME/.autojump/etc/profile.d/autojump.sh" ]; then
+  source $HOME/.autojump/etc/profile.d/autojump.sh
 fi
 
 autoload -Uz +X compinit && compinit -u
