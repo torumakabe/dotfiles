@@ -34,6 +34,10 @@ if [ -f "$HOME/.zfunc/_rustup" ]; then
   FPATH=$HOME/.zfunc:$FPATH
 fi
 
+if [ -s "$HOME/.autojump/etc/profile.d/autojump.sh" ]; then
+  source $HOME/.autojump/etc/profile.d/autojump.sh
+fi
+
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
 
