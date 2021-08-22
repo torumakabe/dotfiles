@@ -23,6 +23,8 @@ alias phist='history | peco'
 alias k=kubectl
 alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
+eval "$(jump shell)"
+
 if [ -e /usr/local/share/zsh-completions ]; then
     fpath=(/usr/local/share/zsh-completions $fpath)
 fi
@@ -33,10 +35,6 @@ fi
 
 if [ -f "$HOME/.zfunc/_rustup" ]; then
   FPATH=$HOME/.zfunc:$FPATH
-fi
-
-if [ -s "$HOME/.autojump/etc/profile.d/autojump.sh" ]; then
-  source $HOME/.autojump/etc/profile.d/autojump.sh
 fi
 
 autoload -Uz +X compinit && compinit -u
