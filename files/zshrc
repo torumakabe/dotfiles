@@ -58,3 +58,5 @@ fi
 . "$HOME/.cargo/env"
 
 command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
