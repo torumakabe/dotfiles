@@ -1,17 +1,18 @@
 #!/bin/bash
+set -eo pipefail
 
 dir=~/dotfiles/files
 olddir=~/dotfiles_old
 files="bash_profile zshrc zprofile gitconfig"
 
 mkdir -p $olddir
-cd $dir
+cd $dir || exit
 
 for file in $files; do
-    if [ -f ~/.$file ]; then
-      mv ~/.$file ~/dotfiles_old/
+    if [ -f ~/."$file" ]; then
+      mv ~/."$file" ~/dotfiles_old/
     fi
-    ln -s $dir/$file ~/.$file
+    ln -s $dir/"$file" ~/."$file"
 done
 
 echo "Updating package lists..."
@@ -45,7 +46,7 @@ brew install jump
 brew install fluxcd/tap/flux
 
 # temporarily disable for M1
-<< 'MULTILINE-COMMENT'
+: << 'MULTILINE-COMMENT'
 brew tap azure/functions
 brew install azure-functions-core-tools@3
 
