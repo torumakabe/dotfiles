@@ -8,10 +8,10 @@ mkdir -p $olddir
 cd "$dir" || exit
 
 for file in $files; do
-    if [ -f ~/.$file ]; then
-      mv ~/.$file ~/dotfiles_old/
+    if [ -f ~/."$file" ]; then
+      mv ~/."$file" ~/dotfiles_old/
     fi
-    ln -s $dir/$file ~/.$file
+    ln -s $dir/"$file" ~/."$file"
 done
 
 if [ $# = 0 ]
@@ -21,7 +21,7 @@ then
   exit 0
 fi
 
-if [ $1 != "install-tools" ]
+if [ "$1" != "install-tools" ]
 then
   echo ''
   echo "Invalid parameter"
@@ -72,15 +72,26 @@ echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt
 sudo apt-get update
 sudo apt-get install -y kubectl
 
-# Docker CE Install
+# Docker Install
 echo ''
-echo "Now installing Docker Client..."
-sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common gnupg-agent
+echo "Now installing Docker..."
+sudo apt install --no-install-recommends apt-transport-https ca-certificates curl gnupg2
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-sudo usermod -aG docker $USER
+sudo usermod -aG docker "$USER"
+sudo groupmod -g 36257 docker
+DOCKER_DIR=/mnt/wsl/shared-docker
+mkdir -p "$DOCKER_DIR"
+chmod o=,g=rx "$DOCKER_DIR"
+sudo chgrp docker "$DOCKER_DIR"
+sudo mkdir /etc/docker/
+sudo tee /etc/docker/daemon.json << EOT
+{
+  "hosts": ["unix:///mnt/wsl/shared-docker/docker.sock"]
+}
+EOT
 
 # Golang Install
 echo ''
