@@ -5,7 +5,7 @@ olddir=~/dotfiles_old
 files="bash_profile zshrc gitconfig"
 
 mkdir -p $olddir
-cd $dir
+cd "$dir" || exit
 
 for file in $files; do
     if [ -f ~/.$file ]; then
@@ -49,7 +49,7 @@ echo ''
 echo "Now installing zsh & zsh-completion..."
 sudo apt-get install zsh -y
 git clone https://github.com/zsh-users/zsh-completions ~/.zsh-completions
-fpath=($HOME/.zsh-completions/src $fpath)
+fpath=("$HOME"/.zsh-completions/src "$fpath")
 rm ~/.zcompdump
 compinit -u
 
