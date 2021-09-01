@@ -81,17 +81,20 @@ sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubun
 sudo apt-get update
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io
 sudo usermod -aG docker "$USER"
-sudo groupmod -g 36257 docker
-DOCKER_DIR=/mnt/wsl/shared-docker
-mkdir -p "$DOCKER_DIR"
-chmod o=,g=rx "$DOCKER_DIR"
-sudo chgrp docker "$DOCKER_DIR"
-sudo mkdir /etc/docker/
-sudo tee /etc/docker/daemon.json << EOT
-{
-  "hosts": ["unix:///mnt/wsl/shared-docker/docker.sock"]
-}
-EOT
+
+# dockerd without docker desktop
+#
+# sudo groupmod -g 36257 docker
+# DOCKER_DIR=/mnt/wsl/shared-docker
+# mkdir -p "$DOCKER_DIR"
+# chmod o=,g=rx "$DOCKER_DIR"
+# sudo chgrp docker "$DOCKER_DIR"
+# sudo mkdir /etc/docker/
+# sudo tee /etc/docker/daemon.json << EOT
+# {
+#   "hosts": ["unix:///mnt/wsl/shared-docker/docker.sock"]
+# }
+# EOT
 
 # Golang Install
 echo ''
