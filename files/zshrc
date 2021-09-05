@@ -10,15 +10,10 @@ export DOCKER_BUILDKIT=1
 export EDITOR=vim
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
-function jump-to-ghq-dir {
-  cd "$( ghq list --full-path | peco)"
-}
-
 ARCH=$(uname -m)
 PROMPT="${ARCH} %# "
 
 alias ll="ls -alh"
-alias jgit='jump-to-ghq-dir'
 alias phist='history | peco'
 alias k=kubectl
 alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
