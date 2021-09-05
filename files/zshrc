@@ -9,14 +9,9 @@ export PATH=$PATH:'/mnt/c/Users/tomakabe/AppData/Local/Programs/Microsoft VS Cod
 export EDITOR=vim
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
-function jump-to-ghq-dir {
-  cd "$( ghq list --full-path | peco)"
-}
-
 PROMPT="%# "
 
 alias ll="ls -alh"
-alias jgit='jump-to-ghq-dir'
 alias phist='history | peco'
 alias k=kubectl
 # Workaround https://github.com/docker/for-win/issues/6391
