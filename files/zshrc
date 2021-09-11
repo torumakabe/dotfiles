@@ -11,4 +11,4 @@ PROMPT="%# "
 
 alias ll="ls -alh"
 
-eval "$(jump shell)"
+eval "$(jump shell zsh)"
