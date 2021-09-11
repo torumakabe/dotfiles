@@ -13,6 +13,8 @@ PROMPT="%# "
 alias ll="ls -alh"
 alias k=kubectl
 
+eval "$(jump shell)"
+
 source /etc/bash_completion.d/azure-cli
 
 source <(kubectl completion zsh)
