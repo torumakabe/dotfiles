@@ -18,7 +18,7 @@ alias k=kubectl
 alias kubectl="/usr/bin/kubectl"
 alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
-eval "$(jump shell)"
+eval "$(jump shell zsh)"
 
 if [ -e $HOME/.zsh-completions/src ]; then
   fpath=($HOME/.zsh-completions/src $fpath)
