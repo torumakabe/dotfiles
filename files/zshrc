@@ -5,19 +5,10 @@ export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
-export DOCKER_BUILDKIT=1
 export EDITOR=vim
 
 PROMPT="%# "
 
 alias ll="ls -alh"
-alias k=kubectl
 
 eval "$(jump shell)"
-
-source /etc/bash_completion.d/azure-cli
-
-source <(kubectl completion zsh)
-complete -o default -F __start_kubectl k
-
-source <(helm completion zsh)
