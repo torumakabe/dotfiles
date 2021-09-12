@@ -28,7 +28,7 @@ fi
 echo ''
 echo "Now installing Azure CLI..."
 if ! type az > /dev/null 2>&1; then
-    ./setup/az-cli.sh
+    sudo ./setup/az-cli.sh
 fi
 
 echo ''
