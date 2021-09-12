@@ -49,6 +49,7 @@ brew install watch
 brew install gh
 brew install terraform
 brew install jump
+brew install fzf
 
 brew install fluxcd/tap/flux
 

@@ -119,7 +119,7 @@ export EDITOR=vim
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 alias ll="ls -alh"
-alias phist='history | peco'
+alias hist='history | fzf'
 alias k=kubectl
 alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
@@ -149,6 +149,7 @@ complete -o default -F __start_kubectl k
 
 source <(helm completion zsh)
 
+ARCH=$(uname -m)
 if [ "$ARCH" = "arm64e" ]; then
 complete -o nospace -C /opt/homebrew/bin/terraform terraform
 else
