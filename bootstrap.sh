@@ -19,7 +19,6 @@ done
 
 popd
 
-# Installing Oh My Zsh
 echo ''
 echo "Now installing Oh My Zsh..."
 ./setup/oh-my-zsh.sh
