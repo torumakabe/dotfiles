@@ -32,6 +32,12 @@ if ! type az > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing docker..."
+if ! type docker > /dev/null 2>&1; then
+    sudo ./setup/docker-in-docker.sh
+fi
+
+echo ''
 echo "Now installing kubectl & helm..."
 if ! type kubectl > /dev/null 2>&1; then
     sudo ./setup/kubectl-helm.sh
