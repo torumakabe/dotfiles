@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/containers/codespaces-linux/.devcontainer/library-scripts/common-debian.sh
+# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/script-library/common-debian.sh
 
 set -eo pipefail
 
