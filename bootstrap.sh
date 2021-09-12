@@ -20,9 +20,9 @@ popd
 echo "Updating package lists..."
 brew update
 
-# Installing git & bash completion
+# Installing bash completion
 echo ''
-echo "Now installing git and bash-completion..."
+echo "Now installing bash-completion..."
 brew install bash-completion
 mkdir -p ~/.zsh/completions
 curl https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion -o ~/.zsh/completions/az.completion
