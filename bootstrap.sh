@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -eo pipefail
 
 dir=~/dotfiles/files
 olddir=~/dotfiles_old
@@ -7,7 +8,7 @@ files="bash_profile zshrc gitconfig"
 git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
 
 mkdir -p $olddir
-cd $dir || exit
+pushd $dir || exit
 
 for file in $files; do
     if [ -f ~/."$file" ]; then
@@ -16,9 +17,19 @@ for file in $files; do
     ln -s $dir/"$file" ~/."$file"
 done
 
+popd
+
 echo ''
 echo "Now installing jump..."
-wget https://github.com/gsamokovarov/jump/releases/download/v0.40.0/jump_0.40.0_amd64.deb && sudo dpkg -i jump_0.40.0_amd64.deb
+if ! type jump > /dev/null 2>&1; then
+    ./setup/jump.sh
+fi
+
+echo ''
+echo "Now installing Azure CLI..."
+if ! type az > /dev/null 2>&1; then
+    ./setup/az-cli.sh
+fi
 
 echo ''
 echo 'Setup completed!'
