@@ -7,8 +7,6 @@ export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 export EDITOR=vim
 
-PROMPT="%# "
-
 alias ll="ls -alh"
 
 eval "$(jump shell zsh)"
