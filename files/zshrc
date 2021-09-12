@@ -6,7 +6,22 @@ export LANG=C.UTF-8
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 export EDITOR=vim
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 alias ll="ls -alh"
+alias hist='history | fzf'
+alias k=kubectl
 
 eval "$(jump shell zsh)"
+
+autoload -Uz +X compinit && compinit -u
+autoload -Uz +X bashcompinit && bashcompinit
+
+if [ -f "$HOME/.zsh/completions/az.completion" ]; then
+  source $HOME/.zsh/completions/az.completion
+fi
+
+source <(kubectl completion zsh)
+complete -o default -F __start_kubectl k
+
+source <(helm completion zsh)

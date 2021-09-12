@@ -26,6 +26,12 @@ if ! type jump > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing fzf..."
+if ! type fzf > /dev/null 2>&1; then
+    sudo ./setup/fzf.sh
+fi
+
+echo ''
 echo "Now installing Azure CLI..."
 if ! type az > /dev/null 2>&1; then
     sudo ./setup/az-cli.sh
