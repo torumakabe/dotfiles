@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -eo pipefail
 
 dir=~/dotfiles/files
@@ -6,7 +6,7 @@ olddir=~/dotfiles_old
 files="bash_profile zshrc zprofile gitconfig"
 
 mkdir -p $olddir
-cd $dir || exit
+pushd $dir || exit
 
 for file in $files; do
     if [ -f ~/."$file" ]; then
@@ -15,15 +15,22 @@ for file in $files; do
     ln -s $dir/"$file" ~/."$file"
 done
 
+popd
+
 echo "Updating package lists..."
 brew update
 
 # Installing git & bash completion
 echo ''
 echo "Now installing git and bash-completion..."
-brew install git && brew install bash-completion
+brew install bash-completion
 mkdir -p ~/.zsh/completions
 curl https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion -o ~/.zsh/completions/az.completion
+
+# Installing Oh My Zsh
+echo ''
+echo "Now installing Oh My Zsh..."
+./setup/oh-my-zsh.sh
 
 # Setup other brew packages
 echo "Now installing and configuring other brew packages..."
