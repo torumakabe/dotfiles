@@ -32,4 +32,10 @@ if ! type az > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing kubectl & helm..."
+if ! type kubectl > /dev/null 2>&1; then
+    sudo ./setup/kubectl-helm.sh
+fi
+
+echo ''
 echo 'Setup completed!'
