@@ -41,7 +41,6 @@ brew install n
 brew install htop
 brew install kubernetes-cli
 brew install kubernetes-helm
-brew install peco
 brew install ghq
 brew install zsh-completions
 brew install jq

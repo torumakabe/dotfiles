@@ -112,6 +112,7 @@ alias x64="exec arch -arch x86_64 /bin/zsh --login"
 setopt autocd
 setopt autopushd
 
+export PATH="/usr/local/sbin:$PATH"
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 export DOCKER_BUILDKIT=1
