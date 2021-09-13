@@ -14,7 +14,7 @@ Install-BoxstarterPackage -PackageName "https://raw.githubusercontent.com/ToruMa
 git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 git switch wsl
-./setup.sh install-tools
+./bootstrap.sh install-tools
 ```
 
 ## Setup (Link only)
@@ -23,5 +23,5 @@ git switch wsl
 git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 git switch wsl
-./setup.sh
+./bootstrap.sh
 ```
