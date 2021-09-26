@@ -32,7 +32,7 @@ fi
 echo ''
 echo "Now installing fzf..."
 if ! type fzf > /dev/null 2>&1; then
-    sudo ./setup/fzf.sh
+    ./setup/fzf.sh
 fi
 
 echo ''

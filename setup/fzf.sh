@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-apt_get_update_if_needed()
-{
-    if [ ! -d "/var/lib/apt/lists" ] || [ "$(ls /var/lib/apt/lists/ | wc -l)" = "0" ]; then
-        echo "Running apt-get update..."
-        apt-get update
-    else
-        echo "Skipping apt-get update."
-    fi
-}
-
 export DEBIAN_FRONTEND=noninteractive
 
-apt_get_update_if_needed
-apt-get -y install --no-install-recommends fzf
+fzf_install_dir="${HOME}/.fzf"
+if [ ! -d "${fzf_install_dir}" ]; then
+    git clone --depth 1 https://github.com/junegunn/fzf.git "${fzf_install_dir}"
+    "${fzf_install_dir}/install" --all
+else
+    pushd "${fzf_install_dir}"
+    git pull
+    "${fzf_install_dir}/install" --all
+    popd
+fi
