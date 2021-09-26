@@ -117,7 +117,6 @@ export EDITOR=vim
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 alias ll="ls -alh"
-alias hist='history | fzf'
 alias k=kubectl
 
 eval "$(jump shell zsh)"
