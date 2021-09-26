@@ -120,7 +120,6 @@ export EDITOR=vim
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 alias ll="ls -alh"
-alias hist='history | fzf'
 alias k=kubectl
 alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
