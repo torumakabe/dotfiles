@@ -146,7 +146,7 @@ complete -o default -F __start_kubectl k
 
 source <(helm completion zsh)
 
-complete -o nospace -C /usr/bin/terraform terraform
+complete -o nospace -C /usr/local/bin/terraform terraform
 
 . "$HOME/.cargo/env"
 
