@@ -55,6 +55,12 @@ if ! type jump > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing 1Password CLI..."
+if ! type op > /dev/null 2>&1; then
+    ./setup/op.sh
+fi
+
+echo ''
 echo "Now installing fzf..."
 if ! type fzf > /dev/null 2>&1; then
     ./setup/fzf.sh

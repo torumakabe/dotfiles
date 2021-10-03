@@ -165,3 +165,9 @@ export DOCKER_BUILDKIT=1
 # fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+function ghenv() {
+  eval $(op signin my)
+  export GITHUB_TOKEN=$(op get item GitHub_PAT_CLI_Interactive | jq -r .details.password)
+  export GITHUB_USER=$(op get item GitHub_PAT_CLI_Interactive | jq -r .details.notesPlain)
+}
