@@ -49,6 +49,14 @@ if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
 fi
 
 echo ''
+echo "Now installing apt packages..."
+sudo apt-get update
+sudo apt-get -y install unzip
+sudo apt-get -y install jq
+sudo apt-get -y install python3 python3-venv
+sudo apt-get -y install python3-pip
+
+echo ''
 echo "Now installing jump..."
 if ! type jump > /dev/null 2>&1; then
     ./setup/jump.sh
@@ -101,14 +109,6 @@ echo "Now installing Terraform..."
 if ! type terraform > /dev/null 2>&1; then
     sudo ./setup/terraform.sh
 fi
-
-echo ''
-echo "Now installing other apt packages..."
-sudo apt-get update
-sudo apt-get -y install unzip
-sudo apt-get -y install jq
-sudo apt-get -y install python3 python3-venv
-sudo apt-get -y install python3-pip
 
 echo ''
 echo 'Setup completed!'
