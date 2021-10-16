@@ -11,5 +11,6 @@ apt-add-repository https://cli.github.com/packages
 apt update
 apt install -y gh
 
-gh extension install https://github.com/cappyzawa/gh-ghq-cd
-gh alias set cd ghq-cd
+# need auth
+# gh extension install https://github.com/cappyzawa/gh-ghq-cd
+# gh alias set cd ghq-cd
