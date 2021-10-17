@@ -111,4 +111,10 @@ if ! type terraform > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing Rust..."
+if ! type cargo > /dev/null 2>&1; then
+    ./setup/rust.sh
+fi
+
+echo ''
 echo 'Setup completed!'

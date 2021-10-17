@@ -1,12 +1,11 @@
 # Configure WSL
 
-## Setup Windows by Boxstarter
+## Prerequisite & TODO
 
-```
-Set-ExecutionPolicy RemoteSigned
-. { iwr -useb http://boxstarter.org/bootstrapper.ps1 } | iex; get-boxstarter -Force
-Install-BoxstarterPackage -PackageName "https://raw.githubusercontent.com/ToruMakabe/dotfiles/wsl/boxstarter.txt"  -DisableReboots
-```
+* [Install WSL](https://docs.microsoft.com/ja-jp/windows/wsl/install)
+* Override /etc/wsl.conf
+* Override Windows Terminal settings
+* Install Windows apps
 
 ## Setup (in WSL)
 
