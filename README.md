@@ -5,7 +5,9 @@
 * [Install WSL](https://docs.microsoft.com/ja-jp/windows/wsl/install)
 * Override /etc/wsl.conf
 * Override Windows Terminal settings
-* Install Windows apps
+* Install essential Windows apps
+  * [Git for Windows](https://gitforwindows.org/)
+  * [VS Code](https://code.visualstudio.com/)
 
 ## Setup (in WSL)
 
