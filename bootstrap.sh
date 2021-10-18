@@ -93,6 +93,12 @@ if ! type kubectl > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing Flux..."
+if ! type flux > /dev/null 2>&1; then
+    ./setup/flux.sh
+fi
+
+echo ''
 echo "Now installing Go..."
 if ! type go > /dev/null 2>&1; then
     sudo ./setup/go.sh
