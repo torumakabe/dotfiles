@@ -57,12 +57,6 @@ sudo apt-get -y install python3 python3-venv
 sudo apt-get -y install python3-pip
 
 echo ''
-echo "Now installing jump..."
-if ! type jump > /dev/null 2>&1; then
-    ./setup/jump.sh
-fi
-
-echo ''
 echo "Now installing 1Password CLI..."
 if ! type op > /dev/null 2>&1; then
     ./setup/op.sh
@@ -103,6 +97,12 @@ echo ''
 echo "Now installing Go..."
 if ! type go > /dev/null 2>&1; then
     sudo ./setup/go.sh
+fi
+
+echo ''
+echo "Now installing jump..."
+if ! type jump > /dev/null 2>&1; then
+    ./setup/jump.sh
 fi
 
 echo ''

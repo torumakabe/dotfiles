@@ -6,6 +6,6 @@ set -eo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-add-apt-repository ppa:longsleep/golang-backports
+add-apt-repository -y ppa:longsleep/golang-backports
 apt-get update
 apt-get -y install golang-go
