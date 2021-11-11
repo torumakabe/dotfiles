@@ -100,6 +100,12 @@ if ! type go > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing ghq..."
+if ! type ghq > /dev/null 2>&1; then
+    ./setup/ghq.sh
+fi
+
+echo ''
 echo "Now installing jump..."
 if ! type jump > /dev/null 2>&1; then
     ./setup/jump.sh
