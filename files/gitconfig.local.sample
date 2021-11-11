@@ -1,0 +1,6 @@
+[ghq]
+	root = /home/your-username/workspace
+	user = your-github-username
+[user]
+	name = your-username
+	email = your-email
