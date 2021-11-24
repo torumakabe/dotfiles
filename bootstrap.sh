@@ -5,7 +5,9 @@ dir=~/dotfiles/files
 olddir=~/dotfiles_old
 files="bash_profile zshrc gitconfig"
 
-git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
+if [ ! -e "~/dotfiles" ]; then
+    git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
+fi
 
 mkdir -p $olddir
 pushd $dir || exit
