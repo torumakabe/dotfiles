@@ -141,7 +141,9 @@ source <(helm completion zsh)
 
 complete -o nospace -C /usr/local/bin/terraform terraform
 
-. "$HOME/.cargo/env"
+if [ -f "$HOME/.cargo/env" ]; then
+  source $HOME/.cargo/env
+fi
 
 command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
 
