@@ -8,6 +8,14 @@ cd ~/dotfiles
 ./bootstrap.sh
 ```
 
+## Setup (with common bash/zsh settings)
+
+```
+git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
+cd ~/dotfiles
+./bootstrap.sh setup-shell
+```
+
 ## Setup (Link only)
 
 ```

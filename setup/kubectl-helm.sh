@@ -8,6 +8,7 @@ KUBECTL_VERSION="latest"
 HELM_VERSION="latest"
 KUBECTL_SHA256="automatic"
 HELM_SHA256="automatic"
+USERNAME="${SUDO_USER}"
 
 HELM_GPG_KEYS_URI="https://raw.githubusercontent.com/helm/helm/main/KEYS"
 GPG_KEY_SERVERS="keyserver hkp://keyserver.ubuntu.com:80
@@ -116,12 +117,12 @@ fi
 if [ "${KUBECTL_VERSION::1}" != 'v' ]; then
     KUBECTL_VERSION="v${KUBECTL_VERSION}"
 fi
-curl -sSL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${architecture}/kubectl"
-chmod 0755 /usr/local/bin/kubectl
+curl -sSL -o /usr/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${architecture}/kubectl"
+chmod 0755 /usr/bin/kubectl
 if [ "$KUBECTL_SHA256" = "automatic" ]; then
     KUBECTL_SHA256="$(curl -sSL "https://dl.k8s.io/${KUBECTL_VERSION}/bin/linux/${architecture}/kubectl.sha256")"
 fi
-([ "${KUBECTL_SHA256}" = "dev-mode" ] || (echo "${KUBECTL_SHA256} */usr/local/bin/kubectl" | sha256sum -c -))
+([ "${KUBECTL_SHA256}" = "dev-mode" ] || (echo "${KUBECTL_SHA256} */usr/bin/kubectl" | sha256sum -c -))
 if ! type kubectl > /dev/null 2>&1; then
     echo '(!) kubectl installation failed!'
     exit 1
