@@ -3,7 +3,7 @@ set -eo pipefail
 
 dir=${HOME}/dotfiles/files
 olddir=${HOME}/dotfiles_old
-files="bash_profile zshrc gitconfig"
+files="zshrc gitconfig"
 
 if [ ! -e "${HOME}/dotfiles" ]; then
     git clone https://github.com/ToruMakabe/dotfiles.git ${HOME}/dotfiles
