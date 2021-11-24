@@ -1,11 +1,3 @@
-[ghq]
-	root = /home/tomakabe/workspace
-	user = ToruMakabe
-[user]
-	name = ToruMakabe
-	email = tomakabe@microsoft.com
-[credential]
-	helper = cache --timeout 30000
 [core]
 	autocrlf = input
 	fileMode = false

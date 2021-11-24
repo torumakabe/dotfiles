@@ -19,14 +19,32 @@ done
 
 popd
 
+if [ "$1" = "link-only" ]
+then
+  echo ''
+  echo "Setup completed! (Link only)"
+  exit 0
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+
 echo ''
 echo "Now installing Oh My Zsh..."
 ./setup/oh-my-zsh.sh
+if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
+  git clone https://github.com/zsh-users/zsh-completions "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions"
+fi
 
 echo ''
-echo "Now installing jump..."
-if ! type jump > /dev/null 2>&1; then
-    ./setup/jump.sh
+echo "Now installing apt packages..."
+sudo apt-get update
+sudo apt-get -y install unzip
+sudo apt-get -y install jq
+
+echo ''
+echo "Now installing 1Password CLI..."
+if ! type op > /dev/null 2>&1; then
+    ./setup/op.sh
 fi
 
 echo ''
@@ -36,21 +54,27 @@ if ! type fzf > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing Azure CLI..."
-if ! type az > /dev/null 2>&1; then
-    sudo ./setup/az-cli.sh
+echo "Now installing Flux..."
+if ! type flux > /dev/null 2>&1; then
+    ./setup/flux.sh
 fi
 
 echo ''
-echo "Now installing docker..."
-if ! type docker > /dev/null 2>&1; then
-    sudo ./setup/docker-in-docker.sh
+echo "Now installing ghq..."
+if ! type ghq > /dev/null 2>&1; then
+    ./setup/ghq.sh
 fi
 
 echo ''
-echo "Now installing kubectl & helm..."
-if ! type kubectl > /dev/null 2>&1; then
-    sudo ./setup/kubectl-helm.sh
+echo "Now installing jump..."
+if ! type jump > /dev/null 2>&1; then
+    ./setup/jump.sh
+fi
+
+echo ''
+echo "Now installing Terraform..."
+if ! type terraform > /dev/null 2>&1; then
+    sudo ./setup/terraform.sh
 fi
 
 echo ''

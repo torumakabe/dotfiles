@@ -72,7 +72,10 @@ ZSH_THEME="robbyrussell"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git)
+plugins=(
+  git
+  zsh-completions
+)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -118,17 +121,39 @@ export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 alias ll="ls -alh"
 alias k=kubectl
+alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
 eval "$(jump shell zsh)"
+
+if [ -f "$HOME/.zfunc/_rustup" ]; then
+  FPATH=$HOME/.zfunc:$FPATH
+fi
 
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
 
-if [ -f "$HOME/.zsh/completions/az.completion" ]; then
-  source $HOME/.zsh/completions/az.completion
-fi
+source /etc/bash_completion.d/azure-cli
 
 source <(kubectl completion zsh)
 complete -o default -F __start_kubectl k
 
 source <(helm completion zsh)
+
+complete -o nospace -C /usr/local/bin/terraform terraform
+
+. "$HOME/.cargo/env"
+
+command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+function ghenv() {
+  eval $(op signin my)
+  export GITHUB_TOKEN=$(op get item GitHub_PAT_CLI_Interactive | jq -r .details.password)
+  export GITHUB_USER=$(op get item GitHub_PAT_CLI_Interactive | jq -r .details.notesPlain)
+}
+
+# For WSL
+# export PATH=$PATH:'/mnt/c/Users/tomakabe/AppData/Local/Programs/Microsoft VS Code/bin'
+# Workaround https://github.com/docker/for-win/issues/6391
+alias kubectl="/usr/bin/kubectl"
