@@ -156,6 +156,8 @@ function ghenv() {
 }
 
 # For WSL
+#
 # export PATH=$PATH:'/mnt/c/Users/tomakabe/AppData/Local/Programs/Microsoft VS Code/bin'
+#
 # Workaround https://github.com/docker/for-win/issues/6391
-alias kubectl="/usr/bin/kubectl"
+# alias kubectl="/usr/bin/kubectl"
