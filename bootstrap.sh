@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-dir=~/dotfiles/files
-olddir=~/dotfiles_old
+dir=${HOME}/dotfiles/files
+olddir=${HOME}/dotfiles_old
 files="bash_profile zshrc gitconfig"
 
-if [ ! -e "~/dotfiles" ]; then
-    git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
+if [ ! -e "${HOME}/dotfiles" ]; then
+    git clone https://github.com/ToruMakabe/dotfiles.git ${HOME}/dotfiles
 fi
 
 mkdir -p $olddir
 pushd $dir || exit
 
 for file in $files; do
-    if [ -f ~/."$file" ]; then
-      mv ~/."$file" ~/dotfiles_old/
+    if [ -f ${HOME}/."$file" ]; then
+      mv ${HOME}/."$file" ${HOME}/dotfiles_old/
     fi
-    ln -s $dir/"$file" ~/."$file"
+    ln -s $dir/"$file" ${HOME}/."$file"
 done
 
 popd
