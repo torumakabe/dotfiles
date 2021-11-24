@@ -1,3 +1,17 @@
-# For GitHub Codespaces
+# dotfiles (for debian/ubuntu)
 
-For other platform such as macOS and WSL, see each branch.
+## Setup (for GitHub Codespaces Default Linux Universal base image)
+
+```
+git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
+cd ~/dotfiles
+./bootstrap.sh
+```
+
+## Setup (Link only)
+
+```
+git clone https://github.com/ToruMakabe/dotfiles.git ~/dotfiles
+cd ~/dotfiles
+./bootstrap.sh link-only
+```
