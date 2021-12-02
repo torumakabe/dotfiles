@@ -11,6 +11,15 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+architecture="$(uname -m)"
+case $architecture in
+    x86_64) architecture="amd64";;
+    aarch64 | armv8*) architecture="arm64";;
+    aarch32 | armv7* | armvhf*) architecture="arm";;
+    i?86) architecture="386";;
+    *) echo "(!) Architecture $architecture unsupported"; exit 1 ;;
+esac
+
 # Get central common setting
 get_common_setting() {
     if [ "${common_settings_file_loaded}" != "true" ]; then
@@ -48,7 +57,28 @@ check_packages() {
 export DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies
-check_packages apt-transport-https curl ca-certificates lsb-release gnupg2
+if [ "${architecture}" = "arm64" ] || [ "${architecture}" = "arm" ]; then
+    check_packages \
+        apt-transport-https \
+        ca-certificates \
+        gcc \
+        python3-dev \
+        libffi-dev
+else
+    check_packages \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        gnupg2 \
+        lsb-release
+fi
+
+# Workaround for ARM (https://github.com/Azure/azure-cli/issues/5657)
+if [ "${architecture}" = "arm64" ] || [ "${architecture}" = "arm" ]; then
+    pip install azure-cli
+    echo "Done!"
+    exit 0
+fi
 
 # Import key safely (new 'signed-by' method rather than deprecated apt-key approach) and install
 . /etc/os-release
