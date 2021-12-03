@@ -3,8 +3,17 @@ set -eo pipefail
 
 OP_VERSION="1.12.3"
 
-wget https://cache.agilebits.com/dist/1P/op/pkg/v"${OP_VERSION}"/op_linux_amd64_v"${OP_VERSION}".zip
-unzip -u op_linux_amd64_v"${OP_VERSION}".zip
+architecture="$(uname -m)"
+case ${architecture} in
+    x86_64) architecture="amd64";;
+    aarch64 | armv8*) architecture="arm64";;
+    aarch32 | armv7* | armvhf*) architecture="arm";;
+    i?86) architecture="386";;
+    *) echo "(!) Architecture ${architecture} unsupported"; exit 1 ;;
+esac
+
+wget https://cache.agilebits.com/dist/1P/op/pkg/v"${OP_VERSION}"/op_linux_"${architecture}"_v"${OP_VERSION}".zip
+unzip -u op_linux_"${architecture}"_v"${OP_VERSION}".zip
 
 mkdir -p "${HOME}"/.gnupg
 echo "keyserver keyserver.ubuntu.com" >> "${HOME}"/.gnupg/gpg.conf
@@ -14,4 +23,4 @@ gpg --verify op.sig op
 sudo mv op /usr/local/bin/op
 
 rm ./op.sig
-rm ./op_linux_amd64_v"${OP_VERSION}".zip
+rm ./op_linux_"${architecture}"_v"${OP_VERSION}".zip
