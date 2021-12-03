@@ -63,8 +63,9 @@ if [ "${architecture}" = "arm64" ] || [ "${architecture}" = "arm" ]; then
         ca-certificates \
         gcc \
         python3-dev \
-	python3-pip \
-	build-essential \
+        python3-pip \
+        build-essential \
+        curl \
         libffi-dev
 else
     check_packages \
@@ -79,7 +80,7 @@ fi
 if [ "${architecture}" = "arm64" ] || [ "${architecture}" = "arm" ]; then
     pip install --upgrade pip setuptools wheel
     pip install azure-cli
-    echo "Done!"
+    curl -sLO 'https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion' && mv az.completion /etc/bash_completion.d/azure-cli
     exit 0
 fi
 
