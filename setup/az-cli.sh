@@ -63,6 +63,8 @@ if [ "${architecture}" = "arm64" ] || [ "${architecture}" = "arm" ]; then
         ca-certificates \
         gcc \
         python3-dev \
+	python3-pip \
+	build-essential \
         libffi-dev
 else
     check_packages \
@@ -75,6 +77,7 @@ fi
 
 # Workaround for ARM (https://github.com/Azure/azure-cli/issues/5657)
 if [ "${architecture}" = "arm64" ] || [ "${architecture}" = "arm" ]; then
+    pip install --upgrade pip setuptools wheel
     pip install azure-cli
     echo "Done!"
     exit 0
