@@ -55,6 +55,10 @@ sudo apt-get -y install unzip
 sudo apt-get -y install jq
 
 echo ''
+echo "Now updating git..."
+sudo ./setup/git.sh
+
+echo ''
 echo "Now installing 1Password CLI..."
 if ! type op > /dev/null 2>&1; then
     ./setup/op.sh
