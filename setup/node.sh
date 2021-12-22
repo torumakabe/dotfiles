@@ -91,7 +91,7 @@ su ${USERNAME} -c "$(cat << EOF
     curl -so- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash
     source ${NVM_DIR}/nvm.sh
     if [ "${NODE_VERSION}" != "" ]; then
-        nvm alias default ${NODE_VERSION}
+        nvm alias default \"${NODE_VERSION}\"
     fi
     nvm clear-cache
 EOF

@@ -122,8 +122,8 @@ export EDITOR=vim
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 export NVM_DIR=/usr/local/share/nvm
-[ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-[ -s "\$NVM_DIR/bash_completion" ] && . "\$NVM_DIR/bash_completion"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 
 alias ll="ls -alh"
 alias k=kubectl
