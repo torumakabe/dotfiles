@@ -8,7 +8,6 @@ TARGET_GO_VERSION="latest"
 TARGET_GOROOT="/usr/local/go"
 TARGET_GOPATH="$(getent passwd $SUDO_USER | cut -d: -f6)/go"
 USERNAME=${SUDO_USER}
-UPDATE_RC="true"
 
 # https://www.google.com/linuxrepositories/
 GO_GPG_KEY_URI="https://dl.google.com/linux/linux_signing_key.pub"
