@@ -9,4 +9,4 @@ if ! type npm > /dev/null 2>&1; then
     exit 1
 fi
 
-npm install -g textlint textlint-filter-rule-allowlist textlint-rule-preset-ja-technical-writing textlint-rule-preset-jtf-style
+npm install -g textlint textlint-filter-rule-allowlist textlint-rule-preset-ja-technical-writing textlint-rule-preset-jtf-style textlint-rule-prh
