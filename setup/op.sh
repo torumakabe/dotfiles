@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-OP_VERSION="1.12.4"
+OP_VERSION="2.0.0"
 
 architecture="$(uname -m)"
 case ${architecture} in
@@ -12,7 +12,7 @@ case ${architecture} in
     *) echo "(!) Architecture ${architecture} unsupported"; exit 1 ;;
 esac
 
-wget https://cache.agilebits.com/dist/1P/op/pkg/v"${OP_VERSION}"/op_linux_"${architecture}"_v"${OP_VERSION}".zip
+wget https://cache.agilebits.com/dist/1P/op2/pkg/v"${OP_VERSION}"/op_linux_"${architecture}"_v"${OP_VERSION}".zip
 unzip -u op_linux_"${architecture}"_v"${OP_VERSION}".zip
 
 mkdir -p "${HOME}"/.gnupg
