@@ -92,6 +92,9 @@ check_packages() {
     fi
 }
 
+# Remove the previous installation
+rm -rf ${TARGET_GOROOT}
+
 # Install curl, tar, git, other dependencies if missing
 check_packages curl ca-certificates gnupg2 tar g++ gcc libc6-dev make pkg-config
 if ! type git > /dev/null 2>&1; then
