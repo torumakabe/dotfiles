@@ -156,9 +156,9 @@ command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 function ghenv() {
-  eval $(op signin my)
-  export GITHUB_TOKEN=$(op get item GitHub_PAT_CLI_Interactive | jq -r .details.password)
-  export GITHUB_USER=$(op get item GitHub_PAT_CLI_Interactive | jq -r .details.notesPlain)
+  eval $(op signin)
+  export GITHUB_TOKEN=$(op item get GitHub_PAT_CLI_Interactive --format=json | jq -r '.fields[] | select(.id == "password") | .value')
+  export GITHUB_USER=$(op item get GitHub_PAT_CLI_Interactive --format=json | jq -r '.fields[] | select(.id == "notesPlain") | .value')
 }
 
 # For WSL
