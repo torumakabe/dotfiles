@@ -61,7 +61,7 @@ sudo ./setup/git.sh
 echo ''
 echo "Now installing bat..."
 if ! type batcat > /dev/null 2>&1; then
-    sudo apt-get -y install jq
+    sudo apt-get -y install bat
     mkdir -p ${HOME}/.local/bin
     ln -s /usr/bin/batcat ${HOME}/.local/bin/bat
 fi
