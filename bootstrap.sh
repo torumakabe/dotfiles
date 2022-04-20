@@ -59,6 +59,14 @@ echo "Now updating git..."
 sudo ./setup/git.sh
 
 echo ''
+echo "Now installing bat..."
+if ! type batcat > /dev/null 2>&1; then
+    sudo apt-get -y install jq
+    mkdir -p ${HOME}/.local/bin
+    ln -s /usr/bin/batcat ${HOME}/.local/bin/bat
+fi
+
+echo ''
 echo "Now installing 1Password CLI..."
 if ! type op > /dev/null 2>&1; then
     ./setup/op.sh
@@ -129,6 +137,12 @@ echo ''
 echo "Now installing Rust..."
 if ! type cargo > /dev/null 2>&1; then
     ./setup/rust.sh
+fi
+
+echo ''
+echo "Now installing rg..."
+if ! type rg > /dev/null 2>&1; then
+    cargo install ripgrep
 fi
 
 echo ''
