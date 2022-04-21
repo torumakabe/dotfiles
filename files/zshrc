@@ -126,7 +126,6 @@ export NVM_DIR=/usr/local/share/nvm
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 
-alias ll="ls -alh"
 alias k=kubectl
 alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
