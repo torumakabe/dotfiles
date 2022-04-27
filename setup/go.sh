@@ -136,7 +136,8 @@ echo "Extracting Go ${TARGET_GO_VERSION}..."
 tar -xzf /tmp/go.tar.gz -C "${TARGET_GOROOT}" --strip-components=1
 rm -rf /tmp/go.tar.gz /tmp/go.tar.gz.asc /tmp/tmp-gnupg
 
-chown -R :golang "${TARGET_GOROOT}" "${TARGET_GOPATH}"
+chown -R :golang "${TARGET_GOROOT}"
+chown -R "${USERNAME}":golang "${TARGET_GOPATH}"
 chmod -R g+r+w "${TARGET_GOROOT}" "${TARGET_GOPATH}"
 find "${TARGET_GOROOT}" -type d | xargs -n 1 chmod g+s
 find "${TARGET_GOPATH}" -type d | xargs -n 1 chmod g+s

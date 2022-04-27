@@ -53,6 +53,7 @@ echo "Now installing apt packages..."
 sudo apt-get update
 sudo apt-get -y install unzip
 sudo apt-get -y install jq
+sudo apt-get -y install libssl-dev
 
 echo ''
 echo "Now updating git..."
@@ -76,6 +77,10 @@ echo ''
 echo "Now installing Go..."
 if ! type go > /dev/null 2>&1; then
     sudo ./setup/go.sh
+    export GOROOT=/usr/local/go
+    export PATH=$PATH:$GOROOT/bin
+    export GOPATH=$HOME/go
+    export PATH=$PATH:$GOPATH/bin
 fi
 
 echo ''
@@ -130,7 +135,7 @@ fi
 echo ''
 echo "Now installing GitHub CLI..."
 if ! type gh > /dev/null 2>&1; then
-    sudo ./setup/github-cli.sh
+    ./setup/github-cli.sh
 fi
 
 echo ''
