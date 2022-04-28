@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1090,SC1091
 set -eo pipefail
 
 dir=${HOME}/dotfiles/files
@@ -6,17 +7,17 @@ olddir=${HOME}/dotfiles_old
 files="zshrc gitconfig cobra.yaml"
 
 if [ ! -e "${HOME}/dotfiles" ]; then
-    git clone https://github.com/ToruMakabe/dotfiles.git ${HOME}/dotfiles
+    git clone https://github.com/ToruMakabe/dotfiles.git "${HOME}/dotfiles"
 fi
 
-mkdir -p $olddir
-pushd $dir || exit
+mkdir -p "$olddir"
+pushd "$dir" || exit
 
 for file in $files; do
-    if [ -f ${HOME}/."$file" ]; then
-      mv ${HOME}/."$file" ${HOME}/dotfiles_old/
+    if [ -f "${HOME}/.$file" ]; then
+      mv "${HOME}/.$file" "${HOME}/dotfiles_old/"
     fi
-    ln -s $dir/"$file" ${HOME}/."$file"
+    ln -s "$dir/$file" "${HOME}/.$file"
 done
 
 popd
@@ -50,7 +51,7 @@ fi
 
 echo ''
 echo "Change default shell to zsh..."
-sudo usermod --shell /bin/zsh ${USER}
+sudo usermod --shell /bin/zsh "${USER}"
 
 echo ''
 echo "Now installing apt packages..."
@@ -67,8 +68,8 @@ echo ''
 echo "Now installing bat..."
 if ! type batcat > /dev/null 2>&1; then
     sudo apt-get -y install bat
-    mkdir -p ${HOME}/.local/bin
-    ln -s /usr/bin/batcat ${HOME}/.local/bin/bat
+    mkdir -p "${HOME}/.local/bin"
+    ln -s /usr/bin/batcat "${HOME}/.local/bin/bat"
 fi
 
 echo ''
@@ -78,31 +79,9 @@ if ! type op > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing Go..."
-if ! type go > /dev/null 2>&1; then
-    sudo ./setup/go.sh
-    export GOROOT=/usr/local/go
-    export PATH=$PATH:$GOROOT/bin
-    export GOPATH=$HOME/go
-    export PATH=$PATH:$GOPATH/bin
-fi
-
-echo ''
 echo "Now installing fzf..."
 if ! type fzf > /dev/null 2>&1; then
     ./setup/fzf.sh
-fi
-
-echo ''
-echo "Now installing ghq..."
-if ! type ghq > /dev/null 2>&1; then
-    ./setup/ghq.sh
-fi
-
-echo ''
-echo "Now installing jump..."
-if ! type jump > /dev/null 2>&1; then
-    ./setup/jump.sh
 fi
 
 echo ''
@@ -131,12 +110,6 @@ if ! type kubectl > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing kubelogin..."
-if ! type kubelogin > /dev/null 2>&1; then
-    ./setup/kubelogin.sh
-fi
-
-echo ''
 echo "Now installing Flux..."
 if ! type flux > /dev/null 2>&1; then
     ./setup/flux.sh
@@ -148,10 +121,43 @@ if ! type gh > /dev/null 2>&1; then
     ./setup/github-cli.sh
 fi
 
+# Go and tools that assume Go
+
+echo ''
+echo "Now installing Go..."
+if ! type go > /dev/null 2>&1; then
+    GOROOT=/usr/local/go
+    GOPATH=$HOME/go
+    sudo ./setup/go.sh "${GOROOT}" "${GOPATH}"
+    export PATH=$PATH:${GOROOT}/bin
+    export PATH=$PATH:${GOPATH}/bin
+fi
+
+echo ''
+echo "Now installing ghq..."
+if ! type ghq > /dev/null 2>&1; then
+    ./setup/ghq.sh
+fi
+
+echo ''
+echo "Now installing jump..."
+if ! type jump > /dev/null 2>&1; then
+    ./setup/jump.sh
+fi
+
+echo ''
+echo "Now installing kubelogin..."
+if ! type kubelogin > /dev/null 2>&1; then
+    ./setup/kubelogin.sh
+fi
+
+# Rust and tools that assume Rust
+
 echo ''
 echo "Now installing Rust..."
 if ! type cargo > /dev/null 2>&1; then
     ./setup/rust.sh
+    source "${HOME}/.cargo/env"
 fi
 
 echo ''

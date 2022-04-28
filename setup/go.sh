@@ -5,8 +5,8 @@
 set -eo pipefail
 
 TARGET_GO_VERSION="latest"
-TARGET_GOROOT="/usr/local/go"
-TARGET_GOPATH="$(getent passwd $SUDO_USER | cut -d: -f6)/go"
+TARGET_GOROOT=${1:-"/usr/local/go"}
+TARGET_GOPATH=${2:-"$(getent passwd "${SUDO_USER}" | cut -d: -f6)/go"}
 USERNAME=${SUDO_USER}
 
 # https://www.google.com/linuxrepositories/
