@@ -49,6 +49,10 @@ if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
 fi
 
 echo ''
+echo "Change default shell to zsh..."
+sudo usermod --shell /bin/zsh ${USER}
+
+echo ''
 echo "Now installing apt packages..."
 sudo apt-get update
 sudo apt-get -y install unzip
