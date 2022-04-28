@@ -131,6 +131,12 @@ if ! type kubectl > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing kubelogin..."
+if ! type kubelogin > /dev/null 2>&1; then
+    ./setup/kubelogin.sh
+fi
+
+echo ''
 echo "Now installing Flux..."
 if ! type flux > /dev/null 2>&1; then
     ./setup/flux.sh
