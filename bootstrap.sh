@@ -151,6 +151,12 @@ if ! type kubelogin > /dev/null 2>&1; then
     ./setup/kubelogin.sh
 fi
 
+echo ''
+echo "Now installing golangci-lint..."
+if ! type type golangci-lint > /dev/null 2>&1; then
+    ./setup/golangci-lint.sh
+fi
+
 # Rust and tools that assume Rust
 
 echo ''
