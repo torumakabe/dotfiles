@@ -134,6 +134,10 @@ if ! type go > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing go tools..."
+./setup/golangci-lint.sh
+
+echo ''
 echo "Now installing ghq..."
 if ! type ghq > /dev/null 2>&1; then
     ./setup/ghq.sh
@@ -149,12 +153,6 @@ echo ''
 echo "Now installing kubelogin..."
 if ! type kubelogin > /dev/null 2>&1; then
     ./setup/kubelogin.sh
-fi
-
-echo ''
-echo "Now installing golangci-lint..."
-if ! type type golangci-lint > /dev/null 2>&1; then
-    ./setup/golangci-lint.sh
 fi
 
 # Rust and tools that assume Rust
