@@ -135,7 +135,7 @@ fi
 
 echo ''
 echo "Now installing go tools..."
-./setup/golangci-lint.sh
+./setup/go-tools.sh
 
 echo ''
 echo "Now installing ghq..."
