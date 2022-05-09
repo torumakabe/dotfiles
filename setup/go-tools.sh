@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-GOLANGCI_LINT_VERSION="v1.45.2"
+GOLANGCI_LINT_VERSION="v1.46.0"
 
 export DEBIAN_FRONTEND=noninteractive
 
