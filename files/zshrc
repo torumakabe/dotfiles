@@ -161,6 +161,14 @@ function ghenv() {
   export GITHUB_USER=$(op item get GitHub_PAT_CLI_Interactive --format=json | jq -r '.fields[] | select(.id == "notesPlain") | .value')
 }
 
+function tfazenv() {
+  eval $(op signin)
+  export ARM_CLIENT_ID=$(op item get TF_AZ_CRED --format=json | jq -r '.fields[] | select(.label == "client_id") | .value')
+  export ARM_CLIENT_SECRET=$(op item get TF_AZ_CRED --format=json | jq -r '.fields[] | select(.label == "client_secret") | .value')
+  export ARM_SUBSCRIPTION_ID=$(op item get TF_AZ_CRED --format=json | jq -r '.fields[] | select(.label == "subscription_id") | .value')
+  export ARM_TENANT_ID=$(op item get TF_AZ_CRED --format=json | jq -r '.fields[] | select(.label == "tenant_id") | .value')
+}
+
 # For WSL
 #
 # export PATH=$PATH:'/mnt/c/Users/tomakabe/AppData/Local/Programs/Microsoft VS Code/bin'
