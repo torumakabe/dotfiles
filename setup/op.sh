@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-OP_VERSION="2.2.0"
+OP_VERSION="2.4.0"
 
 architecture="$(uname -m)"
 case ${architecture} in
