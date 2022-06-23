@@ -157,16 +157,16 @@ command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
 
 function ghenv() {
   eval $(op signin)
-  export GITHUB_TOKEN=$(op item get GitHub_PAT_CLI_Interactive --format=json | jq -r '.fields[] | select(.id == "password") | .value')
-  export GITHUB_USER=$(op item get GitHub_PAT_CLI_Interactive --format=json | jq -r '.fields[] | select(.id == "notesPlain") | .value')
+  export GITHUB_TOKEN=$(op read op://Personal/GitHub_PAT_CLI_Interactive/password)
+  export GITHUB_USER=$(op read  op://Personal/GitHub_PAT_CLI_Interactive/notesPlain)
 }
 
 function tfazenv() {
   eval $(op signin)
-  export ARM_CLIENT_ID=$(op item get TF_AZ_CRED --format=json | jq -r '.fields[] | select(.label == "client_id") | .value')
-  export ARM_CLIENT_SECRET=$(op item get TF_AZ_CRED --format=json | jq -r '.fields[] | select(.label == "client_secret") | .value')
-  export ARM_SUBSCRIPTION_ID=$(op item get TF_AZ_CRED --format=json | jq -r '.fields[] | select(.label == "subscription_id") | .value')
-  export ARM_TENANT_ID=$(op item get TF_AZ_CRED --format=json | jq -r '.fields[] | select(.label == "tenant_id") | .value')
+  export ARM_CLIENT_ID=$(op read op://Personal/TF_AZ_CRED/client_id)
+  export ARM_CLIENT_SECRET=$(op read op://Personal/TF_AZ_CRED/client_secret)
+  export ARM_SUBSCRIPTION_ID=$(op read op://Personal/TF_AZ_CRED/subscription_id)
+  export ARM_TENANT_ID=$(op read  op://Personal/TF_AZ_CRED/tenant_id)
 }
 
 # For WSL
