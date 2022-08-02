@@ -11,3 +11,6 @@ golangci-lint version
 
 echo "Installing fieldalignment..."
 go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest
+
+echo "Installing goreleaser..."
+go install github.com/goreleaser/goreleaser@latest
