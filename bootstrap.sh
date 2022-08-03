@@ -123,6 +123,12 @@ if ! type gh > /dev/null 2>&1; then
     ./setup/github-cli.sh
 fi
 
+echo ''
+echo "Now installing Trivy..."
+if ! type trivy > /dev/null 2>&1; then
+    ./setup/trivy.sh
+fi
+
 # Go and tools that assume Go
 
 echo ''
