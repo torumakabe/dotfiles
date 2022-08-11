@@ -4,6 +4,7 @@
 	editor = vim -c \"set fenc=utf-8\"
 [pull]
 	rebase = true
+	ff = only
 [fetch]
 	prune = true
 [format]
