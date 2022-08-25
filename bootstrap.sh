@@ -163,6 +163,12 @@ if ! type kubelogin > /dev/null 2>&1; then
     ./setup/kubelogin.sh
 fi
 
+echo ''
+echo "Now installing yq..."
+if ! type yq > /dev/null 2>&1; then
+    ./setup/yq.sh
+fi
+
 # Rust and tools that assume Rust
 
 echo ''
