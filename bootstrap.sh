@@ -120,7 +120,7 @@ fi
 echo ''
 echo "Now installing GitHub CLI..."
 if ! type gh > /dev/null 2>&1; then
-    ./setup/github-cli.sh
+    sudo ./setup/github-cli.sh
 fi
 
 echo ''
@@ -143,7 +143,7 @@ fi
 
 echo ''
 echo "Now installing go tools..."
-./setup/go-tools.sh
+    ./setup/go-tools.sh
 
 echo ''
 echo "Now installing ghq..."
