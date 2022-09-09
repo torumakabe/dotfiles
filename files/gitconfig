@@ -24,9 +24,14 @@
 	path = ~/.gitconfig.local
 [credential "https://github.com"]
 	helper = !/usr/bin/gh auth git-credential
+[ghq]
+    root = ~/workspace
+    user = ToruMakabe
+[user]
+    name = Toru Makabe
+    email = 993850+ToruMakabe@users.noreply.github.com
+	signingkey = ~/.ssh/id_ed25519.pub
 [gpg]
 	format = ssh
-[user]
-	signingkey = ~/.ssh/id_ed25519.pub
 [gpg "ssh"]
 	allowedSignersFile = ~/.ssh/allowed_signers
