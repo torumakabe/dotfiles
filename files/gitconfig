@@ -24,3 +24,9 @@
 	path = ~/.gitconfig.local
 [credential "https://github.com"]
 	helper = !/usr/bin/gh auth git-credential
+[gpg]
+	format = ssh
+[user]
+	signingkey = ~/.ssh/id_ed25519.pub
+[gpg "ssh"]
+	allowedSignersFile = ~/.ssh/allowed_signers
