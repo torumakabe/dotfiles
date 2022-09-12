@@ -26,10 +26,10 @@
 	helper = !/usr/bin/gh auth git-credential
 [ghq]
 	root = ~/workspace
-	user = ToruMakabe
+	user = torumakabe
 [user]
 	name = Toru Makabe
-	email = 993850+ToruMakabe@users.noreply.github.com
+	email = 993850+torumakabe@users.noreply.github.com
 	signingkey = ~/.ssh/id_ed25519.pub
 [gpg]
 	format = ssh

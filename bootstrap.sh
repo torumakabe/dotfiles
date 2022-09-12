@@ -7,7 +7,7 @@ olddir=${HOME}/dotfiles_old
 files="zshrc gitconfig cobra.yaml tigrc"
 
 if [ ! -e "${HOME}/dotfiles" ]; then
-    git clone https://github.com/ToruMakabe/dotfiles.git "${HOME}/dotfiles"
+    git clone https://github.com/torumakabe/dotfiles.git "${HOME}/dotfiles"
 fi
 
 mkdir -p "$olddir"
