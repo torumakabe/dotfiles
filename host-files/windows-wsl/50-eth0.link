@@ -1,0 +1,6 @@
+[Match]
+OriginalName=eth0
+
+[Link]
+# Workaround for tailscale https://github.com/tailscale/tailscale/issues/4833
+MTUBytes=1500
