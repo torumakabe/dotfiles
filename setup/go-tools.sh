@@ -14,3 +14,6 @@ go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignme
 
 echo "Installing goreleaser..."
 go install github.com/goreleaser/goreleaser@latest
+
+echo "Installing CUE..."
+go install cuelang.org/go/cmd/cue@latest
