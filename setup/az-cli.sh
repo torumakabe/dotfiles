@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Reffered to: hhttps://github.com/microsoft/vscode-dev-containers/blob/main/script-library/azcli-debian.sh
+# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/script-library/azcli-debian.sh
 
 set -eo pipefail
 
