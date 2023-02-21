@@ -103,7 +103,9 @@ fi
 echo ''
 echo "Now installing docker..."
 if ! type docker > /dev/null 2>&1; then
-    sudo ./setup/docker.sh
+    if ${REMOTE_CONTAINERS} != "true" > /dev/null 2>&1; then
+        sudo ./setup/docker.sh
+    fi
 fi
 
 echo ''
