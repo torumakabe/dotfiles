@@ -1,26 +1,17 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-OP_VERSION="2.14.0"
+curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+ sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
 
-architecture="$(uname -m)"
-case ${architecture} in
-    x86_64) architecture="amd64";;
-    aarch64 | armv8*) architecture="arm64";;
-    aarch32 | armv7* | armvhf*) architecture="arm";;
-    i?86) architecture="386";;
-    *) echo "(!) Architecture ${architecture} unsupported"; exit 1 ;;
-esac
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" |
+ sudo tee /etc/apt/sources.list.d/1password.list
 
-wget https://cache.agilebits.com/dist/1P/op2/pkg/v"${OP_VERSION}"/op_linux_"${architecture}"_v"${OP_VERSION}".zip
-unzip -u op_linux_"${architecture}"_v"${OP_VERSION}".zip
+sudo mkdir -p /etc/debsig/policies/AC2D62742012EA22/
+curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol | \
+ sudo tee /etc/debsig/policies/AC2D62742012EA22/1password.pol
+sudo mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22
+curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+ sudo gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
 
-mkdir -p "${HOME}"/.gnupg
-echo "keyserver keyserver.ubuntu.com" >> "${HOME}"/.gnupg/gpg.conf
-gpg --receive-keys 3FEF9748469ADBE15DA7CA80AC2D62742012EA22
-gpg --verify op.sig op
-
-sudo mv op /usr/local/bin/op
-
-rm ./op.sig
-rm ./op_linux_"${architecture}"_v"${OP_VERSION}".zip
+sudo apt update && sudo apt install 1password-cli

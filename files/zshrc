@@ -169,6 +169,11 @@ function azenv() {
   export ARM_TENANT_ID=$(op read  op://Personal/Azure-SP-Work-Hybrid-Subscription-Contributor/tenant_id)
 }
 
+function getkey() {
+  eval $(op signin)
+  op read op://Personal/id_ed25519/public_key > ~/.ssh/id_ed25519.pub
+}
+
 # For WSL
 #
 # export PATH=$PATH:'/mnt/c/Users/tomakabe/AppData/Local/Programs/Microsoft VS Code/bin'
