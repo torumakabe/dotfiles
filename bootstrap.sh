@@ -99,6 +99,9 @@ echo "Now installing Azure CLI..."
 if ! type az > /dev/null 2>&1; then
     sudo ./setup/az-cli.sh
 fi
+if [ ! -f /etc/bash_completion.d/azure-cli ]; then
+  curl -sLO 'https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion' && mv az.completion /etc/bash_completion.d/azure-cli
+fi
 
 echo ''
 echo "Now installing docker..."
