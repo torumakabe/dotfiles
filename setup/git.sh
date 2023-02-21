@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# for latest git
+
 set -eo pipefail
 
 apt_get_update_if_needed()

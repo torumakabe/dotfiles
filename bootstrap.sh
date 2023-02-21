@@ -63,8 +63,10 @@ sudo apt-get -y install software-properties-common
 sudo apt-get -y install tig
 
 echo ''
-echo "Now updating git..."
-sudo ./setup/git.sh
+echo "Now installing git..."
+if ! type git > /dev/null 2>&1; then
+    sudo apt-get -y install git
+fi
 
 echo ''
 echo "Now installing bat..."
