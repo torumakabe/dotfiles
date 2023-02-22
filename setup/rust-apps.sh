@@ -3,4 +3,5 @@ set -eo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-go install github.com/x-motemen/ghq@latest
+echo "Installing ripgrep..."
+cargo install ripgrep

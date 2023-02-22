@@ -63,6 +63,12 @@ sudo apt-get -y install software-properties-common
 sudo apt-get -y install tig
 
 echo ''
+echo "Now installing vim..."
+if ! type vim > /dev/null 2>&1; then
+    sudo apt-get -y install vim
+fi
+
+echo ''
 echo "Now installing git..."
 if ! type git > /dev/null 2>&1; then
     sudo apt-get -y install git
@@ -136,7 +142,7 @@ if ! type trivy > /dev/null 2>&1; then
     ./setup/trivy.sh
 fi
 
-# Go and tools that assume Go
+# Go, tools and apps that assume Go
 
 echo ''
 echo "Now installing Go..."
@@ -150,33 +156,13 @@ fi
 
 echo ''
 echo "Now installing go tools..."
-    ./setup/go-tools.sh
+./setup/go-tools.sh
 
 echo ''
-echo "Now installing ghq..."
-if ! type ghq > /dev/null 2>&1; then
-    ./setup/ghq.sh
-fi
+echo "Now installing go apps..."
+./setup/go-apps.sh
 
-echo ''
-echo "Now installing jump..."
-if ! type jump > /dev/null 2>&1; then
-    ./setup/jump.sh
-fi
-
-echo ''
-echo "Now installing kubelogin..."
-if ! type kubelogin > /dev/null 2>&1; then
-    ./setup/kubelogin.sh
-fi
-
-echo ''
-echo "Now installing yq..."
-if ! type yq > /dev/null 2>&1; then
-    ./setup/yq.sh
-fi
-
-# Rust and tools that assume Rust
+# Rust, tools and apps that assume Rust
 
 echo ''
 echo "Now installing Rust..."
@@ -186,10 +172,8 @@ if ! type cargo > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing rg..."
-if ! type rg > /dev/null 2>&1; then
-    cargo install ripgrep
-fi
+echo "Now installing Rust apps..."
+./setup/rust-apps.sh
 
 echo ''
 echo 'Setup completed!'
