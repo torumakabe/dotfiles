@@ -230,3 +230,6 @@ else
     apt-get -y install "gh${version_suffix}"
     rm -rf "/tmp/gh/gnupg"
 fi
+
+# gh extension install https://github.com/cappyzawa/gh-ghq-cd
+# gh alias set cd ghq-cd
