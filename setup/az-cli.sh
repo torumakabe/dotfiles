@@ -29,8 +29,9 @@ get_common_setting() {
     if [ -f "/tmp/vsdc-settings.env" ]; then
         local multi_line=""
         if [ "$2" = "true" ]; then multi_line="-z"; fi
-        local result="$(grep ${multi_line} -oP "$1=\"?\K[^\"]+" /tmp/vsdc-settings.env | tr -d '\0')"
-        if [ ! -z "${result}" ]; then declare -g $1="${result}"; fi
+        local result
+        result="$(grep ${multi_line} -oP "$1=\"?\K[^\"]+" /tmp/vsdc-settings.env | tr -d '\0')"
+        if [ -n "${result}" ]; then declare -g "$1"="${result}"; fi
     fi
     echo "$1=${!1}"
 }
@@ -38,7 +39,7 @@ get_common_setting() {
 # Function to run apt-get if needed
 apt_get_update_if_needed()
 {
-    if [ ! -d "/var/lib/apt/lists" ] || [ "$(ls /var/lib/apt/lists/ | wc -l)" = "0" ]; then
+    if [ ! -d "/var/lib/apt/lists" ] || [ "$(find /var/lib/apt/lists/ | wc -l)" = "0" ]; then
         echo "Running apt-get update..."
         apt-get update
     else
@@ -91,4 +92,3 @@ curl -sSL ${MICROSOFT_GPG_KEYS_URI} | gpg --dearmor > /usr/share/keyrings/micros
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/azure-cli/ ${VERSION_CODENAME} main" > /etc/apt/sources.list.d/azure-cli.list
 apt-get update
 apt-get install -y azure-cli
-echo "Done!"

@@ -44,7 +44,7 @@ fi
 
 echo ''
 echo "Now installing Oh My Zsh..."
-./setup/oh-my-zsh.sh
+sudo ./setup/oh-my-zsh.sh
 if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
   git clone https://github.com/zsh-users/zsh-completions "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions"
 fi

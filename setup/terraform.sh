@@ -119,7 +119,7 @@ find_version_from_git_tags() {
 # Function to run apt-get if needed
 apt_get_update_if_needed()
 {
-    if [ ! -d "/var/lib/apt/lists" ] || [ "$(ls /var/lib/apt/lists/ | wc -l)" = "0" ]; then
+    if [ ! -d "/var/lib/apt/lists" ] || [ "$(find /var/lib/apt/lists/ | wc -l)" = "0" ]; then
         echo "Running apt-get update..."
         apt-get update
     else
@@ -208,4 +208,3 @@ if [ "${TERRAGRUNT_VERSION}" != "none" ]; then
 fi
 
 rm -rf /tmp/tf-downloads ${GNUPGHOME}
-echo "Done!"

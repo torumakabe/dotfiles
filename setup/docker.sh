@@ -2,9 +2,14 @@
 
 set -eo pipefail
 
+if [ "$(id -u)" -ne 0 ]; then
+    echo -e 'Script must be run as root. Use sudo, su, or add "USER root" to your Dockerfile before running this script.'
+    exit 1
+fi
+
 apt_get_update_if_needed()
 {
-    if [ ! -d "/var/lib/apt/lists" ] || [ "$(ls /var/lib/apt/lists/ | wc -l)" = "0" ]; then
+    if [ ! -d "/var/lib/apt/lists" ] || [ "$(find /var/lib/apt/lists/ | wc -l)" = "0" ]; then
         echo "Running apt-get update..."
         apt-get update
     else
@@ -31,17 +36,3 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docke
 apt-get update
 apt-get -y install docker-ce docker-ce-cli containerd.io docker-compose-plugin
 usermod -aG docker "${SUDO_USER}"
-
-# dockerd without docker desktop
-#
-# groupmod -g 36257 docker
-# DOCKER_DIR=/mnt/wsl/shared-docker
-# mkdir -p "$DOCKER_DIR"
-# chmod o=,g=rx "$DOCKER_DIR"
-# chgrp docker "$DOCKER_DIR"
-# mkdir /etc/docker/
-# tee /etc/docker/daemon.json << EOT
-# {
-#   "hosts": ["unix:///mnt/wsl/shared-docker/docker.sock"]
-# }
-# EOT

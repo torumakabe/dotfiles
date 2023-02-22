@@ -12,12 +12,12 @@ USERNAME=${SUDO_USER}
 # https://www.google.com/linuxrepositories/
 GO_GPG_KEY_URI="https://dl.google.com/linux/linux_signing_key.pub"
 
-export DEBIAN_FRONTEND=noninteractive
-
 if [ "$(id -u)" -ne 0 ]; then
     echo -e 'Script must be run as root. Use sudo, su, or add "USER root" to your Dockerfile before running this script.'
     exit 1
 fi
+
+export DEBIAN_FRONTEND=noninteractive
 
 # Ensure that login shells get the correct path if the user updated the PATH using ENV.
 rm -f /etc/profile.d/00-restore-env.sh
@@ -42,12 +42,13 @@ find_version_from_git_tags() {
             last_part="${escaped_separator}[0-9]+"
         fi
         local regex="${prefix}\\K[0-9]+${escaped_separator}[0-9]+${last_part}$"
-        local version_list="$(git ls-remote --tags ${repository} | grep -oP "${regex}" | tr -d ' ' | tr "${separator}" "." | sort -rV)"
+        local version_list
+        version_list="$(git ls-remote --tags "${repository}" | grep -oP "${regex}" | tr -d ' ' | tr "${separator}" "." | sort -rV)"
         if [ "${requested_version}" = "latest" ] || [ "${requested_version}" = "current" ] || [ "${requested_version}" = "lts" ]; then
-            declare -g ${variable_name}="$(echo "${version_list}" | head -n 1)"
+            declare -g "${variable_name}"="$(echo "${version_list}" | head -n 1)"
         else
             set +e
-            declare -g ${variable_name}="$(echo "${version_list}" | grep -E -m 1 "^${requested_version//./\\.}([\\.\\s]|$)")"
+            declare -g "${variable_name}"="$(echo "${version_list}" | grep -E -m 1 "^${requested_version//./\\.}([\\.\\s]|$)")"
             set -e
         fi
     fi
@@ -67,8 +68,9 @@ get_common_setting() {
     if [ -f "/tmp/vsdc-settings.env" ]; then
         local multi_line=""
         if [ "$2" = "true" ]; then multi_line="-z"; fi
-        local result="$(grep ${multi_line} -oP "$1=\"?\K[^\"]+" /tmp/vsdc-settings.env | tr -d '\0')"
-        if [ ! -z "${result}" ]; then declare -g $1="${result}"; fi
+        local result
+        result="$(grep ${multi_line} -oP "$1=\"?\K[^\"]+" /tmp/vsdc-settings.env | tr -d '\0')"
+        if [ -n "${result}" ]; then declare -g "$1"="${result}"; fi
     fi
     echo "$1=${!1}"
 }
@@ -76,7 +78,7 @@ get_common_setting() {
 # Function to run apt-get if needed
 apt_get_update_if_needed()
 {
-    if [ ! -d "/var/lib/apt/lists" ] || [ "$(ls /var/lib/apt/lists/ | wc -l)" = "0" ]; then
+    if [ ! -d "/var/lib/apt/lists" ] || [ "$(find /var/lib/apt/lists/ | wc -l)" = "0" ]; then
         echo "Running apt-get update..."
         apt-get update
     else
@@ -93,7 +95,7 @@ check_packages() {
 }
 
 # Remove the previous installation
-rm -rf ${TARGET_GOROOT}
+rm -rf "${TARGET_GOROOT}"
 
 # Install curl, tar, git, other dependencies if missing
 check_packages curl ca-certificates gnupg2 tar g++ gcc libc6-dev make pkg-config
