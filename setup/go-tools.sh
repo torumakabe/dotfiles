@@ -17,3 +17,6 @@ go install github.com/goreleaser/goreleaser@latest
 
 echo "Installing CUE..."
 go install cuelang.org/go/cmd/cue@latest
+
+echo "Installing FAST..."
+go install github.com/ddo/fast@latest
