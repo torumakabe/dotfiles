@@ -155,6 +155,8 @@ command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+eval "$(github-copilot-cli alias -- "$0")"
+
 function ghenv() {
   eval $(op signin)
   export GITHUB_TOKEN=$(op read op://Personal/GitHub_PAT_CLI_Interactive/password)
