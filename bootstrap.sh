@@ -137,6 +137,18 @@ if ! type gh > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing Node..."
+if ! type node > /dev/null 2>&1; then
+    sudo ./setup/node.sh
+fi
+
+echo ''
+echo "Now installing GitHub Copilot for CLI..."
+if ! type github-copilot-cli > /dev/null 2>&1; then
+    ./setup/github-copilot-cli.sh
+fi
+
+echo ''
 echo "Now installing Trivy..."
 if ! type trivy > /dev/null 2>&1; then
     ./setup/trivy.sh
