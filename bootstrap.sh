@@ -110,27 +110,6 @@ if [ ! -f /etc/bash_completion.d/azure-cli ]; then
 fi
 
 echo ''
-echo "Now installing docker..."
-if ! type docker > /dev/null 2>&1; then
-    if [ -z "${REMOTE_CONTAINERS}" ] > /dev/null 2>&1; then
-        sudo ./setup/docker.sh
-    fi
-fi
-
-echo ''
-echo "Now installing kubectl & helm..."
-if ! type kubectl > /dev/null 2>&1; then
-    sudo ./setup/kubectl-helm.sh
-    ./setup/krew.sh
-fi
-
-echo ''
-echo "Now installing Flux..."
-if ! type flux > /dev/null 2>&1; then
-    ./setup/flux.sh
-fi
-
-echo ''
 echo "Now installing GitHub CLI..."
 if ! type gh > /dev/null 2>&1; then
     sudo ./setup/github-cli.sh
@@ -146,6 +125,32 @@ echo ''
 echo "Now installing GitHub Copilot for CLI..."
 if ! type github-copilot-cli > /dev/null 2>&1; then
     ./setup/github-copilot-cli.sh
+fi
+
+if "${REMOTE_CONTAINERS}" > /dev/null 2>&1; then
+    echo ''
+    echo 'You are in a remote container. Skip the following steps.'
+    echo "Setup completed!"
+    exit 0
+fi
+
+echo ''
+echo "Now installing docker..."
+if ! type docker > /dev/null 2>&1; then
+    sudo ./setup/docker.sh
+fi
+
+echo ''
+echo "Now installing kubectl & helm..."
+if ! type kubectl > /dev/null 2>&1; then
+    sudo ./setup/kubectl-helm.sh
+    ./setup/krew.sh
+fi
+
+echo ''
+echo "Now installing Flux..."
+if ! type flux > /dev/null 2>&1; then
+    ./setup/flux.sh
 fi
 
 echo ''
