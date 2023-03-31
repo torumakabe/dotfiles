@@ -127,35 +127,22 @@ export NVM_DIR=/usr/local/share/nvm
 [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 
 alias k=kubectl
-alias tf-state-cleanup='terraform state list | cut -f 1 -d "[" | xargs -L 1 terraform state rm'
 
-eval "$(jump shell zsh)"
+command -v jump >/dev/null && eval "$(jump shell zsh)"
+command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o default -F __start_kubectl k
+command -v helm >/dev/null && source <(helm completion zsh)
+command -v terraform >/dev/null && complete -o nospace -C /usr/local/bin/terraform terraform
+command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
+command -v github-copilot-cli >/dev/null && eval "$(github-copilot-cli alias -- "$0")"
 
-if [ -f "$HOME/.zfunc/_rustup" ]; then
-  FPATH=$HOME/.zfunc:$FPATH
-fi
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+[ -f "$HOME/.zfunc/_rustup" ] && FPATH=$HOME/.zfunc:$FPATH
+[ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
 
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
 
-source /etc/bash_completion.d/azure-cli
-
-source <(kubectl completion zsh)
-complete -o default -F __start_kubectl k
-
-source <(helm completion zsh)
-
-complete -o nospace -C /usr/local/bin/terraform terraform
-
-if [ -f "$HOME/.cargo/env" ]; then
-  source $HOME/.cargo/env
-fi
-
-command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
-
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-
-eval "$(github-copilot-cli alias -- "$0")"
+command -v az >/dev/null && source /etc/bash_completion.d/azure-cli
 
 function ghenv() {
   eval $(op signin)
