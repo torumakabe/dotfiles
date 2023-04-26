@@ -16,6 +16,3 @@ export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 kubectl krew install ctx
 kubectl krew install ns
-
-kubectl krew index add kvaps https://github.com/kvaps/krew-index
-kubectl krew install kvaps/node-shell
