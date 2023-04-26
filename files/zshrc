@@ -128,21 +128,20 @@ export NVM_DIR=/usr/local/share/nvm
 
 alias k=kubectl
 
+autoload -Uz +X compinit && compinit -u
+autoload -Uz +X bashcompinit && bashcompinit
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+[ -f "$HOME/.zfunc/_rustup" ] && FPATH=$HOME/.zfunc:$FPATH
+[ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
+
+command -v az >/dev/null && source /etc/bash_completion.d/azure-cli
 command -v jump >/dev/null && eval "$(jump shell zsh)"
 command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o default -F __start_kubectl k
 command -v helm >/dev/null && source <(helm completion zsh)
 command -v terraform >/dev/null && complete -o nospace -C /usr/local/bin/terraform terraform
 command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
 command -v github-copilot-cli >/dev/null && eval "$(github-copilot-cli alias -- "$0")"
-
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-[ -f "$HOME/.zfunc/_rustup" ] && FPATH=$HOME/.zfunc:$FPATH
-[ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
-
-autoload -Uz +X compinit && compinit -u
-autoload -Uz +X bashcompinit && bashcompinit
-
-command -v az >/dev/null && source /etc/bash_completion.d/azure-cli
 
 function ghenv() {
   eval $(op signin)
