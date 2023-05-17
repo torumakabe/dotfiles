@@ -20,3 +20,6 @@ go install github.com/Azure/kubelogin@latest
 
 echo "Installing yq..."
 go install github.com/mikefarah/yq/v4@latest
+
+echo "Installing sqlc.."
+go install github.com/kyleconroy/sqlc/cmd/sqlc@latest
