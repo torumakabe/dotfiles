@@ -104,6 +104,12 @@ if [ ! -f /etc/bash_completion.d/azure-cli ]; then
 fi
 
 echo ''
+echo "Now installing Azure Developer CLI..."
+if ! type azd > /dev/null 2>&1; then
+    sudo ./setup/azd-cli.sh
+fi
+
+echo ''
 echo "Now installing GitHub CLI..."
 if ! type gh > /dev/null 2>&1; then
     sudo ./setup/github-cli.sh
