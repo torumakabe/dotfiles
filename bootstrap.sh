@@ -95,6 +95,12 @@ if ! type fzf > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing cosign..."
+if ! type cosign > /dev/null 2>&1; then
+    sudo ./setup/cosign.sh
+fi
+
+echo ''
 echo "Now installing Terraform..."
 if ! type terraform > /dev/null 2>&1; then
     sudo ./setup/terraform.sh

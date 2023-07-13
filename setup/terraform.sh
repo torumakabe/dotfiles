@@ -12,7 +12,6 @@ TFLINT_SHA256="automatic"
 TERRAGRUNT_SHA256="automatic"
 
 TERRAFORM_GPG_KEY="72D7468F"
-TFLINT_GPG_KEY_URI="https://raw.githubusercontent.com/terraform-linters/tflint/master/8CE69160EB3F2FE9.key"
 GPG_KEY_SERVERS="keyserver hkp://keyserver.ubuntu.com:80
 keyserver hkps://keys.openpgp.org
 keyserver hkp://keyserver.pgp.com"
@@ -28,6 +27,11 @@ esac
 
 if [ "$(id -u)" -ne 0 ]; then
     echo -e 'Script must be run as root. Use sudo, su, or add "USER root" to your Dockerfile before running this script.'
+    exit 1
+fi
+
+if ! type cosign > /dev/null 2>&1; then
+    echo -e 'Please install cosign for tflint verification.'
     exit 1
 fi
 
@@ -177,12 +181,10 @@ if [ "${TFLINT_VERSION}" != "none" ]; then
     curl -sSL -o /tmp/tf-downloads/${TFLINT_FILENAME} https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/${TFLINT_FILENAME}
     if [ "${TFLINT_SHA256}" != "dev-mode" ]; then
         if [ "${TFLINT_SHA256}" = "automatic" ]; then
-            get_common_setting TFLINT_GPG_KEY_URI
-            curl -sSL -o tflint_key "${TFLINT_GPG_KEY_URI}"
-            gpg -q --import tflint_key
             curl -sSL -o tflint_checksums.txt https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/checksums.txt
-            curl -sSL -o tflint_checksums.txt.sig https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/checksums.txt.sig
-            gpg --verify tflint_checksums.txt.sig tflint_checksums.txt
+            curl -sSL -o tflint_checksums.txt.pem https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/checksums.txt.pem
+            curl -sSL -o tflint_checksums.txt.keyless.sig https://github.com/terraform-linters/tflint/releases/download/v${TFLINT_VERSION}/checksums.txt.keyless.sig
+            cosign verify-blob --certificate=tflint_checksums.txt.pem --signature=tflint_checksums.txt.keyless.sig --certificate-identity-regexp="^https://github.com/terraform-linters/tflint" --certificate-oidc-issuer=https://token.actions.githubusercontent.com tflint_checksums.txt
         else
             echo "${TFLINT_SHA256} *${TFLINT_FILENAME}" > tflint_checksums.txt
         fi
