@@ -23,3 +23,6 @@ go install github.com/mikefarah/yq/v4@latest
 
 echo "Installing sqlc.."
 go install github.com/kyleconroy/sqlc/cmd/sqlc@latest
+
+echo "Installing cosign.."
+go install github.com/sigstore/cosign/v2/cmd/cosign@latest
