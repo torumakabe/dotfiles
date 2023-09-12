@@ -1,0 +1,5 @@
+[ghq]
+	root = ~/workspace_corp
+	user = tomakabe_microsoft
+[commit]
+	gpgsign = false
