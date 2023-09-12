@@ -20,8 +20,6 @@
 [oh-my-zsh]
 	hide-status = 1
 	hide-dirty = 1
-[include]
-	path = ~/.gitconfig.local
 [credential "https://github.com"]
 	helper = !/usr/bin/gh auth git-credential
 [ghq]
