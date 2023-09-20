@@ -127,6 +127,7 @@ export NVM_DIR=/usr/local/share/nvm
 [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 
 alias k=kubectl
+alias ll='ls -ahl'
 
 autoload -Uz +X compinit && compinit -u
 autoload -Uz +X bashcompinit && bashcompinit
