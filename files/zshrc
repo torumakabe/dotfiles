@@ -142,7 +142,6 @@ command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o
 command -v helm >/dev/null && source <(helm completion zsh)
 command -v terraform >/dev/null && complete -o nospace -C /usr/local/bin/terraform terraform
 command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
-command -v github-copilot-cli >/dev/null && eval "$(github-copilot-cli alias -- "$0")"
 
 function ghenv() {
   eval $(op signin)

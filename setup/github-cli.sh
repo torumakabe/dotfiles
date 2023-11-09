@@ -231,4 +231,5 @@ else
     rm -rf "/tmp/gh/gnupg"
 fi
 
-# gh extension install https://github.com/cappyzawa/gh-ghq-cd
+# gh extension install cappyzawa/gh-ghq-cd
+# gh extension install github/gh-copilot

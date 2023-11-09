@@ -124,12 +124,6 @@ if ! type node > /dev/null 2>&1; then
     [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 fi
 
-echo ''
-echo "Now installing GitHub Copilot for CLI..."
-if ! type github-copilot-cli > /dev/null 2>&1; then
-    ./setup/github-copilot-cli.sh
-fi
-
 if "${REMOTE_CONTAINERS}" > /dev/null 2>&1; then
     echo ''
     echo 'You are in a remote container. Skip the following steps.'
