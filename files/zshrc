@@ -129,7 +129,7 @@ export NVM_DIR=/usr/local/share/nvm
 alias k=kubectl
 alias ll='ls -ahl'
 
-autoload -Uz +X compinit && compinit -u
+autoload -Uz +X compinit && compinit -ui
 autoload -Uz +X bashcompinit && bashcompinit
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

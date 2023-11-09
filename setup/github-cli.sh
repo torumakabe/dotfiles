@@ -231,5 +231,7 @@ else
     rm -rf "/tmp/gh/gnupg"
 fi
 
+gh completion -s zsh > /usr/local/share/zsh/site-functions/_gh
+
 # gh extension install cappyzawa/gh-ghq-cd
 # gh extension install github/gh-copilot
