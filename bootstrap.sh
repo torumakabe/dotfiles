@@ -116,6 +116,12 @@ if ! type gh > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing Radius CLI..."
+if ! type rad > /dev/null 2>&1; then
+    ./setup/rad.sh
+fi
+
+echo ''
 echo "Now installing Node..."
 if ! type node > /dev/null 2>&1; then
     sudo ./setup/node.sh

@@ -142,6 +142,7 @@ command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o
 command -v helm >/dev/null && source <(helm completion zsh)
 command -v terraform >/dev/null && complete -o nospace -C /usr/local/bin/terraform terraform
 command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
+command -v rad >/dev/null && . <(rad completion zsh)
 
 function ghenv() {
   eval $(op signin)
