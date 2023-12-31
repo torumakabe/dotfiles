@@ -1,7 +1,7 @@
 [core]
 	autocrlf = input
 	fileMode = false
-	editor = vim -c \"set fenc=utf-8\"
+#	editor = vim -c \"set fenc=utf-8\"
 [pull]
 	rebase = true
 	ff = only
@@ -21,11 +21,11 @@
 	hide-status = 1
 	hide-dirty = 1
 [credential "https://github.com"]
-	helper = 
-	helper = !/usr/bin/gh auth git-credential
+	helper =
+	helper = !gh auth git-credential
 [credential "https://gist.github.com"]
-	helper = 
-	helper = !/usr/bin/gh auth git-credential
+	helper =
+	helper = !gh auth git-credential
 [ghq]
 	root = ~/workspace
 	user = torumakabe
