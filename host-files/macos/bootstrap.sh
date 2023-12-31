@@ -11,10 +11,6 @@ brew install bash-completion
 mkdir -p ~/.zsh/completions
 curl https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion -o ~/.zsh/completions/az.completion
 
-# Installing Oh My Zsh
-echo ''
-echo "Now installing Oh My Zsh..."
-../../setup/oh-my-zsh.sh
 
 # Setup other brew packages
 echo "Now installing and configuring other brew packages..."
@@ -26,8 +22,14 @@ brew install go
 brew install ghq
 brew install jump
 brew install fzf
-# brew install kubernetes-cli
-# brew install kubernetes-helm
+brew install 1password-cli
+brew install azure-cli
+brew tap azure/azd && brew install azd
+brew install kubernetes-cli
+brew install kubernetes-helm
 
 echo ''
 echo 'Setup completed!'
+
+# Install Oh My Zsh separetely
+# https://ohmyz.sh/#install
