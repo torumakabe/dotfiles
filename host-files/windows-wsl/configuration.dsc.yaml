@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://aka.ms/configuration-dsc-schema/0.2
+# Reference: https://github.com/microsoft/winget-cli#building-the-client
+properties:
+  resources:
+    - resource: Microsoft.Windows.Developer/DeveloperMode
+      directives:
+        description: 'Enable Developer Mode'
+        allowPrerelease: true
+      settings:
+        Ensure: Present
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: 'Install GitHub CLI'
+        allowPrerelease: true
+      settings:
+        id: GitHub.cli
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: 'Install Go'
+        allowPrerelease: true
+      settings:
+        id: GoLang.Go
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: 'Install fzf'
+        allowPrerelease: true
+      settings:
+        id: junegunn.fzf
+        source: winget
+  configurationVersion: 0.2.0
