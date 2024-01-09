@@ -44,4 +44,4 @@
 [includeIf "gitdir:~/workspace_corp/"]
 	path = ~/.gitconfig_corp
 [safe]
-        directory = *
+	directory = *
