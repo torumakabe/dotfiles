@@ -43,3 +43,5 @@
 	gpgsign = true
 [includeIf "gitdir:~/workspace_corp/"]
 	path = ~/.gitconfig_corp
+[safe]
+        directory = *
