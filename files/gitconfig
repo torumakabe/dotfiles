@@ -1,7 +1,6 @@
 [core]
 	autocrlf = input
 	fileMode = false
-#	editor = vim -c \"set fenc=utf-8\"
 [pull]
 	rebase = true
 	ff = only
@@ -41,7 +40,13 @@
 # echo '993850+torumakabe@users.noreply.github.com ssh-ed25519 [pub-key]' > ~/.ssh/allowed_signers
 [commit]
 	gpgsign = true
-[includeIf "gitdir:~/workspace_corp/"]
-	path = ~/.gitconfig_corp
 [safe]
 	directory = *
+[includeIf "gitdir:~/workspace_corp/"]
+	path = ~/.gitconfig-corp
+[includeIf "gitdir:/home/"]
+	path = ~/.gitconfig-linux
+[includeIf "gitdir:/Users/"]
+	path = ~/.gitconfig-mac
+[includeIf "gitdir:C:"]
+	path = ~/.gitconfig-windows

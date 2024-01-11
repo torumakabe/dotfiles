@@ -4,7 +4,7 @@ set -eo pipefail
 
 dir=${HOME}/dotfiles/files
 olddir=${HOME}/dotfiles_old
-files="zshrc gitconfig gitconfig_corp cobra.yaml tigrc tmux.conf"
+files="zshrc gitconfig gitconfig-linux gitconfig-mac gitconfig-windows gitconfig-corp cobra.yaml tigrc tmux.conf"
 
 if [ ! -e "${HOME}/dotfiles" ]; then
     git clone https://github.com/torumakabe/dotfiles.git "${HOME}/dotfiles"
