@@ -50,3 +50,5 @@
 	path = ~/.gitconfig-mac
 [includeIf "gitdir:C:"]
 	path = ~/.gitconfig-windows
+[credential]
+	helper = "!f() { /home/vscode/.vscode-server/bin/0ee08df0cf4527e40edc9aa28f4b5bd38bbff2b2/node /tmp/vscode-remote-containers-9540b4e3-b687-455e-84f4-4c71a8ba4775.js git-credential-helper $*; }; f"
