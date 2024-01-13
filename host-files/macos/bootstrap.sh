@@ -4,14 +4,6 @@ set -eo pipefail
 echo "Updating package lists..."
 brew update
 
-# Installing bash completion
-echo ''
-echo "Now installing bash-completion..."
-brew install bash-completion
-mkdir -p ~/.zsh/completions
-curl https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion -o ~/.zsh/completions/az.completion
-
-
 # Setup other brew packages
 echo "Now installing and configuring other brew packages..."
 brew install zsh-completions
