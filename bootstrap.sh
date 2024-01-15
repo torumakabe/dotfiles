@@ -105,6 +105,14 @@ if ! type node > /dev/null 2>&1; then
     [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 fi
 
+echo ''
+echo "Now checking Azure CLI completion file..."
+if type az > /dev/null 2>&1; then
+    if [ ! -f /etc/bash_completion.d/azure-cli ]; then
+        curl -sLO 'https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion' && sudo mv az.completion /etc/bash_completion.d/azure-cli
+    fi
+fi
+
 # If you are in Dev Container, the following steps are skipped because they could be installed by Dev Container templates or features
 
 if "${REMOTE_CONTAINERS}" > /dev/null 2>&1; then
@@ -124,9 +132,6 @@ echo ''
 echo "Now installing Azure CLI..."
 if ! type az > /dev/null 2>&1; then
     sudo ./setup/az-cli.sh
-fi
-if [ ! -f /etc/bash_completion.d/azure-cli ]; then
-  curl -sLO 'https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion' && sudo mv az.completion /etc/bash_completion.d/azure-cli
 fi
 
 echo ''
