@@ -53,6 +53,8 @@ echo ''
 echo "Change default shell to zsh..."
 sudo usermod --shell /bin/zsh "${USER}"
 
+# Essential tools
+
 echo ''
 echo "Now installing apt packages..."
 sudo apt-get update
@@ -83,15 +85,39 @@ if ! type batcat > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing 1Password CLI..."
-if ! type op > /dev/null 2>&1; then
-    ./setup/op.sh
-fi
-
-echo ''
 echo "Now installing fzf..."
 if ! type fzf > /dev/null 2>&1; then
     ./setup/fzf.sh
+fi
+
+echo ''
+echo "Now installing GitHub CLI..."
+if ! type gh > /dev/null 2>&1; then
+    sudo ./setup/github-cli.sh
+fi
+
+echo ''
+echo "Now installing Node..."
+if ! type node > /dev/null 2>&1; then
+    sudo ./setup/node.sh
+    export NVM_DIR=/usr/local/share/nvm
+    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+    [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+fi
+
+# If you are in Dev Container, the following steps are skipped because they could be installed by Dev Container templates or features
+
+if "${REMOTE_CONTAINERS}" > /dev/null 2>&1; then
+    echo ''
+    echo 'You are in a remote container. Skip the following steps.'
+    echo "Setup completed!"
+    exit 0
+fi
+
+echo ''
+echo "Now installing 1Password CLI..."
+if ! type op > /dev/null 2>&1; then
+    ./setup/op.sh
 fi
 
 echo ''
@@ -110,31 +136,9 @@ if ! type azd > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing GitHub CLI..."
-if ! type gh > /dev/null 2>&1; then
-    sudo ./setup/github-cli.sh
-fi
-
-echo ''
 echo "Now installing Radius CLI..."
 if ! type rad > /dev/null 2>&1; then
     ./setup/rad.sh
-fi
-
-echo ''
-echo "Now installing Node..."
-if ! type node > /dev/null 2>&1; then
-    sudo ./setup/node.sh
-    export NVM_DIR=/usr/local/share/nvm
-    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-    [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
-fi
-
-if "${REMOTE_CONTAINERS}" > /dev/null 2>&1; then
-    echo ''
-    echo 'You are in a remote container. Skip the following steps.'
-    echo "Setup completed!"
-    exit 0
 fi
 
 echo ''
