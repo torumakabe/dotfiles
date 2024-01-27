@@ -136,7 +136,15 @@ autoload -Uz +X bashcompinit && bashcompinit
 [ -f "$HOME/.zfunc/_rustup" ] && FPATH=$HOME/.zfunc:$FPATH
 [ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
 
-command -v az >/dev/null && source /etc/bash_completion.d/azure-cli
+case `uname` in
+  Darwin)
+    command -v az >/dev/null && source $(brew --prefix)/etc/bash_completion.d/az
+  ;;
+  *)
+    command -v az >/dev/null && source /etc/bash_completion.d/azure-cli
+  ;;
+esac
+
 command -v jump >/dev/null && eval "$(jump shell zsh)"
 command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o default -F __start_kubectl k
 command -v helm >/dev/null && source <(helm completion zsh)
