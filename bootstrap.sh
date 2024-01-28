@@ -113,9 +113,9 @@ if type az > /dev/null 2>&1; then
     fi
 fi
 
-# If you are in Dev Container, the following steps are skipped because they could be installed by Dev Container templates or features
+# If you are in Dev Container/GitHub Codespaces, the following steps are skipped because they could be installed by Dev Container templates or features
 
-if "${REMOTE_CONTAINERS}" > /dev/null 2>&1; then
+if "${REMOTE_CONTAINERS}" || "${CODESPACES}" > /dev/null 2>&1; then
     echo ''
     echo 'You are in a remote container. Skip the following steps.'
     echo "Setup completed!"
