@@ -31,27 +31,26 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-if [ "$1" = "setup-shell" ]
-then
+if [ "$1" = "setup-zsh" ]; then
   echo ''
-  echo "Now setting up bash..."
-  sudo ./setup/bash-common.sh
+  echo "Now setting up bash completion..."
+  sudo ./setup/bash-completion.sh
 
   echo ''
   echo "Now setting up zsh..."
-  sudo ./setup/zsh-common.sh
-fi
+  sudo ./setup/zsh.sh
 
-echo ''
-echo "Now installing Oh My Zsh..."
-sudo ./setup/oh-my-zsh.sh
-if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
-  git clone https://github.com/zsh-users/zsh-completions "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions"
-fi
+  echo ''
+  echo "Now installing Oh My Zsh..."
+  sudo ./setup/oh-my-zsh.sh
+  if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
+    git clone https://github.com/zsh-users/zsh-completions "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions"
+  fi
 
-echo ''
-echo "Change default shell to zsh..."
-sudo usermod --shell /bin/zsh "${USER}"
+  echo ''
+  echo "Change default shell to zsh..."
+  sudo usermod --shell /bin/zsh "${USER}"
+fi
 
 # Essential tools
 

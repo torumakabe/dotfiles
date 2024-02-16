@@ -8,12 +8,12 @@ cd ~/dotfiles
 ./bootstrap.sh
 ```
 
-## Setup (with common bash/zsh settings)
+## Setup (zsh settings with bash completion)
 
 ```
 git clone https://github.com/torumakabe/dotfiles.git ~/dotfiles
 cd ~/dotfiles
-./bootstrap.sh setup-shell
+./bootstrap.sh setup-zsh
 ```
 
 ## Setup (Link only)

@@ -48,5 +48,5 @@
 	path = ~/.gitconfig-linux
 [includeIf "gitdir:/Users/"]
 	path = ~/.gitconfig-mac
-[includeIf "gitdir:C:"]
+[includeIf "gitdir/i:C:/"]
 	path = ~/.gitconfig-windows
