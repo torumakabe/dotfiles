@@ -51,7 +51,7 @@ fi
 
 echo ''
 echo "Now installing zsh completions..."
-if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
+if [ -d "$HOME/.oh-my-zsh" && ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
   git clone https://github.com/zsh-users/zsh-completions "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions"
 fi
 
