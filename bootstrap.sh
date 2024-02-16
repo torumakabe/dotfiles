@@ -43,13 +43,17 @@ if [ "$1" = "setup-zsh" ]; then
   echo ''
   echo "Now installing Oh My Zsh..."
   sudo ./setup/oh-my-zsh.sh
-  if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
-    git clone https://github.com/zsh-users/zsh-completions "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions"
-  fi
 
   echo ''
   echo "Change default shell to zsh..."
   sudo usermod --shell /bin/zsh "${USER}"
+fi
+
+echo ''
+echo "Now installing xsh completions..."
+sudo ./setup/oh-my-zsh.sh
+if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
+  git clone https://github.com/zsh-users/zsh-completions "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions"
 fi
 
 # Essential tools
