@@ -62,7 +62,6 @@ echo "Now installing apt packages..."
 sudo apt-get update
 sudo apt-get -y install unzip
 sudo apt-get -y install jq
-sudo apt-get -y install libssl-dev
 sudo apt-get -y install software-properties-common
 sudo apt-get -y install tig
 
