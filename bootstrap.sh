@@ -50,7 +50,7 @@ echo "Now setting up bash completion..."
 sudo ./setup/bash-completion.sh
 
 echo ''
-echo "Now installing zsh completions..."
+echo "Now installing zsh completion..."
 if [ ! -e "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions" ]; then
   git clone https://github.com/zsh-users/zsh-completions "${HOME}/.oh-my-zsh/custom/plugins/zsh-completions"
 fi
