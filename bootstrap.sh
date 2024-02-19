@@ -31,6 +31,10 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+echo ''
+echo "Now updating apt packages..."
+sudo apt-get update
+
 if [ "$1" = "setup-zsh" ]; then
   echo ''
   echo "Now setting up zsh..."
@@ -59,7 +63,6 @@ fi
 
 echo ''
 echo "Now installing apt packages..."
-sudo apt-get update
 sudo apt-get -y install unzip
 sudo apt-get -y install jq
 sudo apt-get -y install software-properties-common
