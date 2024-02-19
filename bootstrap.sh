@@ -33,10 +33,6 @@ export DEBIAN_FRONTEND=noninteractive
 
 if [ "$1" = "setup-zsh" ]; then
   echo ''
-  echo "Now setting up bash completion..."
-  sudo ./setup/bash-completion.sh
-
-  echo ''
   echo "Now setting up zsh..."
   sudo ./setup/zsh.sh
 
@@ -48,6 +44,10 @@ if [ "$1" = "setup-zsh" ]; then
   echo "Change default shell to zsh..."
   sudo usermod --shell /bin/zsh "${USER}"
 fi
+
+echo ''
+echo "Now setting up bash completion..."
+sudo ./setup/bash-completion.sh
 
 echo ''
 echo "Now installing zsh completions..."
