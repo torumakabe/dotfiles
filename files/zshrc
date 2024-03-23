@@ -151,7 +151,7 @@ command -v helm >/dev/null && source <(helm completion zsh)
 command -v terraform >/dev/null && complete -o nospace -C /usr/local/bin/terraform terraform
 command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
 command -v rad >/dev/null && . <(rad completion zsh)
-command -v gh >/dev/null && eval "$(gh copilot alias -- zsh)"
+gh copilot -h >/dev/null && eval "$(gh copilot alias -- zsh)"
 
 function ghenv() {
   eval $(op signin)
