@@ -3,4 +3,5 @@ OriginalName=eth0
 
 [Link]
 # Workaround for tailscale https://github.com/tailscale/tailscale/issues/4833
-MTUBytes=1500
+# and https://tailscale.com/kb/1295/install-windows-wsl2
+MTUBytes=1340
