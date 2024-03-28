@@ -10,6 +10,8 @@ if type cargo > /dev/null 2>&1; then
     exit 0
 fi
 
+sudo apt install libssl-dev
+
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "${HOME}/.cargo/env"
 
