@@ -139,6 +139,7 @@ autoload -Uz +X bashcompinit && bashcompinit
 case `uname` in
   Darwin)
     command -v az >/dev/null && source $(brew --prefix)/etc/bash_completion.d/az
+    SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
   ;;
   *)
     command -v az >/dev/null && source /etc/bash_completion.d/azure-cli
