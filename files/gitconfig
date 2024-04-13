@@ -4,6 +4,8 @@
 [pull]
 	rebase = true
 	ff = only
+[rerere]
+	enabled = true
 [fetch]
 	prune = true
 [format]
