@@ -11,56 +11,56 @@ properties:
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install PowerShell'
-        allowPrerelease: true
+        allowPrerelease: false
       settings:
         id: Microsoft.PowerShell
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install GitHub CLI'
-        allowPrerelease: true
+        allowPrerelease: false
       settings:
         id: GitHub.cli
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install Go'
-        allowPrerelease: true
+        allowPrerelease: false
       settings:
         id: GoLang.Go
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install fzf'
-        allowPrerelease: true
+        allowPrerelease: false
       settings:
         id: junegunn.fzf
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install git'
-        allowPrerelease: true
+        allowPrerelease: false
       settings:
         id: Git.Git
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install Tailscale'
-        allowPrerelease: true
+        allowPrerelease: false
       settings:
         id: tailscale.tailscale
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install Azure CLI'
-        allowPrerelease: true
+        allowPrerelease: false
       settings:
         id: Microsoft.AzureCLI
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install PowerToys'
-        allowPrerelease: true
+        allowPrerelease: false
       settings:
         id: Microsoft.PowerToys
         source: winget
