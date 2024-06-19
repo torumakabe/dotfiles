@@ -10,6 +10,13 @@ properties:
         Ensure: Present
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: 'Install PowerShell'
+        allowPrerelease: true
+      settings:
+        id: Microsoft.PowerShell
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: 'Install GitHub CLI'
         allowPrerelease: true
       settings:
