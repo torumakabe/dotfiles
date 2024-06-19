@@ -53,32 +53,13 @@
                 "source": "Windows.Terminal.PowershellCore"
             },
             {
-                "background": "#350425",
-                "commandline": "multipass shell mp",
-                "cursorShape": "filledBox",
-                "font": {
-                    "face": "Ubuntu Mono"
-                },
-                "guid": "{aaaa9e6d-1e09-4be6-b76c-82b4ba1885fb}",
-                "hidden": true,
-                "historySize": 50000,
-                "icon": "C:/Program Files/Multipass/bin/multipass_wt.ico",
-                "name": "Multipass"
-            },
-            {
                 "font": {
                     "face": "Ubuntu Mono"
                 },
                 "guid": "{e5a83caa-4c73-52b3-ae6b-bc438d721ef9}",
                 "hidden": false,
-                "name": "Ubuntu 22.04.3 LTS",
+                "name": "Ubuntu 22.04.4 LTS",
                 "source": "CanonicalGroupLimited.Ubuntu22.04LTS_79rhkp1fndgsc"
-            },
-            {
-                "guid": "{17bf3de4-5353-5709-bcf9-835bd952a95e}",
-                "hidden": true,
-                "name": "Ubuntu-22.04",
-                "source": "Windows.Terminal.Wsl"
             },
             {
                 "guid": "{b453ae62-4e3d-5e58-b989-0a998ec441b8}",
