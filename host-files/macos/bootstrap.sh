@@ -19,6 +19,7 @@ brew install azure-cli
 brew tap azure/azd && brew install azd
 brew install kubernetes-cli
 brew install kubernetes-helm
+brew install --cask devtoys
 
 echo ''
 echo 'Setup completed!'
