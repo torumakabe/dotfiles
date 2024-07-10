@@ -71,4 +71,11 @@ properties:
       settings:
         id: DevToys-app.DevToys
         source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: 'Install DotNet SDK'
+        allowPrerelease: false
+      settings:
+        id: Microsoft.DotNet.SDK.8
+        source: winget
   configurationVersion: 0.2.0
