@@ -78,4 +78,11 @@ properties:
       settings:
         id: Microsoft.DotNet.SDK.8
         source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: 'Install Azure Developer CLI'
+        allowPrerelease: false
+      settings:
+        id: microsoft.azd
+        source: winget
   configurationVersion: 0.2.0
