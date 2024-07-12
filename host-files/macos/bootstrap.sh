@@ -20,6 +20,7 @@ brew tap azure/azd && brew install azd
 brew install kubernetes-cli
 brew install kubernetes-helm
 brew install --cask devtoys
+brew install --cask dotnet-sdk
 
 echo ''
 echo 'Setup completed!'
