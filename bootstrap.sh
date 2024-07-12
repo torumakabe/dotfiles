@@ -101,6 +101,12 @@ if ! type gh > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing .NET SDK..."
+if ! type dotnet > /dev/null 2>&1; then
+    sudo ./setup/dotnet.sh
+fi
+
+echo ''
 echo "Now installing Node..."
 if ! type node > /dev/null 2>&1; then
     sudo ./setup/node.sh
