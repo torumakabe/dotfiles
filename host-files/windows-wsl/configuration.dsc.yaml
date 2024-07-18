@@ -85,4 +85,11 @@ properties:
       settings:
         id: microsoft.azd
         source: winget
+      - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: 'Install jq'
+        allowPrerelease: false
+      settings:
+        id: jqlang.jq
+        source: winget
   configurationVersion: 0.2.0
