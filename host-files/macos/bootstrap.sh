@@ -11,6 +11,7 @@ brew install watch
 brew install jq
 brew install gh
 brew install go
+brew install node
 brew install ghq
 brew install jump
 brew install fzf

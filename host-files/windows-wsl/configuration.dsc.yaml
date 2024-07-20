@@ -85,11 +85,18 @@ properties:
       settings:
         id: microsoft.azd
         source: winget
-      - resource: Microsoft.WinGet.DSC/WinGetPackage
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: 'Install jq'
         allowPrerelease: false
       settings:
         id: jqlang.jq
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: 'Install node'
+        allowPrerelease: false
+      settings:
+        id: OpenJS.NodeJS
         source: winget
   configurationVersion: 0.2.0
