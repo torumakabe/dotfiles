@@ -20,6 +20,8 @@ brew install azure-cli
 brew tap azure/azd && brew install azd
 brew install kubernetes-cli
 brew install kubernetes-helm
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform
 brew install --cask devtoys
 brew install --cask dotnet-sdk
 
