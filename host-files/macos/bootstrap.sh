@@ -12,6 +12,7 @@ brew install jq
 brew install gh
 brew install go
 brew install node
+brew install python@3
 brew install ghq
 brew install jump
 brew install fzf
