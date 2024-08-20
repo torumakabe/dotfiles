@@ -159,11 +159,3 @@ function ghenv() {
   export GITHUB_TOKEN=$(op read op://Personal/GitHub_PAT_CLI_Interactive/password)
   export GITHUB_USER=$(op read  op://Personal/GitHub_PAT_CLI_Interactive/notesPlain)
 }
-
-function azenv() {
-  eval $(op signin)
-  export ARM_CLIENT_ID=$(op read op://Personal/Azure-SP-Work-Hybrid-Subscription-Contributor/client_id)
-  export ARM_CLIENT_SECRET=$(op read op://Personal/Azure-SP-Work-Hybrid-Subscription-Contributor/client_secret)
-  export ARM_SUBSCRIPTION_ID=$(op read op://Personal/Azure-SP-Work-Hybrid-Subscription-Contributor/subscription_id)
-  export ARM_TENANT_ID=$(op read  op://Personal/Azure-SP-Work-Hybrid-Subscription-Contributor/tenant_id)
-}
