@@ -113,4 +113,11 @@ properties:
       settings:
         id: Microsoft.DevProxy
         source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: 'Install Sqlite'
+        allowPrerelease: false
+      settings:
+        id: sqlite.sqlite
+        source: winget
   configurationVersion: 0.2.0
