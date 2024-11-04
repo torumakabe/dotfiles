@@ -4,120 +4,127 @@ properties:
   resources:
     - resource: Microsoft.Windows.Developer/DeveloperMode
       directives:
-        description: 'Enable Developer Mode'
+        description: "Enable Developer Mode"
         allowPrerelease: true
       settings:
         Ensure: Present
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install PowerShell'
+        description: "Install PowerShell"
         allowPrerelease: false
       settings:
         id: Microsoft.PowerShell
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install GitHub CLI'
+        description: "Install GitHub CLI"
         allowPrerelease: false
       settings:
         id: GitHub.cli
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install Go'
+        description: "Install Go"
         allowPrerelease: false
       settings:
         id: GoLang.Go
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install fzf'
+        description: "Install fzf"
         allowPrerelease: false
       settings:
         id: junegunn.fzf
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install git'
+        description: "Install git"
         allowPrerelease: false
       settings:
         id: Git.Git
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install Tailscale'
+        description: "Install Tailscale"
         allowPrerelease: false
       settings:
         id: tailscale.tailscale
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install Azure CLI'
+        description: "Install Azure CLI"
         allowPrerelease: false
       settings:
         id: Microsoft.AzureCLI
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install PowerToys'
+        description: "Install PowerToys"
         allowPrerelease: false
       settings:
         id: Microsoft.PowerToys
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install DevToys'
+        description: "Install DevToys"
         allowPrerelease: true
       settings:
         id: DevToys-app.DevToys
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install DotNet SDK'
+        description: "Install DotNet SDK"
         allowPrerelease: false
       settings:
         id: Microsoft.DotNet.SDK.8
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install Azure Developer CLI'
+        description: "Install Azure Developer CLI"
         allowPrerelease: false
       settings:
         id: microsoft.azd
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install jq'
+        description: "Install jq"
         allowPrerelease: false
       settings:
         id: jqlang.jq
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install node'
+        description: "Install node"
         allowPrerelease: false
       settings:
         id: OpenJS.NodeJS
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install Terraform'
+        description: "Install Terraform"
         allowPrerelease: false
       settings:
         id: Hashicorp.Terraform
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install Dev Proxy'
+        description: "Install Dev Proxy"
         allowPrerelease: false
       settings:
         id: Microsoft.DevProxy
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: 'Install Sqlite'
+        description: "Install Sqlite"
         allowPrerelease: false
       settings:
         id: sqlite.sqlite
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: "Install Python"
+        allowPrerelease: false
+      settings:
+        id: Python.Python.3.11
         source: winget
   configurationVersion: 0.2.0
