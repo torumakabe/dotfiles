@@ -28,8 +28,29 @@ brew install --cask dotnet-sdk
 brew tap microsoft/dev-proxy
 brew install dev-proxy
 
+dir=${HOME}/dotfiles/files
+olddir=${HOME}/dotfiles_old
+files="zshrc gitconfig gitconfig-mac gitconfig-corp cobra.yaml tigrc tmux.conf"
+
+if [ ! -e "${HOME}/dotfiles" ]; then
+    git clone https://github.com/torumakabe/dotfiles.git "${HOME}/dotfiles"
+fi
+
+mkdir -p "$olddir"
+pushd "$dir" || exit
+
+for file in $files; do
+    if [ -f "${HOME}/.$file" ]; then
+      mv "${HOME}/.$file" "${HOME}/dotfiles_old/"
+    fi
+    ln -s "$dir/$file" "${HOME}/.$file"
+done
+
+popd
+
 echo ''
 echo 'Setup completed!'
 
-# Install Oh My Zsh separetely
-# https://ohmyz.sh/#install
+# Install Oh My Zsh and plugins separetely
+# Oh My Zsh: https://ohmyz.sh/#install
+# zsh_completion plugin: https://github.com/zsh-users/zsh-completions
