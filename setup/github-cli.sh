@@ -234,4 +234,5 @@ fi
 gh completion -s zsh > /usr/local/share/zsh/site-functions/_gh
 
 # gh extension install cappyzawa/gh-ghq-cd
+# gh alias set cd ghq-cd
 # gh extension install github/gh-copilot
