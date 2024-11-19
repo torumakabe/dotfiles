@@ -52,3 +52,5 @@
 	path = ~/.gitconfig-mac
 [includeIf "gitdir/i:C:/"]
 	path = ~/.gitconfig-windows
+[includeIf "gitdir/i:D:/"]
+	path = ~/.gitconfig-windows
