@@ -76,7 +76,7 @@ properties:
         description: "Install DotNet SDK"
         allowPrerelease: false
       settings:
-        id: Microsoft.DotNet.SDK.8
+        id: Microsoft.DotNet.SDK.9
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
