@@ -114,7 +114,6 @@ setopt autopushd
 
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
-export GOROOT=/usr/local/go
 export PATH=$PATH:$GOROOT/bin
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
