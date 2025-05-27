@@ -45,13 +45,6 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install Tailscale"
-        allowPrerelease: false
-      settings:
-        id: tailscale.tailscale
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
         description: "Install Azure CLI"
         allowPrerelease: false
       settings:
