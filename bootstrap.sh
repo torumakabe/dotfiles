@@ -67,6 +67,7 @@ sudo apt-get -y install unzip
 sudo apt-get -y install jq
 sudo apt-get -y install software-properties-common
 sudo apt-get -y install tig
+sudo apt-get -y install keychain
 
 echo ''
 echo "Now installing vim..."

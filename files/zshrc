@@ -154,6 +154,11 @@ command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
 command -v rad >/dev/null && . <(rad completion zsh)
 command -v gh >/dev/null && gh copilot -h >/dev/null 2>&1 && eval "$(gh copilot alias -- zsh)"
 
+if [ -z "$SSH_AUTH_SOCK" ] ; then
+  eval $(ssh-agent -s) >/dev/null
+  ssh-add -l >/dev/null || ssh-add ~/.ssh/id_ed25519 >/dev/null 2>&1
+fi
+
 function ghenv() {
   eval $(op signin)
   export GITHUB_TOKEN=$(op read op://Personal/GitHub_PAT_CLI_Interactive/password)
