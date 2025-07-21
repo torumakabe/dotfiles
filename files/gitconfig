@@ -2,7 +2,6 @@
 	autocrlf = input
 	fileMode = false
 [pull]
-	rebase = true
 	ff = only
 [rerere]
 	enabled = true
