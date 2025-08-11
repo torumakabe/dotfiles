@@ -26,6 +26,7 @@ brew install --cask devtoys
 brew install --cask dotnet-sdk
 brew tap microsoft/dev-proxy
 brew install dev-proxy
+brew install oven-sh/bun/bun
 
 dir=${HOME}/dotfiles/files
 olddir=${HOME}/dotfiles_old
