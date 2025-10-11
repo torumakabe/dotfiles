@@ -108,15 +108,6 @@ if ! type dotnet > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing Node..."
-if ! type node > /dev/null 2>&1; then
-    sudo ./setup/node.sh
-    export NVM_DIR=/usr/local/share/nvm
-    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-    [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
-fi
-
-echo ''
 echo "Now checking Azure CLI completion file..."
 if type az > /dev/null 2>&1; then
     if [ ! -f /etc/bash_completion.d/azure-cli ]; then
