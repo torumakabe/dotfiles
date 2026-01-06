@@ -118,6 +118,13 @@ properties:
         description: "Install Python"
         allowPrerelease: false
       settings:
-        id: Python.Python.3.11
+        id: Python.Python.3.13
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: "Install GitHub Copilot CLI"
+        allowPrerelease: true
+      settings:
+        id: GitHub.Copilot
         source: winget
   configurationVersion: 0.2.0
