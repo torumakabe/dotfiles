@@ -104,14 +104,14 @@ properties:
         description: "Install Dev Proxy"
         allowPrerelease: false
       settings:
-        id: Microsoft.DevProxy
+        id: DevProxy.DevProxy
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: "Install Sqlite"
         allowPrerelease: false
       settings:
-        id: sqlite.sqlite
+        id: SQLite.SQLite
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
