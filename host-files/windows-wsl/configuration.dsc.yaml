@@ -127,4 +127,11 @@ properties:
       settings:
         id: GitHub.Copilot
         source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: "Install uv"
+        allowPrerelease: false
+      settings:
+        id: astral-sh.uv
+        source: winget
   configurationVersion: 0.2.0
