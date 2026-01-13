@@ -108,13 +108,6 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install Sqlite"
-        allowPrerelease: false
-      settings:
-        id: SQLite.SQLite
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
         description: "Install Python"
         allowPrerelease: false
       settings:
