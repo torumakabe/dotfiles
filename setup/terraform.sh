@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-#
-# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/script-library/terraform-debian.sh
-
-set -e
+set -eo pipefail
 
 TERRAFORM_VERSION="latest"
 TFLINT_VERSION="latest"

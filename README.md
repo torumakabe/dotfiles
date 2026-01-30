@@ -1,6 +1,6 @@
 # dotfiles (for debian/ubuntu)
 
-## Setup ([for GitHub Codespaces Default Linux Universal base image](https://github.com/microsoft/vscode-dev-containers/tree/main/containers/codespaces-linux))
+## Setup ([for GitHub Codespaces / Dev Containers Universal Image](https://github.com/devcontainers/images/tree/main/src/universal))
 
 ```
 git clone https://github.com/torumakabe/dotfiles.git ~/dotfiles

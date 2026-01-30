@@ -4,7 +4,7 @@ set -eo pipefail
 
 dir=${HOME}/dotfiles/files
 olddir=${HOME}/dotfiles_old
-files="zshrc gitconfig gitconfig-linux gitconfig-mac gitconfig-windows gitconfig-corp cobra.yaml tigrc tmux.conf"
+files="zshrc gitconfig gitconfig-linux gitconfig-mac gitconfig-windows gitconfig-corp"
 
 if [ ! -e "${HOME}/dotfiles" ]; then
     git clone https://github.com/torumakabe/dotfiles.git "${HOME}/dotfiles"
@@ -63,11 +63,7 @@ fi
 
 echo ''
 echo "Now installing apt packages..."
-sudo apt-get -y install unzip
-sudo apt-get -y install jq
-sudo apt-get -y install software-properties-common
-sudo apt-get -y install tig
-sudo apt-get -y install keychain
+sudo apt-get -y install unzip jq software-properties-common keychain
 
 echo ''
 echo "Now installing vim..."
@@ -158,13 +154,6 @@ echo ''
 echo "Now installing kubectl & helm..."
 if ! type kubectl > /dev/null 2>&1; then
     sudo ./setup/kubectl-helm.sh
-    ./setup/krew.sh
-fi
-
-echo ''
-echo "Now installing Flux..."
-if ! type flux > /dev/null 2>&1; then
-    ./setup/flux.sh
 fi
 
 echo ''
@@ -211,6 +200,22 @@ fi
 echo ''
 echo "Now installing Rust apps..."
 ./setup/rust-apps.sh
+
+# Node.js (fnm)
+
+echo ''
+echo "Now installing fnm (Fast Node Manager)..."
+if ! type fnm > /dev/null 2>&1; then
+    ./setup/fnm.sh
+fi
+
+# AI tools
+
+echo ''
+echo "Now installing GitHub Copilot CLI..."
+if ! type copilot > /dev/null 2>&1; then
+    ./setup/copilot-cli.sh
+fi
 
 echo ''
 echo 'Setup completed!'

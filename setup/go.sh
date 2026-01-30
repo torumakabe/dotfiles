@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-#
-# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/containers/go/.devcontainer/library-scripts/go-debian.sh
-
 set -eo pipefail
 
 TARGET_GO_VERSION="latest"

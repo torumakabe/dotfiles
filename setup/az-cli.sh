@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-#
-# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/script-library/azcli-debian.sh
-
 set -eo pipefail
 
 MICROSOFT_GPG_KEYS_URI="https://packages.microsoft.com/keys/microsoft.asc"

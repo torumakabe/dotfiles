@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-#
-# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/script-library/common-debian.sh
-
 set -eo pipefail
 
 INSTALL_OH_MYS="true"

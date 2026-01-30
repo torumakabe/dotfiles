@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-#
-# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/script-library/github-debian.sh
-
 set -eo pipefail
 
 CLI_VERSION=${VERSION:-"latest"}

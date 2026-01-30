@@ -116,29 +116,27 @@ export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 export GOROOT=/usr/local/go
 export GOPATH=$HOME/go
-export PATH=$PATH:$GOROOT/bin
-export PATH=$PATH:$GOPATH/bin
 export EDITOR=vim
-export PATH=${KREW_ROOT:-$HOME/.krew}/bin:$PATH
-export PATH=${HOME}/.local/bin:$PATH
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+export PATH=$HOME/.local/bin:$GOROOT/bin:$GOPATH/bin:$PATH
 
 alias k=kubectl
 alias ll='ls -ahl'
+
+# FPATH for completions (must be before compinit)
+[ -f "$HOME/.zfunc/_rustup" ] && FPATH=$HOME/.zfunc:$FPATH
 
 autoload -Uz +X compinit && compinit -ui
 autoload -Uz +X bashcompinit && bashcompinit
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-[ -f "$HOME/.zfunc/_rustup" ] && FPATH=$HOME/.zfunc:$FPATH
-[ -f "$HOME/.cargo/env" ] && source $HOME/.cargo/env
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
-case `uname` in
+# fnm (Fast Node Manager)
+command -v fnm >/dev/null && eval "$(fnm env --use-on-cd)"
+
+case $(uname) in
   Darwin)
-    command -v az >/dev/null && source $(brew --prefix)/etc/bash_completion.d/az
+    command -v az >/dev/null && source "$(brew --prefix)/etc/bash_completion.d/az"
     SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
   ;;
   *)
@@ -146,13 +144,15 @@ case `uname` in
   ;;
 esac
 
+# Tool completions
 command -v jump >/dev/null && eval "$(jump shell zsh)"
 command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o default -F __start_kubectl k
 command -v helm >/dev/null && source <(helm completion zsh)
 command -v terraform >/dev/null && complete -o nospace -C /usr/local/bin/terraform terraform
-command -v flux >/dev/null && . <(flux completion zsh) && compdef _flux flux
 command -v rad >/dev/null && . <(rad completion zsh)
-command -v gh >/dev/null && gh copilot -h >/dev/null 2>&1 && eval "$(gh copilot alias -- zsh)"
+command -v gh >/dev/null && eval "$(gh completion -s zsh)"
+command -v azd >/dev/null && source <(azd completion zsh)
+command -v trivy >/dev/null && source <(trivy completion zsh)
 
 if [ -z "$SSH_AUTH_SOCK" ] ; then
   eval $(ssh-agent -s) >/dev/null

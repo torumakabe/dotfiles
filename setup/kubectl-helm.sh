@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-#
-# Reffered to: https://github.com/microsoft/vscode-dev-containers/blob/main/script-library/kubectl-helm-debian.sh
-
 set -eo pipefail
 
 KUBECTL_VERSION="latest"

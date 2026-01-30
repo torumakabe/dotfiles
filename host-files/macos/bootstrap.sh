@@ -27,10 +27,18 @@ brew tap microsoft/dev-proxy
 brew install dev-proxy
 brew install --cask codex
 brew install copilot-cli
+brew install go
+brew install fnm
+
+# Rust (rustup - official installer)
+echo "Now installing Rust..."
+if ! type cargo > /dev/null 2>&1; then
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+fi
 
 dir=${HOME}/dotfiles/files
 olddir=${HOME}/dotfiles_old
-files="zshrc gitconfig gitconfig-mac gitconfig-corp cobra.yaml tigrc tmux.conf"
+files="zshrc gitconfig gitconfig-mac gitconfig-corp"
 
 if [ ! -e "${HOME}/dotfiles" ]; then
     git clone https://github.com/torumakabe/dotfiles.git "${HOME}/dotfiles"
@@ -51,6 +59,6 @@ popd
 echo ''
 echo 'Setup completed!'
 
-# Install Oh My Zsh and plugins separetely
+# Install Oh My Zsh and plugins separately
 # Oh My Zsh: https://ohmyz.sh/#install
 # zsh_completion plugin: https://github.com/zsh-users/zsh-completions
