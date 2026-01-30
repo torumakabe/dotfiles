@@ -13,11 +13,13 @@ brew install python@3
 brew install ghq
 brew install jump
 brew install azure-cli
-brew tap azure/azd && brew install azd
-brew install --cask devtoys
+# azure-dev (azd) is now in homebrew/core, use azure/azd tap for latest version
+brew tap azure/azd
+brew install azure/azd/azd
+brew install --cask --force devtoys || true
 brew tap microsoft/dev-proxy
 brew install dev-proxy
-brew install --cask codex
+brew install --cask --force codex || true
 brew install copilot-cli
 brew install mise
 
