@@ -1,0 +1,12 @@
+[tools]
+go = "latest"
+terraform = "latest"
+kubectl = "latest"
+helm = "latest"
+trivy = "latest"
+node = "lts"
+uv = "latest"
+fzf = "latest"
+
+[settings]
+experimental = true

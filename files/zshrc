@@ -114,10 +114,12 @@ setopt autopushd
 
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
-export GOROOT=/usr/local/go
 export GOPATH=$HOME/go
 export EDITOR=vim
-export PATH=$HOME/.local/bin:$GOROOT/bin:$GOPATH/bin:$PATH
+export PATH=$HOME/.local/bin:$GOPATH/bin:$PATH
+
+# mise (tool version manager)
+command -v mise >/dev/null && eval "$(mise activate zsh)"
 
 alias k=kubectl
 alias ll='ls -ahl'
@@ -131,8 +133,7 @@ autoload -Uz +X bashcompinit && bashcompinit
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
-# fnm (Fast Node Manager)
-command -v fnm >/dev/null && eval "$(fnm env --use-on-cd)"
+
 
 case $(uname) in
   Darwin)

@@ -13,30 +13,22 @@ brew install gh
 brew install python@3
 brew install ghq
 brew install jump
-brew install fzf
 brew install 1password-cli
 brew install azure-cli
 brew tap azure/azd && brew install azd
-brew install kubernetes-cli
-brew install kubernetes-helm
-brew tap hashicorp/tap
-brew install hashicorp/tap/terraform
 brew install --cask devtoys
 brew install --cask dotnet-sdk
 brew tap microsoft/dev-proxy
 brew install dev-proxy
 brew install --cask codex
 brew install copilot-cli
-brew install go
-brew install fnm
+brew install mise
 
 # Rust (rustup - official installer)
 echo "Now installing Rust..."
 if ! type cargo > /dev/null 2>&1; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 fi
-
-brew install uv
 
 dir=${HOME}/dotfiles/files
 olddir=${HOME}/dotfiles_old
@@ -57,6 +49,15 @@ for file in $files; do
 done
 
 popd
+
+# Link .mise.toml to home for global tool access
+if [ ! -e "${HOME}/.mise.toml" ]; then
+    ln -s "${HOME}/dotfiles/.mise.toml" "${HOME}/.mise.toml"
+fi
+
+echo ''
+echo "Now installing tools via mise..."
+mise install
 
 echo ''
 echo 'Setup completed!'

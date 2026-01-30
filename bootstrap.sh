@@ -20,6 +20,11 @@ for file in $files; do
     ln -s "$dir/$file" "${HOME}/.$file"
 done
 
+# Link .mise.toml to home for global tool access
+if [ ! -e "${HOME}/.mise.toml" ]; then
+    ln -s "${HOME}/dotfiles/.mise.toml" "${HOME}/.mise.toml"
+fi
+
 popd
 
 if [ "$1" = "link-only" ]
@@ -86,10 +91,15 @@ if ! type batcat > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing fzf..."
-if ! type fzf > /dev/null 2>&1; then
-    ./setup/fzf.sh
+echo "Now installing mise..."
+if ! type mise > /dev/null 2>&1; then
+    ./setup/mise.sh
+    export PATH="$HOME/.local/bin:$PATH"
 fi
+
+echo ''
+echo "Now installing tools via mise..."
+mise install
 
 echo ''
 echo "Now installing GitHub CLI..."
@@ -150,29 +160,7 @@ if ! type docker > /dev/null 2>&1; then
     sudo ./setup/docker.sh
 fi
 
-echo ''
-echo "Now installing kubectl & helm..."
-if ! type kubectl > /dev/null 2>&1; then
-    sudo ./setup/kubectl-helm.sh
-fi
-
-echo ''
-echo "Now installing Trivy..."
-if ! type trivy > /dev/null 2>&1; then
-    ./setup/trivy.sh
-fi
-
-# Go, tools and apps that assume Go
-
-echo ''
-echo "Now installing Go..."
-if ! type go > /dev/null 2>&1; then
-    GOROOT=/usr/local/go
-    GOPATH=$HOME/go
-    sudo ./setup/go.sh "${GOROOT}" "${GOPATH}"
-    export PATH=$PATH:${GOROOT}/bin
-    export PATH=$PATH:${GOPATH}/bin
-fi
+# Go tools and apps
 
 echo ''
 echo "Now installing go tools..."
@@ -181,12 +169,6 @@ echo "Now installing go tools..."
 echo ''
 echo "Now installing go apps..."
 ./setup/go-apps.sh
-
-echo ''
-echo "Now installing Terraform..."
-if ! type terraform > /dev/null 2>&1; then
-    sudo env PATH="${PATH}" ./setup/terraform.sh
-fi
 
 # Rust, tools and apps that assume Rust
 
@@ -200,22 +182,6 @@ fi
 echo ''
 echo "Now installing Rust apps..."
 ./setup/rust-apps.sh
-
-# Node.js (fnm)
-
-echo ''
-echo "Now installing fnm (Fast Node Manager)..."
-if ! type fnm > /dev/null 2>&1; then
-    ./setup/fnm.sh
-fi
-
-# Python tools
-
-echo ''
-echo "Now installing uv..."
-if ! type uv > /dev/null 2>&1; then
-    ./setup/uv.sh
-fi
 
 # AI tools
 
