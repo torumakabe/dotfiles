@@ -209,6 +209,14 @@ if ! type fnm > /dev/null 2>&1; then
     ./setup/fnm.sh
 fi
 
+# Python tools
+
+echo ''
+echo "Now installing uv..."
+if ! type uv > /dev/null 2>&1; then
+    ./setup/uv.sh
+fi
+
 # AI tools
 
 echo ''

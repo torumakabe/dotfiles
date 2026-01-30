@@ -36,6 +36,8 @@ if ! type cargo > /dev/null 2>&1; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 fi
 
+brew install uv
+
 dir=${HOME}/dotfiles/files
 olddir=${HOME}/dotfiles_old
 files="zshrc gitconfig gitconfig-mac gitconfig-corp"
