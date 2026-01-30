@@ -11,6 +11,15 @@ github-cli = "latest"
 dotnet = "latest"
 1password = "latest"
 goreleaser = "latest"
+cue = "latest"
+ghq = "latest"
+azure-kubelogin = "latest"
+yq = "latest"
+sqlc = "latest"
+cosign = "latest"
+golangci-lint = "latest"
+ripgrep = "latest"
+cargo-make = "latest"
 
 [settings]
 experimental = true

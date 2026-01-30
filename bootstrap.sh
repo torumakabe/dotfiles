@@ -152,7 +152,7 @@ echo ''
 echo "Now installing go apps..."
 ./setup/go-apps.sh
 
-# Rust, tools and apps that assume Rust
+# Rust (for tools that require cargo)
 
 echo ''
 echo "Now installing Rust..."
@@ -160,10 +160,6 @@ if ! type cargo > /dev/null 2>&1; then
     ./setup/rust.sh
     source "${HOME}/.cargo/env"
 fi
-
-echo ''
-echo "Now installing Rust apps..."
-./setup/rust-apps.sh
 
 # AI tools
 
