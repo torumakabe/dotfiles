@@ -39,8 +39,8 @@ mkdir -p "$olddir"
 pushd "$dir" || exit
 
 for file in $files; do
-    if [ -f "${HOME}/.$file" ]; then
-      mv "${HOME}/.$file" "${HOME}/dotfiles_old/"
+    if [ -e "${HOME}/.$file" ] || [ -L "${HOME}/.$file" ]; then
+      rm -f "${HOME}/.$file"
     fi
     ln -s "$dir/$file" "${HOME}/.$file"
 done
@@ -48,9 +48,10 @@ done
 popd
 
 # Link .mise.toml to home for global tool access
-if [ ! -e "${HOME}/.mise.toml" ]; then
-    ln -s "${HOME}/dotfiles/.mise.toml" "${HOME}/.mise.toml"
+if [ -e "${HOME}/.mise.toml" ] || [ -L "${HOME}/.mise.toml" ]; then
+    rm -f "${HOME}/.mise.toml"
 fi
+ln -s "${HOME}/dotfiles/.mise.toml" "${HOME}/.mise.toml"
 
 echo ''
 echo "Now installing tools via mise..."
