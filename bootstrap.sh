@@ -4,7 +4,7 @@ set -eo pipefail
 
 dir=${HOME}/dotfiles/files
 olddir=${HOME}/dotfiles_old
-files="zshrc gitconfig gitconfig-linux gitconfig-mac gitconfig-windows gitconfig-corp"
+files="zshrc gitconfig gitconfig-mac gitconfig-windows gitconfig-corp"
 
 if [ ! -e "${HOME}/dotfiles" ]; then
     git clone https://github.com/torumakabe/dotfiles.git "${HOME}/dotfiles"
@@ -14,11 +14,23 @@ mkdir -p "$olddir"
 pushd "$dir" || exit
 
 for file in $files; do
-    if [ -f "${HOME}/.$file" ]; then
-      mv "${HOME}/.$file" "${HOME}/dotfiles_old/"
+    if [ -e "${HOME}/.$file" ] || [ -L "${HOME}/.$file" ]; then
+      rm -f "${HOME}/.$file"
     fi
     ln -s "$dir/$file" "${HOME}/.$file"
 done
+
+# Link gitconfig-linux based on WSL or native Linux
+if [ -e "${HOME}/.gitconfig-linux" ] || [ -L "${HOME}/.gitconfig-linux" ]; then
+    rm -f "${HOME}/.gitconfig-linux"
+fi
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    # WSL
+    ln -s "$dir/gitconfig-wsl" "${HOME}/.gitconfig-linux"
+else
+    # Native Linux
+    ln -s "$dir/gitconfig-linux-native" "${HOME}/.gitconfig-linux"
+fi
 
 # Link .mise.toml to home for global tool access
 if [ ! -e "${HOME}/.mise.toml" ]; then
