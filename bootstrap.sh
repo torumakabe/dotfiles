@@ -102,18 +102,6 @@ echo "Now installing tools via mise..."
 mise install
 
 echo ''
-echo "Now installing GitHub CLI..."
-if ! type gh > /dev/null 2>&1; then
-    sudo ./setup/github-cli.sh
-fi
-
-echo ''
-echo "Now installing .NET SDK..."
-if ! type dotnet > /dev/null 2>&1; then
-    sudo ./setup/dotnet.sh
-fi
-
-echo ''
 echo "Now checking Azure CLI completion file..."
 if type az > /dev/null 2>&1; then
     if [ ! -f /etc/bash_completion.d/azure-cli ]; then
@@ -128,12 +116,6 @@ if [ "${REMOTE_CONTAINERS}" ] || [ "${CODESPACES}" ] > /dev/null 2>&1; then
     echo 'You are in a remote container. Skip the following steps.'
     echo "Setup completed!"
     exit 0
-fi
-
-echo ''
-echo "Now installing 1Password CLI..."
-if ! type op > /dev/null 2>&1; then
-    ./setup/op.sh
 fi
 
 echo ''

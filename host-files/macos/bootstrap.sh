@@ -9,15 +9,12 @@ echo "Now installing and configuring other brew packages..."
 brew install zsh-completions
 brew install watch
 brew install jq
-brew install gh
 brew install python@3
 brew install ghq
 brew install jump
-brew install 1password-cli
 brew install azure-cli
 brew tap azure/azd && brew install azd
 brew install --cask devtoys
-brew install --cask dotnet-sdk
 brew tap microsoft/dev-proxy
 brew install dev-proxy
 brew install --cask codex

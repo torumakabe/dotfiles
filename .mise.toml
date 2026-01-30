@@ -7,6 +7,9 @@ trivy = "latest"
 node = "lts"
 uv = "latest"
 fzf = "latest"
+github-cli = "latest"
+dotnet = "latest"
+1password = "latest"
 
 [settings]
 experimental = true
