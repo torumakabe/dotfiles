@@ -18,7 +18,9 @@ yq = "latest"
 sqlc = "latest"
 cosign = "latest"
 golangci-lint = "latest"
+kustomize = "latest"
 ripgrep = "latest"
+shellcheck = "latest"
 cargo-make = "latest"
 
 [settings]
