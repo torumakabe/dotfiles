@@ -95,14 +95,6 @@ if ! type git > /dev/null 2>&1; then
 fi
 
 echo ''
-echo "Now installing bat..."
-if ! type batcat > /dev/null 2>&1; then
-    sudo apt-get -y install bat
-    mkdir -p "${HOME}/.local/bin"
-    ln -s /usr/bin/batcat "${HOME}/.local/bin/bat"
-fi
-
-echo ''
 echo "Now installing mise..."
 if ! type mise > /dev/null 2>&1; then
     ./setup/mise.sh
