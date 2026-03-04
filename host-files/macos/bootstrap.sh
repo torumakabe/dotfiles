@@ -11,7 +11,6 @@ brew install watch
 brew install jq
 brew install python@3
 brew install ghq
-brew install jump
 brew install azure-cli
 # azure-dev (azd) is now in homebrew/core, use azure/azd tap for latest version
 brew tap azure/azd

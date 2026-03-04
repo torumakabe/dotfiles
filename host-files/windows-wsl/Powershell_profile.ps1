@@ -20,3 +20,14 @@ Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
 Set-Alias -Name k -Value kubectl
 kubectl completion powershell | Out-String | Invoke-Expression
 Register-ArgumentCompleter -CommandName k -ScriptBlock $__kubectlCompleterBlock
+
+# zoxide (smarter cd)
+Invoke-Expression (& { (zoxide init powershell --cmd cd | Out-String) })
+Set-Alias -Name z -Value cd
+function zi { cdi @args }
+
+# ghq + fzf: fuzzy-search git repositories and cd into selection
+function ghcd {
+    $dir = ghq list -p | fzf
+    if ($dir) { Set-Location $dir }
+}

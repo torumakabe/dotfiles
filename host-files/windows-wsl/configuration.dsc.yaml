@@ -122,6 +122,13 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: "Install zoxide"
+        allowPrerelease: false
+      settings:
+        id: ajeetdsouza.zoxide
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install uv"
         allowPrerelease: false
       settings:

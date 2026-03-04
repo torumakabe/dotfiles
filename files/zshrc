@@ -146,7 +146,9 @@ case $(uname) in
 esac
 
 # Tool completions
-command -v jump >/dev/null && eval "$(jump shell zsh)"
+command -v zoxide >/dev/null && eval "$(zoxide init zsh --cmd cd)"
+alias z='cd'
+alias zi='cdi'
 command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o default -F __start_kubectl k
 command -v helm >/dev/null && source <(helm completion zsh)
 command -v terraform >/dev/null && complete -o nospace -C /usr/local/bin/terraform terraform
@@ -159,6 +161,15 @@ if [ -z "$SSH_AUTH_SOCK" ] ; then
   eval $(ssh-agent -s) >/dev/null
   ssh-add -l >/dev/null || ssh-add ~/.ssh/id_ed25519 >/dev/null 2>&1
 fi
+
+# ghq + fzf: fuzzy-search git repositories and cd into selection
+function ghcd() {
+  local dir
+  dir=$(ghq list -p | fzf --preview 'ls -la {}')
+  if [ -n "$dir" ]; then
+    cd "$dir"
+  fi
+}
 
 function ghenv() {
   eval $(op signin)
