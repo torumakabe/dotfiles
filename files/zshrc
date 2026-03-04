@@ -170,9 +170,3 @@ function ghcd() {
     cd "$dir"
   fi
 }
-
-function ghenv() {
-  eval $(op signin)
-  export GITHUB_TOKEN=$(op read op://Personal/GitHub_PAT_CLI_Interactive/password)
-  export GITHUB_USER=$(op read  op://Personal/GitHub_PAT_CLI_Interactive/notesPlain)
-}
