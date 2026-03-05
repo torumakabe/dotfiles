@@ -2,18 +2,8 @@
 set -eo pipefail
 
 INSTALL_OH_MYS="true"
-USERNAME=${SUDO_USER}
-if [ "${USERNAME}" = "root" ]; then
-    user_rc_path="/root"
-else
-    user_rc_path="/home/${USERNAME}"
-fi
-group_name="${USERNAME}"
-
-if [ "$(id -u)" -ne 0 ]; then
-    echo -e 'Script must be run as root. Use sudo, su, or add "USER root" to your Dockerfile before running this script.'
-    exit 1
-fi
+USERNAME=${USER}
+user_rc_path="${HOME}"
 
 codespaces_zsh="$(cat \
 <<'EOF'
@@ -62,9 +52,4 @@ if [ ! -d "${oh_my_install_dir}" ] && [ "${INSTALL_OH_MYS}" = "true" ]; then
     # Shrink git while still enabling updates
     cd "${oh_my_install_dir}"
     git repack -a -d -f --depth=1 --window=1
-    # Copy to non-root user if one is specified
-    if [ "${USERNAME}" != "root" ]; then
-        cp -rf "${user_rc_file}" "${oh_my_install_dir}" /root
-        chown -R "${USERNAME}":"${group_name}" "${user_rc_path}"
-    fi
 fi

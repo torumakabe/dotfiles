@@ -55,11 +55,11 @@ sudo apt-get update
 if [ "$1" = "setup-zsh" ]; then
   echo ''
   echo "Now setting up zsh..."
-  sudo ./setup/zsh.sh
+  ./setup/zsh.sh
 
   echo ''
   echo "Now installing Oh My Zsh..."
-  sudo ./setup/oh-my-zsh.sh
+  ./setup/oh-my-zsh.sh
 
   echo ''
   echo "Change default shell to zsh..."
@@ -68,7 +68,7 @@ fi
 
 echo ''
 echo "Now setting up bash completion..."
-sudo ./setup/bash-completion.sh
+./setup/bash-completion.sh
 
 echo ''
 echo "Now installing zsh completion..."
@@ -125,7 +125,7 @@ fi
 echo ''
 echo "Now installing Azure CLI..."
 if ! type az > /dev/null 2>&1; then
-    sudo ./setup/az-cli.sh
+    ./setup/az-cli.sh
 fi
 
 echo ''
@@ -149,7 +149,7 @@ fi
 echo ''
 echo "Now installing docker..."
 if ! type docker > /dev/null 2>&1; then
-    sudo ./setup/docker.sh
+    ./setup/docker.sh
 fi
 
 # Go tools and apps
