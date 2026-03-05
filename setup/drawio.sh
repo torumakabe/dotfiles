@@ -19,5 +19,13 @@ fi
 TMP_DEB=$(mktemp /tmp/drawio-XXXXXX.deb)
 curl -fsSL -o "$TMP_DEB" "$LATEST_URL"
 
-sudo dpkg -i "$TMP_DEB" || sudo apt-get -f -y install
+if ! sudo dpkg -i "$TMP_DEB"; then
+    echo "dpkg failed, attempting to fix dependencies..."
+    sudo apt-get -f -y install
+fi
 rm -f "$TMP_DEB"
+
+if ! type drawio > /dev/null 2>&1; then
+    echo "draw.io installation failed"
+    exit 1
+fi
