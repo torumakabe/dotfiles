@@ -141,6 +141,12 @@ if ! type rad > /dev/null 2>&1; then
 fi
 
 echo ''
+echo "Now installing draw.io..."
+if ! type drawio > /dev/null 2>&1; then
+    ./setup/drawio.sh
+fi
+
+echo ''
 echo "Now installing docker..."
 if ! type docker > /dev/null 2>&1; then
     sudo ./setup/docker.sh

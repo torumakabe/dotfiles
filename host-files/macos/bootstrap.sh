@@ -19,6 +19,7 @@ brew install --cask --force devtoys || true
 brew tap microsoft/dev-proxy
 brew install dev-proxy
 brew install --cask --force codex || true
+brew install --cask --force drawio || true
 brew install copilot-cli
 brew install mise
 

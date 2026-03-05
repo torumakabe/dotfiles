@@ -122,6 +122,13 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: "Install draw.io"
+        allowPrerelease: false
+      settings:
+        id: JGraph.Draw
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install zoxide"
         allowPrerelease: false
       settings:
