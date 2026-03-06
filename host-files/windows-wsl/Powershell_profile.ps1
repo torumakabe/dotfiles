@@ -1,3 +1,5 @@
+$env:EDITOR = 'edit'
+
 # https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?tabs=azure-cli#enable-tab-completion-in-powershell
 Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
     param($commandName, $wordToComplete, $cursorPosition)
