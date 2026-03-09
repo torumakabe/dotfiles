@@ -1,0 +1,8 @@
+# Allowed domains for URL allowlist filtering (one domain per line)
+# Uncomment and customize to enable URL filtering in hook scripts.
+#
+# github.com
+# npmjs.com
+# registry.npmjs.org
+# login.microsoftonline.com
+# management.azure.com
