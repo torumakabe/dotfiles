@@ -53,7 +53,6 @@ chezmoi init --source ./home --apply --dry-run
 確認ポイント:
 
 - [x] `reference/windows/configuration.dsc.yaml` の内容が妥当（jdx.mise 追加済み、Python.Python.3.13 削除済み）
-- [ ] `reference/windows/winterm-settings.json` が Windows Terminal にインポート可能
 - [x] Copilot Guard テスト: `'{"method":"validate","path":"C:\\Windows\\System32"}' | uv run $HOME\.copilot\hooks\scripts\copilot-guard.py`
 - [x] `copilot-guard.json` の PowerShell エントリが動作する
 
