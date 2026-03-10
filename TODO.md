@@ -55,6 +55,16 @@ chezmoi init --source ./home --apply --dry-run
 - [x] `reference/windows/configuration.dsc.yaml` の内容が妥当（jdx.mise 追加済み、Python.Python.3.13 削除済み）
 - [x] Copilot Guard テスト: `'{"method":"validate","path":"C:\\Windows\\System32"}' | uv run $HOME\.copilot\hooks\scripts\copilot-guard.py`
 - [x] `copilot-guard.json` の PowerShell エントリが動作する
+- [x] `chezmoi init --apply torumakabe` で dotfiles が正しく適用される
+- [x] `chezmoi update` + `chezmoi init torumakabe` でテンプレート変更後の再生成が動作する
+
+### 2.5. Codespaces でのテスト
+
+確認ポイント:
+
+- [x] dotfiles の自動適用が成功する（`.gitconfig` 等が正しく配置される）
+- [x] `corpUser` / `windowsUser` プロンプトが非対話環境でスキップされる
+- [x] `mise install` 部分失敗時にリカバリ手順が表示される
 
 ### 3. v2.0.0 リリース（全テスト完了後）
 

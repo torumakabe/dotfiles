@@ -145,7 +145,6 @@ rm -f ~/.gitconfig ~/.gitconfig-linux ~/.gitconfig-corp ~/.zshrc ~/.mise.toml
 chezmoi init --apply torumakabe
 
 # 初回プロンプト:
-#   Windows username → (空でOK、ネイティブLinuxでは不使用)
 #   Corp username    → (入力)
 ```
 
@@ -240,6 +239,9 @@ v2.0.0 では `install.sh` が chezmoi をブートストラップし、run_once
 Codespaces では以下がスキップされる:
 - `run_once_after_30-install-tools.sh`: Azure CLI, Docker, Rust 等のインストール
 - デフォルトシェルの変更 (`chsh`)
+- `corpUser` / `windowsUser` のプロンプト（非対話環境のため自動スキップ、`.gitconfig-corp` は適用されない）
+
+また、`mise install` がベースイメージの GitHub API レート制限で部分失敗する場合がある。ターミナルにリカバリ手順が表示されるので、`mise ls --missing` で確認し `mise install` でリトライする。
 
 ---
 
@@ -287,7 +289,9 @@ Copy-Item ~\dotfiles_migration_backup\.gitconfig-corp ~\ -ErrorAction SilentlyCo
 chezmoi: template: .chezmoiignore: map has no entry for key "isWSL"
 ```
 
-`chezmoi init` を実行して設定ファイルを生成してから `chezmoi apply` を実行する。
+`chezmoi init torumakabe` を実行して設定ファイルを再生成してから `chezmoi apply` を実行する。
+
+> **注意**: リポジトリ名を省略すると、ソースディレクトリが空になり `chezmoi update` が動かなくなる。必ず `torumakabe` を指定すること。
 
 ### run_once_ スクリプトが sudo を要求して停止する
 

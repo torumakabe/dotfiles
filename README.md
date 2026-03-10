@@ -22,6 +22,11 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 自動適用される。GitHub の設定で dotfiles リポジトリとして登録するだけでよい。
 参考: [Codespaces docs](https://docs.github.com/en/codespaces/setting-your-user-preferences/personalizing-github-codespaces-for-your-account#dotfiles)
 
+**制限事項:**
+
+- 非対話環境のため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる（`.gitconfig-corp` は適用されない）
+- `mise install` がベースイメージの GitHub API レート制限で部分失敗する場合がある。ターミナルにリカバリ手順が表示される
+
 ### Windows
 
 1. chezmoi インストール: `winget install twpayne.chezmoi`
@@ -146,6 +151,35 @@ echo '{"toolName":"bash","toolArgs":{"command":"ls"}}' | uv run ~/.copilot/hooks
 echo '{"toolName":"edit","toolArgs":{"path":".env"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
 # → deny
 ```
+
+## Troubleshooting
+
+### `warning: config file template has changed`
+
+`.chezmoi.toml.tmpl` が更新された場合に表示される。設定を再生成する:
+
+```bash
+chezmoi init torumakabe
+```
+
+> **注意**: リポジトリ名を省略すると、ソースディレクトリが空になり `chezmoi update` が動かなくなる。必ず `torumakabe` を指定すること。
+
+### `mise install` が部分失敗する
+
+GitHub API レート制限やネットワーク障害でツールの一部がインストールされない場合がある。
+
+```bash
+# 未インストールのツールを確認
+mise ls --missing
+
+# リトライ
+mise install
+```
+
+### `run_once_` スクリプトが sudo を要求して停止する
+
+Codespaces 以外の環境では、パッケージインストールに sudo が必要。
+パスワードを入力するか、sudoers を設定する。
 
 ## Architecture
 
