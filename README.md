@@ -31,7 +31,10 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
    ```powershell
    # $PROFILE（OneDrive 配下）から chezmoi 管理のファイルを読み込む
    if (!(Test-Path $PROFILE)) { New-Item -Path $PROFILE -Type File -Force }
-   Add-Content -Path $PROFILE -Value '. "$env:USERPROFILE\PowerShell_profile.ps1"'
+   $line = '. "$env:USERPROFILE\PowerShell_profile.ps1"'
+   if (!(Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
+       Add-Content -Path $PROFILE -Value $line
+   }
    ```
    chezmoi が `~/PowerShell_profile.ps1` を配置する。`$PROFILE` は OneDrive 配下で chezmoi の管理外のため、ローダー（1行の dot-source）で橋渡しする。
 
