@@ -28,6 +28,17 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 
 ## Day-to-Day Operations
 
+### chezmoi で管理するもの・しないもの
+
+| 分類 | 例 | 編集方法 |
+|------|----|----------|
+| **chezmoi 管理** | `.gitconfig`, `.zshrc`, `.mise.toml`, `.copilot/` | `chezmoi edit` でソースを編集 → `chezmoi apply` |
+| **mise 管理** | Go, Node, Terraform 等のバージョン | `.mise.toml` を `chezmoi edit` で編集 → `mise install` |
+| **手動管理** | `reference/windows/` 配下 (DSC, Terminal テーマ) | 直接編集し git commit。chezmoi は関与しない |
+| **リポジトリ設定** | `.github/copilot-instructions.md`, `README.md` | 直接編集し git commit |
+
+**重要**: chezmoi 管理下のファイル（`~/.gitconfig` 等）を直接編集しても、次回の `chezmoi apply` で上書きされる。永続化するには必ず `chezmoi edit` でソース側を変更すること。
+
 ### 設定ファイルの編集
 
 dotfiles を変更したい場合、chezmoi のソースを編集してから適用する:
