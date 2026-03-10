@@ -31,3 +31,10 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 - **mise** manages tool versions (`.mise.toml`)
 - **uv** manages Python execution (installed via mise)
 - No direct `python3`, `pip`, or `brew install python` — uv handles all Python needs
+
+## Windows DSC と mise の重複
+
+- `reference/windows/configuration.dsc.yaml` には mise でも管理しているツール（Go, Node, Terraform 等）が含まれている
+- これは mise の Windows 対応が安定途上のため、フォールバックとして残している
+- mise でのインストール・バージョン管理が安定したツールから、DSC のエントリを段階的に削除する
+- DSC に残すべきもの: GUI アプリ（PowerToys, DevToys 等）、mise 未対応ツール、OS レベルの設定（DeveloperMode）
