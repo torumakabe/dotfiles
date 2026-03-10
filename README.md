@@ -26,7 +26,14 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 
 1. chezmoi インストール: `winget install twpayne.chezmoi`
 2. 設定適用: `chezmoi init --apply torumakabe`
-3. GUI アプリ: `winget configure -f reference/windows/configuration.dsc.yaml`
+3. GUI アプリ: `winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"`
+4. PowerShell Profile のローダー設定（初回のみ）:
+   ```powershell
+   # $PROFILE（OneDrive 配下）から chezmoi 管理のファイルを読み込む
+   if (!(Test-Path $PROFILE)) { New-Item -Path $PROFILE -Type File -Force }
+   Add-Content -Path $PROFILE -Value '. "$env:USERPROFILE\PowerShell_profile.ps1"'
+   ```
+   chezmoi が `~/PowerShell_profile.ps1` を配置する。`$PROFILE` は OneDrive 配下で chezmoi の管理外のため、ローダー（1行の dot-source）で橋渡しする。
 
 ## Day-to-Day Operations
 
@@ -150,6 +157,7 @@ home/                          ← chezmoi source (.chezmoiroot で指定)
 ├── dot_gitconfig-corp.tmpl    ← 社内リポジトリ用
 ├── dot_zshrc.tmpl             ← シェル設定
 ├── dot_mise.toml              ← ツールバージョン定義
+├── PowerShell_profile.ps1.tmpl ← Windows PowerShell Profile (mise activate 含む)
 ├── private_dot_copilot/       ← ~/.copilot/ に配置
 │   ├── copilot-instructions.md
 │   └── hooks/

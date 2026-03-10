@@ -15,3 +15,6 @@
 {{- if eq .corpUser "" }}
 .gitconfig-corp
 {{- end }}
+{{- if ne .chezmoi.os "windows" }}
+PowerShell_profile.ps1
+{{- end }}
