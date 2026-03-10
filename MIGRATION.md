@@ -289,26 +289,6 @@ chezmoi: template: .chezmoiignore: map has no entry for key "isWSL"
 
 `chezmoi init` を実行して設定ファイルを生成してから `chezmoi apply` を実行する。
 
-### git commit が GPG 署名でハングする
-
-1Password の SSH 署名エージェントが応答していない可能性がある。1Password アプリが起動しているか確認する。WSL の場合、Windows 側の 1Password が動作している必要がある。
-
-### Copilot Guard が常に deny を返す
-
-uv がインストールされているか確認する:
-
-```bash
-# Linux / macOS / WSL
-command -v uv    # パスが表示されること
-uv python list   # Python が利用可能であること
-```
-
-```powershell
-# Windows (PowerShell)
-Get-Command uv   # パスが表示されること
-uv python list   # Python が利用可能であること
-```
-
 ### run_once_ スクリプトが sudo を要求して停止する
 
 Codespaces 以外の環境では、パッケージインストールに sudo が必要。
