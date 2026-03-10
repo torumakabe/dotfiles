@@ -20,6 +20,8 @@ v2.0.0 は dotfiles 管理を **シンボリンク + bootstrap.sh** から **che
 
 ### 1. 現状のバックアップ
 
+#### Linux / macOS / WSL
+
 任意のディレクトリで実行:
 
 ```bash
@@ -36,22 +38,41 @@ cp -L ~/.zshrc ~/dotfiles_migration_backup/
 cp -L ~/.mise.toml ~/dotfiles_migration_backup/
 ```
 
+#### Windows
+
+PowerShell で実行:
+
+```powershell
+Copy-Item -Recurse ~\dotfiles ~\dotfiles.bak
+mkdir ~\dotfiles_migration_backup -Force
+Copy-Item ~\.gitconfig ~\dotfiles_migration_backup\ -ErrorAction SilentlyContinue
+Copy-Item ~\.gitconfig-windows ~\dotfiles_migration_backup\ -ErrorAction SilentlyContinue
+Copy-Item ~\.gitconfig-corp ~\dotfiles_migration_backup\ -ErrorAction SilentlyContinue
+```
+
 ### 2. chezmoi のインストール
 
-任意のディレクトリで実行:
+#### Linux / WSL
 
 ```bash
-# Linux / WSL
 sh -c "$(curl -fsLS get.chezmoi.io)" -- -b ~/.local/bin
+```
 
-# macOS
+#### macOS
+
+```bash
 brew install chezmoi
+```
 
-# Windows
+#### Windows (PowerShell)
+
+```powershell
 winget install twpayne.chezmoi
 ```
 
 ### 3. uv のインストール（Copilot Guard に必要）
+
+#### Linux / macOS / WSL
 
 ```bash
 # mise 経由（推奨）
@@ -59,6 +80,16 @@ mise install uv
 
 # または直接
 curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+#### Windows (PowerShell)
+
+```powershell
+# mise 経由（推奨）
+mise install uv
+
+# または直接
+winget install astral-sh.uv
 ```
 
 ---
@@ -216,6 +247,8 @@ Codespaces では以下がスキップされる:
 
 問題が発生した場合、v1.0.0 の状態に戻すことができる:
 
+#### Linux / macOS / WSL
+
 ```bash
 # chezmoi の管理を解除（ファイルは残る）
 chezmoi purge
@@ -231,6 +264,17 @@ rm -rf ~/dotfiles
 git clone --branch v1.0.0 https://github.com/torumakabe/dotfiles.git ~/dotfiles
 cd ~/dotfiles
 ./bootstrap.sh
+```
+
+#### Windows (PowerShell)
+
+```powershell
+chezmoi purge
+
+# バックアップから復元
+Copy-Item ~\dotfiles_migration_backup\.gitconfig ~\
+Copy-Item ~\dotfiles_migration_backup\.gitconfig-windows ~\ -ErrorAction SilentlyContinue
+Copy-Item ~\dotfiles_migration_backup\.gitconfig-corp ~\ -ErrorAction SilentlyContinue
 ```
 
 ---
@@ -254,7 +298,14 @@ chezmoi: template: .chezmoiignore: map has no entry for key "isWSL"
 uv がインストールされているか確認する:
 
 ```bash
+# Linux / macOS / WSL
 command -v uv    # パスが表示されること
+uv python list   # Python が利用可能であること
+```
+
+```powershell
+# Windows (PowerShell)
+Get-Command uv   # パスが表示されること
 uv python list   # Python が利用可能であること
 ```
 
