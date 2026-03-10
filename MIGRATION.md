@@ -216,7 +216,7 @@ chezmoi init --apply torumakabe
 
 # 3. GUI アプリ・ツールの一括インストール（手動）
 #    DSC ファイルの場所が変更されている点に注意
-winget configure -f (chezmoi source-path)/../reference/windows/configuration.dsc.yaml --module-path default
+winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"
 ```
 
 ### DSC の変更点
