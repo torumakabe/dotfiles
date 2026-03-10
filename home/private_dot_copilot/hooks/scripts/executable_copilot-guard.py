@@ -73,9 +73,10 @@ def pattern_to_substring(pattern: str) -> str:
 
 def check_blocked_path(target: str, patterns: list[str]) -> str | None:
     """Strict substring match for path arguments."""
+    norm_target = target.replace("\\", "/")
     for pat in patterns:
-        sub = pattern_to_substring(pat)
-        if sub and sub in target:
+        sub = pattern_to_substring(pat).replace("\\", "/")
+        if sub and sub in norm_target:
             return pat
     return None
 
@@ -87,13 +88,14 @@ def check_blocked_command(target: str, patterns: list[str]) -> str | None:
     assignment operators as word boundaries to avoid false positives on
     substrings like ``os.environ``.
     """
+    norm_target = target.replace("\\", "/")
     for pat in patterns:
-        sub = pattern_to_substring(pat)
+        sub = pattern_to_substring(pat).replace("\\", "/")
         if not sub:
             continue
         escaped = re.escape(sub)
         boundary = r"""(?:^|[\\/\s"';|&()`=$])"""
-        if re.search(boundary + escaped, target):
+        if re.search(boundary + escaped, norm_target):
             return pat
     return None
 
