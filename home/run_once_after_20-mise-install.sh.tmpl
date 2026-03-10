@@ -11,5 +11,18 @@ if ! command -v mise >/dev/null 2>&1; then
 fi
 
 echo "Installing tool versions via mise..."
-mise install --yes
+if ! mise install --yes; then
+  echo "" >&2
+  echo "========================================" >&2
+  echo "WARNING: mise install が一部失敗しました" >&2
+  echo "========================================" >&2
+  echo "原因: GitHub API レート制限、ネットワーク障害など" >&2
+  echo "" >&2
+  echo "未インストールのツールを確認:" >&2
+  echo "  mise ls --missing" >&2
+  echo "" >&2
+  echo "リトライ:" >&2
+  echo "  mise install" >&2
+  echo "========================================" >&2
+fi
 {{ end -}}

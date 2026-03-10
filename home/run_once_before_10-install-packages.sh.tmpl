@@ -7,7 +7,10 @@ export DEBIAN_FRONTEND=noninteractive
 
 {{ if eq .chezmoi.os "linux" -}}
 echo "Installing system packages via apt..."
-sudo apt-get update -qq
+# サードパーティリポジトリのGPGキー期限切れ等でupdate全体が失敗することがあるため、警告に留める
+if ! sudo apt-get update -qq; then
+  echo "Warning: apt-get update had errors (possibly from third-party repos), continuing..." >&2
+fi
 sudo apt-get install -y -qq \
   bash-completion \
   git \

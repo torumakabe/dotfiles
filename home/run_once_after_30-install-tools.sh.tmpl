@@ -16,7 +16,9 @@ if ! command -v az >/dev/null 2>&1; then
   . /etc/os-release
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/azure-cli/ ${VERSION_CODENAME} main" | \
     sudo tee /etc/apt/sources.list.d/azure-cli.list >/dev/null
-  sudo apt-get update -qq
+  if ! sudo apt-get update -qq; then
+    echo "Warning: apt-get update had errors (possibly from third-party repos), continuing..." >&2
+  fi
   sudo apt-get install -y -qq azure-cli
 {{ else if eq .chezmoi.os "darwin" -}}
   echo "Installing Azure CLI..."
@@ -50,10 +52,12 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "Installing Docker..."
   sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-    sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
     sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-  sudo apt-get update -qq
+  if ! sudo apt-get update -qq; then
+    echo "Warning: apt-get update had errors (possibly from third-party repos), continuing..." >&2
+  fi
   sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
   sudo usermod -aG docker "${USER}"
 fi
@@ -78,10 +82,10 @@ fi
 # --- GitHub Copilot CLI ---
 if ! command -v copilot >/dev/null 2>&1; then
 {{ if eq .chezmoi.os "darwin" -}}
-  brew install copilot-cli
+  brew install copilot-cli || echo "Warning: copilot-cli installation failed, skipping..." >&2
 {{ else -}}
   echo "Installing GitHub Copilot CLI..."
-  curl -fsSL https://gh.io/copilot-install | bash
+  curl -fsSL https://gh.io/copilot-install | bash || echo "Warning: copilot-cli installation failed, skipping..." >&2
 {{ end -}}
 fi
 
@@ -98,16 +102,18 @@ brew install --cask --force codex || true
 # --- draw.io (native Linux only) ---
 if ! command -v drawio >/dev/null 2>&1; then
   echo "Installing draw.io..."
-  ARCH=$(dpkg --print-architecture)
-  RELEASE_JSON=$(curl -fsSL https://api.github.com/repos/jgraph/drawio-desktop/releases/latest)
-  DEB_URL=$(echo "${RELEASE_JSON}" | jq -r --arg arch "${ARCH}" \
-    '.assets[] | select(.name | test("drawio-" + $arch + "-.*\\.deb$")) | .browser_download_url')
-  if [ -n "${DEB_URL}" ]; then
-    TMP_DEB=$(mktemp /tmp/drawio-XXXXXX.deb)
-    curl -fsSL -o "${TMP_DEB}" "${DEB_URL}"
-    sudo dpkg -i "${TMP_DEB}" || sudo apt-get -f -y install
-    rm -f "${TMP_DEB}"
-  fi
+  (
+    ARCH=$(dpkg --print-architecture)
+    RELEASE_JSON=$(curl -fsSL https://api.github.com/repos/jgraph/drawio-desktop/releases/latest)
+    DEB_URL=$(echo "${RELEASE_JSON}" | jq -r --arg arch "${ARCH}" \
+      '.assets[] | select(.name | test("drawio-" + $arch + "-.*\\.deb$")) | .browser_download_url')
+    if [ -n "${DEB_URL}" ]; then
+      TMP_DEB=$(mktemp /tmp/drawio-XXXXXX.deb)
+      curl -fsSL -o "${TMP_DEB}" "${DEB_URL}"
+      sudo dpkg -i "${TMP_DEB}" || sudo apt-get -f -y install
+      rm -f "${TMP_DEB}"
+    fi
+  ) || echo "Warning: draw.io installation failed, skipping..." >&2
 fi
 {{ end -}}
 

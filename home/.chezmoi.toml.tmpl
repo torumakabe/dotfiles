@@ -10,11 +10,14 @@
 {{- end -}}
 
 {{- $windowsUser := "" -}}
-{{- if $isWSL -}}
+{{- if and $isWSL stdinIsATTY -}}
 {{-   $windowsUser = promptStringOnce . "windowsUser" "Windows username (for WSL 1Password paths)" -}}
 {{- end -}}
 
-{{- $corpUser := promptStringOnce . "corpUser" "Corp username (for gitconfig-corp, empty to skip)" -}}
+{{- $corpUser := "" -}}
+{{- if stdinIsATTY -}}
+{{-   $corpUser = promptStringOnce . "corpUser" "Corp username (for gitconfig-corp, empty to skip)" -}}
+{{- end -}}
 
 [data]
   codespaces = {{ $codespaces }}
