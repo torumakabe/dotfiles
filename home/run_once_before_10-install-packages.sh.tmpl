@@ -1,0 +1,30 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/bin/bash
+set -euo pipefail
+
+# System packages — runs once before chezmoi applies dotfiles
+export DEBIAN_FRONTEND=noninteractive
+
+{{ if eq .chezmoi.os "linux" -}}
+echo "Installing system packages via apt..."
+sudo apt-get update -qq
+sudo apt-get install -y -qq \
+  bash-completion \
+  git \
+  jq \
+  keychain \
+  software-properties-common \
+  unzip \
+  vim \
+  zsh
+
+{{ else if eq .chezmoi.os "darwin" -}}
+echo "Installing system packages via brew..."
+brew update --quiet
+brew install \
+  jq \
+  watch \
+  zsh-completions
+
+{{ end -}}
+{{ end -}}

@@ -1,5 +1,11 @@
 # yaml-language-server: $schema=https://aka.ms/configuration-dsc-schema/0.2
 # Reference: https://github.com/microsoft/winget-cli#building-the-client
+#
+# Usage: winget configure -f configuration.dsc.yaml
+#
+# Note: Tool versions (Go, Node, Terraform, etc.) are managed by mise.
+# DSC installs them as a baseline; mise overrides with pinned versions.
+# As mise on Windows stabilizes, these can be gradually removed from DSC.
 properties:
   resources:
     - resource: Microsoft.Windows.Developer/DeveloperMode
@@ -106,12 +112,20 @@ properties:
       settings:
         id: DevProxy.DevProxy
         source: winget
+    # Python is managed by uv — no system Python install needed
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install Python"
+        description: "Install uv"
         allowPrerelease: false
       settings:
-        id: Python.Python.3.13
+        id: astral-sh.uv
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: "Install mise"
+        allowPrerelease: false
+      settings:
+        id: jdx.mise
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
@@ -143,9 +157,9 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install uv"
+        description: "Install ghq"
         allowPrerelease: false
       settings:
-        id: astral-sh.uv
+        id: x-motemen.ghq
         source: winget
   configurationVersion: 0.2.0

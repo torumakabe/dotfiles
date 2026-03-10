@@ -1,0 +1,17 @@
+{{- if ne .chezmoi.os "darwin" }}
+.gitconfig-mac
+{{- end }}
+{{- if ne .chezmoi.os "windows" }}
+.gitconfig-windows
+{{- end }}
+{{- if ne .chezmoi.os "linux" }}
+.gitconfig-linux
+{{- end }}
+{{- if not .isWSL }}
+{{- if ne .chezmoi.os "linux" }}
+{{- /* skip gitconfig-linux on non-linux */ -}}
+{{- end }}
+{{- end }}
+{{- if eq .corpUser "" }}
+.gitconfig-corp
+{{- end }}

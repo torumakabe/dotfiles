@@ -1,4 +1,0 @@
-[core]
-	editor = vim -c \"set fenc=utf-8\"
-[gpg "ssh"]
-	program = /mnt/c/Users/tomakabe/AppData/Local/Microsoft/WindowsApps/op-ssh-sign-wsl.exe

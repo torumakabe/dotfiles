@@ -151,7 +151,7 @@ alias z='cd'
 alias zi='cdi'
 command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o default -F __start_kubectl k
 command -v helm >/dev/null && source <(helm completion zsh)
-command -v terraform >/dev/null && complete -o nospace -C /usr/local/bin/terraform terraform
+command -v terraform >/dev/null && complete -o nospace -C "$(command -v terraform)" terraform
 command -v rad >/dev/null && . <(rad completion zsh)
 command -v gh >/dev/null && eval "$(gh completion -s zsh)"
 command -v azd >/dev/null && source <(azd completion zsh)

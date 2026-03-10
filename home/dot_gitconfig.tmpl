@@ -41,8 +41,6 @@
 # echo '993850+torumakabe@users.noreply.github.com ssh-ed25519 [pub-key]' > ~/.ssh/allowed_signers
 [commit]
 	gpgsign = true
-[safe]
-	directory = *
 [includeIf "gitdir:~/workspace_corp/"]
 	path = ~/.gitconfig-corp
 [includeIf "gitdir:/home/"]

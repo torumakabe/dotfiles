@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/copilot-guard.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\copilot-guard.py\"",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

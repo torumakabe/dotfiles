@@ -1,0 +1,17 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/bin/bash
+set -euo pipefail
+
+# mise — tool version manager
+if command -v mise >/dev/null 2>&1; then
+  echo "mise is already installed: $(mise --version)"
+  exit 0
+fi
+
+{{ if eq .chezmoi.os "darwin" -}}
+brew install mise
+{{ else -}}
+echo "Installing mise..."
+curl -fsSL https://mise.run | sh
+{{ end -}}
+{{ end -}}
