@@ -50,6 +50,20 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 | Windows | `winget` (DSC) + `mise` | winget: GUI アプリ・OS ツール、mise: 開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行（システム Python 不要） |
 
+### chezmoi コマンドとリモート参照
+
+| コマンド | 参照先 | 用途 |
+|----------|--------|------|
+| `chezmoi init <repo>` | **リモート** | 初回セットアップ（リポジトリをクローン） |
+| `chezmoi update` | **リモート** | `git pull` + `apply` を一括実行 |
+| `chezmoi apply` | ローカル | ソース → ホームに反映 |
+| `chezmoi diff` | ローカル | ソースとホームの差分表示 |
+| `chezmoi cat <file>` | ローカル | テンプレート展開結果の確認 |
+| `chezmoi edit <file>` | ローカル | ソースを編集（エディタが開く） |
+| `chezmoi add <file>` | ローカル | ホームの変更をソースに取り込み |
+
+リモート参照は `init` と `update` のみ。テンプレートの変更を試すだけなら push 不要で `chezmoi apply` で即反映できる。
+
 以下のコマンドは全て任意のディレクトリで実行できる（chezmoi がソースの場所を管理している）。
 
 ### 設定ファイルの編集
