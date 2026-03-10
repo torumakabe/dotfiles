@@ -39,6 +39,15 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 
 **重要**: chezmoi 管理下のファイル（`~/.gitconfig` 等）を直接編集しても、次回の `chezmoi apply` で上書きされる。永続化するには必ず `chezmoi edit` でソース側を変更すること。
 
+### パッケージの管理
+
+| 環境 | パッケージマネージャ | 対象 |
+|------|---------------------|------|
+| Linux / WSL | `apt` + `mise` | apt: OS パッケージ、mise: 開発ツール |
+| macOS | `brew` + `mise` | brew: OS パッケージ・GUI アプリ、mise: 開発ツール |
+| Windows | `winget` (DSC) + `mise` | winget: GUI アプリ・OS ツール、mise: 開発ツール |
+| 全環境共通 | `uv` | Python スクリプト実行（システム Python 不要） |
+
 ### 設定ファイルの編集
 
 dotfiles を変更したい場合、chezmoi のソースを編集してから適用する:
