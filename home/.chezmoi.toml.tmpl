@@ -1,0 +1,24 @@
+{{- $codespaces := env "CODESPACES" | not | not -}}
+{{- $devcontainer := env "REMOTE_CONTAINERS" | not | not -}}
+{{- $isWSL := false -}}
+{{- if eq .chezmoi.os "linux" -}}
+{{-   if .chezmoi.kernel -}}
+{{-     if hasKey .chezmoi.kernel "osrelease" -}}
+{{-       $isWSL = .chezmoi.kernel.osrelease | lower | contains "microsoft" -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+
+{{- $windowsUser := "" -}}
+{{- if $isWSL -}}
+{{-   $windowsUser = promptStringOnce . "windowsUser" "Windows username (for WSL 1Password paths)" -}}
+{{- end -}}
+
+{{- $corpUser := promptStringOnce . "corpUser" "Corp username (for gitconfig-corp, empty to skip)" -}}
+
+[data]
+  codespaces = {{ $codespaces }}
+  devcontainer = {{ $devcontainer }}
+  isWSL = {{ $isWSL }}
+  windowsUser = {{ $windowsUser | quote }}
+  corpUser = {{ $corpUser | quote }}
