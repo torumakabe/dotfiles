@@ -25,6 +25,7 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 - Executed via `uv run` (no system Python dependency)
 - Config files: `blocked-files.txt` (deny patterns), `allowed-urls.txt` (URL allowlist)
 - Fail-safe: any error results in deny
+- **パス区切り文字**: Windows のバックスラッシュ (`\`) と Unix のフォワードスラッシュ (`/`) の両方を扱う。比較前に `/` へ正規化すること。パターンファイルは `/` で記述する
 
 ## Tool Management
 
