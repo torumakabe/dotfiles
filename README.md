@@ -6,6 +6,8 @@ Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](h
 
 ### Linux / macOS / WSL
 
+任意のディレクトリで実行できる（chezmoi がリポジトリのクローンと配置を自動で行う）:
+
 ```bash
 sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 ```
@@ -48,6 +50,8 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 | Windows | `winget` (DSC) + `mise` | winget: GUI アプリ・OS ツール、mise: 開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行（システム Python 不要） |
 
+以下のコマンドは全て任意のディレクトリで実行できる（chezmoi がソースの場所を管理している）。
+
 ### 設定ファイルの編集
 
 dotfiles を変更したい場合、chezmoi のソースを編集してから適用する:
@@ -57,7 +61,7 @@ dotfiles を変更したい場合、chezmoi のソースを編集してから適
 chezmoi edit ~/.zshrc
 
 # または、リポジトリ内のソースを直接編集してから適用
-cd $(chezmoi source-path)/..
+cd $(chezmoi source-path)/..    # ~/dotfiles 相当に移動
 vim home/dot_zshrc.tmpl
 chezmoi apply
 ```

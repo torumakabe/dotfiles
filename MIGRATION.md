@@ -20,6 +20,8 @@ v2.0.0 は dotfiles 管理を **シンボリンク + bootstrap.sh** から **che
 
 ### 1. 現状のバックアップ
 
+任意のディレクトリで実行:
+
 ```bash
 # 既存の dotfiles リポジトリをバックアップ
 cp -r ~/dotfiles ~/dotfiles.bak
@@ -35,6 +37,8 @@ cp -L ~/.mise.toml ~/dotfiles_migration_backup/
 ```
 
 ### 2. chezmoi のインストール
+
+任意のディレクトリで実行:
 
 ```bash
 # Linux / WSL
@@ -64,6 +68,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 v1.x では `bootstrap.sh` がシンボリンクを作成し、`setup/*.sh` でツールをインストールしていた。
 
 ### 手順
+
+任意のディレクトリで実行（chezmoi がリポジトリのクローンと配置を自動で行う）:
 
 ```bash
 # 1. 既存シンボリンクの除去
@@ -101,6 +107,8 @@ WSL との違いは 1Password のパスのみ。
 
 ### 手順
 
+任意のディレクトリで実行:
+
 ```bash
 rm -f ~/.gitconfig ~/.gitconfig-linux ~/.gitconfig-corp ~/.zshrc ~/.mise.toml
 chezmoi init --apply torumakabe
@@ -123,6 +131,8 @@ git config gpg.ssh.program    # → /opt/1Password/op-ssh-sign
 v1.x では `host-files/macos/bootstrap.sh` が brew でパッケージをインストールし、シンボリンクを作成していた。
 
 ### 手順
+
+任意のディレクトリで実行:
 
 ```bash
 # 1. 既存シンボリンクの除去
@@ -159,6 +169,8 @@ brew uninstall python@3
 v1.x では `host-files/windows-wsl/configuration.dsc.yaml` を手動で WinGet DSC に渡してパッケージをインストールしていた。設定ファイルの管理は WSL 側で行い、Windows ネイティブには直接配置していなかった。
 
 ### 手順
+
+PowerShell で実行:
 
 ```powershell
 # 1. chezmoi インストール
