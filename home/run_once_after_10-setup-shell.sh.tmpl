@@ -1,0 +1,34 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/bin/bash
+set -euo pipefail
+
+# Oh My Zsh + plugins
+OH_MY_ZSH_DIR="${HOME}/.oh-my-zsh"
+
+if [ ! -d "${OH_MY_ZSH_DIR}" ]; then
+  echo "Installing Oh My Zsh..."
+  git clone --depth=1 \
+    -c core.eol=lf \
+    -c core.autocrlf=false \
+    -c fsck.zeroPaddedFilemode=ignore \
+    -c fetch.fsck.zeroPaddedFilemode=ignore \
+    -c receive.fsck.zeroPaddedFilemode=ignore \
+    https://github.com/ohmyzsh/ohmyzsh "${OH_MY_ZSH_DIR}"
+  cd "${OH_MY_ZSH_DIR}" && git repack -a -d -f --depth=1 --window=1
+fi
+
+# zsh-completions plugin
+ZSH_COMPLETIONS_DIR="${OH_MY_ZSH_DIR}/custom/plugins/zsh-completions"
+if [ ! -d "${ZSH_COMPLETIONS_DIR}" ]; then
+  echo "Installing zsh-completions plugin..."
+  git clone --depth=1 https://github.com/zsh-users/zsh-completions "${ZSH_COMPLETIONS_DIR}"
+fi
+
+# Set default shell to zsh (skip in containers where chsh may not work)
+{{ if not (or .codespaces .devcontainer) -}}
+if [ "$(basename "${SHELL}")" != "zsh" ]; then
+  echo "Changing default shell to zsh..."
+  sudo usermod --shell /bin/zsh "${USER}" || chsh -s "$(command -v zsh)" || true
+fi
+{{ end -}}
+{{ end -}}

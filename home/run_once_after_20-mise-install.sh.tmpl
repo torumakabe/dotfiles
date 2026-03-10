@@ -1,0 +1,15 @@
+{{ if ne .chezmoi.os "windows" -}}
+#!/bin/bash
+set -euo pipefail
+
+# Activate mise and install tool versions from .mise.toml
+export PATH="${HOME}/.local/bin:${PATH}"
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo "mise not found, skipping tool installation"
+  exit 0
+fi
+
+echo "Installing tool versions via mise..."
+mise install --yes
+{{ end -}}
