@@ -1,0 +1,43 @@
+# Azure CLI 認証
+**/.azure/*
+**/accessTokens.json
+**/azureProfile.json
+**/msal_token_cache*
+
+# azd 環境
+**/.azure/**/.env
+**/.azure/**/.env.*
+
+# Azure Developer CLI (azd) トークンキャッシュ
+# Azure Developer CLI (azd) 設定
+**/.azd/*
+
+# Azure Functions
+**/local.settings.json
+
+# .NET
+**/appsettings.Development.json
+**/secrets.json
+
+# Terraform / Bicep
+**/terraform.tfstate
+**/terraform.tfvars
+**/*.auto.tfvars
+**/*.bicepparam
+**/*.parameters.json
+
+# Terraform Cloud
+**/.terraform.d/credentials.tfrc.json
+
+# Kubernetes
+**/.kube/config
+
+# Publish Profile
+**/*.PublishSettings
+
+# 汎用
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.token
