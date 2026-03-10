@@ -111,7 +111,9 @@ chezmoi state delete-bucket --bucket=scriptState
 chezmoi apply
 ```
 
-### Copilot Guard フックのテスト
+### GitHub Copilot CLI フックスクリプトのテスト
+
+フックは stdin に JSON を受け取り、stdout に許可/拒否の JSON を返す。手動テスト:
 
 ```bash
 echo '{"toolName":"bash","toolArgs":{"command":"ls"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
