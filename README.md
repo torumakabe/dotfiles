@@ -67,7 +67,7 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 | Windows | `winget` (DSC) + `mise` | winget: GUI アプリ・OS ツール、mise: 開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行（システム Python 不要） |
 
-### chezmoi コマンドとリモート参照
+### chezmoi コマンドリファレンス
 
 | コマンド | 参照先 | 用途 |
 |----------|--------|------|
@@ -79,13 +79,9 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 | `chezmoi edit <file>` | ローカル | ソースを編集（エディタが開く） |
 | `chezmoi add <file>` | ローカル | ホームの変更をソースに取り込み |
 
-リモート参照は `init` と `update` のみ。テンプレートの変更を試すだけなら push 不要で `chezmoi apply` で即反映できる。
-
-以下のコマンドは全て任意のディレクトリで実行できる（chezmoi がソースの場所を管理している）。
+リモート参照は `init` と `update` のみ。テンプレートの変更を試すだけなら push 不要で `chezmoi apply` で即反映できる。全コマンドは任意のディレクトリで実行できる。
 
 ### 設定ファイルの編集
-
-dotfiles を変更したい場合、chezmoi のソースを編集してから適用する:
 
 ```bash
 # ソースを直接編集（エディタが開く）
@@ -142,7 +138,35 @@ chezmoi state delete-bucket --bucket=scriptState
 chezmoi apply
 ```
 
-### GitHub Copilot CLI フックスクリプトのテスト
+## GitHub Copilot CLI
+
+chezmoi は `~/.copilot/` 配下の以下のファイルを管理する。プラグインやスキルはプラグインマネージャが管理するため chezmoi の対象外。
+
+| ファイル | 用途 | 管理方法 |
+|---------|------|----------|
+| `copilot-instructions.md` | ユーザーレベルのカスタム指示 | chezmoi |
+| `mcp-config.json` | MCP サーバー設定 | chezmoi（`/mcp add` 後は `re-add`） |
+| `hooks/` | preToolUse ガードフック | chezmoi |
+| `skills/`, `installed-plugins/` | スキル・プラグイン | `/plugin install` で管理 |
+
+### プラグインのセットアップ（初回のみ）
+
+[Azure Skills Plugin](https://github.com/microsoft/azure-skills) を導入すると、Azure スキル（20+）、Azure MCP Server、Foundry MCP がまとめてインストールされる。
+
+```
+/plugin marketplace add microsoft/azure-skills
+/plugin install azure@azure-skills
+```
+
+更新:
+
+```
+/plugin update azure@azure-skills
+```
+
+> **前提**: Node.js 18+、Azure CLI (`az login`)、Azure Developer CLI (`azd auth login`) が必要。
+
+### ガードフックのテスト
 
 フックは stdin に JSON を受け取り、stdout に許可/拒否の JSON を返す。手動テスト:
 
