@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "MS-Learn": {
+      "tools": ["*"],
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp",
+      "headers": {}
+    },
+    "Azure-MCP-Server": {
+      "tools": ["*"],
+      "type": "local",
+      "command": "uvx",
+      "args": ["--from", "msmcp-azure", "azmcp", "server", "start"]
+    }
+  }
+}

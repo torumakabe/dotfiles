@@ -49,12 +49,14 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 
 | 分類 | 例 | 編集方法 |
 |------|----|----------|
-| **chezmoi 管理** | `.gitconfig`, `.zshrc`, `.mise.toml`, `.copilot/` | `chezmoi edit` でソースを編集 → `chezmoi apply` |
+| **chezmoi 管理** | `.gitconfig`, `.zshrc`, `.mise.toml`, `.copilot/` | `chezmoi edit` でソースを編集 → `chezmoi apply`（※1） |
 | **mise 管理** | Go, Node, Terraform 等のバージョン | `.mise.toml` を `chezmoi edit` で編集 → `mise install` |
 | **手動管理** | `reference/windows/` 配下 (DSC, Terminal テーマ) | 直接編集し git commit。chezmoi は関与しない |
 | **リポジトリ設定** | `.github/copilot-instructions.md`, `README.md` | 直接編集し git commit |
 
 **重要**: chezmoi 管理下のファイル（`~/.gitconfig` 等）を直接編集しても、次回の `chezmoi apply` で上書きされる。永続化するには必ず `chezmoi edit` でソース側を変更すること。
+
+> **※1**: `~/.copilot/mcp-config.json` は例外的に、Copilot CLI の `/mcp add` コマンドでローカル側が変更される場合がある。変更後は `chezmoi re-add ~/.copilot/mcp-config.json` でソースに反映すること。
 
 ### パッケージの管理
 
@@ -197,6 +199,7 @@ home/                          ← chezmoi source (.chezmoiroot で指定)
 ├── PowerShell_profile.ps1.tmpl ← Windows PowerShell Profile (mise activate 含む)
 ├── private_dot_copilot/       ← ~/.copilot/ に配置
 │   ├── copilot-instructions.md
+│   ├── mcp-config.json        ← MCP サーバー設定 (/mcp add 後は re-add)
 │   └── hooks/
 │       ├── copilot-guard.json ← フック定義 (uv run)
 │       ├── blocked-files.txt  ← ブロックパターン
