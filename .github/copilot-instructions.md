@@ -45,9 +45,11 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 - コンテナ作成後にターミナルから `mise install --yes` を手動実行する
 - Codespaces では `GITHUB_TOKEN` が自動設定されるためスキップしない
 
-## Windows DSC と mise の重複
+## Windows DSC と mise の役割分担
 
-- `reference/windows/configuration.dsc.yaml` には mise でも管理しているツール（Go, Node, Terraform 等）が含まれている
-- これは mise の Windows 対応が安定途上のため、フォールバックとして残している
-- mise でのインストール・バージョン管理が安定したツールから、DSC のエントリを段階的に削除する
-- DSC に残すべきもの: GUI アプリ（PowerToys, DevToys 等）、mise 未対応ツール、OS レベルの設定（DeveloperMode）
+- CLI ツールのバージョン管理は mise に一本化済み
+- `reference/windows/configuration.dsc.yaml` には mise で管理しないものだけを残す:
+  - OS 設定（DeveloperMode）
+  - GUI アプリ（PowerToys, DevToys, draw.io 等）
+  - mise 未対応 CLI（Azure CLI, azd, jq, Dev Proxy, GitHub Copilot CLI, Microsoft Edit）
+  - ブートストラップ（mise 自身, Git, PowerShell）

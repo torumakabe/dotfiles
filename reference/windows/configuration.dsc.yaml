@@ -3,11 +3,9 @@
 #
 # Usage: winget configure -f configuration.dsc.yaml
 #
-# Note: Tool versions (Go, Node, Terraform, etc.) are managed by mise.
-# DSC installs them as a baseline; mise overrides with pinned versions.
-# As mise on Windows stabilizes, these can be gradually removed from DSC.
-# Candidates for removal: GoLang.Go, OpenJS.NodeJS, Hashicorp.Terraform
-# Keep in DSC: GUI apps, mise-incompatible tools, OS settings (DeveloperMode)
+# Note: CLI tool versions are managed by mise (~/.config/mise/config.toml).
+# DSC contains only: OS settings, GUI apps, mise-incompatible tools, and
+# bootstrap tooling (mise itself).
 properties:
   resources:
     - resource: Microsoft.Windows.Developer/DeveloperMode
@@ -22,27 +20,6 @@ properties:
         allowPrerelease: false
       settings:
         id: Microsoft.PowerShell
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install GitHub CLI"
-        allowPrerelease: false
-      settings:
-        id: GitHub.cli
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install Go"
-        allowPrerelease: false
-      settings:
-        id: GoLang.Go
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install fzf"
-        allowPrerelease: false
-      settings:
-        id: junegunn.fzf
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
@@ -74,13 +51,6 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install DotNet SDK"
-        allowPrerelease: false
-      settings:
-        id: Microsoft.DotNet.SDK.9
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
         description: "Install Azure Developer CLI"
         allowPrerelease: false
       settings:
@@ -95,32 +65,10 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install node"
-        allowPrerelease: false
-      settings:
-        id: OpenJS.NodeJS
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install Terraform"
-        allowPrerelease: false
-      settings:
-        id: Hashicorp.Terraform
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
         description: "Install Dev Proxy"
         allowPrerelease: false
       settings:
         id: DevProxy.DevProxy
-        source: winget
-    # Python is managed by uv — no system Python install needed
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install uv"
-        allowPrerelease: false
-      settings:
-        id: astral-sh.uv
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
@@ -149,19 +97,5 @@ properties:
         allowPrerelease: false
       settings:
         id: JGraph.Draw
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install zoxide"
-        allowPrerelease: false
-      settings:
-        id: ajeetdsouza.zoxide
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install ghq"
-        allowPrerelease: false
-      settings:
-        id: x-motemen.ghq
         source: winget
   configurationVersion: 0.2.0
