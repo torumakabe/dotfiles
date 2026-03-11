@@ -23,6 +23,10 @@
 - Use type hints (PEP 484 / PEP 604 union syntax for 3.10+)
 - Prefer standard library over external dependencies when practical
 - Use PEP 723 inline metadata for single-file scripts run via `uv run`
+- **Always use `uv` for Python execution and package management**
+  - `uv run` for script execution (not `python3` / `python`)
+  - `uv add` / `uv pip` for dependency management (not `pip` / `pip3`)
+  - `uv venv` for virtual environments (not `python -m venv`)
 
 ## Infrastructure / Cloud
 
