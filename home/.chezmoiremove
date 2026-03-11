@@ -1,0 +1,2 @@
+# Remove legacy config files superseded by new locations
+.mise.toml
