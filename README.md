@@ -140,14 +140,15 @@ chezmoi apply
 
 ## GitHub Copilot CLI
 
-chezmoi は `~/.copilot/` 配下の以下のファイルを管理する。プラグインやスキルはプラグインマネージャが管理するため chezmoi の対象外。
+chezmoi は `~/.copilot/` 配下の以下のファイルを管理する。プラグインはプラグインマネージャが管理するため chezmoi の対象外。
 
 | ファイル | 用途 | 管理方法 |
 |---------|------|----------|
 | `copilot-instructions.md` | ユーザーレベルのカスタム指示 | chezmoi |
 | `mcp-config.json` | MCP サーバー設定 | chezmoi（`/mcp add` 後は `re-add`） |
 | `hooks/` | preToolUse ガードフック | chezmoi |
-| `skills/`, `installed-plugins/` | スキル・プラグイン | `/plugin install` で管理 |
+| `skills/` | エージェントスキル | chezmoi（上流更新時は再取得して `re-add`） |
+| `installed-plugins/` | プラグイン | `/plugin install` で管理（chezmoi 対象外） |
 
 ### プラグインのセットアップ（初回のみ）
 
@@ -165,6 +166,27 @@ chezmoi は `~/.copilot/` 配下の以下のファイルを管理する。プラ
 ```
 
 > **前提**: Node.js 18+、Azure CLI (`az login`)、Azure Developer CLI (`azd auth login`) が必要。
+
+### スキルの管理
+
+ユーザーレベルのスキル（`~/.copilot/skills/`）は chezmoi で管理する。新しいスキルの追加・更新手順:
+
+```bash
+# 新しいスキルを追加（一時ディレクトリに取得して chezmoi に取り込む）
+npx skills add -g <owner>/<repo>/<path>
+chezmoi re-add ~/.copilot/skills/<skill-name>
+
+# 上流の更新を取り込む
+npx skills add -g <owner>/<repo>/<path>    # 上書きインストール
+chezmoi re-add ~/.copilot/skills/<skill-name>
+chezmoi diff                                # 変更内容を確認
+```
+
+現在インストール済みのスキル:
+
+| スキル | ソース | 用途 |
+|--------|--------|------|
+| `microsoft-skill-creator` | [github/awesome-copilot](https://github.com/github/awesome-copilot) (MIT) | MS Learn MCP を使って Microsoft 技術のスキルを生成 |
 
 ### ガードフックのテスト
 
