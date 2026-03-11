@@ -23,7 +23,10 @@ ripgrep = "latest"
 zoxide = "latest"
 bat = "latest"
 shellcheck = "latest"
+{{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
+# プリビルドバイナリが linux/arm64 未提供のためスキップ
 cargo-make = "latest"
+{{ end -}}
 
 [settings]
 experimental = true

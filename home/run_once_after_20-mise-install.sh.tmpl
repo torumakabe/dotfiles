@@ -2,7 +2,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Activate mise and install tool versions from .mise.toml
+# Activate mise and install tool versions from config
 export PATH="${HOME}/.local/bin:${PATH}"
 
 if ! command -v mise >/dev/null 2>&1; then
@@ -10,19 +10,52 @@ if ! command -v mise >/dev/null 2>&1; then
   exit 0
 fi
 
+{{ if and .devcontainer (not .codespaces) -}}
+# Dev container (非 Codespaces): コンテナ作成時は GitHub API トークンが
+# 利用できずレート制限に抵触するため、mise install はスキップする。
+# コンテナ作成後にターミナルから手動で実行:
+#   mise install --yes
+echo "Dev container detected — skipping mise install"
+echo "Run 'mise install --yes' manually after container creation"
+exit 0
+{{ end -}}
+
+max_attempts=3
+attempt=1
+wait_sec=10
+
 echo "Installing tool versions via mise..."
-if ! mise install --yes; then
+while [ "$attempt" -le "$max_attempts" ]; do
+  if mise install --yes 2>&1; then
+    echo "mise install completed successfully"
+    break
+  fi
+
+  missing_count="$(mise ls --missing 2>/dev/null | grep -c '(missing)' || true)"
+  if [ "$missing_count" -eq 0 ]; then
+    echo "All tools installed successfully"
+    break
+  fi
+
+  if [ "$attempt" -lt "$max_attempts" ]; then
+    echo "Attempt ${attempt}/${max_attempts}: ${missing_count} tool(s) remaining. Retrying in ${wait_sec}s..."
+    sleep "$wait_sec"
+    wait_sec=$((wait_sec * 2))
+  fi
+
+  attempt=$((attempt + 1))
+done
+
+# 最終チェック
+missing_tools="$(mise ls --missing 2>/dev/null || true)"
+if echo "$missing_tools" | grep -q '(missing)'; then
   echo "" >&2
   echo "========================================" >&2
   echo "WARNING: mise install が一部失敗しました" >&2
   echo "========================================" >&2
-  echo "原因: GitHub API レート制限、ネットワーク障害など" >&2
+  echo "$missing_tools" >&2
   echo "" >&2
-  echo "未インストールのツールを確認:" >&2
-  echo "  mise ls --missing" >&2
-  echo "" >&2
-  echo "リトライ:" >&2
-  echo "  mise install" >&2
+  echo "リトライ: mise install" >&2
   echo "========================================" >&2
 fi
 {{ end -}}

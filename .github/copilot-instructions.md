@@ -33,6 +33,18 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 - **uv** manages Python execution (installed via mise)
 - No direct `python3`, `pip`, or `brew install python` — uv handles all Python needs
 
+### mise のプラットフォーム制約
+
+- `home/dot_config/mise/config.toml.tmpl` は chezmoi テンプレートで、プラットフォーム非対応ツールを条件付きでスキップする
+- **cargo-make**: linux/arm64 のプリビルドバイナリが未提供のためスキップ中（[sagiegurari/cargo-make#541](https://github.com/sagiegurari/cargo-make/issues/541)）
+- **定期チェック**: このリポジトリの mise 設定を変更する際は、[cargo-make の最新リリース](https://github.com/sagiegurari/cargo-make/releases)に `aarch64-unknown-linux` バイナリが追加されていないか確認すること。追加されていれば条件分岐を削除して全プラットフォーム共通に戻す
+
+### Dev container での mise install
+
+- Dev container（非 Codespaces）ではコンテナ作成時に GitHub API トークンが利用できず、レート制限（60 req/hr）に抵触するため `mise install` をスキップする
+- コンテナ作成後にターミナルから `mise install --yes` を手動実行する
+- Codespaces では `GITHUB_TOKEN` が自動設定されるためスキップしない
+
 ## Windows DSC と mise の重複
 
 - `reference/windows/configuration.dsc.yaml` には mise でも管理しているツール（Go, Node, Terraform 等）が含まれている
