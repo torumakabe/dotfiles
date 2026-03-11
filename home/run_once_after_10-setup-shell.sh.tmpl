@@ -24,11 +24,10 @@ if [ ! -d "${ZSH_COMPLETIONS_DIR}" ]; then
   git clone --depth=1 https://github.com/zsh-users/zsh-completions "${ZSH_COMPLETIONS_DIR}"
 fi
 
-# Set default shell to zsh (skip in containers where chsh may not work)
-{{ if not (or .codespaces .devcontainer) -}}
+# Set default shell to zsh
 if [ "$(basename "${SHELL}")" != "zsh" ]; then
   echo "Changing default shell to zsh..."
   sudo usermod --shell /bin/zsh "${USER}" || chsh -s "$(command -v zsh)" || true
 fi
-{{ end -}}
+
 {{ end -}}

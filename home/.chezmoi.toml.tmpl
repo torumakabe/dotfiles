@@ -10,7 +10,9 @@
 {{- end -}}
 
 {{- $windowsUser := "" -}}
-{{- if and $isWSL stdinIsATTY -}}
+{{- if eq .chezmoi.os "windows" -}}
+{{-   $windowsUser = env "USERNAME" -}}
+{{- else if and $isWSL stdinIsATTY -}}
 {{-   $windowsUser = promptStringOnce . "windowsUser" "Windows username (for WSL 1Password paths)" -}}
 {{- end -}}
 
