@@ -29,6 +29,7 @@ exit 0
 max_attempts=3
 attempt=1
 wait_sec=10
+missing_marker='(missing)'
 
 retry_missing_tools_without_github_credentials() {
   # --- SAML SSO workaround ---
@@ -45,8 +46,13 @@ retry_missing_tools_without_github_credentials() {
   # - the initial authenticated `mise install --yes` still runs first,
   # - only missing tools are retried unauthenticated, and
   # - non-Codespaces environments still keep their existing behavior.
-  local missing_for_retry
-  missing_for_retry="$(mise ls --missing 2>/dev/null | awk '/(missing)/ {print $1}' || true)"
+  local missing_tools_output missing_for_retry
+  if ! missing_tools_output="$(mise ls --missing 2>/dev/null)"; then
+    echo "Warning: failed to list missing tools for unauthenticated retry. Skipping retry step." >&2
+    return 0
+  fi
+
+  missing_for_retry="$(printf '%s\n' "$missing_tools_output" | awk -v marker="$missing_marker" 'index($0, marker) {print $1}')"
   if [ -z "$missing_for_retry" ]; then
     return 0
   fi
@@ -54,11 +60,13 @@ retry_missing_tools_without_github_credentials() {
   echo ""
   echo "Retrying missing tools without GitHub credentials (SAML SSO workaround)..."
   (
-    unset GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN 2>/dev/null || true
+    unset GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN 2>/dev/null
     echo "$missing_for_retry" | while read -r tool; do
       [ -z "$tool" ] && continue
       echo "  Installing $tool (unauthenticated)..."
-      mise install "$tool" --yes 2>&1 || true
+      if ! mise install "$tool" --yes 2>&1; then
+        echo "Warning: failed to install $tool without GitHub credentials. Retry manually with 'mise install $tool --yes'." >&2
+      fi
     done
   )
 }
@@ -70,7 +78,13 @@ while [ "$attempt" -le "$max_attempts" ]; do
     break
   fi
 
-  missing_count="$(mise ls --missing 2>/dev/null | grep -c '(missing)' || true)"
+  if ! missing_tools_output="$(mise ls --missing 2>/dev/null)"; then
+    echo "Warning: failed to inspect missing tools after mise install attempt ${attempt}/${max_attempts}. Retrying..." >&2
+    missing_count=1
+  else
+    missing_count="$(printf '%s\n' "$missing_tools_output" | awk -v marker="$missing_marker" 'BEGIN {count=0} index($0, marker) {count++} END {print count+0}')"
+  fi
+
   if [ "$missing_count" -eq 0 ]; then
     echo "All tools installed successfully"
     break
@@ -88,8 +102,9 @@ done
 retry_missing_tools_without_github_credentials
 
 # 最終チェック
-missing_tools="$(mise ls --missing 2>/dev/null || true)"
-if echo "$missing_tools" | grep -q '(missing)'; then
+if ! missing_tools="$(mise ls --missing 2>/dev/null)"; then
+  echo "Warning: failed to inspect final mise installation status. Run 'mise ls --missing' manually." >&2
+elif echo "$missing_tools" | grep -F -q "$missing_marker"; then
   echo "" >&2
   echo "========================================" >&2
   echo "WARNING: mise install が一部失敗しました" >&2

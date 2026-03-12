@@ -15,7 +15,70 @@ fi
 {{ if eq .chezmoi.os "darwin" -}}
 brew install mise
 {{ else -}}
+MISE_VERSION="v2026.3.8"
+MISE_BIN_DIR="${HOME}/.local/bin"
+
+download_file() {
+  local url=$1
+  local output=$2
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "${output}" "${url}"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "${output}" "${url}"
+  else
+    echo "error: curl or wget required to install mise" >&2
+    exit 1
+  fi
+}
+
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify mise" >&2
+    exit 1
+  fi
+}
+
+case "$(uname -m)" in
+  x86_64|amd64)
+    mise_archive="mise-${MISE_VERSION}-linux-x64.tar.gz"
+    expected_sha256="d71efdfe14eaa2a62ac3ac0c010cd2053c501bd317de63ab785e5cd37840ed57"
+    ;;
+  aarch64|arm64)
+    mise_archive="mise-${MISE_VERSION}-linux-arm64.tar.gz"
+    expected_sha256="a3b615c2e6491e3c9788cf2f98d65783090921ac914744d781f050d567b5474d"
+    ;;
+  *)
+    echo "error: unsupported architecture: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
 echo "Installing mise..."
-curl -fsSL https://mise.run | sh
+tmp_dir=$(mktemp -d)
+trap 'rm -rf "${tmp_dir}"' EXIT
+
+archive_path="${tmp_dir}/${mise_archive}"
+archive_url="https://github.com/jdx/mise/releases/download/${MISE_VERSION}/${mise_archive}"
+
+download_file "${archive_url}" "${archive_path}"
+
+actual_sha256="$(sha256_file "${archive_path}")"
+if [ "${actual_sha256}" != "${expected_sha256}" ]; then
+  echo "error: checksum verification failed for ${mise_archive}" >&2
+  echo "expected: ${expected_sha256}" >&2
+  echo "actual:   ${actual_sha256}" >&2
+  exit 1
+fi
+
+mkdir -p "${MISE_BIN_DIR}"
+tar -xzf "${archive_path}" -C "${tmp_dir}" mise/bin/mise
+install -m 0755 "${tmp_dir}/mise/bin/mise" "${MISE_BIN_DIR}/mise"
 {{ end -}}
 {{ end -}}

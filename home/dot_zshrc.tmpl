@@ -118,8 +118,12 @@ export GOPATH=$HOME/go
 export EDITOR=vim
 export PATH=$HOME/.local/bin:$GOPATH/bin:$PATH
 
-# mise (tool version manager)
-command -v mise >/dev/null && eval "$(mise activate zsh)"
+# Shell hooks that need to run in the current zsh process.
+# Prefer sourcing generated shell code over eval so command output is read as a script.
+# - mise activate zsh: tool shims, PATH updates, and shell hooks
+# - zoxide init zsh --cmd cd: directory-jumping integration
+# - gh completion -s zsh: GitHub CLI completion definitions
+command -v mise >/dev/null && source <(mise activate zsh)
 
 alias k=kubectl
 alias ll='ls -ahl'
@@ -146,20 +150,39 @@ case $(uname) in
 esac
 
 # Tool completions
-command -v zoxide >/dev/null && eval "$(zoxide init zsh --cmd cd)"
+command -v zoxide >/dev/null && source <(zoxide init zsh --cmd cd)
 alias z='cd'
 alias zi='cdi'
 command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o default -F __start_kubectl k
 command -v helm >/dev/null && source <(helm completion zsh)
 command -v terraform >/dev/null && complete -o nospace -C "$(command -v terraform)" terraform
 command -v rad >/dev/null && . <(rad completion zsh)
-command -v gh >/dev/null && eval "$(gh completion -s zsh)"
+command -v gh >/dev/null && source <(gh completion -s zsh)
 command -v azd >/dev/null && source <(azd completion zsh)
 command -v trivy >/dev/null && source <(trivy completion zsh)
 
 if [ -z "$SSH_AUTH_SOCK" ] ; then
-  eval $(ssh-agent -s) >/dev/null
-  ssh-add -l >/dev/null || ssh-add ~/.ssh/id_ed25519 >/dev/null 2>&1
+  if agent_output=$(ssh-agent -s 2>/dev/null); then
+    while IFS= read -r line; do
+      assignment=${line%%;*}
+      case "$assignment" in
+        SSH_AUTH_SOCK=/*)
+          export "$assignment"
+          ;;
+        SSH_AGENT_PID=*)
+          agent_pid=${assignment#SSH_AGENT_PID=}
+          case "$agent_pid" in
+            ''|*[!0-9]*)
+              ;;
+            *)
+              export "$assignment"
+              ;;
+          esac
+          ;;
+      esac
+    done <<< "$agent_output"
+    ssh-add -l >/dev/null || ssh-add ~/.ssh/id_ed25519 >/dev/null 2>&1
+  fi
 fi
 
 # ghq + fzf: fuzzy-search git repositories and cd into selection

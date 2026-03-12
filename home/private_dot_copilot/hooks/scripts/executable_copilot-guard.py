@@ -10,11 +10,18 @@ Run via: uv run copilot-guard.py
 """
 from __future__ import annotations
 
+from functools import lru_cache
 import json
-import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
+
+COMMAND_STRIP_CHARS = "\"'`()[]{};,"
+# Match one shell-ish token composed of unquoted text, double-quoted text,
+# and/or single-quoted text, so paths with spaces remain intact.
+# Quoted spans also allow backslash escapes such as \" and \'.
+COMMAND_TOKEN_RE = re.compile(r"""(?:[^\s"']+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+""")
 
 
 def deny(reason: str) -> None:
@@ -58,13 +65,77 @@ def load_patterns(path: Path) -> list[str]:
     return lines
 
 
-def pattern_to_substring(pattern: str) -> str:
-    """Extract the fixed substring from a glob-like pattern for matching."""
-    short = pattern.lstrip("*").lstrip("/")
-    short = short.rstrip("*")
-    # Remove remaining glob chars
-    clean = short.replace("*", "").replace("?", "")
-    return clean
+def normalize_pattern(pattern: str) -> str:
+    """Normalize a blocked-files glob pattern to a canonical POSIX form."""
+    normalized = pattern.strip().replace("\\", "/")
+    normalized = re.sub(r"/+", "/", normalized)
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.lstrip("/")
+
+
+def normalize_path(value: str) -> str:
+    """Normalize path-like values from tool args for cross-platform matching."""
+    normalized = value.strip().strip("\"'")
+    if normalized.lower().startswith("file://"):
+        parsed = urlsplit(normalized)
+        normalized = unquote(parsed.path)
+        if parsed.netloc:
+            normalized = f"{parsed.netloc}/{normalized.lstrip('/')}"
+    normalized = normalized.replace("\\", "/")
+    normalized = re.sub(r"/+", "/", normalized)
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    # file:// URIs on Windows are parsed as /C:/path, so drop that extra slash.
+    if re.match(r"^/[A-Za-z]:/", normalized):
+        normalized = normalized[1:]
+    return normalized.lstrip("/")
+
+
+@lru_cache(maxsize=None)
+def compile_glob(pattern: str) -> re.Pattern[str]:
+    """Compile a path-aware glob pattern.
+
+    Rules:
+    - ``*`` matches within one path segment.
+    - ``?`` matches one character within one path segment.
+    - ``**`` matches across path segments.
+    - Compiled patterns are cached because the same blocked globs are reused
+      across multiple path and command checks within one hook invocation.
+    """
+    normalized = normalize_pattern(pattern)
+    parts = ["^"]
+    index = 0
+    while index < len(normalized):
+        char = normalized[index]
+        if char == "*":
+            if index + 1 < len(normalized) and normalized[index + 1] == "*":
+                index += 2
+                if index < len(normalized) and normalized[index] == "/":
+                    index += 1
+                    # Match zero or more directory segments for the special ``**/`` case.
+                    parts.append("(?:[^/]+/)*")
+                else:
+                    parts.append(".*")
+                continue
+            parts.append("[^/]*")
+        elif char == "?":
+            parts.append("[^/]")
+        elif char == "/":
+            parts.append("/")
+        else:
+            parts.append(re.escape(char))
+        index += 1
+    parts.append("$")
+    return re.compile("".join(parts))
+
+
+def matches_blocked_pattern(target: str, pattern: str) -> bool:
+    """Return True when a normalized target path matches a blocked glob."""
+    normalized_target = normalize_path(target)
+    if not normalized_target:
+        return False
+    return bool(compile_glob(pattern).match(normalized_target))
 
 
 # ---------------------------------------------------------------------------
@@ -72,30 +143,33 @@ def pattern_to_substring(pattern: str) -> str:
 # ---------------------------------------------------------------------------
 
 def check_blocked_path(target: str, patterns: list[str]) -> str | None:
-    """Strict substring match for path arguments."""
-    norm_target = target.replace("\\", "/")
+    """Path-aware glob match for path arguments."""
     for pat in patterns:
-        sub = pattern_to_substring(pat).replace("\\", "/")
-        if sub and sub in norm_target:
+        if matches_blocked_pattern(target, pat):
             return pat
     return None
 
 
-def check_blocked_command(target: str, patterns: list[str]) -> str | None:
-    """Boundary-aware match for command strings.
-
-    Uses path separators, whitespace, quotes, shell metacharacters, and
-    assignment operators as word boundaries to avoid false positives on
-    substrings like ``os.environ``.
-    """
-    norm_target = target.replace("\\", "/")
-    for pat in patterns:
-        sub = pattern_to_substring(pat).replace("\\", "/")
-        if not sub:
+def extract_command_candidates(command: str) -> list[str]:
+    """Extract path-like command tokens while preserving quoted substrings."""
+    candidates: list[str] = []
+    for token in COMMAND_TOKEN_RE.findall(command):
+        cleaned = token.strip(COMMAND_STRIP_CHARS)
+        if not cleaned:
             continue
-        escaped = re.escape(sub)
-        boundary = r"""(?:^|[\\/\s"';|&()`=$])"""
-        if re.search(boundary + escaped, norm_target):
+        candidates.append(cleaned)
+        if "=" in cleaned:
+            _, rhs = cleaned.rsplit("=", 1)
+            if rhs:
+                candidates.append(rhs)
+    return candidates
+
+
+def check_blocked_command(target: str, patterns: list[str]) -> str | None:
+    """Path-aware glob match for command arguments."""
+    candidates = extract_command_candidates(target)
+    for pat in patterns:
+        if any(matches_blocked_pattern(candidate, pat) for candidate in candidates):
             return pat
     return None
 
@@ -157,7 +231,7 @@ def main() -> None:
     blocked_patterns = load_patterns(blocked_file)
     allowed_domains = load_patterns(allowed_file)
 
-    # --- Check path-like properties (strict match) ---
+    # --- Check path-like properties (path-aware glob match) ---
     for prop in ("path", "file", "uri", "glob"):
         val = tool_args.get(prop, "")
         if val:
@@ -165,7 +239,7 @@ def main() -> None:
             if hit:
                 deny(f"Blocked pattern: {hit}")
 
-    # --- Check command property (boundary-aware match) ---
+    # --- Check command property (path-aware glob match) ---
     command: str = tool_args.get("command", "")
     if command:
         hit = check_blocked_command(command, blocked_patterns)

@@ -16,10 +16,12 @@ Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](h
 
 ### Linux / macOS / WSL
 
-任意のディレクトリで実行できる（chezmoi がリポジトリのクローンと配置を自動で行う）:
+任意のディレクトリでリポジトリを clone してから実行する。`install.sh` は検証済みの `chezmoi` リリースだけを展開し、その後 `chezmoi` がリポジトリのクローンと配置を自動で行う:
 
 ```bash
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
+git clone https://github.com/torumakabe/dotfiles.git ~/dotfiles
+cd ~/dotfiles
+./install.sh
 ```
 
 初回実行時にプラットフォーム検出と変数の入力プロンプトが表示される:
@@ -192,6 +194,28 @@ chezmoi re-add ~/.config/mise/mise.lock
 
 PowerShell の場合はそれぞれ `$env:GITHUB_TOKEN = (gh auth token); <command>; $env:GITHUB_TOKEN = $null` で置き換える。
 
+### Bootstrap / shell pin の更新
+
+初期セットアップ系スクリプトは、上流の最新版をその場で実行せず、リリース番号・コミット・SHA256 をリポジトリ内に pin している。更新時は **バージョンの更新 → 公式チェックサムの照合 → スクリプト反映** の順で行う。
+
+- `install.sh`
+  - `CHEZMOI_VERSION` を更新
+  - `https://github.com/twpayne/chezmoi/releases/download/v<version>/chezmoi_<version>_checksums.txt` から利用中プラットフォーム分の SHA256 を更新
+- `home/run_once_before_20-install-mise.sh.tmpl`
+  - `MISE_VERSION` を更新
+  - `https://github.com/jdx/mise/releases/download/<version>/SHASUMS256.txt` から利用中プラットフォーム分の SHA256 を更新
+- `home/run_once_after_10-setup-shell.sh.tmpl`
+  - `OH_MY_ZSH_COMMIT` は `git ls-remote https://github.com/ohmyzsh/ohmyzsh.git HEAD` などで新しい commit を選んで更新
+  - `ZSH_COMPLETIONS_TAG` は GitHub Releases / tags の安定版へ更新
+
+更新後は最低限次を実行して差分を確認する:
+
+```bash
+shellcheck install.sh
+sed '/^{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
+sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
+```
+
 ### mise lockfile と locked 設定
 
 `mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `locked = true` を設定しており、`mise install` は lockfile の URL から直接ダウンロードする。GitHub API を呼ばないため、レート制限もトークンも不要。
@@ -317,8 +341,8 @@ echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/
 
 ```
 home/                          ← chezmoi source (.chezmoiroot で指定)
-├── .chezmoi.toml.tmpl         ← プラットフォーム検出・変数定義
-├── .chezmoiignore             ← OS 別にファイルをスキップ
+├── .chezmoi.toml.tmpl         ← 共通 platform flag・変数定義
+├── .chezmoiignore             ← 共通 flag を使ってファイルをスキップ
 ├── .chezmoiremove             ← レガシーファイル自動削除
 ├── dot_gitconfig.tmpl         ← ベース gitconfig (includeIf で分岐)
 ├── dot_gitconfig-linux.tmpl   ← Linux/WSL 共通 (内部で WSL 分岐)
@@ -369,12 +393,30 @@ reference/windows/             ← デプロイしない参照ファイル
 
 | 変数名 | 説明 |
 |--------|------|
-| `.chezmoi.os` | `linux`, `darwin`, `windows` |
-| `.isWSL` | WSL 環境の検出 |
+| `.chezmoi.os` | chezmoi 組み込みの OS 値 (`linux`, `darwin`, `windows`) |
+| `.isLinux` / `.isMac` / `.isWindows` | `.chezmoi.os` から導出した共通 flag。`.chezmoiignore` と template では基本的にこちらを使う |
+| `.isWSL` | Linux 上で `kernel.osrelease` に `microsoft` を含む場合に true |
 | `.codespaces` | GitHub Codespaces |
 | `.devcontainer` | Dev Container |
-| `.windowsUser` | Windows ユーザー名 (WSL 1Password パス) |
+| `.windowsUser` | Windows ユーザー名 (Windows 本体または WSL の 1Password パス用) |
 | `.corpUser` | 所属企業での Git ユーザー名 |
+
+### Git `includeIf` の設計
+
+`home/dot_gitconfig.tmpl` ではベース設定を `~/.gitconfig` に集約し、`includeIf` でプラットフォーム別の差分だけを読み込む。
+これにより、Git 側の判定は「現在のリポジトリのパス接頭辞」に限定し、chezmoi 側の template 分岐を最小限にしている。
+
+- `gitdir:/home/` → Linux / WSL のリポジトリ
+- `gitdir:/Users/` → macOS のリポジトリ
+- `gitdir/i:C:/`, `gitdir/i:D:/` → Windows のリポジトリ
+
+補足:
+
+- `gitdir` はリポジトリの `.git` ディレクトリのパス接頭辞で判定される
+- Windows では drive letter の大文字小文字差を吸収するため `gitdir/i:` を使っている
+- この dotfiles は「Windows 上のローカル clone は `C:/` または `D:/` 配下」という前提。別の drive を使う場合は `includeIf "gitdir/i:E:/"` のように追加する
+- WSL はパス判定上は Linux (`/home/`) なので `~/.gitconfig-linux` を読み込み、その中で `.isWSL` を使って 1Password 連携パスだけを切り替える
+- template の制御構文は `{{- ... -}}` で前後の余分な空行を抑える。`dot_gitconfig-linux.tmpl` の `core.editor` だけは Git に埋め込む引用符を保つため、WSL 側で `\"` を使っている
 
 ## トラブルシューティング
 
@@ -400,6 +442,17 @@ mise ls --missing
 GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
 mise install
 ```
+
+### `run_once_` スクリプトの warning / error
+
+- **warning として継続**:
+  - `run_once_after_10-setup-shell.sh`: デフォルトシェルを zsh に変更できない場合
+  - `run_once_after_20-mise-install.sh`: `mise install` 後の一部ツールが未導入のまま残る場合、または状態確認・認証なしリトライの一部が失敗した場合
+  - `run_once_after_30-install-tools.sh`: 追加の Go ツール、macOS の cask、Linux の draw.io など任意ツールの導入に失敗した場合
+- **error として停止**:
+  - Oh My Zsh の clone、Docker 本体の導入など、セットアップ継続に必要な主要処理（`mise install` 自体の失敗は上記のとおり warning で継続）
+
+warning は標準エラーに明示表示される。表示されたコマンドを手動で再実行して復旧できる。
 
 ### `run_once_` スクリプトが sudo を要求して停止する
 

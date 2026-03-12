@@ -31,14 +31,22 @@ fi
 # --- Go tools ---
 if command -v go >/dev/null 2>&1; then
   echo "Installing Go tools..."
-  go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest || true
-  go install github.com/ddo/fast@latest || true
+  if ! go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest; then
+    echo "Warning: failed to install fieldalignment. Retry manually with 'go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest'." >&2
+  fi
+  if ! go install github.com/ddo/fast@latest; then
+    echo "Warning: failed to install fast. Retry manually with 'go install github.com/ddo/fast@latest'." >&2
+  fi
 fi
 
 {{ if eq .chezmoi.os "darwin" -}}
 # --- macOS-specific brew cask packages ---
-brew install --cask --force devtoys || true
-brew install --cask --force drawio || true
+if ! brew install --cask --force devtoys; then
+  echo "Warning: failed to install DevToys via Homebrew. Retry manually with 'brew install --cask --force devtoys'." >&2
+fi
+if ! brew install --cask --force drawio; then
+  echo "Warning: failed to install draw.io via Homebrew. Retry manually with 'brew install --cask --force drawio'." >&2
+fi
 {{ end -}}
 
 {{ if and (eq .chezmoi.os "linux") (not .isWSL) -}}
