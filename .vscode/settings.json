@@ -1,0 +1,11 @@
+{
+  "go.useLanguageServer": false,
+  "go.buildOnSave": "off",
+  "gopls": {
+    "templateExtensions": [],
+    "expandWorkspaceToModule": false,
+    "directoryFilters": [
+      "-"
+    ]
+  }
+}

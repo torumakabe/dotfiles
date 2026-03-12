@@ -1,15 +1,15 @@
-{{- if not .isMac -}}
+{{ if ne .chezmoi.os "darwin" -}}
 .gitconfig-mac
-{{- end }}
-{{- if not .isWindows -}}
+{{ end -}}
+{{ if ne .chezmoi.os "windows" -}}
 .gitconfig-windows
-{{- end }}
-{{- if not .isLinux -}}
+{{ end -}}
+{{ if ne .chezmoi.os "linux" -}}
 .gitconfig-linux
-{{- end }}
-{{- if eq .corpUser "" -}}
+{{ end -}}
+{{ if eq (get . "corpUser") "" -}}
 .gitconfig-corp
-{{- end }}
-{{- if not .isWindows -}}
+{{ end -}}
+{{ if ne .chezmoi.os "windows" -}}
 PowerShell_profile.ps1
-{{- end }}
+{{ end -}}
