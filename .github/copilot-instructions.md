@@ -55,6 +55,11 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 - コンテナ作成後にターミナルから `mise install --yes` を手動実行する
 - Codespaces では `GITHUB_TOKEN` が自動設定されるためスキップしない
 
+## ワークアラウンド
+
+- **Azure CLI SyntaxWarning**: `home/dot_zshrc.tmpl` に `az()` ラッパー関数があり、`PYTHONWARNINGS="ignore::SyntaxWarning"` で警告を抑制している。[Azure/azure-sdk-for-python#38618](https://github.com/Azure/azure-sdk-for-python/issues/38618) が解決されたらラッパーを削除する
+- **定期チェック**: このリポジトリの Azure CLI 関連ファイルを変更する際は、上記 issue のステータスを確認すること。Close されていればラッパーを削除する
+
 ## Windows DSC と mise の役割分担
 
 - CLI ツールのバージョン管理は mise に一本化済み

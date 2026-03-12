@@ -170,3 +170,8 @@ function ghcd() {
     cd "$dir"
   fi
 }
+
+# Azure CLI の SyntaxWarning を抑制（azure-sdk-for-python#38618 の回避策）
+az() {
+  PYTHONWARNINGS="ignore::SyntaxWarning" command az "$@"
+}
