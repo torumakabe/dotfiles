@@ -29,7 +29,10 @@ rust = "latest"
 "aqua:Azure/azure-dev" = "latest"
 "github:microsoft/dev-proxy" = "latest"
 "github:github/copilot-cli" = "latest"
+{{ if ne .chezmoi.os "darwin" -}}
+# macOS 向けプリビルドバイナリが未提供のためスキップ
 edit = "latest"
+{{ end -}}
 codex = "latest"
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
 # プリビルドバイナリが linux/arm64 未提供のためスキップ

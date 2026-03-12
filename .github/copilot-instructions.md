@@ -46,7 +46,8 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 
 - `home/dot_config/mise/config.toml.tmpl` は chezmoi テンプレートで、プラットフォーム非対応ツールを条件付きでスキップする
 - **cargo-make**: linux/arm64 のプリビルドバイナリが未提供のためスキップ中（[sagiegurari/cargo-make#541](https://github.com/sagiegurari/cargo-make/issues/541)）
-- **定期チェック**: このリポジトリの mise 設定を変更する際は、[cargo-make の最新リリース](https://github.com/sagiegurari/cargo-make/releases)に `aarch64-unknown-linux` バイナリが追加されていないか確認すること。追加されていれば条件分岐を削除して全プラットフォーム共通に戻す
+- **edit**: macOS 向けプリビルドバイナリが未提供のためスキップ中。[edit の最新リリース](https://github.com/microsoft/edit/releases)に macOS バイナリが追加されたら条件分岐を削除する
+- **定期チェック**: このリポジトリの mise 設定を変更する際は、上記ツールのリリースページでプラットフォーム対応状況を確認すること。対応されていれば条件分岐を削除して全プラットフォーム共通に戻す
 
 ### Dev container での mise install
 
