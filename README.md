@@ -16,10 +16,12 @@ Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](h
 
 ### Linux / macOS / WSL
 
-任意のディレクトリで実行できる（chezmoi がリポジトリのクローンと配置を自動で行う）:
+任意のディレクトリでリポジトリを clone してから実行する。`install.sh` は検証済みの `chezmoi` リリースだけを展開し、その後 `chezmoi` がリポジトリのクローンと配置を自動で行う:
 
 ```bash
-sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
+git clone https://github.com/torumakabe/dotfiles.git ~/dotfiles
+cd ~/dotfiles
+./install.sh
 ```
 
 初回実行時にプラットフォーム検出と変数の入力プロンプトが表示される:
@@ -191,6 +193,28 @@ chezmoi re-add ~/.config/mise/mise.lock
 ```
 
 PowerShell の場合はそれぞれ `$env:GITHUB_TOKEN = (gh auth token); <command>; $env:GITHUB_TOKEN = $null` で置き換える。
+
+### Bootstrap / shell pin の更新
+
+初期セットアップ系スクリプトは、上流の最新版をその場で実行せず、リリース番号・コミット・SHA256 をリポジトリ内に pin している。更新時は **バージョンの更新 → 公式チェックサムの照合 → スクリプト反映** の順で行う。
+
+- `install.sh`
+  - `CHEZMOI_VERSION` を更新
+  - `https://github.com/twpayne/chezmoi/releases/download/v<version>/chezmoi_<version>_checksums.txt` から利用中プラットフォーム分の SHA256 を更新
+- `home/run_once_before_20-install-mise.sh.tmpl`
+  - `MISE_VERSION` を更新
+  - `https://github.com/jdx/mise/releases/download/<version>/SHASUMS256.txt` から利用中プラットフォーム分の SHA256 を更新
+- `home/run_once_after_10-setup-shell.sh.tmpl`
+  - `OH_MY_ZSH_COMMIT` は `git ls-remote https://github.com/ohmyzsh/ohmyzsh.git HEAD` などで新しい commit を選んで更新
+  - `ZSH_COMPLETIONS_TAG` は GitHub Releases / tags の安定版へ更新
+
+更新後は最低限次を実行して差分を確認する:
+
+```bash
+shellcheck install.sh
+sed '/^{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
+sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
+```
 
 ### mise lockfile と locked 設定
 
