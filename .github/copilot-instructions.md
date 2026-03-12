@@ -33,6 +33,13 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 - **uv** manages Python execution (installed via mise)
 - No direct `python3`, `pip`, or `brew install python` — uv handles all Python needs
 
+### mise lockfile と locked 設定
+
+- `config.toml` で `locked = true` を設定済み。`mise install` は lockfile（`mise.lock`）の URL から直接ダウンロードし、GitHub API を呼ばない
+- `mise upgrade` は `locked` 設定を無視して API 経由で最新バージョンを取得する
+- `mise upgrade` や `mise lock` 実行時はトークンを一時的に渡す: `GITHUB_TOKEN=$(gh auth token) mise upgrade`
+- `GITHUB_TOKEN` を `.zshrc` 等の環境変数に常駐させないこと（エージェントへの機密情報露出を防ぐため）
+
 ### mise のプラットフォーム制約
 
 - `home/dot_config/mise/config.toml.tmpl` は chezmoi テンプレートで、プラットフォーム非対応ツールを条件付きでスキップする

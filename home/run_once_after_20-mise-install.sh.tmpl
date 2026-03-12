@@ -20,21 +20,13 @@ echo "Run 'mise install --yes' manually after container creation"
 exit 0
 {{ end -}}
 
-# lockfile があれば --locked で GitHub API 呼び出しを回避
-mise_install_args="--yes"
-if [ -f "${HOME}/.config/mise/mise.lock" ]; then
-  mise_install_args="--yes --locked"
-  echo "Lockfile found — using --locked (no GitHub API calls)"
-fi
-
 max_attempts=3
 attempt=1
 wait_sec=10
 
 echo "Installing tool versions via mise..."
 while [ "$attempt" -le "$max_attempts" ]; do
-  # shellcheck disable=SC2086
-  if mise install $mise_install_args 2>&1; then
+  if mise install --yes 2>&1; then
     echo "mise install completed successfully"
     break
   fi

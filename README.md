@@ -151,11 +151,12 @@ chezmoi add ~/.some-config
 
 ### mise 管理ツールの更新
 
-日常的なツールの更新は `mise upgrade` で行う。config.toml は `latest` 指定のため変更されず、**lockfile が実際のバージョンを固定する**。`mise upgrade` は lockfile も自動更新する。
+日常的なツールの更新は `mise upgrade` で行う。`mise upgrade` は `locked` 設定を無視して GitHub API で最新バージョンを取得し、lockfile も自動更新する。API 呼び出しにはトークンが必要だが、コマンド実行時に一時的に渡せばよい。
 
 ```bash
-# 全ツールを最新バージョンに更新（lockfile も自動更新される）
-mise upgrade
+# 全ツールを最新バージョンに更新
+# トークンはこのコマンドの実行中のみ有効（シェル環境には残らない）
+GITHUB_TOKEN=$(gh auth token) mise upgrade
 
 # lockfile を chezmoi に反映してコミット・プッシュ
 chezmoi re-add ~/.config/mise/mise.lock
@@ -164,7 +165,7 @@ git add -A && git commit -m "chore: upgrade mise tools"
 git push
 ```
 
-> **補足**: `mise upgrade` は lockfile の全プラットフォーム分のエントリを維持する。ただし新しいツールを追加した場合は `mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64` で全プラットフォーム分を生成すること。他の端末で `chezmoi update` すると lockfile 経由で同じバージョンがインストールされる。
+> **補足**: 他の端末では `chezmoi update` で lockfile が同期され、`mise install` は lockfile の URL から直接ダウンロードする（API 不要、トークン不要）。
 
 ### ツールの追加・削除
 
@@ -174,25 +175,31 @@ git push
 # config.toml を編集
 chezmoi edit ~/.config/mise/config.toml
 
-# インストール
-mise install
+# インストール（新しいツールは lockfile にないので一時的にトークンが必要）
+GITHUB_TOKEN=$(gh auth token) mise install
 
 # 全プラットフォーム分の lockfile を生成して反映
-mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
+GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
 chezmoi re-add ~/.config/mise/config.toml
 chezmoi re-add ~/.config/mise/mise.lock
 ```
 
-### mise lockfile について
+### mise lockfile と locked 設定
 
-`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。これにより `mise install` 時の GitHub API 呼び出しが不要になり、レート制限を回避できる。`GITHUB_TOKEN` の環境変数設定も不要。
+`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `locked = true` を設定しており、`mise install` は lockfile の URL から直接ダウンロードする。GitHub API を呼ばないため、レート制限もトークンも不要。
+
+`mise upgrade` は `locked` 設定を無視する（mise のソースコードでハードコードされている）ため、常に API 経由で最新バージョンを取得できる。
+
+| 操作 | GitHub API | トークン |
+|------|-----------|---------|
+| `mise install`（他端末の同期） | 呼ばない（lockfile） | 不要 |
+| `mise upgrade`（ツール更新） | 呼ぶ | 一時的に渡す |
+| `mise lock`（ツール追加時） | 呼ぶ | 一時的に渡す |
 
 **注意事項:**
 
-- lockfile が存在する環境では `mise install` に `--locked` が自動付与される（`run_once_after_20`）
-- `--locked` 時は lockfile にないツールがエラーになる。ツールの追加・更新後は必ず lockfile を再生成してからコミットすること
-- `mise upgrade` と `mise lock` は GitHub API を呼ぶため、レート制限を受ける場合がある。その際は一時的に `GITHUB_TOKEN=$(gh auth token) mise upgrade` で実行する
-- lockfile がない環境（初回セットアップ等）では従来どおり GitHub API 経由でインストールされる
+- `locked = true` のため、lockfile にないツールの `mise install` はエラーになる。ツール追加後は必ず lockfile を再生成してからコミットすること
+- `GITHUB_TOKEN` を `.zshrc` 等に常駐させないこと。`GITHUB_TOKEN=$(gh auth token) <command>` でコマンド単位で渡す
 
 ### run_once_ スクリプトの再実行
 
@@ -327,7 +334,7 @@ reference/windows/             ← デプロイしない参照ファイル
 - **Copilot Guard** フック: bash + PowerShell の二重実装を Python 単一スクリプトに統一
 - **uv Enforcer** フック: Copilot エージェントの python/pip 直接実行をブロックし uv 経由を強制
 - **SAML SSO ワークアラウンド**: Codespaces の `mise install` で SAML SSO 要求による 403 を回避するため、失敗したツールを認証なしで自動リトライ
-- **mise lockfile**: ダウンロード URL とチェックサムを事前解決し、GitHub API レート制限を回避。`GITHUB_TOKEN` 環境変数が不要になり、エージェントへの機密情報露出リスクも低減
+- **mise lockfile + locked 設定**: `locked = true` により `mise install` は lockfile の URL から直接ダウンロード（API 不要、トークン不要）。`mise upgrade` は locked を無視して API 経由で更新。トークンはコマンド実行時に一時的に渡し、環境変数に常駐させない
 - **Windows**: chezmoi で設定、DSC で GUI アプリ、mise でツール（段階的導入）
 
 ## プラットフォーム検出
@@ -355,20 +362,15 @@ chezmoi init torumakabe
 
 ### `mise install` が部分失敗する
 
-GitHub API レート制限やネットワーク障害でツールの一部がインストールされない場合がある。
-
-lockfile（`~/.config/mise/mise.lock`）が存在する環境では GitHub API を呼ばないため、レート制限は発生しない。lockfile がない場合や `mise upgrade` 後に lockfile が古い場合は以下で対処する。
+`locked = true` 設定により lockfile の URL からインストールするため、通常はレート制限に抵触しない。lockfile にないツールがある場合はエラーになる。
 
 ```bash
 # 未インストールのツールを確認
 mise ls --missing
 
-# リトライ
+# lockfile を再生成してリトライ
+GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
 mise install
-
-# lockfile を更新して次回以降のレート制限を回避
-mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
-chezmoi re-add ~/.config/mise/mise.lock
 ```
 
 ### `run_once_` スクリプトが sudo を要求して停止する
