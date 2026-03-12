@@ -4,24 +4,37 @@ set -euo pipefail
 
 # Oh My Zsh + plugins
 OH_MY_ZSH_DIR="${HOME}/.oh-my-zsh"
+OH_MY_ZSH_REPO="https://github.com/ohmyzsh/ohmyzsh"
+OH_MY_ZSH_COMMIT="8df5c1b18b1393dc5046c729094f897bd3636a9b"
+ZSH_COMPLETIONS_DIR="${OH_MY_ZSH_DIR}/custom/plugins/zsh-completions"
+ZSH_COMPLETIONS_REPO="https://github.com/zsh-users/zsh-completions"
+ZSH_COMPLETIONS_TAG="0.36.0"
 
 if [ ! -d "${OH_MY_ZSH_DIR}" ]; then
   echo "Installing Oh My Zsh..."
-  git clone --depth=1 \
+  git clone \
     -c core.eol=lf \
     -c core.autocrlf=false \
     -c fsck.zeroPaddedFilemode=ignore \
     -c fetch.fsck.zeroPaddedFilemode=ignore \
     -c receive.fsck.zeroPaddedFilemode=ignore \
-    https://github.com/ohmyzsh/ohmyzsh "${OH_MY_ZSH_DIR}"
+    "${OH_MY_ZSH_REPO}" "${OH_MY_ZSH_DIR}"
+  git -C "${OH_MY_ZSH_DIR}" checkout --detach "${OH_MY_ZSH_COMMIT}"
+  if [ "$(git -C "${OH_MY_ZSH_DIR}" rev-parse HEAD)" != "${OH_MY_ZSH_COMMIT}" ]; then
+    echo "error: failed to pin Oh My Zsh to ${OH_MY_ZSH_COMMIT}" >&2
+    exit 1
+  fi
   cd "${OH_MY_ZSH_DIR}" && git repack -a -d -f --depth=1 --window=1
 fi
 
 # zsh-completions plugin
-ZSH_COMPLETIONS_DIR="${OH_MY_ZSH_DIR}/custom/plugins/zsh-completions"
 if [ ! -d "${ZSH_COMPLETIONS_DIR}" ]; then
   echo "Installing zsh-completions plugin..."
-  git clone --depth=1 https://github.com/zsh-users/zsh-completions "${ZSH_COMPLETIONS_DIR}"
+  git clone --branch "${ZSH_COMPLETIONS_TAG}" --depth=1 "${ZSH_COMPLETIONS_REPO}" "${ZSH_COMPLETIONS_DIR}"
+  if [ "$(git -C "${ZSH_COMPLETIONS_DIR}" describe --tags --exact-match)" != "${ZSH_COMPLETIONS_TAG}" ]; then
+    echo "error: failed to pin zsh-completions to ${ZSH_COMPLETIONS_TAG}" >&2
+    exit 1
+  fi
 fi
 
 # Set default shell to zsh
