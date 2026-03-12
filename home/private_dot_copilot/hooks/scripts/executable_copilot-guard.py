@@ -10,12 +10,14 @@ Run via: uv run copilot-guard.py
 """
 from __future__ import annotations
 
-import functools
+from functools import lru_cache
 import json
 import re
 import sys
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
+
+COMMAND_STRIP_CHARS = "\"'`()[]{};,"
 
 
 def deny(reason: str) -> None:
@@ -73,7 +75,9 @@ def normalize_path(value: str) -> str:
     normalized = value.strip().strip("\"'")
     if normalized.lower().startswith("file://"):
         parsed = urlsplit(normalized)
-        normalized = f"{parsed.netloc}{unquote(parsed.path)}"
+        normalized = unquote(parsed.path)
+        if parsed.netloc:
+            normalized = f"{parsed.netloc}/{normalized.lstrip('/')}"
     normalized = normalized.replace("\\", "/")
     normalized = re.sub(r"/+", "/", normalized)
     while normalized.startswith("./"):
@@ -84,7 +88,7 @@ def normalize_path(value: str) -> str:
     return normalized.lstrip("/")
 
 
-@functools.lru_cache(maxsize=None)
+@lru_cache(maxsize=None)
 def compile_glob(pattern: str) -> re.Pattern[str]:
     """Compile a path-aware glob pattern.
 
@@ -144,7 +148,7 @@ def extract_command_candidates(command: str) -> list[str]:
     """Extract path-like command tokens without relying on shell-specific parsing."""
     candidates: list[str] = []
     for token in command.split():
-        cleaned = token.strip("\"'`()[]{};,")
+        cleaned = token.strip(COMMAND_STRIP_CHARS)
         if not cleaned:
             continue
         candidates.append(cleaned)

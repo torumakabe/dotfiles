@@ -48,6 +48,13 @@ class CopilotGuardPathMatchingTests(unittest.TestCase):
         )
         self.assertEqual(hit, "**/accessTokens.json")
 
+    def test_matches_file_uri_with_netloc(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "file://server/share/.azure/accessTokens.json",
+            ["**/accessTokens.json"],
+        )
+        self.assertEqual(hit, "**/accessTokens.json")
+
 
 class CopilotGuardCommandMatchingTests(unittest.TestCase):
     def test_command_ignores_non_path_substrings(self) -> None:
