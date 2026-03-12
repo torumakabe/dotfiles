@@ -20,7 +20,8 @@ from urllib.parse import unquote, urlsplit
 COMMAND_STRIP_CHARS = "\"'`()[]{};,"
 # Match one shell-ish token composed of unquoted text, double-quoted text,
 # and/or single-quoted text, so paths with spaces remain intact.
-COMMAND_TOKEN_RE = re.compile(r"""(?:[^\s"']+|"[^"]*"|'[^']*')+""")
+# Quoted spans also allow backslash escapes such as \" and \'.
+COMMAND_TOKEN_RE = re.compile(r"""(?:[^\s"']+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+""")
 
 
 def deny(reason: str) -> None:
