@@ -149,51 +149,53 @@ chezmoi cat ~/.gitconfig
 chezmoi add ~/.some-config
 ```
 
-### ツールバージョンの更新
+### mise 管理ツールの更新
+
+日常的なツールの更新は `mise upgrade` で行う。config.toml の手動編集は不要。
 
 ```bash
-# config.toml を編集してバージョンを変更
-chezmoi edit ~/.config/mise/config.toml
+# 全ツールを最新バージョンに更新
+mise upgrade
 
-# ツールをインストール
-mise install
-
-# lockfile を更新（ツール追加・更新後は必ず実行）
+# lockfile を再生成（更新後は必ず実行）
 mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
 
-# lockfile を chezmoi に反映してコミット
+# chezmoi に反映してコミット・プッシュ
+chezmoi re-add ~/.config/mise/config.toml
 chezmoi re-add ~/.config/mise/mise.lock
-```
-
-### mise lockfile の運用
-
-`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。これにより `mise install` 時の GitHub API 呼び出しが不要になり、レート制限を回避できる。
-
-**lockfile の更新が必要なタイミング:**
-
-- `config.toml` にツールを追加・削除したとき
-- ツールのバージョンを更新したとき（`mise upgrade` 後）
-- 定期的な更新（セキュリティパッチの取り込み）
-
-**更新手順:**
-
-```bash
-# 1. 全対象プラットフォーム分の lockfile を生成
-mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
-
-# 2. chezmoi に反映
-chezmoi re-add ~/.config/mise/mise.lock
-
-# 3. コミット・プッシュ
 cd $(chezmoi source-path)/..
-git add -A && git commit -m "chore: update mise lockfile"
+git add -A && git commit -m "chore: upgrade mise tools"
 git push
 ```
+
+> **補足**: `mise upgrade` は config.toml のバージョンも自動で書き換える（`latest` 指定のツールは最新版に解決される）。他の端末では `chezmoi update` で config.toml と lockfile が同期される。
+
+### ツールの追加・削除
+
+新しいツールの追加や既存ツールの削除は config.toml を編集する。
+
+```bash
+# config.toml を編集
+chezmoi edit ~/.config/mise/config.toml
+
+# インストール
+mise install
+
+# lockfile を再生成して反映
+mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
+chezmoi re-add ~/.config/mise/config.toml
+chezmoi re-add ~/.config/mise/mise.lock
+```
+
+### mise lockfile について
+
+`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。これにより `mise install` 時の GitHub API 呼び出しが不要になり、レート制限を回避できる。`GITHUB_TOKEN` の環境変数設定も不要。
 
 **注意事項:**
 
 - lockfile が存在する環境では `mise install` に `--locked` が自動付与される（`run_once_after_20`）
-- `--locked` 時は lockfile にない URL へのアクセスがエラーになる。新しいツールを追加したら必ず lockfile を更新してからコミットすること
+- `--locked` 時は lockfile にないツールがエラーになる。ツールの追加・更新後は必ず lockfile を再生成してからコミットすること
+- `mise lock` の実行時に GitHub API を呼ぶため、レート制限を受ける場合がある。その際は一時的に `GITHUB_TOKEN=$(gh auth token) mise lock ...` で実行する
 - lockfile がない環境（初回セットアップ等）では従来どおり GitHub API 経由でインストールされる
 
 ### run_once_ スクリプトの再実行
