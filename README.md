@@ -2,17 +2,17 @@
 
 Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](https://mise.jdx.dev/).
 
-## Supported Environments
+## 対応環境
 
-| 環境 | セットアップ | 日常操作の注意 | 主な制限事項 |
-|------|------------|---------------|-------------|
-| Linux / macOS | [Quick Start → Linux / macOS / WSL](#linux--macos--wsl) | — | — |
-| WSL | [Quick Start → Linux / macOS / WSL](#linux--macos--wsl) | 1Password パスが Windows 側 | 初回セットアップで `windowsUser` の入力が必要 |
-| GitHub Codespaces | [Quick Start → Codespaces](#github-codespaces) | 自動適用 | `corpUser` 未設定、レート制限 |
-| Dev Container (ローカル) | [Quick Start → Dev Container](#dev-container-ローカル) | `mise install` は手動実行 | 追加ツール未インストール |
-| Windows | [Quick Start → Windows](#windows) | DSC は手動実行 | mise 管理外のツールあり |
+| 環境 | セットアップ | 注意点 |
+|------|------------|--------|
+| Linux / macOS | [クイックスタート → Linux / macOS / WSL](#linux--macos--wsl) | — |
+| WSL | [クイックスタート → Linux / macOS / WSL](#linux--macos--wsl) | 1Password パスが Windows 側、初回 `windowsUser` 入力が必要 |
+| GitHub Codespaces | [クイックスタート → Codespaces](#github-codespaces) | `corpUser` 未設定 |
+| Dev Container (ローカル) | [クイックスタート → Dev Container](#dev-container-ローカル) | 初回 `mise install --yes` を手動実行 |
+| Windows | [クイックスタート → Windows](#windows) | — |
 
-## Quick Start
+## クイックスタート
 
 ### Linux / macOS / WSL
 
@@ -25,7 +25,7 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 初回実行時にプラットフォーム検出と変数の入力プロンプトが表示される:
 
 - **Windows username** (WSL のみ): 1Password の WSL 連携パスに使用
-- **Corp username** (任意): 社内リポジトリ用 gitconfig に使用
+- **Corp username** (任意): 所属企業での Git ユーザー名。gitconfig に使用
 
 ### GitHub Codespaces
 
@@ -35,7 +35,6 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 **制限事項:**
 
 - 非対話環境のため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる（`.gitconfig-corp` は適用されない）
-- `mise install` がベースイメージの GitHub API レート制限で部分失敗する場合がある。ターミナルにリカバリ手順が表示される
 
 ### Dev Container (ローカル)
 
@@ -53,8 +52,8 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 
 **制限事項:**
 
-- `mise install` はコンテナ作成時にスキップされる（GitHub API トークンが利用できないため）。コンテナ起動後に手動実行が必要
-- Azure CLI 等の追加ツール（`run_once_after_30-install-tools.sh`）もスキップされる。ベースイメージに含まれている想定
+- `mise install` はコンテナ作成時にスキップされる（GitHub API トークンが利用できず、レート制限に抵触する可能性が高いため）。コンテナ起動後に手動実行が必要
+- Azure CLI 等の追加ツール（`run_once_after_30-install-tools.sh`）もスキップされる。ベースイメージまたは Dev Container Feature で導入される想定
 - 非対話環境のため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる
 
 ### Windows
@@ -71,18 +70,18 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
        Add-Content -Path $PROFILE -Value $line
    }
    ```
-   chezmoi が `~/PowerShell_profile.ps1` を配置する。`$PROFILE` は OneDrive 配下で chezmoi の管理外のため、ローダー（1行の dot-source）で橋渡しする。
+   chezmoi が `~/PowerShell_profile.ps1` を配置する。`$PROFILE` は OneDrive 配下になることもあり chezmoi の管理外のため、ローダー（1行の dot-source）で橋渡しする。
 
-## Day-to-Day Operations
+## 日常操作
 
 ### chezmoi で管理するもの・しないもの
 
 | 分類 | 例 | 編集方法 |
 |------|----|----------|
-| **chezmoi 管理** | `.gitconfig`, `.zshrc`, `.mise.toml`, `.copilot/` | `chezmoi edit` でソースを編集 → `chezmoi apply`（※1） |
-| **mise 管理** | Go, Node, Terraform 等のバージョン | `.mise.toml` を `chezmoi edit` で編集 → `mise install` |
+| **chezmoi 管理** | `.gitconfig`, `.zshrc`, `.config/mise/config.toml`, `.copilot/` | `chezmoi edit` でソースを編集 → `chezmoi apply`（※1） |
+| **mise 管理** | Go, Node, Terraform 等のバージョン | `.config/mise/config.toml` を `chezmoi edit` で編集 → `mise install` |
 | **手動管理** | `reference/windows/` 配下 (DSC, Terminal テーマ) | 直接編集し git commit。chezmoi は関与しない |
-| **リポジトリ設定** | `.github/copilot-instructions.md`, `README.md` | 直接編集し git commit |
+| **リポジトリメタ情報** | `.github/copilot-instructions.md`, `README.md` | 直接編集し git commit |
 
 **重要**: chezmoi 管理下のファイル（`~/.gitconfig` 等）を直接編集しても、次回の `chezmoi apply` で上書きされる。永続化するには必ず `chezmoi edit` でソース側を変更すること。
 
@@ -90,11 +89,11 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 
 ### パッケージの管理
 
-| 環境 | パッケージマネージャ | 対象 |
-|------|---------------------|------|
+| 環境 | 管理ツール | 対象 |
+|------|-----------|------|
 | Linux / WSL | `apt` + `mise` | apt: OS パッケージ、mise: 開発ツール |
 | macOS | `brew` + `mise` | brew: OS パッケージ・GUI アプリ、mise: 開発ツール |
-| Codespaces / Dev Container | ベースイメージ + `mise` | ベースイメージ: 主要ツール同梱、mise: 開発ツール |
+| Codespaces / Dev Container | ベースイメージ / Feature + `mise` | ベースイメージ・Feature: 主要ツール同梱、mise: 開発ツール |
 | Windows | `winget` (DSC) + `mise` | winget: GUI アプリ・OS ツール、mise: 開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行（システム Python 不要） |
 
@@ -102,7 +101,7 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 
 | コマンド | 参照先 | 用途 |
 |----------|--------|------|
-| `chezmoi init <repo>` | **リモート** | 初回セットアップ（リポジトリをクローン） |
+| `chezmoi init <repo>` | **リモート** | 初回セットアップ（リポジトリをクローン）、構成テンプレート変更時の再初期化 |
 | `chezmoi update` | **リモート** | `git pull` + `apply` を一括実行 |
 | `chezmoi apply` | ローカル | ソース → ホームに反映 |
 | `chezmoi diff` | ローカル | ソースとホームの差分表示 |
@@ -110,7 +109,9 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 | `chezmoi edit <file>` | ローカル | ソースを編集（エディタが開く） |
 | `chezmoi add <file>` | ローカル | ホームの変更をソースに取り込み |
 
-リモート参照は `init` と `update` のみ。テンプレートの変更を試すだけなら push 不要で `chezmoi apply` で即反映できる。全コマンドは任意のディレクトリで実行できる。
+リモート参照は `init` と `update` のみ。全コマンドは任意のディレクトリで実行できる。
+
+変更をリモートに反映するには、chezmoi のソースディレクトリ（`chezmoi source-path` で確認可能）で `git commit` + `git push` する。ローカルでテンプレートの変更を試すだけなら push 不要で `chezmoi apply` で即反映できる。
 
 ### 設定ファイルの編集
 
@@ -151,8 +152,8 @@ chezmoi add ~/.some-config
 ### ツールバージョンの更新
 
 ```bash
-# mise.toml を編集してバージョンを変更
-chezmoi edit ~/.mise.toml
+# config.toml を編集してバージョンを変更
+chezmoi edit ~/.config/mise/config.toml
 
 # ツールをインストール
 mise install
@@ -177,23 +178,32 @@ chezmoi は `~/.copilot/` 配下の以下のファイルを管理する。プラ
 |---------|------|----------|
 | `copilot-instructions.md` | ユーザーレベルのカスタム指示 | chezmoi |
 | `mcp-config.json` | MCP サーバー設定 | chezmoi（`/mcp add` 後は `re-add`） |
-| `hooks/` | preToolUse ガードフック | chezmoi |
+| `hooks/hooks.json` | preToolUse フック定義 | chezmoi |
+| `hooks/scripts/copilot-guard.py` | セキュリティガード（ファイル・URL 制限） | chezmoi |
+| `hooks/scripts/uv-enforcer.py` | python/pip 直接実行をブロックし uv 経由を強制 | chezmoi |
+| `hooks/blocked-files.txt` | ブロック対象ファイルパターン | chezmoi |
+| `hooks/allowed-urls.txt` | URL 許可リスト | chezmoi |
 | `skills/` | エージェントスキル | chezmoi（上流更新時は再取得して `re-add`） |
 | `installed-plugins/` | プラグイン | `/plugin install` で管理（chezmoi 対象外） |
 
-### プラグインのセットアップ（初回のみ）
+### プラグインの管理
 
-[Azure Skills Plugin](https://github.com/microsoft/azure-skills) を導入すると、Azure スキル（20+）、Azure MCP Server、Foundry MCP がまとめてインストールされる。
+プラグインは `/plugin` コマンドで管理する。chezmoi の管理外。
+
+```
+# マーケットプレイスからプラグインを追加
+/plugin marketplace add <publisher>/<plugin>
+/plugin install <name>@<plugin>
+
+# 更新
+/plugin update <name>@<plugin>
+```
+
+例: [Azure Skills Plugin](https://github.com/microsoft/azure-skills) を導入すると、Azure スキル（20+）、Azure MCP Server、Foundry MCP がまとめてインストールされる。
 
 ```
 /plugin marketplace add microsoft/azure-skills
 /plugin install azure@azure-skills
-```
-
-更新:
-
-```
-/plugin update azure@azure-skills
 ```
 
 > **前提**: Node.js 18+、Azure CLI (`az login`)、Azure Developer CLI (`azd auth login`) が必要。
@@ -219,19 +229,82 @@ chezmoi diff                                # 変更内容を確認
 |--------|--------|------|
 | `microsoft-skill-creator` | [github/awesome-copilot](https://github.com/github/awesome-copilot) (MIT) | MS Learn MCP を使って Microsoft 技術のスキルを生成 |
 
-### ガードフックのテスト
+### フックのテスト
 
 フックは stdin に JSON を受け取り、stdout に許可/拒否の JSON を返す。手動テスト:
 
 ```bash
-echo '{"toolName":"bash","toolArgs":{"command":"ls"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
-# → {"permissionDecision": "allow"}
-
+# copilot-guard: ファイル・URL アクセス制御
 echo '{"toolName":"edit","toolArgs":{"path":".env"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
-# → deny
+# → {"permissionDecision": "deny", ...}
+
+# uv-enforcer: python/pip 直接実行のブロック
+echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/.copilot/hooks/scripts/uv-enforcer.py
+# → {"permissionDecision": "deny", ...}
 ```
 
-## Troubleshooting
+## ディレクトリ構造
+
+```
+home/                          ← chezmoi source (.chezmoiroot で指定)
+├── .chezmoi.toml.tmpl         ← プラットフォーム検出・変数定義
+├── .chezmoiignore             ← OS 別にファイルをスキップ
+├── .chezmoiremove             ← レガシーファイル自動削除
+├── dot_gitconfig.tmpl         ← ベース gitconfig (includeIf で分岐)
+├── dot_gitconfig-linux.tmpl   ← Linux/WSL 共通 (内部で WSL 分岐)
+├── dot_gitconfig-mac.tmpl     ← macOS 用
+├── dot_gitconfig-windows.tmpl ← Windows 用
+├── dot_gitconfig-corp.tmpl    ← 所属企業リポジトリ用
+├── dot_zshrc.tmpl             ← シェル設定
+├── dot_config/
+│   └── mise/
+│       └── config.toml.tmpl   ← mise ツールバージョン定義
+├── PowerShell_profile.ps1.tmpl ← Windows PowerShell Profile (mise activate 含む)
+├── private_dot_copilot/       ← ~/.copilot/ に配置
+│   ├── copilot-instructions.md
+│   ├── mcp-config.json        ← MCP サーバー設定 (/mcp add 後は re-add)
+│   ├── hooks/
+│   │   ├── hooks.json         ← preToolUse フック定義
+│   │   ├── blocked-files.txt  ← ブロックパターン
+│   │   ├── allowed-urls.txt   ← URL 許可リスト
+│   │   └── scripts/
+│   │       ├── copilot-guard.py  ← セキュリティガード
+│   │       └── uv-enforcer.py   ← python/pip 直接実行ブロック
+│   └── skills/                ← エージェントスキル
+├── run_once_before_*          ← パッケージ・mise インストール
+└── run_once_after_*           ← シェル・ツールセットアップ
+reference/windows/             ← デプロイしない参照ファイル
+├── configuration.dsc.yaml     ← WinGet DSC (手動実行)
+└── winterm-settings.json      ← Windows Terminal テーマ
+.github/
+└── copilot-instructions.md    ← リポジトリレベル Copilot 指示
+```
+
+`.chezmoiremove` は `chezmoi apply` 時にホームディレクトリから不要になったファイルを自動削除する。現在は `~/.mise.toml`（`~/.config/mise/config.toml` への移行に伴うレガシーファイル）を対象としている。
+
+## 主要な決定事項
+
+- **chezmoi** が設定ファイルの配置・テンプレート化・プラットフォーム分岐を担当
+- **mise** が全プラットフォームでツールバージョンを管理 (`.config/mise/config.toml`)
+- **uv** が Python 実行を管理 — システム Python のインストールは不要
+- **Git includeIf** パターンを維持し、プラットフォーム別 gitconfig を自動読み込み
+- **Copilot Guard** フック: bash + PowerShell の二重実装を Python 単一スクリプトに統一
+- **uv Enforcer** フック: Copilot エージェントの python/pip 直接実行をブロックし uv 経由を強制
+- **SAML SSO ワークアラウンド**: Codespaces の `mise install` で SAML SSO 要求による 403 を回避するため、失敗したツールを認証なしで自動リトライ
+- **Windows**: chezmoi で設定、DSC で GUI アプリ、mise でツール（段階的導入）
+
+## プラットフォーム検出
+
+| 変数名 | 説明 |
+|--------|------|
+| `.chezmoi.os` | `linux`, `darwin`, `windows` |
+| `.isWSL` | WSL 環境の検出 |
+| `.codespaces` | GitHub Codespaces |
+| `.devcontainer` | Dev Container |
+| `.windowsUser` | Windows ユーザー名 (WSL 1Password パス) |
+| `.corpUser` | 所属企業での Git ユーザー名 |
+
+## トラブルシューティング
 
 ### `warning: config file template has changed`
 
@@ -268,55 +341,3 @@ Codespaces 以外の環境では、パッケージインストールに sudo が
 ```bash
 mise install --yes
 ```
-
-## Architecture
-
-```
-home/                          ← chezmoi source (.chezmoiroot で指定)
-├── .chezmoi.toml.tmpl         ← プラットフォーム検出・変数定義
-├── .chezmoiignore             ← OS 別にファイルをスキップ
-├── dot_gitconfig.tmpl         ← ベース gitconfig (includeIf で分岐)
-├── dot_gitconfig-linux.tmpl   ← Linux/WSL 共通 (内部で WSL 分岐)
-├── dot_gitconfig-mac.tmpl     ← macOS 用
-├── dot_gitconfig-windows.tmpl ← Windows 用
-├── dot_gitconfig-corp.tmpl    ← 社内リポジトリ用
-├── dot_zshrc.tmpl             ← シェル設定
-├── dot_mise.toml              ← ツールバージョン定義
-├── PowerShell_profile.ps1.tmpl ← Windows PowerShell Profile (mise activate 含む)
-├── private_dot_copilot/       ← ~/.copilot/ に配置
-│   ├── copilot-instructions.md
-│   ├── mcp-config.json        ← MCP サーバー設定 (/mcp add 後は re-add)
-│   └── hooks/
-│       ├── copilot-guard.json ← フック定義 (uv run)
-│       ├── blocked-files.txt  ← ブロックパターン
-│       ├── allowed-urls.txt   ← URL 許可リスト
-│       └── scripts/
-│           └── copilot-guard.py  ← 統一ガードスクリプト
-├── run_once_before_*          ← パッケージ・mise インストール
-└── run_once_after_*           ← シェル・ツールセットアップ
-reference/windows/             ← デプロイしない参照ファイル
-├── configuration.dsc.yaml     ← WinGet DSC (手動実行)
-└── winterm-settings.json      ← Windows Terminal テーマ
-.github/
-└── copilot-instructions.md    ← リポジトリレベル Copilot 指示
-```
-
-## Key Design Decisions
-
-- **chezmoi** が設定ファイルの配置・テンプレート化・プラットフォーム分岐を担当
-- **mise** が全プラットフォームでツールバージョンを管理 (`.mise.toml`)
-- **uv** が Python 実行を管理 — システム Python のインストールは不要
-- **Git includeIf** パターンを維持し、プラットフォーム別 gitconfig を自動読み込み
-- **Copilot Guard** フック: bash + PowerShell の二重実装を Python 単一スクリプトに統一
-- **Windows**: chezmoi で設定、DSC で GUI アプリ、mise でツール（段階的導入）
-
-## Platform Detection
-
-| Variable | Description |
-|----------|-------------|
-| `.chezmoi.os` | `linux`, `darwin`, `windows` |
-| `.isWSL` | WSL 環境の検出 |
-| `.codespaces` | GitHub Codespaces |
-| `.devcontainer` | Dev Container |
-| `.windowsUser` | Windows ユーザー名 (WSL 1Password パス) |
-| `.corpUser` | 社内 Git ユーザー名 |
