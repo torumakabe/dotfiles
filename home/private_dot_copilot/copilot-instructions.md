@@ -39,3 +39,8 @@
 
 - Conventional Commits format for commit messages
 - Sign commits with SSH keys (1Password managed)
+
+## Windows / Copilot CLI
+
+- ファイルをエディタで開く際は `Start-Process edit <path>` を使う（Microsoft Edit が別ウィンドウで起動する）
+- Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
