@@ -151,14 +151,11 @@ chezmoi add ~/.some-config
 
 ### mise 管理ツールの更新
 
-日常的なツールの更新は `mise upgrade` で行う。config.toml は `latest` 指定のため変更されず、**lockfile が実際のバージョンを固定する**。
+日常的なツールの更新は `mise upgrade` で行う。config.toml は `latest` 指定のため変更されず、**lockfile が実際のバージョンを固定する**。`mise upgrade` は lockfile も自動更新する。
 
 ```bash
-# 全ツールを最新バージョンに更新
+# 全ツールを最新バージョンに更新（lockfile も自動更新される）
 mise upgrade
-
-# lockfile を再生成（更新後は必ず実行）
-mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
 
 # lockfile を chezmoi に反映してコミット・プッシュ
 chezmoi re-add ~/.config/mise/mise.lock
@@ -167,7 +164,7 @@ git add -A && git commit -m "chore: upgrade mise tools"
 git push
 ```
 
-> **補足**: config.toml の `latest` は「制約なし」を意味し、`mise upgrade` で最新版がインストールされるが config.toml 自体は変わらない。端末間のバージョン統一は lockfile が担う — 他の端末で `chezmoi update` すると lockfile 経由で同じバージョンがインストールされる。
+> **補足**: `mise upgrade` は lockfile の全プラットフォーム分のエントリを維持する。ただし新しいツールを追加した場合は `mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64` で全プラットフォーム分を生成すること。他の端末で `chezmoi update` すると lockfile 経由で同じバージョンがインストールされる。
 
 ### ツールの追加・削除
 
@@ -180,7 +177,7 @@ chezmoi edit ~/.config/mise/config.toml
 # インストール
 mise install
 
-# lockfile を再生成して反映
+# 全プラットフォーム分の lockfile を生成して反映
 mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
 chezmoi re-add ~/.config/mise/config.toml
 chezmoi re-add ~/.config/mise/mise.lock
@@ -194,7 +191,7 @@ chezmoi re-add ~/.config/mise/mise.lock
 
 - lockfile が存在する環境では `mise install` に `--locked` が自動付与される（`run_once_after_20`）
 - `--locked` 時は lockfile にないツールがエラーになる。ツールの追加・更新後は必ず lockfile を再生成してからコミットすること
-- `mise lock` の実行時に GitHub API を呼ぶため、レート制限を受ける場合がある。その際は一時的に `GITHUB_TOKEN=$(gh auth token) mise lock ...` で実行する
+- `mise upgrade` と `mise lock` は GitHub API を呼ぶため、レート制限を受ける場合がある。その際は一時的に `GITHUB_TOKEN=$(gh auth token) mise upgrade` で実行する
 - lockfile がない環境（初回セットアップ等）では従来どおり GitHub API 経由でインストールされる
 
 ### run_once_ スクリプトの再実行
