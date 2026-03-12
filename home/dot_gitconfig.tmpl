@@ -41,6 +41,10 @@
 # echo '993850+torumakabe@users.noreply.github.com ssh-ed25519 [pub-key]' > ~/.ssh/allowed_signers
 [commit]
 	gpgsign = true
+# gitdir matches the repository path prefix, so keep shared defaults here and load
+# platform-specific overrides from separate files without duplicating the base config.
+# Windows uses explicit drive letters because Git has no drive-agnostic gitdir pattern;
+# this setup assumes local clones live on C:/ or D:/ and needs another rule otherwise.
 [includeIf "gitdir:~/workspace_corp/"]
 	path = ~/.gitconfig-corp
 [includeIf "gitdir:/home/"]
