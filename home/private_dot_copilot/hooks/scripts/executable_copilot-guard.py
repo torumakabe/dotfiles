@@ -96,6 +96,8 @@ def compile_glob(pattern: str) -> re.Pattern[str]:
     - ``*`` matches within one path segment.
     - ``?`` matches one character within one path segment.
     - ``**`` matches across path segments.
+    - Compiled patterns are cached because the same blocked globs are reused
+      across multiple path and command checks within one hook invocation.
     """
     normalized = normalize_pattern(pattern)
     parts = ["^"]
@@ -107,7 +109,7 @@ def compile_glob(pattern: str) -> re.Pattern[str]:
                 index += 2
                 if index < len(normalized) and normalized[index] == "/":
                     index += 1
-                    # Match zero or more directory segments, including the empty prefix.
+                    # Match zero or more directory segments for the special ``**/`` case.
                     parts.append("(?:[^/]+/)*")
                 else:
                     parts.append(".*")
