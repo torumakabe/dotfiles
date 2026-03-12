@@ -46,6 +46,24 @@ while [ "$attempt" -le "$max_attempts" ]; do
   attempt=$((attempt + 1))
 done
 
+# SAML SSO ワークアラウンド:
+# GitHub Organization が SAML SSO を要求する場合、認証済みの API リクエスト
+# （GITHUB_TOKEN 付き）は 403 Forbidden になる。未認証なら公開リポジトリとして
+# 正常にアクセスできるため、失敗したツールを認証なしでリトライする。
+missing_for_retry="$(mise ls --missing 2>/dev/null | awk '/(missing)/ {print $1}' || true)"
+if [ -n "$missing_for_retry" ]; then
+  echo ""
+  echo "Retrying missing tools without GitHub credentials (SAML SSO workaround)..."
+  (
+    unset GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN 2>/dev/null || true
+    echo "$missing_for_retry" | while read -r tool; do
+      [ -z "$tool" ] && continue
+      echo "  Installing $tool (unauthenticated)..."
+      mise install "$tool" --yes 2>&1 || true
+    done
+  )
+fi
+
 # 最終チェック
 missing_tools="$(mise ls --missing 2>/dev/null || true)"
 if echo "$missing_tools" | grep -q '(missing)'; then
