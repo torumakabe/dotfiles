@@ -46,7 +46,7 @@ retry_missing_tools_without_github_credentials() {
   # - only missing tools are retried unauthenticated, and
   # - non-Codespaces environments still keep their existing behavior.
   local missing_for_retry
-  missing_for_retry="$(mise ls --missing 2>/dev/null | awk '/\(missing\)/ {print $1}' || true)"
+  missing_for_retry="$(mise ls --missing 2>/dev/null | awk '/(missing)/ {print $1}' || true)"
   if [ -z "$missing_for_retry" ]; then
     return 0
   fi
