@@ -157,7 +157,44 @@ chezmoi edit ~/.config/mise/config.toml
 
 # ツールをインストール
 mise install
+
+# lockfile を更新（ツール追加・更新後は必ず実行）
+mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
+
+# lockfile を chezmoi に反映してコミット
+chezmoi re-add ~/.config/mise/mise.lock
 ```
+
+### mise lockfile の運用
+
+`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。これにより `mise install` 時の GitHub API 呼び出しが不要になり、レート制限を回避できる。
+
+**lockfile の更新が必要なタイミング:**
+
+- `config.toml` にツールを追加・削除したとき
+- ツールのバージョンを更新したとき（`mise upgrade` 後）
+- 定期的な更新（セキュリティパッチの取り込み）
+
+**更新手順:**
+
+```bash
+# 1. 全対象プラットフォーム分の lockfile を生成
+mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
+
+# 2. chezmoi に反映
+chezmoi re-add ~/.config/mise/mise.lock
+
+# 3. コミット・プッシュ
+cd $(chezmoi source-path)/..
+git add -A && git commit -m "chore: update mise lockfile"
+git push
+```
+
+**注意事項:**
+
+- lockfile が存在する環境では `mise install` に `--locked` が自動付与される（`run_once_after_20`）
+- `--locked` 時は lockfile にない URL へのアクセスがエラーになる。新しいツールを追加したら必ず lockfile を更新してからコミットすること
+- lockfile がない環境（初回セットアップ等）では従来どおり GitHub API 経由でインストールされる
 
 ### run_once_ スクリプトの再実行
 
@@ -258,7 +295,8 @@ home/                          ← chezmoi source (.chezmoiroot で指定)
 ├── dot_zshrc.tmpl             ← シェル設定
 ├── dot_config/
 │   └── mise/
-│       └── config.toml.tmpl   ← mise ツールバージョン定義
+│       ├── config.toml.tmpl   ← mise ツールバージョン定義
+│       └── mise.lock          ← mise lockfile (mise lock で生成)
 ├── PowerShell_profile.ps1.tmpl ← Windows PowerShell Profile (mise activate 含む)
 ├── private_dot_copilot/       ← ~/.copilot/ に配置
 │   ├── copilot-instructions.md
@@ -291,6 +329,7 @@ reference/windows/             ← デプロイしない参照ファイル
 - **Copilot Guard** フック: bash + PowerShell の二重実装を Python 単一スクリプトに統一
 - **uv Enforcer** フック: Copilot エージェントの python/pip 直接実行をブロックし uv 経由を強制
 - **SAML SSO ワークアラウンド**: Codespaces の `mise install` で SAML SSO 要求による 403 を回避するため、失敗したツールを認証なしで自動リトライ
+- **mise lockfile**: ダウンロード URL とチェックサムを事前解決し、GitHub API レート制限を回避。`GITHUB_TOKEN` 環境変数が不要になり、エージェントへの機密情報露出リスクも低減
 - **Windows**: chezmoi で設定、DSC で GUI アプリ、mise でツール（段階的導入）
 
 ## プラットフォーム検出
@@ -320,12 +359,18 @@ chezmoi init torumakabe
 
 GitHub API レート制限やネットワーク障害でツールの一部がインストールされない場合がある。
 
+lockfile（`~/.config/mise/mise.lock`）が存在する環境では GitHub API を呼ばないため、レート制限は発生しない。lockfile がない場合や `mise upgrade` 後に lockfile が古い場合は以下で対処する。
+
 ```bash
 # 未インストールのツールを確認
 mise ls --missing
 
 # リトライ
 mise install
+
+# lockfile を更新して次回以降のレート制限を回避
+mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
+chezmoi re-add ~/.config/mise/mise.lock
 ```
 
 ### `run_once_` スクリプトが sudo を要求して停止する
