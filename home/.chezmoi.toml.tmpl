@@ -1,7 +1,10 @@
 {{- $codespaces := env "CODESPACES" | not | not -}}
 {{- $devcontainer := env "REMOTE_CONTAINERS" | not | not -}}
+{{- $isLinux := eq .chezmoi.os "linux" -}}
+{{- $isMac := eq .chezmoi.os "darwin" -}}
+{{- $isWindows := eq .chezmoi.os "windows" -}}
 {{- $isWSL := false -}}
-{{- if eq .chezmoi.os "linux" -}}
+{{- if $isLinux -}}
 {{-   if .chezmoi.kernel -}}
 {{-     if hasKey .chezmoi.kernel "osrelease" -}}
 {{-       $isWSL = .chezmoi.kernel.osrelease | lower | contains "microsoft" -}}
@@ -10,7 +13,7 @@
 {{- end -}}
 
 {{- $windowsUser := "" -}}
-{{- if eq .chezmoi.os "windows" -}}
+{{- if $isWindows -}}
 {{-   $windowsUser = env "USERNAME" -}}
 {{- else if and $isWSL stdinIsATTY -}}
 {{-   $windowsUser = promptStringOnce . "windowsUser" "Windows username (for WSL 1Password paths)" -}}
@@ -24,6 +27,9 @@
 [data]
   codespaces = {{ $codespaces }}
   devcontainer = {{ $devcontainer }}
+  isLinux = {{ $isLinux }}
+  isMac = {{ $isMac }}
+  isWindows = {{ $isWindows }}
   isWSL = {{ $isWSL }}
   windowsUser = {{ $windowsUser | quote }}
   corpUser = {{ $corpUser | quote }}

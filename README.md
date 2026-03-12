@@ -321,8 +321,8 @@ echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/
 
 ```
 home/                          ← chezmoi source (.chezmoiroot で指定)
-├── .chezmoi.toml.tmpl         ← プラットフォーム検出・変数定義
-├── .chezmoiignore             ← OS 別にファイルをスキップ
+├── .chezmoi.toml.tmpl         ← 共通 platform flag・変数定義
+├── .chezmoiignore             ← 共通 flag を使ってファイルをスキップ
 ├── .chezmoiremove             ← レガシーファイル自動削除
 ├── dot_gitconfig.tmpl         ← ベース gitconfig (includeIf で分岐)
 ├── dot_gitconfig-linux.tmpl   ← Linux/WSL 共通 (内部で WSL 分岐)
@@ -373,12 +373,30 @@ reference/windows/             ← デプロイしない参照ファイル
 
 | 変数名 | 説明 |
 |--------|------|
-| `.chezmoi.os` | `linux`, `darwin`, `windows` |
-| `.isWSL` | WSL 環境の検出 |
+| `.chezmoi.os` | chezmoi 組み込みの OS 値 (`linux`, `darwin`, `windows`) |
+| `.isLinux` / `.isMac` / `.isWindows` | `.chezmoi.os` から導出した共通 flag。`.chezmoiignore` と template では基本的にこちらを使う |
+| `.isWSL` | Linux 上で `kernel.osrelease` に `microsoft` を含む場合に true |
 | `.codespaces` | GitHub Codespaces |
 | `.devcontainer` | Dev Container |
-| `.windowsUser` | Windows ユーザー名 (WSL 1Password パス) |
+| `.windowsUser` | Windows ユーザー名 (Windows 本体または WSL の 1Password パス用) |
 | `.corpUser` | 所属企業での Git ユーザー名 |
+
+### Git `includeIf` の設計
+
+`home/dot_gitconfig.tmpl` ではベース設定を `~/.gitconfig` に集約し、`includeIf` でプラットフォーム別の差分だけを読み込む。
+これにより、Git 側の判定は「現在のリポジトリのパス接頭辞」に限定し、chezmoi 側の template 分岐を最小限にしている。
+
+- `gitdir:/home/` → Linux / WSL のリポジトリ
+- `gitdir:/Users/` → macOS のリポジトリ
+- `gitdir/i:C:/`, `gitdir/i:D:/` → Windows のリポジトリ
+
+補足:
+
+- `gitdir` はリポジトリの `.git` ディレクトリのパス接頭辞で判定される
+- Windows では drive letter の大文字小文字差を吸収するため `gitdir/i:` を使っている
+- この dotfiles は「Windows 上のローカル clone は `C:/` または `D:/` 配下」という前提。別の drive を使う場合は `includeIf "gitdir/i:E:/"` のように追加する
+- WSL はパス判定上は Linux (`/home/`) なので `~/.gitconfig-linux` を読み込み、その中で `.isWSL` を使って 1Password 連携パスだけを切り替える
+- template の制御構文は `{{- ... -}}` で前後の余分な空行を抑える。`dot_gitconfig-linux.tmpl` の `core.editor` だけは Git に埋め込む引用符を保つため、WSL 側で `\"` を使っている
 
 ## トラブルシューティング
 
