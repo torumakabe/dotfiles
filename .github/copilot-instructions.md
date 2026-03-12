@@ -47,7 +47,8 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 - `home/dot_config/mise/config.toml.tmpl` は chezmoi テンプレートで、プラットフォーム非対応ツールを条件付きでスキップする
 - **cargo-make**: linux/arm64 のプリビルドバイナリが未提供のためスキップ中（[sagiegurari/cargo-make#541](https://github.com/sagiegurari/cargo-make/issues/541)）
 - **edit**: macOS 向けプリビルドバイナリが未提供のためスキップ中。[edit の最新リリース](https://github.com/microsoft/edit/releases)に macOS バイナリが追加されたら条件分岐を削除する
-- **定期チェック**: このリポジトリの mise 設定を変更する際は、上記ツールのリリースページでプラットフォーム対応状況を確認すること。対応されていれば条件分岐を削除して全プラットフォーム共通に戻す
+- **azure-dev**: [aqua レジストリ](https://github.com/aquaproj/aqua-registry/blob/main/pkgs/Azure/azure-dev/registry.yaml)の `supported_envs` が `[darwin, amd64]` のみで linux/arm64 未対応。`github:Azure/azure-dev` バックエンドで全プラットフォームに対応中。aqua レジストリに linux/arm64 が追加されたら `aqua:` に戻す
+- **定期チェック**: このリポジトリの mise 設定を変更する際は、上記ツールのリリースページやレジストリでプラットフォーム対応状況を確認すること。対応されていれば条件分岐やバックエンド変更を元に戻す
 
 ### Dev container での mise install
 
