@@ -35,7 +35,7 @@ while [ "$attempt" -le "$max_attempts" ]; do
     echo "Warning: failed to inspect missing tools after mise install attempt ${attempt}/${max_attempts}. Retrying..." >&2
     missing_count=1
   else
-    missing_count="$(printf '%s\n' "$missing_tools_output" | awk '/\(missing\)/ {count++} END {print count+0}')"
+    missing_count="$(printf '%s\n' "$missing_tools_output" | awk 'index($0, "(missing)") {count++} END {print count+0}')"
   fi
 
   if [ "$missing_count" -eq 0 ]; then
@@ -60,7 +60,7 @@ if ! missing_tools_output="$(mise ls --missing 2>/dev/null)"; then
   echo "Warning: failed to list missing tools for unauthenticated retry. Skipping retry step." >&2
   missing_for_retry=""
 else
-  missing_for_retry="$(printf '%s\n' "$missing_tools_output" | awk '/\(missing\)/ {print $1}')"
+  missing_for_retry="$(printf '%s\n' "$missing_tools_output" | awk 'index($0, "(missing)") {print $1}')"
 fi
 
 if [ -n "$missing_for_retry" ]; then
