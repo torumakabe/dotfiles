@@ -3,6 +3,10 @@
 set -euo pipefail
 
 # System packages — runs once before chezmoi applies dotfiles
+# Order dependency:
+# - Keep this before run_once_before_20-install-mise so git/zsh are available first.
+# - When changing packages here, confirm the later shell setup and mise bootstrap still
+#   have the commands they expect on each platform.
 export DEBIAN_FRONTEND=noninteractive
 
 {{ if eq .chezmoi.os "linux" -}}

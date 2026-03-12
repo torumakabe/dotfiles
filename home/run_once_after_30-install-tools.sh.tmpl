@@ -3,6 +3,11 @@
 set -euo pipefail
 
 # Additional tools — skipped in Codespaces/Dev Containers
+# Order dependency:
+# - Keep this after run_once_after_20-mise-install because it expects mise-installed
+#   runtimes/shims (for example `go`) to already be on PATH.
+# - When changing the skip conditions, confirm Dev Containers / Codespaces still rely on
+#   their base image or Features instead of this script.
 export DEBIAN_FRONTEND=noninteractive
 export PATH="${HOME}/.local/share/mise/shims:${HOME}/.local/bin:${GOPATH:-${HOME}/go}/bin:${PATH}"
 
