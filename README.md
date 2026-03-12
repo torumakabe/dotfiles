@@ -2,6 +2,16 @@
 
 Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](https://mise.jdx.dev/).
 
+## Supported Environments
+
+| 環境 | セットアップ | 日常操作の注意 | 主な制限事項 |
+|------|------------|---------------|-------------|
+| Linux / macOS | [Quick Start → Linux / macOS / WSL](#linux--macos--wsl) | — | — |
+| WSL | [Quick Start → Linux / macOS / WSL](#linux--macos--wsl) | 1Password パスが Windows 側 | 初回セットアップで `windowsUser` の入力が必要 |
+| GitHub Codespaces | [Quick Start → Codespaces](#github-codespaces) | 自動適用 | `corpUser` 未設定、レート制限 |
+| Dev Container (ローカル) | [Quick Start → Dev Container](#dev-container-ローカル) | `mise install` は手動実行 | 追加ツール未インストール |
+| Windows | [Quick Start → Windows](#windows) | DSC は手動実行 | mise 管理外のツールあり |
+
 ## Quick Start
 
 ### Linux / macOS / WSL
@@ -26,6 +36,26 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 
 - 非対話環境のため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる（`.gitconfig-corp` は適用されない）
 - `mise install` がベースイメージの GitHub API レート制限で部分失敗する場合がある。ターミナルにリカバリ手順が表示される
+
+### Dev Container (ローカル)
+
+任意のリポジトリの Dev Container で dotfiles を適用するケース。VS Code の設定で dotfiles リポジトリを指定すると、コンテナ作成時に `install.sh` が自動実行される。
+参考: [Personalizing with dotfile repositories](https://code.visualstudio.com/docs/devcontainers/containers#_personalizing-with-dotfile-repositories)
+
+1. VS Code の Settings → **Dotfiles** で以下を設定:
+   - **Repository**: `torumakabe/dotfiles`
+   - **Install Command**: `install.sh`（デフォルト、変更不要）
+2. Dev Container を作成すると `install.sh` → `chezmoi init --apply` が自動実行される
+3. コンテナ起動後にターミナルから手動で実行:
+   ```bash
+   mise install --yes
+   ```
+
+**制限事項:**
+
+- `mise install` はコンテナ作成時にスキップされる（GitHub API トークンが利用できないため）。コンテナ起動後に手動実行が必要
+- Azure CLI 等の追加ツール（`run_once_after_30-install-tools.sh`）もスキップされる。ベースイメージに含まれている想定
+- 非対話環境のため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる
 
 ### Windows
 
@@ -64,6 +94,7 @@ sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply torumakabe
 |------|---------------------|------|
 | Linux / WSL | `apt` + `mise` | apt: OS パッケージ、mise: 開発ツール |
 | macOS | `brew` + `mise` | brew: OS パッケージ・GUI アプリ、mise: 開発ツール |
+| Codespaces / Dev Container | ベースイメージ + `mise` | ベースイメージ: 主要ツール同梱、mise: 開発ツール |
 | Windows | `winget` (DSC) + `mise` | winget: GUI アプリ・OS ツール、mise: 開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行（システム Python 不要） |
 
@@ -228,6 +259,15 @@ mise install
 
 Codespaces 以外の環境では、パッケージインストールに sudo が必要。
 パスワードを入力するか、sudoers を設定する。
+
+### Dev Container で mise ツールが入っていない
+
+コンテナ作成時に `mise install` は自動スキップされる（GitHub API トークン不在のため）。
+コンテナ起動後にターミナルから手動実行する:
+
+```bash
+mise install --yes
+```
 
 ## Architecture
 
