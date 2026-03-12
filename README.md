@@ -151,7 +151,7 @@ chezmoi add ~/.some-config
 
 ### mise 管理ツールの更新
 
-日常的なツールの更新は `mise upgrade` で行う。config.toml の手動編集は不要。
+日常的なツールの更新は `mise upgrade` で行う。config.toml は `latest` 指定のため変更されず、**lockfile が実際のバージョンを固定する**。
 
 ```bash
 # 全ツールを最新バージョンに更新
@@ -160,15 +160,14 @@ mise upgrade
 # lockfile を再生成（更新後は必ず実行）
 mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
 
-# chezmoi に反映してコミット・プッシュ
-chezmoi re-add ~/.config/mise/config.toml
+# lockfile を chezmoi に反映してコミット・プッシュ
 chezmoi re-add ~/.config/mise/mise.lock
 cd $(chezmoi source-path)/..
 git add -A && git commit -m "chore: upgrade mise tools"
 git push
 ```
 
-> **補足**: `mise upgrade` は config.toml のバージョンも自動で書き換える（`latest` 指定のツールは最新版に解決される）。他の端末では `chezmoi update` で config.toml と lockfile が同期される。
+> **補足**: config.toml の `latest` は「制約なし」を意味し、`mise upgrade` で最新版がインストールされるが config.toml 自体は変わらない。端末間のバージョン統一は lockfile が担う — 他の端末で `chezmoi update` すると lockfile 経由で同じバージョンがインストールされる。
 
 ### ツールの追加・削除
 
