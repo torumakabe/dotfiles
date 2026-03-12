@@ -25,10 +25,10 @@ bat = "latest"
 shellcheck = "latest"
 jq = "latest"
 rust = "latest"
-"pipx:azure-cli" = "latest"
+"pipx:azure-cli" = { version = "latest", uvx_args = "--prerelease=allow" }
 "aqua:Azure/azure-dev" = "latest"
-"ubi:microsoft/dev-proxy" = "latest"
-"ubi:github/copilot-cli" = "latest"
+"github:microsoft/dev-proxy" = "latest"
+"github:github/copilot-cli" = "latest"
 edit = "latest"
 codex = "latest"
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
