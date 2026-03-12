@@ -30,13 +30,6 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install Azure CLI"
-        allowPrerelease: false
-      settings:
-        id: Microsoft.AzureCLI
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
         description: "Install PowerToys"
         allowPrerelease: false
       settings:
@@ -51,45 +44,10 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install Azure Developer CLI"
-        allowPrerelease: false
-      settings:
-        id: microsoft.azd
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install jq"
-        allowPrerelease: false
-      settings:
-        id: jqlang.jq
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install Dev Proxy"
-        allowPrerelease: false
-      settings:
-        id: DevProxy.DevProxy
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
         description: "Install mise"
         allowPrerelease: false
       settings:
         id: jdx.mise
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install GitHub Copilot CLI"
-        allowPrerelease: true
-      settings:
-        id: GitHub.Copilot
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
-        description: "Install Microsoft Edit"
-        allowPrerelease: false
-      settings:
-        id: Microsoft.Edit
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:

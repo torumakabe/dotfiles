@@ -51,5 +51,4 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 - `reference/windows/configuration.dsc.yaml` には mise で管理しないものだけを残す:
   - OS 設定（DeveloperMode）
   - GUI アプリ（PowerToys, DevToys, draw.io 等）
-  - mise 未対応 CLI（Azure CLI, azd, jq, Dev Proxy, GitHub Copilot CLI, Microsoft Edit）
   - ブートストラップ（mise 自身, Git, PowerShell）

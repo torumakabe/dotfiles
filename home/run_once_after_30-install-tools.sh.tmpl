@@ -4,47 +4,7 @@ set -euo pipefail
 
 # Additional tools — skipped in Codespaces/Dev Containers
 export DEBIAN_FRONTEND=noninteractive
-export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${GOPATH:-${HOME}/go}/bin:${PATH}"
-
-# --- Azure CLI ---
-if ! command -v az >/dev/null 2>&1; then
-{{ if eq .chezmoi.os "linux" -}}
-  echo "Installing Azure CLI..."
-  sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
-  curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | \
-    gpg --dearmor | sudo tee /usr/share/keyrings/microsoft-archive-keyring.gpg >/dev/null
-  . /etc/os-release
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/azure-cli/ ${VERSION_CODENAME} main" | \
-    sudo tee /etc/apt/sources.list.d/azure-cli.list >/dev/null
-  if ! sudo apt-get update -qq; then
-    echo "Warning: apt-get update had errors (possibly from third-party repos), continuing..." >&2
-  fi
-  sudo apt-get install -y -qq azure-cli
-{{ else if eq .chezmoi.os "darwin" -}}
-  echo "Installing Azure CLI..."
-  brew install azure-cli
-{{ end -}}
-fi
-
-# Azure CLI completion (Linux)
-{{ if eq .chezmoi.os "linux" -}}
-if command -v az >/dev/null 2>&1 && [ ! -f /etc/bash_completion.d/azure-cli ]; then
-  curl -fsSL https://raw.githubusercontent.com/Azure/azure-cli/dev/az.completion -o /tmp/az.completion
-  sudo mv /tmp/az.completion /etc/bash_completion.d/azure-cli
-fi
-{{ end -}}
-
-# --- Azure Developer CLI ---
-if ! command -v azd >/dev/null 2>&1; then
-{{ if eq .chezmoi.os "linux" -}}
-  echo "Installing Azure Developer CLI..."
-  curl -fsSL https://aka.ms/install-azd.sh | bash -s -- -a "$(dpkg --print-architecture)"
-{{ else if eq .chezmoi.os "darwin" -}}
-  echo "Installing Azure Developer CLI..."
-  brew tap azure/azd
-  brew install azure/azd/azd
-{{ end -}}
-fi
+export PATH="${HOME}/.local/share/mise/shims:${HOME}/.local/bin:${GOPATH:-${HOME}/go}/bin:${PATH}"
 
 # --- Docker (Linux only, skip in WSL where Docker Desktop is used) ---
 {{ if and (eq .chezmoi.os "linux") (not .isWSL) -}}
@@ -63,15 +23,6 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 {{ end -}}
 
-# --- Rust ---
-if ! command -v cargo >/dev/null 2>&1; then
-  echo "Installing Rust..."
-{{ if eq .chezmoi.os "linux" -}}
-  sudo apt-get install -y -qq libssl-dev
-{{ end -}}
-  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
-fi
-
 # --- Go tools ---
 if command -v go >/dev/null 2>&1; then
   echo "Installing Go tools..."
@@ -79,23 +30,10 @@ if command -v go >/dev/null 2>&1; then
   go install github.com/ddo/fast@latest || true
 fi
 
-# --- GitHub Copilot CLI ---
-if ! command -v copilot >/dev/null 2>&1; then
 {{ if eq .chezmoi.os "darwin" -}}
-  brew install copilot-cli || echo "Warning: copilot-cli installation failed, skipping..." >&2
-{{ else -}}
-  echo "Installing GitHub Copilot CLI..."
-  curl -fsSL https://gh.io/copilot-install | bash || echo "Warning: copilot-cli installation failed, skipping..." >&2
-{{ end -}}
-fi
-
-{{ if eq .chezmoi.os "darwin" -}}
-# --- macOS-specific brew packages ---
-brew install ghq || true
-brew tap microsoft/dev-proxy && brew install dev-proxy || true
+# --- macOS-specific brew cask packages ---
 brew install --cask --force devtoys || true
 brew install --cask --force drawio || true
-brew install --cask --force codex || true
 {{ end -}}
 
 {{ if and (eq .chezmoi.os "linux") (not .isWSL) -}}
