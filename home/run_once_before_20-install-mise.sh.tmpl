@@ -3,6 +3,10 @@
 set -euo pipefail
 
 # mise — tool version manager
+# Order dependency:
+# - Keep this after run_once_before_10-install-packages so package-manager prerequisites
+#   such as git/zsh/curl are already installed where needed.
+# - Keep this before run_once_after_20-mise-install so `mise install` has a bootstrapper.
 if command -v mise >/dev/null 2>&1; then
   echo "mise is already installed: $(mise --version)"
   exit 0

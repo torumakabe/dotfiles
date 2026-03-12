@@ -244,6 +244,26 @@ chezmoi state delete-bucket --bucket=scriptState
 chezmoi apply
 ```
 
+### run_once_ スクリプトの実行順と依存関係
+
+このリポジトリでは、`run_once_before_*` → 通常のファイル適用 → `run_once_after_*` の順に処理される。さらに同じフェーズ内ではファイル名の数字順で実行されるため、次の依存関係を前提にしている。
+
+| 順序 | スクリプト | 役割 | 後続が依存している前提 |
+|------|-----------|------|------------------------|
+| 1 | `run_once_before_10-install-packages.sh` | OS パッケージ (`git`, `zsh` など) を導入 | `git` / `zsh` が後続の shell setup と mise bootstrap までに使える |
+| 2 | `run_once_before_20-install-mise.sh` | `mise` 自体を導入 | `run_once_after_20-mise-install.sh` 開始時点で `mise` コマンドが存在する |
+| 3 | `run_once_after_10-setup-shell.sh` | Oh My Zsh / plugin / default shell を設定 | `git` / `zsh` は 1 で導入済み。後続スクリプトは新しいログインシェルを前提にしない |
+| 4 | `run_once_after_20-mise-install.sh` | `~/.config/mise/config.toml` と `mise.lock` を使ってツール本体を導入 | chezmoi による dotfiles 配置完了後に実行され、`run_once_after_30-install-tools.sh` より先に runtimes / shims を用意する |
+| 5 | `run_once_after_30-install-tools.sh` | Docker, Go tools, GUI アプリ等の追加導入 | `mise install` 済みで `go` などのコマンドが PATH に存在する |
+
+変更時は、少なくとも次の前提を確認すること。
+
+- `before_` / `after_` の跨ぎを変えても、`mise` 設定ファイルや lockfile が生成される前に `mise install` しないこと
+- `run_once_before_10-install-packages.sh` のパッケージ変更で、後続の `git`, `zsh`, `curl`, package manager 前提を壊していないこと
+- `run_once_after_10-setup-shell.sh` は非対話環境でも失敗しないこと。後続スクリプトが「新しい shell を開き直した後」の状態に依存しないこと
+- `run_once_after_20-mise-install.sh` の retry / workaround を変える場合、Codespaces とローカル Dev Container の分岐を壊していないこと
+- `run_once_after_30-install-tools.sh` の skip 条件を変える場合、Codespaces / Dev Container では引き続きベースイメージや Features 側で補う前提か確認すること
+
 ## GitHub Copilot CLI
 
 chezmoi は `~/.copilot/` 配下の以下のファイルを管理する。プラグインはプラグインマネージャが管理するため chezmoi の対象外。

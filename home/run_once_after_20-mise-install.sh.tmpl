@@ -3,6 +3,12 @@
 set -euo pipefail
 
 # Activate mise and install tool versions from config
+# Order dependency:
+# - Keep this after run_once_before_20-install-mise because `mise` must already exist.
+# - Keep this in the `after_` phase because chezmoi must first apply
+#   ~/.config/mise/config.toml and ~/.config/mise/mise.lock.
+# - Keep run_once_after_30-install-tools after this script because it relies on runtimes
+#   and shims installed by `mise install`.
 export PATH="${HOME}/.local/bin:${PATH}"
 
 if ! command -v mise >/dev/null 2>&1; then
@@ -24,6 +30,46 @@ max_attempts=3
 attempt=1
 wait_sec=10
 missing_marker='(missing)'
+
+retry_missing_tools_without_github_credentials() {
+  # --- SAML SSO workaround ---
+  # Codespaces can inject GITHUB_TOKEN automatically. When a public GitHub Organization
+  # repository also requires SAML SSO, authenticated requests can fail with 403 even
+  # though the same asset is downloadable anonymously. Retry only the still-missing
+  # tools without GitHub credentials.
+  #
+  # Revisit/remove this block when either:
+  # - Codespaces no longer exposes a token that triggers the SAML-only 403 behavior, or
+  # - mise / the affected registries can complete these downloads with the token present.
+  #
+  # When changing this logic, verify on Codespaces that:
+  # - the initial authenticated `mise install --yes` still runs first,
+  # - only missing tools are retried unauthenticated, and
+  # - non-Codespaces environments still keep their existing behavior.
+  local missing_tools_output missing_for_retry
+  if ! missing_tools_output="$(mise ls --missing 2>/dev/null)"; then
+    echo "Warning: failed to list missing tools for unauthenticated retry. Skipping retry step." >&2
+    return 0
+  fi
+
+  missing_for_retry="$(printf '%s\n' "$missing_tools_output" | awk -v marker="$missing_marker" 'index($0, marker) {print $1}')"
+  if [ -z "$missing_for_retry" ]; then
+    return 0
+  fi
+
+  echo ""
+  echo "Retrying missing tools without GitHub credentials (SAML SSO workaround)..."
+  (
+    unset GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN 2>/dev/null
+    echo "$missing_for_retry" | while read -r tool; do
+      [ -z "$tool" ] && continue
+      echo "  Installing $tool (unauthenticated)..."
+      if ! mise install "$tool" --yes 2>&1; then
+        echo "Warning: failed to install $tool without GitHub credentials. Retry manually with 'mise install $tool --yes'." >&2
+      fi
+    done
+  )
+}
 
 echo "Installing tool versions via mise..."
 while [ "$attempt" -le "$max_attempts" ]; do
@@ -53,31 +99,7 @@ while [ "$attempt" -le "$max_attempts" ]; do
   attempt=$((attempt + 1))
 done
 
-# SAML SSO ワークアラウンド:
-# GitHub Organization が SAML SSO を要求する場合、認証済みの API リクエスト
-# （GITHUB_TOKEN 付き）は 403 Forbidden になる。未認証なら公開リポジトリとして
-# 正常にアクセスできるため、失敗したツールを認証なしでリトライする。
-if ! missing_tools_output="$(mise ls --missing 2>/dev/null)"; then
-  echo "Warning: failed to list missing tools for unauthenticated retry. Skipping retry step." >&2
-  missing_for_retry=""
-else
-  missing_for_retry="$(printf '%s\n' "$missing_tools_output" | awk -v marker="$missing_marker" 'index($0, marker) {print $1}')"
-fi
-
-if [ -n "$missing_for_retry" ]; then
-  echo ""
-  echo "Retrying missing tools without GitHub credentials (SAML SSO workaround)..."
-  (
-    unset GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN 2>/dev/null
-    echo "$missing_for_retry" | while read -r tool; do
-      [ -z "$tool" ] && continue
-      echo "  Installing $tool (unauthenticated)..."
-      if ! mise install "$tool" --yes 2>&1; then
-        echo "Warning: failed to install $tool without GitHub credentials. Retry manually with 'mise install $tool --yes'." >&2
-      fi
-    done
-  )
-fi
+retry_missing_tools_without_github_credentials
 
 # 最終チェック
 if ! missing_tools="$(mise ls --missing 2>/dev/null)"; then

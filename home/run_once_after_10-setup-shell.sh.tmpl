@@ -3,6 +3,10 @@
 set -euo pipefail
 
 # Oh My Zsh + plugins
+# Order dependency:
+# - Keep this after run_once_before_10-install-packages because it needs git and zsh.
+# - When changing shell bootstrap behavior, confirm later run_once_after_20 / _30 scripts
+#   still work in non-interactive environments even before the user starts a new shell.
 OH_MY_ZSH_DIR="${HOME}/.oh-my-zsh"
 OH_MY_ZSH_REPO="https://github.com/ohmyzsh/ohmyzsh"
 OH_MY_ZSH_COMMIT="8df5c1b18b1393dc5046c729094f897bd3636a9b"
