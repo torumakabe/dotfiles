@@ -2,18 +2,18 @@
 
 ## ツール操作の制約（デフォルト動作より優先）
 
-- ファイルをエディタで開く → `Start-Process edit <path>`（Microsoft Edit が別ウィンドウで起動する）
+- **[Windows]** ファイルをエディタで開く → `Start-Process edit <path>`（Microsoft Edit が別ウィンドウで起動する）
 - Python 実行・パッケージ管理 → 常に `uv` 経由。`python` / `pip` の直接実行は禁止（preToolUse フックで強制）
   - スクリプト実行: `uv run`（`python3` / `python` は不可）
   - パッケージ管理: `uv add` / `uv pip`（`pip` / `pip3` は不可）
   - 仮想環境: `uv venv`（`python -m venv` は不可）
-- コマンド存在チェック → `command -v`（`which` は使わない）
-- Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
+- **[Unix]** コマンド存在チェック → `command -v`（`which` は使わない）
+- **[Windows]** Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
 
 ## 言語
 
 - 日本語で応答する（文脈上明らかに英語が必要な場合を除く）
-- コードコメント: 個人プロジェクトは日本語、OSS 貢献は英語
+- コードコメント: README が英語のリポジトリでは英語、それ以外は日本語
 
 ## 基本方針
 
@@ -38,7 +38,6 @@
 ### インフラ / クラウド
 
 - プライマリクラウド: Azure
-- 自動化にはポータルより Azure CLI (`az`) を優先
 
 ### Git
 
