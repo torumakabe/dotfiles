@@ -1,3 +1,9 @@
+# Path glob rules:
+# - Write patterns with `/` separators even for Windows paths.
+# - Matching normalizes `\` to `/`, collapses repeated separators, and strips `file://`.
+# - `*` matches within one path segment, `?` matches one character, `**` matches across segments.
+# - Patterns are evaluated as path globs, not as plain substrings.
+
 # Azure CLI 認証
 **/.azure/*
 **/accessTokens.json
