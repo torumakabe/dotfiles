@@ -163,10 +163,21 @@ command -v trivy >/dev/null && source <(trivy completion zsh)
 
 if [ -z "$SSH_AUTH_SOCK" ] ; then
   if agent_output=$(ssh-agent -s 2>/dev/null); then
-    while IFS='=;' read -r key value _; do
-      case "$key" in
-        SSH_AUTH_SOCK|SSH_AGENT_PID)
-          export "$key=$value"
+    while IFS= read -r line; do
+      assignment=${line%%;*}
+      case "$assignment" in
+        SSH_AUTH_SOCK=/*)
+          export "$assignment"
+          ;;
+        SSH_AGENT_PID=*)
+          agent_pid=${assignment#SSH_AGENT_PID=}
+          case "$agent_pid" in
+            ''|*[!0-9]*)
+              ;;
+            *)
+              export "$assignment"
+              ;;
+          esac
           ;;
       esac
     done <<< "$agent_output"
