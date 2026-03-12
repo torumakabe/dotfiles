@@ -31,7 +31,13 @@ while [ "$attempt" -le "$max_attempts" ]; do
     break
   fi
 
-  missing_count="$(mise ls --missing 2>/dev/null | grep -c '(missing)' || true)"
+  if ! missing_tools_output="$(mise ls --missing 2>/dev/null)"; then
+    echo "Warning: failed to inspect missing tools after mise install attempt ${attempt}/${max_attempts}. Retrying..." >&2
+    missing_count=1
+  else
+    missing_count="$(printf '%s\n' "$missing_tools_output" | awk '/\(missing\)/ {count++} END {print count+0}')"
+  fi
+
   if [ "$missing_count" -eq 0 ]; then
     echo "All tools installed successfully"
     break
@@ -50,23 +56,32 @@ done
 # GitHub Organization が SAML SSO を要求する場合、認証済みの API リクエスト
 # （GITHUB_TOKEN 付き）は 403 Forbidden になる。未認証なら公開リポジトリとして
 # 正常にアクセスできるため、失敗したツールを認証なしでリトライする。
-missing_for_retry="$(mise ls --missing 2>/dev/null | awk '/(missing)/ {print $1}' || true)"
+if ! missing_tools_output="$(mise ls --missing 2>/dev/null)"; then
+  echo "Warning: failed to list missing tools for unauthenticated retry. Skipping retry step." >&2
+  missing_for_retry=""
+else
+  missing_for_retry="$(printf '%s\n' "$missing_tools_output" | awk '/\(missing\)/ {print $1}')"
+fi
+
 if [ -n "$missing_for_retry" ]; then
   echo ""
   echo "Retrying missing tools without GitHub credentials (SAML SSO workaround)..."
   (
-    unset GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN 2>/dev/null || true
+    unset GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN 2>/dev/null
     echo "$missing_for_retry" | while read -r tool; do
       [ -z "$tool" ] && continue
       echo "  Installing $tool (unauthenticated)..."
-      mise install "$tool" --yes 2>&1 || true
+      if ! mise install "$tool" --yes 2>&1; then
+        echo "Warning: failed to install $tool without GitHub credentials. Retry manually with 'mise install $tool --yes'." >&2
+      fi
     done
   )
 fi
 
 # 最終チェック
-missing_tools="$(mise ls --missing 2>/dev/null || true)"
-if echo "$missing_tools" | grep -q '(missing)'; then
+if ! missing_tools="$(mise ls --missing 2>/dev/null)"; then
+  echo "Warning: failed to inspect final mise installation status. Run 'mise ls --missing' manually." >&2
+elif echo "$missing_tools" | grep -q '(missing)'; then
   echo "" >&2
   echo "========================================" >&2
   echo "WARNING: mise install が一部失敗しました" >&2

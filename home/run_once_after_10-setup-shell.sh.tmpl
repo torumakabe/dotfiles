@@ -27,7 +27,11 @@ fi
 # Set default shell to zsh
 if [ "$(basename "${SHELL}")" != "zsh" ]; then
   echo "Changing default shell to zsh..."
-  sudo usermod --shell /bin/zsh "${USER}" || chsh -s "$(command -v zsh)" || true
+  if ! sudo usermod --shell /bin/zsh "${USER}"; then
+    if ! chsh -s "$(command -v zsh)"; then
+      echo "Warning: failed to change the default shell to zsh. Configure it manually if needed." >&2
+    fi
+  fi
 fi
 
 {{ end -}}
