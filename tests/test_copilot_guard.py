@@ -3,7 +3,7 @@ import pathlib
 import unittest
 
 
-REPO_ROOT = pathlib.Path("/home/runner/work/dotfiles/dotfiles")
+REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py"
 
 

@@ -78,6 +78,7 @@ def normalize_path(value: str) -> str:
     normalized = re.sub(r"/+", "/", normalized)
     while normalized.startswith("./"):
         normalized = normalized[2:]
+    # file:// URIs on Windows are parsed as /C:/path, so drop that extra slash.
     if re.match(r"^/[A-Za-z]:/", normalized):
         normalized = normalized[1:]
     return normalized.lstrip("/")
@@ -102,6 +103,7 @@ def compile_glob(pattern: str) -> re.Pattern[str]:
                 index += 2
                 if index < len(normalized) and normalized[index] == "/":
                     index += 1
+                    # Match zero or more directory segments, including the empty prefix.
                     parts.append("(?:[^/]+/)*")
                 else:
                     parts.append(".*")
