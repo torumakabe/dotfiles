@@ -34,6 +34,21 @@ sha256_file() {
   fi
 }
 
+mktemp_dir() {
+  if tmp=$(mktemp -d 2>/dev/null); then
+    echo "$tmp"
+    return 0
+  fi
+
+  if tmp=$(mktemp -d -t chezmoi.XXXXXX 2>/dev/null); then
+    echo "$tmp"
+    return 0
+  fi
+
+  echo "error: unable to create temporary directory" >&2
+  exit 1
+}
+
 if ! command -v chezmoi >/dev/null 2>&1; then
   bin_dir="$HOME/.local/bin"
   chezmoi="$bin_dir/chezmoi"
@@ -79,7 +94,7 @@ if ! command -v chezmoi >/dev/null 2>&1; then
       ;;
   esac
 
-  tmp_dir=$(mktemp -d)
+  tmp_dir=$(mktemp_dir)
   trap 'rm -rf "$tmp_dir"' EXIT HUP INT TERM
 
   archive_path="${tmp_dir}/${archive}"

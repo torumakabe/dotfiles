@@ -12,19 +12,19 @@ ZSH_COMPLETIONS_TAG="0.36.0"
 
 if [ ! -d "${OH_MY_ZSH_DIR}" ]; then
   echo "Installing Oh My Zsh..."
-  git clone \
-    -c core.eol=lf \
-    -c core.autocrlf=false \
-    -c fsck.zeroPaddedFilemode=ignore \
-    -c fetch.fsck.zeroPaddedFilemode=ignore \
-    -c receive.fsck.zeroPaddedFilemode=ignore \
-    "${OH_MY_ZSH_REPO}" "${OH_MY_ZSH_DIR}"
-  git -C "${OH_MY_ZSH_DIR}" checkout --detach "${OH_MY_ZSH_COMMIT}"
+  git init "${OH_MY_ZSH_DIR}"
+  git -C "${OH_MY_ZSH_DIR}" config core.eol lf
+  git -C "${OH_MY_ZSH_DIR}" config core.autocrlf false
+  git -C "${OH_MY_ZSH_DIR}" config fsck.zeroPaddedFilemode ignore
+  git -C "${OH_MY_ZSH_DIR}" config fetch.fsck.zeroPaddedFilemode ignore
+  git -C "${OH_MY_ZSH_DIR}" config receive.fsck.zeroPaddedFilemode ignore
+  git -C "${OH_MY_ZSH_DIR}" remote add origin "${OH_MY_ZSH_REPO}"
+  git -C "${OH_MY_ZSH_DIR}" fetch --depth=1 origin "${OH_MY_ZSH_COMMIT}"
+  git -C "${OH_MY_ZSH_DIR}" checkout --detach FETCH_HEAD
   if [ "$(git -C "${OH_MY_ZSH_DIR}" rev-parse HEAD)" != "${OH_MY_ZSH_COMMIT}" ]; then
     echo "error: failed to pin Oh My Zsh to ${OH_MY_ZSH_COMMIT}" >&2
     exit 1
   fi
-  cd "${OH_MY_ZSH_DIR}" && git repack -a -d -f --depth=1 --window=1
 fi
 
 # zsh-completions plugin
