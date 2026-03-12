@@ -82,7 +82,7 @@ fi
 # 最終チェック
 if ! missing_tools="$(mise ls --missing 2>/dev/null)"; then
   echo "Warning: failed to inspect final mise installation status. Run 'mise ls --missing' manually." >&2
-elif echo "$missing_tools" | grep -q '(missing)'; then
+elif echo "$missing_tools" | grep -F -q "$missing_marker"; then
   echo "" >&2
   echo "========================================" >&2
   echo "WARNING: mise install が一部失敗しました" >&2
