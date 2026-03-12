@@ -18,6 +18,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 COMMAND_STRIP_CHARS = "\"'`()[]{};,"
+COMMAND_TOKEN_RE = re.compile(r"""(?:[^\s"']+|"[^"]*"|'[^']*')+""")
 
 
 def deny(reason: str) -> None:
@@ -147,9 +148,9 @@ def check_blocked_path(target: str, patterns: list[str]) -> str | None:
 
 
 def extract_command_candidates(command: str) -> list[str]:
-    """Extract path-like command tokens without relying on shell-specific parsing."""
+    """Extract path-like command tokens while preserving quoted substrings."""
     candidates: list[str] = []
-    for token in command.split():
+    for token in COMMAND_TOKEN_RE.findall(command):
         cleaned = token.strip(COMMAND_STRIP_CHARS)
         if not cleaned:
             continue

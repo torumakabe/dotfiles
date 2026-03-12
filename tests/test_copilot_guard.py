@@ -73,6 +73,13 @@ class CopilotGuardCommandMatchingTests(unittest.TestCase):
         )
         self.assertEqual(hit, "**/accessTokens.json")
 
+    def test_command_matches_quoted_windows_path_with_spaces(self) -> None:
+        hit = copilot_guard.check_blocked_command(
+            'type --file="C:\\Users\\John Doe\\.azure\\accessTokens.json"',
+            ["**/accessTokens.json"],
+        )
+        self.assertEqual(hit, "**/accessTokens.json")
+
 
 if __name__ == "__main__":
     unittest.main()
