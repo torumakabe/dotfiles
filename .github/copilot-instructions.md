@@ -37,7 +37,9 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 
 - `config.toml` で `locked = true` を設定済み。`mise install` は lockfile（`mise.lock`）の URL から直接ダウンロードし、GitHub API を呼ばない
 - `mise upgrade` は `locked` 設定を無視して API 経由で最新バージョンを取得する
-- `mise upgrade` や `mise lock` 実行時はトークンを一時的に渡す: `GITHUB_TOKEN=$(gh auth token) mise upgrade`
+- `mise upgrade` や `mise lock` 実行時はトークンを一時的に渡す:
+  - bash: `GITHUB_TOKEN=$(gh auth token) mise upgrade`
+  - PowerShell: `$env:GITHUB_TOKEN = (gh auth token); mise upgrade; $env:GITHUB_TOKEN = $null`
 - `GITHUB_TOKEN` を `.zshrc` 等の環境変数に常駐させないこと（エージェントへの機密情報露出を防ぐため）
 
 ### mise のプラットフォーム制約

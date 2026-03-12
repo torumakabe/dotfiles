@@ -154,10 +154,16 @@ chezmoi add ~/.some-config
 日常的なツールの更新は `mise upgrade` で行う。`mise upgrade` は `locked` 設定を無視して GitHub API で最新バージョンを取得し、lockfile も自動更新する。API 呼び出しにはトークンが必要だが、コマンド実行時に一時的に渡せばよい。
 
 ```bash
-# 全ツールを最新バージョンに更新
-# トークンはこのコマンドの実行中のみ有効（シェル環境には残らない）
+# bash / zsh（トークンはこのコマンドの実行中のみ有効）
 GITHUB_TOKEN=$(gh auth token) mise upgrade
+```
 
+```powershell
+# PowerShell
+$env:GITHUB_TOKEN = (gh auth token); mise upgrade; $env:GITHUB_TOKEN = $null
+```
+
+```bash
 # lockfile を chezmoi に反映してコミット・プッシュ
 chezmoi re-add ~/.config/mise/mise.lock
 cd $(chezmoi source-path)/..
@@ -184,6 +190,8 @@ chezmoi re-add ~/.config/mise/config.toml
 chezmoi re-add ~/.config/mise/mise.lock
 ```
 
+PowerShell の場合はそれぞれ `$env:GITHUB_TOKEN = (gh auth token); <command>; $env:GITHUB_TOKEN = $null` で置き換える。
+
 ### mise lockfile と locked 設定
 
 `mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `locked = true` を設定しており、`mise install` は lockfile の URL から直接ダウンロードする。GitHub API を呼ばないため、レート制限もトークンも不要。
@@ -199,7 +207,7 @@ chezmoi re-add ~/.config/mise/mise.lock
 **注意事項:**
 
 - `locked = true` のため、lockfile にないツールの `mise install` はエラーになる。ツール追加後は必ず lockfile を再生成してからコミットすること
-- `GITHUB_TOKEN` を `.zshrc` 等に常駐させないこと。`GITHUB_TOKEN=$(gh auth token) <command>` でコマンド単位で渡す
+- `GITHUB_TOKEN` を `.zshrc` や `$PROFILE` に常駐させないこと。コマンド単位で一時的に渡す
 
 ### run_once_ スクリプトの再実行
 
