@@ -26,7 +26,8 @@ shellcheck = "latest"
 jq = "latest"
 rust = "latest"
 "pipx:azure-cli" = { version = "latest", uvx_args = "--prerelease=allow" }
-"aqua:Azure/azure-dev" = "latest"
+# aqua レジストリが linux/arm64 未対応のため github バックエンドを使用
+"github:Azure/azure-dev" = "latest"
 "github:microsoft/dev-proxy" = "latest"
 "github:github/copilot-cli" = "latest"
 {{ if ne .chezmoi.os "darwin" -}}
@@ -42,3 +43,4 @@ cargo-make = "latest"
 [settings]
 experimental = true
 locked = true
+fetch_remote_versions_timeout = "60s"
