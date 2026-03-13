@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Global pre-commit hook: gitleaks secret detection + local hook delegation
+#
+# Deployed by chezmoi to ~/.config/git/hooks/pre-commit
+# Activated via core.hooksPath in ~/.gitconfig
+
+# --- gitleaks secret scan ---
+
+find_gitleaks() {
+  if command -v gitleaks >/dev/null 2>&1; then
+    command -v gitleaks
+    return 0
+  fi
+
+  # Try mise shim locations when not in PATH (git hooks don't source shell rc)
+  local shim_dirs=(
+    "${HOME}/.local/share/mise/shims"
+  )
+  # Windows (Git Bash): LOCALAPPDATA is set by the OS
+  if [ -n "${LOCALAPPDATA:-}" ]; then
+    shim_dirs+=("$(cygpath -u "${LOCALAPPDATA}" 2>/dev/null || echo "${LOCALAPPDATA}")/mise/shims")
+  fi
+
+  for dir in "${shim_dirs[@]}"; do
+    if [ -x "${dir}/gitleaks" ]; then
+      echo "${dir}/gitleaks"
+      return 0
+    fi
+    # Windows shim may be .exe
+    if [ -x "${dir}/gitleaks.exe" ]; then
+      echo "${dir}/gitleaks.exe"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+GITLEAKS=$(find_gitleaks) || {
+  echo "⚠️  gitleaks not found — skipping secret scan."
+  echo "   Install with: mise install gitleaks"
+  # fail-open: allow commit when gitleaks is not installed
+  GITLEAKS=""
+}
+
+if [ -n "${GITLEAKS}" ]; then
+  "${GITLEAKS}" git --pre-commit --staged --redact --verbose --no-banner
+fi
+
+# --- Delegate to repository-local pre-commit hook ---
+# core.hooksPath overrides .git/hooks/, so we explicitly run the local hook
+# if it exists to preserve project-specific hooks.
+
+LOCAL_HOOK="$(git rev-parse --git-dir 2>/dev/null)/hooks/pre-commit"
+if [ -x "${LOCAL_HOOK}" ]; then
+  exec "${LOCAL_HOOK}" "$@"
+fi
