@@ -168,7 +168,7 @@ $env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
 - `GITHUB_TOKEN` を `.zshrc` や `$PROFILE` に常駐させない
 - ツール追加時は `mise lock --platform` で全プラットフォーム分の lockfile を再生成してからコミットする
 
-## git pre-commit ハーネスの追加・更新
+## git pre-commit フックの追加・更新
 
 このリポジトリでは、グローバル `git pre-commit` フックを dotfiles の一部として配布している。フックは `gitleaks` による secret scan を実行した後、必要であれば各リポジトリ固有の `.git/hooks/pre-commit` へ処理を委譲する。
 

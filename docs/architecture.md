@@ -56,7 +56,7 @@ reference/windows/             ← デプロイしない参照ファイル
 - **gitleaks + git pre-commit** により、コミット前に secret scan を走らせつつ、各リポジトリ固有のフックも併用できる
 - **Codespaces / Dev Container** では、非対話での作成や認証制約に合わせたワークアラウンドとフォールバックを持つ
 
-## git pre-commit ハーネス
+## git pre-commit フック
 
 グローバル `pre-commit` フックは `home/dot_config/git/hooks/executable_pre-commit` から `~/.config/git/hooks/pre-commit` に配置され、`~/.gitconfig` の `core.hooksPath` で有効化される構成である。
 

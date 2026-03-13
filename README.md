@@ -2,14 +2,14 @@
 
 Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](https://mise.jdx.dev/).
 
-このリポジトリは、Linux / macOS / WSL / Windows / Codespaces / Dev Container で、同じ運用感と安全なデフォルトを維持するための dotfiles である。`chezmoi` で設定ファイルをテンプレート管理し、`mise` で開発ツールのバージョンをそろえ、OS ごとの差分は最小限の分岐に閉じ込めている。コーディングエージェント向けの共通化は、GitHub Copilot CLI を前提に custom instructions、hooks、skills を整備している。
+このリポジトリは、Linux / macOS / WSL / Windows / Codespaces / Dev Container で、同じ運用感と安全なデフォルトを維持するための dotfiles である。`chezmoi` で設定ファイルをテンプレート管理し、`mise` で開発ツールのバージョンをそろえ、OS ごとの差分は最小限の分岐に閉じ込めている。コーディングエージェント向けの共通化は、GitHub Copilot CLI を前提にカスタム指示、フック、スキルを整備している。
 
 ## 特徴と価値
 
 - **1つのソースで複数環境を管理**: `chezmoi` のテンプレートで、プラットフォームごとの差分を吸収しながら設定を一元管理している
 - **ツールチェーンを再現しやすい**: `mise` と lockfile で、開発ツールのバージョンと取得元をそろえやすい構成である
-- **GitHub Copilot CLI 向け設定を共通化**: custom instructions、hooks、skills を dotfiles として管理している
-- **安全なデフォルト**: `gitleaks` を組み込んだ `git pre-commit` フックと Copilot hooks により、コミット前とエージェント実行時のガードをそろえている
+- **GitHub Copilot CLI 向け設定を共通化**: カスタム指示、フック、スキルを dotfiles として管理している
+- **安全なデフォルト**: `gitleaks` を組み込んだ `git pre-commit` フックと Copilot CLI のフックにより、コミット前とエージェント実行時のガードをそろえている
 - **制約の多いコンテナ環境でも破綻しにくい**: 非対話での作成やホスト側ツールにアクセスできないケースを考慮し、必要な分岐やフォールバックを組み込んでいる
 
 ## 対応環境
@@ -21,6 +21,18 @@ Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](h
 | GitHub Codespaces | [クイックスタート → GitHub Codespaces](#github-codespaces) | `corpUser` 未設定 |
 | Dev Container (ローカル) | [クイックスタート → Dev Container](#dev-container-ローカル) | 初回 `mise install --yes` を手動実行 |
 | Windows | [クイックスタート → Windows](#windows) | — |
+
+### `mise` で lock しているプラットフォーム
+
+`mise` の lockfile は、現在次のプラットフォームに絞って更新している。
+
+- `linux-x64`
+- `linux-arm64`
+- `macos-arm64`
+- `windows-x64`
+- `windows-arm64`
+
+それ以外のプラットフォームでも動作する可能性があるが、lockfile の更新や検証はこの一覧を前提にしている。
 
 ## クイックスタート
 
@@ -150,8 +162,8 @@ mise-upgrade
 
 ## 詳細ドキュメント
 
-- [`docs/operations.md`](docs/operations.md): 運用詳細、`mise` の追加・削除、lockfile 再構築、`git pre-commit` ハーネスの追加・更新、`run_once_*` の扱い
-- [`docs/architecture.md`](docs/architecture.md): ディレクトリ構造、主要な設計判断、`git pre-commit` ハーネスの構造、プラットフォーム検出、Git `includeIf` 設計
-- [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の managed files、plugins、skills、hooks のテスト方法
+- [`docs/operations.md`](docs/operations.md): 運用詳細、`mise` の追加・削除、lockfile 再構築、`git pre-commit` フックの追加・更新、`run_once_*` の扱い
+- [`docs/architecture.md`](docs/architecture.md): ディレクトリ構造、主要な設計判断、`git pre-commit` フックの構造、プラットフォーム検出、Git `includeIf` 設計
+- [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の管理対象ファイル、プラグイン、スキル、フックのテスト方法
 - [`docs/troubleshooting.md`](docs/troubleshooting.md): よくあるエラーと復旧手順
 - [`MIGRATION.md`](MIGRATION.md): v1.x → v2.0.0 移行ガイド
