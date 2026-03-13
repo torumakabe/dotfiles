@@ -151,48 +151,54 @@ chezmoi cat ~/.gitconfig
 chezmoi add ~/.some-config
 ```
 
-### mise 管理ツールの更新
+### mise 管理ツールの更新（日常操作）
 
-日常的なツールの更新は `mise upgrade` で行う。`mise upgrade` は `locked` 設定を無視して GitHub API で最新バージョンを取得し、lockfile も自動更新する。API 呼び出しにはトークンが必要だが、コマンド実行時に一時的に渡せばよい。
+定期的にツールを最新版にする。`mise upgrade` が GitHub API でバージョンを確認してインストールし、`mise lock --platform` が他プラットフォーム分の lockfile エントリを更新する。`mise lock` は引数なしだと既定の 8 プラットフォーム（musl 含む）を対象にするため、**常に `--platform` を指定する**。
 
 ```bash
-# bash / zsh（トークンはこのコマンドの実行中のみ有効）
+# bash / zsh
 GITHUB_TOKEN=$(gh auth token) mise upgrade
+GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
+chezmoi re-add ~/.config/mise/mise.lock
+cd $(chezmoi source-path)/.. && git add -A && git commit -m "chore: upgrade mise tools" && git push
 ```
 
 ```powershell
 # PowerShell
-$env:GITHUB_TOKEN = (gh auth token); mise upgrade; $env:GITHUB_TOKEN = $null
+$env:GITHUB_TOKEN = (gh auth token); mise upgrade; mise lock --platform "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64"; $env:GITHUB_TOKEN = $null
+chezmoi re-add ~\.config\mise\mise.lock
+cd (Join-Path (chezmoi source-path) ".."); git add -A; git commit -m "chore: upgrade mise tools"; git push
 ```
 
-```bash
-# lockfile を chezmoi に反映してコミット・プッシュ
-chezmoi re-add ~/.config/mise/mise.lock
-cd $(chezmoi source-path)/..
-git add -A && git commit -m "chore: upgrade mise tools"
-git push
-```
+他の端末では `chezmoi update` で lockfile が同期され、`mise install` は lockfile の URL から直接ダウンロードする（API 不要、トークン不要）。
 
-> **補足**: 他の端末では `chezmoi update` で lockfile が同期され、`mise install` は lockfile の URL から直接ダウンロードする（API 不要、トークン不要）。
+### mise のツール追加・削除（非日常操作）
 
-### ツールの追加・削除
-
-新しいツールの追加や既存ツールの削除は config.toml を編集する。
+config.toml にツールを追加または削除するときに行う。
 
 ```bash
-# config.toml を編集
 chezmoi edit ~/.config/mise/config.toml
-
-# インストール（新しいツールは lockfile にないので一時的にトークンが必要）
 GITHUB_TOKEN=$(gh auth token) mise install
-
-# 全プラットフォーム分の lockfile を生成して反映
-GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
+GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
 chezmoi re-add ~/.config/mise/config.toml
 chezmoi re-add ~/.config/mise/mise.lock
 ```
 
-PowerShell の場合はそれぞれ `$env:GITHUB_TOKEN = (gh auth token); <command>; $env:GITHUB_TOKEN = $null` で置き換える。
+PowerShell の場合は `$env:GITHUB_TOKEN = (gh auth token); <command>; $env:GITHUB_TOKEN = $null` で囲む。`--platform` の値は必ずクォートで囲むこと（例: `--platform "linux-x64,..."`）。PowerShell はカンマを配列演算子として解釈する場合がある。
+
+### mise lockfile の再構築（非日常操作）
+
+以下の状況では lockfile を削除してから `--platform` 付きで再生成する。
+
+- **新しいプラットフォームの端末を使い始める** — lockfile に存在しないプラットフォームを追加する必要がある
+- **不要なプラットフォームのエントリを除去したい** — `mise lock` は既存エントリを削除しないため、作り直しが必要
+- **lockfile が壊れた** — mise のバグ等で不整合が生じた場合
+
+```bash
+rm ~/.config/mise/mise.lock
+GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
+chezmoi re-add ~/.config/mise/mise.lock
+```
 
 ### Bootstrap / shell pin の更新
 
@@ -216,11 +222,11 @@ sed '/^{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
 sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
 ```
 
-### mise lockfile と locked 設定
+### mise lockfile 設定
 
-`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `locked = true` を設定しており、`mise install` は lockfile の URL から直接ダウンロードする。GitHub API を呼ばないため、レート制限もトークンも不要。
+`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `lockfile = true` を設定しており、`mise install` / `mise upgrade` ともに lockfile を自動更新する。
 
-`mise upgrade` は `locked` 設定を無視する（mise のソースコードでハードコードされている）ため、常に API 経由で最新バージョンを取得できる。
+他端末では `chezmoi update` で lockfile が同期され、lockfile の URL から直接ダウンロードする。GitHub API を呼ばないため、レート制限もトークンも不要。
 
 | 操作 | GitHub API | トークン |
 |------|-----------|---------|
@@ -230,7 +236,7 @@ sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
 
 **注意事項:**
 
-- `locked = true` のため、lockfile にないツールの `mise install` はエラーになる。ツール追加後は必ず lockfile を再生成してからコミットすること
+- ツール追加時は `mise lock --platform` で全プラットフォーム分の lockfile を再生成してからコミットすること
 - `GITHUB_TOKEN` を `.zshrc` や `$PROFILE` に常駐させないこと。コマンド単位で一時的に渡す
 
 ### run_once_ スクリプトの再実行
@@ -386,7 +392,7 @@ reference/windows/             ← デプロイしない参照ファイル
 - **Copilot Guard** フック: bash + PowerShell の二重実装を Python 単一スクリプトに統一
 - **uv Enforcer** フック: Copilot エージェントの python/pip 直接実行をブロックし uv 経由を強制
 - **SAML SSO ワークアラウンド**: Codespaces の `mise install` で SAML SSO 要求による 403 を回避するため、失敗したツールを認証なしで自動リトライ
-- **mise lockfile + locked 設定**: `locked = true` により `mise install` は lockfile の URL から直接ダウンロード（API 不要、トークン不要）。`mise upgrade` は locked を無視して API 経由で更新。トークンはコマンド実行時に一時的に渡し、環境変数に常駐させない
+- **mise lockfile 設定**: `lockfile = true` により lockfile を自動管理。他端末の `mise install` は lockfile の URL から直接ダウンロード（API 不要、トークン不要）。`mise upgrade` は API 経由で更新し lockfile も同時更新。トークンはコマンド実行時に一時的に渡し、環境変数に常駐させない
 - **Windows**: chezmoi で設定、DSC で GUI アプリ、mise でツール（段階的導入）
 
 ## プラットフォーム検出
@@ -432,14 +438,15 @@ chezmoi init torumakabe
 
 ### `mise install` が部分失敗する
 
-`locked = true` 設定により lockfile の URL からインストールするため、通常はレート制限に抵触しない。lockfile にないツールがある場合はエラーになる。
+`lockfile = true` 設定により lockfile の URL からインストールするため、通常はレート制限に抵触しない。lockfile にないツールがある場合は lockfile を再生成する（手順は「mise lockfile の再構築」を参照）。
 
 ```bash
 # 未インストールのツールを確認
 mise ls --missing
 
-# lockfile を再生成してリトライ
-GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64
+# lockfile を再生成してリトライ（詳細は「mise lockfile の再構築」セクション参照）
+rm ~/.config/mise/mise.lock
+GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
 mise install
 ```
 

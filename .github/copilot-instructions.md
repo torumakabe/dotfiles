@@ -29,17 +29,20 @@ This repository manages cross-platform dotfiles using **chezmoi** and **mise**.
 
 ## Tool Management
 
-- **mise** manages tool versions (`.mise.toml`)
+- **mise** manages tool versions (`config.toml`)
 - **uv** manages Python execution (installed via mise)
 - No direct `python3`, `pip`, or `brew install python` — uv handles all Python needs
 
-### mise lockfile と locked 設定
+### mise lockfile 設定
 
-- `config.toml` で `locked = true` を設定済み。`mise install` は lockfile（`mise.lock`）の URL から直接ダウンロードし、GitHub API を呼ばない
-- `mise upgrade` は `locked` 設定を無視して API 経由で最新バージョンを取得する
+- `config.toml` で `lockfile = true` を設定。`mise install` / `mise upgrade` ともに lockfile（`mise.lock`）を自動更新する
+- 他端末では `chezmoi update` で lockfile が同期され、lockfile の URL から直接ダウンロードする（API 不要、トークン不要）
 - `mise upgrade` や `mise lock` 実行時はトークンを一時的に渡す:
   - bash: `GITHUB_TOKEN=$(gh auth token) mise upgrade`
   - PowerShell: `$env:GITHUB_TOKEN = (gh auth token); mise upgrade; $env:GITHUB_TOKEN = $null`
+- `mise lock` は**常に `--platform` を指定する**。引数なしだと既定の 8 プラットフォーム（musl 含む）が対象になる:
+  - bash: `mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64`
+  - PowerShell: `mise lock --platform "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64"`（カンマが配列演算子として解釈されるのを防ぐ）
 - `GITHUB_TOKEN` を `.zshrc` 等の環境変数に常駐させないこと（エージェントへの機密情報露出を防ぐため）
 
 ### mise のプラットフォーム制約
