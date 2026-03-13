@@ -29,6 +29,8 @@ cd ~/dotfiles
 - **Windows username** (WSL のみ): 1Password の WSL 連携パスに使用
 - **Corp username** (任意): 所属企業での Git ユーザー名。gitconfig に使用
 
+`install.sh` の実行中に `mise install` がレート制限で一部失敗した場合は、[mise と GitHub API](#mise-と-github-api) を参照してリトライする。
+
 ### GitHub Codespaces
 
 自動適用される。GitHub の設定で dotfiles リポジトリとして登録するだけでよい。
@@ -49,13 +51,14 @@ cd ~/dotfiles
 2. Dev Container を作成すると `install.sh` → `chezmoi init --apply` が自動実行される
 3. コンテナ起動後にターミナルから手動で実行:
    ```bash
-   mise install --yes
+   gh auth login
+   GITHUB_TOKEN=$(gh auth token) mise install --yes
    ```
 
 **制限事項:**
 
-- `mise install` はコンテナ作成時にスキップされる（GitHub API トークンが利用できず、レート制限に抵触する可能性が高いため）。コンテナ起動後に手動実行が必要
-- Azure CLI 等の追加ツール（`run_once_after_30-install-tools.sh`）もスキップされる。ベースイメージまたは Dev Container Feature で導入される想定
+- `mise install` はコンテナ作成時にスキップされる（[理由](#mise-と-github-api)）。コンテナ起動後にステップ 3 の手順で手動実行する
+- Docker, Go tools, draw.io 等の非 mise 管理ツール（`run_once_after_30-install-tools.sh`）はスキップされる。必要な場合はベースイメージまたは Dev Container Feature で導入する
 - 非対話環境のため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる
 
 ### Windows
@@ -73,6 +76,11 @@ cd ~/dotfiles
    }
    ```
    chezmoi が `~/PowerShell_profile.ps1` を配置する。`$PROFILE` は OneDrive 配下になることもあり chezmoi の管理外のため、ローダー（1行の dot-source）で橋渡しする。
+5. ツールインストール（[詳細](#mise-と-github-api)）:
+   ```powershell
+   gh auth login
+   $env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
+   ```
 
 ## 日常操作
 
@@ -93,11 +101,15 @@ cd ~/dotfiles
 
 | 環境 | 管理ツール | 対象 |
 |------|-----------|------|
-| Linux / WSL | `apt` + `mise` | apt: OS パッケージ、mise: 開発ツール |
-| macOS | `brew` + `mise` | brew: OS パッケージ・GUI アプリ、mise: 開発ツール |
-| Codespaces / Dev Container | ベースイメージ / Feature + `mise` | ベースイメージ・Feature: 主要ツール同梱、mise: 開発ツール |
-| Windows | `winget` (DSC) + `mise` | winget: GUI アプリ・OS ツール、mise: 開発ツール |
+| Linux / WSL | `apt` + `mise` | apt: OS パッケージ + Azure CLI、mise: 開発ツール |
+| macOS | `brew` + `mise` | brew: OS パッケージ・GUI アプリ + Azure CLI、mise: 開発ツール |
+| Codespaces / Dev Container | ベースイメージ / Feature + `mise` | Feature: Azure CLI 等、mise: 開発ツール |
+| Windows | `winget` (DSC) + `mise` | winget: GUI/CLI アプリ + Azure CLI、mise: 開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行（システム Python 不要） |
+
+> **Azure CLI**: mise ではなく各プラットフォームの公式パッケージマネージャーで管理する。Codespaces / Dev Container では devcontainer Feature ([`ghcr.io/devcontainers/features/azure-cli`](https://github.com/devcontainers/features/tree/main/src/azure-cli)) で導入する。
+
+このリポジトリでは、mise の日常的なツール更新を効率化するシェル関数 `mise-upgrade` を `.zshrc` / PowerShell `$PROFILE` に定義している。詳細は [mise 管理ツールの更新](#mise-管理ツールの更新日常操作) を参照。
 
 ### chezmoi コマンドリファレンス
 
@@ -153,7 +165,31 @@ chezmoi add ~/.some-config
 
 ### mise 管理ツールの更新（日常操作）
 
-定期的にツールを最新版にする。`mise upgrade` が GitHub API でバージョンを確認してインストールし、`mise lock --platform` が他プラットフォーム分の lockfile エントリを更新する。`mise lock` は引数なしだと既定の 8 プラットフォーム（musl 含む）を対象にするため、**常に `--platform` を指定する**。
+定期的にツールを最新版にする。シェル関数 `mise-upgrade`（`.zshrc` / `$PROFILE` で定義済み）が以下を一括実行する:
+
+> **初期構築時の注意**: `chezmoi apply` 後は、シェルの設定ファイルがまだ現セッションに読み込まれていない。`mise-upgrade` を使う前にターミナルを再起動するか、手動でリロードすること:
+> - bash / zsh: `source ~/.zshrc`
+> - PowerShell: `. $PROFILE`
+
+1. `gh auth token` で一時トークンを取得
+2. `mise upgrade` で全ツールを最新化
+3. `mise lock --platform` で全プラットフォームの lockfile を更新
+4. `chezmoi re-add` で lockfile をソースに反映
+5. git commit + push
+
+```bash
+# bash / zsh / PowerShell 共通
+mise-upgrade
+```
+
+各ステップでエラーが発生した場合、原因と対処法を表示して即停止する。変更がない場合（全ツール最新）は正常終了する。
+
+他の端末では `chezmoi update` で lockfile が同期され、`mise install` は lockfile の URL から直接ダウンロードする（API 不要、トークン不要）。
+
+<details>
+<summary>手動で実行する場合</summary>
+
+`mise lock` は引数なしだと既定の 8 プラットフォーム（musl 含む）を対象にするため、**常に `--platform` を指定する**。
 
 ```bash
 # bash / zsh
@@ -170,7 +206,7 @@ chezmoi re-add ~\.config\mise\mise.lock
 cd (Join-Path (chezmoi source-path) ".."); git add -A; git commit -m "chore: upgrade mise tools"; git push
 ```
 
-他の端末では `chezmoi update` で lockfile が同期され、`mise install` は lockfile の URL から直接ダウンロードする（API 不要、トークン不要）。
+</details>
 
 ### mise のツール追加・削除（非日常操作）
 
@@ -222,22 +258,42 @@ sed '/^{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
 sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
 ```
 
-### mise lockfile 設定
+### mise と GitHub API
 
-`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `lockfile = true` を設定しており、`mise install` / `mise upgrade` ともに lockfile を自動更新する。
+mise はツールのダウンロードに GitHub API を使用する。未認証の場合、レート制限（60 req/hr）に抵触する可能性がある。
 
-他端末では `chezmoi update` で lockfile が同期され、lockfile の URL から直接ダウンロードする。GitHub API を呼ばないため、レート制限もトークンも不要。
+**トークンの取得:**
+
+`gh`（GitHub CLI）は mise より先にシステムパッケージ（apt / brew / winget）として導入される。認証後に `gh auth token` で `GITHUB_TOKEN` を取得できる:
+
+```bash
+# bash / zsh
+gh auth login                         # 初回のみ
+GITHUB_TOKEN=$(gh auth token) mise install
+```
+
+```powershell
+# PowerShell
+gh auth login                         # 初回のみ
+$env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
+```
+
+`run_once_after_20` は gh が認証済みなら `GITHUB_TOKEN` を自動設定する。初回セットアップで gh が未認証の場合は、セットアップ完了後に上記コマンドでリトライする。
+
+**lockfile による API 呼び出しの削減:**
+
+`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `lockfile = true` を設定しており、`mise install` / `mise upgrade` ともに lockfile を自動更新する。他端末では `chezmoi update` で lockfile が同期される。lockfile があっても一部の API 呼び出しは発生するため、トークンの設定を推奨する。
 
 | 操作 | GitHub API | トークン |
 |------|-----------|---------|
-| `mise install`（他端末の同期） | 呼ばない（lockfile） | 不要 |
-| `mise upgrade`（ツール更新） | 呼ぶ | 一時的に渡す |
-| `mise lock`（ツール追加時） | 呼ぶ | 一時的に渡す |
+| `mise install`（lockfile あり） | 最小限 | 推奨 |
+| `mise upgrade`（ツール更新） | 呼ぶ | 必要 |
+| `mise lock`（lockfile 再生成） | 呼ぶ | 必要 |
 
 **注意事項:**
 
-- ツール追加時は `mise lock --platform` で全プラットフォーム分の lockfile を再生成してからコミットすること
 - `GITHUB_TOKEN` を `.zshrc` や `$PROFILE` に常駐させないこと。コマンド単位で一時的に渡す
+- ツール追加時は `mise lock --platform` で全プラットフォーム分の lockfile を再生成してからコミットすること
 
 ### run_once_ スクリプトの再実行
 
@@ -392,7 +448,7 @@ reference/windows/             ← デプロイしない参照ファイル
 - **Copilot Guard** フック: bash + PowerShell の二重実装を Python 単一スクリプトに統一
 - **uv Enforcer** フック: Copilot エージェントの python/pip 直接実行をブロックし uv 経由を強制
 - **SAML SSO ワークアラウンド**: Codespaces の `mise install` で SAML SSO 要求による 403 を回避するため、失敗したツールを認証なしで自動リトライ
-- **mise lockfile 設定**: `lockfile = true` により lockfile を自動管理。他端末の `mise install` は lockfile の URL から直接ダウンロード（API 不要、トークン不要）。`mise upgrade` は API 経由で更新し lockfile も同時更新。トークンはコマンド実行時に一時的に渡し、環境変数に常駐させない
+- **mise と GitHub API**: lockfile + `gh auth token` によるトークン管理（[詳細](#mise-と-github-api)）
 - **Windows**: chezmoi で設定、DSC で GUI アプリ、mise でツール（段階的導入）
 
 ## プラットフォーム検出
@@ -438,7 +494,9 @@ chezmoi init torumakabe
 
 ### `mise install` が部分失敗する
 
-`lockfile = true` 設定により lockfile の URL からインストールするため、通常はレート制限に抵触しない。lockfile にないツールがある場合は lockfile を再生成する（手順は「mise lockfile の再構築」を参照）。
+GitHub API のレート制限が原因の場合は、[mise と GitHub API](#mise-と-github-api) の手順でトークンを設定してリトライする。
+
+lockfile にないツールがある場合は lockfile を再生成する（手順は「mise lockfile の再構築」を参照）。
 
 ```bash
 # 未インストールのツールを確認
@@ -468,9 +526,5 @@ Codespaces 以外の環境では、パッケージインストールに sudo が
 
 ### Dev Container で mise ツールが入っていない
 
-コンテナ作成時に `mise install` は自動スキップされる（GitHub API トークン不在のため）。
-コンテナ起動後にターミナルから手動実行する:
-
-```bash
-mise install --yes
-```
+コンテナ作成時に `mise install` は自動スキップされる（[理由](#mise-と-github-api)）。
+[Dev Container のクイックスタート](#dev-container-ローカル) のステップ 3 を実行する。

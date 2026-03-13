@@ -26,10 +26,40 @@ sudo apt-get install -y -qq \
   xdg-utils \
   zsh
 
+{{ if not .codespaces -}}
+# GitHub CLI — mise install 前にトークン取得手段を確保する
+# Codespaces はベースイメージに gh 同梱 + GITHUB_TOKEN 自動設定のため対象外
+# mise install 後は mise 版 gh が shim で shadow する
+if ! command -v gh >/dev/null 2>&1; then
+  echo "Installing GitHub CLI via apt..."
+  sudo mkdir -p -m 755 /etc/apt/keyrings
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | \
+    sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
+  sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | \
+    sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+  if ! sudo apt-get update -qq; then
+    echo "Warning: apt-get update had errors, continuing..." >&2
+  fi
+  sudo apt-get install -y -qq gh
+fi
+{{ end -}}
+
+{{ if and (not .codespaces) (not .devcontainer) -}}
+# Azure CLI — 公式インストールスクリプト (https://aka.ms/InstallAzureCLIDeb)
+# Codespaces / Dev Container では devcontainer Feature で導入するためスキップ
+if ! command -v az >/dev/null 2>&1; then
+  echo "Installing Azure CLI via official script..."
+  curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+fi
+{{ end -}}
+
 {{ else if eq .chezmoi.os "darwin" -}}
 echo "Installing system packages via brew..."
 brew update --quiet
 brew install \
+  azure-cli \
+  gh \
   watch \
   zsh-completions
 

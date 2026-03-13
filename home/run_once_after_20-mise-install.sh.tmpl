@@ -17,14 +17,23 @@ if ! command -v mise >/dev/null 2>&1; then
 fi
 
 {{ if and .devcontainer (not .codespaces) -}}
-# Dev container (非 Codespaces): コンテナ作成時は GitHub API トークンが
-# 利用できずレート制限に抵触するため、mise install はスキップする。
-# コンテナ作成後にターミナルから手動で実行:
-#   mise install --yes
+# Dev container (非 Codespaces): コンテナ作成時は gh が未認証のため
+# GITHUB_TOKEN を取得できず、レート制限に抵触する。mise install はスキップし、
+# コンテナ起動後にユーザーが gh auth login してから手動実行する。
 echo "Dev container detected — skipping mise install"
-echo "Run 'mise install --yes' manually after container creation"
+echo "Run the following after container creation:"
+echo "  gh auth login"
+echo "  GITHUB_TOKEN=\$(gh auth token) mise install --yes"
 exit 0
 {{ end -}}
+
+# gh が認証済みなら GITHUB_TOKEN を自動設定してレート制限を回避する
+if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then
+  if gh auth status >/dev/null 2>&1; then
+    GITHUB_TOKEN="$(gh auth token 2>/dev/null)" && export GITHUB_TOKEN
+    echo "Using GitHub token from gh CLI"
+  fi
+fi
 
 max_attempts=3
 attempt=1

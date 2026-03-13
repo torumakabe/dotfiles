@@ -198,3 +198,70 @@ function ghcd() {
 az() {
   PYTHONWARNINGS="ignore::SyntaxWarning" command az "$@"
 }
+
+# mise 管理ツールの一括更新（日常操作）
+# upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
+mise-upgrade() {
+  # 前提条件チェック
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "❌ gh CLI が見つかりません。https://cli.github.com/ からインストールしてください" >&2
+    return 1
+  fi
+  if ! command -v mise >/dev/null 2>&1; then
+    echo "❌ mise が見つかりません。https://mise.jdx.dev/ からインストールしてください" >&2
+    return 1
+  fi
+  if ! command -v chezmoi >/dev/null 2>&1; then
+    echo "❌ chezmoi が見つかりません。https://www.chezmoi.io/ からインストールしてください" >&2
+    return 1
+  fi
+
+  local token
+  token=$(gh auth token 2>/dev/null) || {
+    echo "❌ GitHub 認証が必要です。gh auth login を実行してください" >&2
+    return 1
+  }
+
+  echo "==> mise upgrade: ツールを最新版に更新..."
+  GITHUB_TOKEN="$token" mise upgrade || {
+    echo "❌ mise upgrade に失敗しました" >&2
+    return 1
+  }
+
+  echo "==> mise lock: 全プラットフォームの lockfile を更新..."
+  GITHUB_TOKEN="$token" mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 || {
+    echo "❌ lockfile の更新に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください" >&2
+    return 1
+  }
+
+  echo "==> chezmoi re-add: lockfile をソースに反映..."
+  chezmoi re-add ~/.config/mise/mise.lock || {
+    echo "❌ chezmoi re-add に失敗しました。chezmoi source-path を確認してください" >&2
+    return 1
+  }
+
+  local source_root
+  source_root="$(chezmoi source-path)/.."
+  cd "$source_root" || {
+    echo "❌ chezmoi ソースディレクトリに移動できません: $source_root" >&2
+    return 1
+  }
+
+  git add -A
+  if git diff --cached --quiet; then
+    echo "✅ 更新するツールはありませんでした"
+    return 0
+  fi
+
+  git commit -m "chore: upgrade mise tools" || {
+    echo "❌ git commit に失敗しました" >&2
+    return 1
+  }
+
+  git push || {
+    echo "❌ git push に失敗しました。コミットは完了しています。手動で push してください" >&2
+    return 1
+  }
+
+  echo "✅ mise ツールの更新が完了しました"
+}

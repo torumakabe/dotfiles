@@ -40,9 +40,80 @@ function ghcd {
     if ($dir) { Set-Location $dir }
 }
 
+# mise 管理ツールの一括更新（日常操作）
+# upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
+function Invoke-MiseUpgrade {
+    $prevErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Stop'
+    try {
+        # 前提条件チェック
+        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            throw "gh CLI が見つかりません。https://cli.github.com/ からインストールしてください"
+        }
+        if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
+            throw "mise が見つかりません。https://mise.jdx.dev/ からインストールしてください"
+        }
+        if (-not (Get-Command chezmoi -ErrorAction SilentlyContinue)) {
+            throw "chezmoi が見つかりません。https://www.chezmoi.io/ からインストールしてください"
+        }
+
+        $token = gh auth token 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $token) {
+            throw "GitHub 認証が必要です。gh auth login を実行してください"
+        }
+        $env:GITHUB_TOKEN = $token
+
+        Write-Host "==> mise upgrade: ツールを最新版に更新..."
+        mise upgrade
+        if ($LASTEXITCODE -ne 0) { throw "mise upgrade に失敗しました" }
+
+        Write-Host "==> mise lock: 全プラットフォームの lockfile を更新..."
+        mise lock --platform "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64"
+        if ($LASTEXITCODE -ne 0) { throw "lockfile の更新に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください" }
+
+        Write-Host "==> chezmoi re-add: lockfile をソースに反映..."
+        chezmoi re-add ~\.config\mise\mise.lock
+        if ($LASTEXITCODE -ne 0) { throw "chezmoi re-add に失敗しました。chezmoi source-path を確認してください" }
+
+        $sourceRoot = Join-Path (chezmoi source-path) ".."
+        Push-Location $sourceRoot
+
+        git add -A
+        $diff = git diff --cached --quiet 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ 更新するツールはありませんでした"
+            Pop-Location
+            return
+        }
+
+        git commit -m "chore: upgrade mise tools"
+        if ($LASTEXITCODE -ne 0) {
+            Pop-Location
+            throw "git commit に失敗しました"
+        }
+
+        git push
+        if ($LASTEXITCODE -ne 0) {
+            Pop-Location
+            throw "git push に失敗しました。コミットは完了しています。手動で push してください"
+        }
+
+        Pop-Location
+        Write-Host "✅ mise ツールの更新が完了しました"
+    }
+    catch {
+        Write-Error "❌ $($_.Exception.Message)"
+    }
+    finally {
+        $env:GITHUB_TOKEN = $null
+        $ErrorActionPreference = $prevErrorAction
+    }
+}
+
 # === Aliases ===
 Set-Alias -Name e -Value Open-EditInNewConsole
 Set-Alias -Name k -Value kubectl
+Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 
 # === Completers and tool setup ===
 

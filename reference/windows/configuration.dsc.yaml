@@ -1,10 +1,10 @@
 # yaml-language-server: $schema=https://aka.ms/configuration-dsc-schema/0.2
 # Reference: https://github.com/microsoft/winget-cli#building-the-client
 #
-# Usage: winget configure -f configuration.dsc.yaml
+# Usage: winget configure -f configuration.dsc.yaml (管理者権限の PowerShell で実行)
 #
 # Note: CLI tool versions are managed by mise (~/.config/mise/config.toml).
-# DSC contains only: OS settings, GUI apps, mise-incompatible tools, and
+# DSC contains only: OS settings, GUI/CLI apps not managed by mise, and
 # bootstrap tooling (mise itself).
 properties:
   resources:
@@ -44,10 +44,24 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: "Install GitHub CLI"
+        allowPrerelease: false
+      settings:
+        id: GitHub.cli
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install mise"
         allowPrerelease: false
       settings:
         id: jdx.mise
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: "Install Azure CLI"
+        allowPrerelease: false
+      settings:
+        id: Microsoft.AzureCLI
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
