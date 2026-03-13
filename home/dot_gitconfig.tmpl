@@ -41,7 +41,11 @@
 # Need to add a public key separately
 # echo '993850+torumakabe@users.noreply.github.com ssh-ed25519 [pub-key]' > ~/.ssh/allowed_signers
 [commit]
+{{- if or .codespaces .devcontainer }}
+	gpgsign = false
+{{- else }}
 	gpgsign = true
+{{- end }}
 # gitdir matches the repository path prefix, so keep shared defaults here and load
 # platform-specific overrides from separate files without duplicating the base config.
 # Windows uses explicit drive letters because Git has no drive-agnostic gitdir pattern;

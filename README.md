@@ -38,9 +38,8 @@ cd ~/dotfiles
 
 **制限事項:**
 
-- 非対話環境のため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる（`.gitconfig-corp` は適用されない）
-
-### Dev Container (ローカル)
+- 非対話環境で作成されるため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる（`.gitconfig-corp` は適用されない）
+- コミット署名（`commit.gpgsign`）は自動で無効化される（1Password SSH エージェントが利用できないため）。Codespaces の [GPG verification](https://docs.github.com/en/codespaces/managing-your-codespaces/managing-gpg-verification-for-github-codespaces) を有効にすると GitHub 管理の鍵で署名できる
 
 任意のリポジトリの Dev Container で dotfiles を適用するケース。VS Code の設定で dotfiles リポジトリを指定すると、コンテナ作成時に `install.sh` が自動実行される。
 参考: [Personalizing with dotfile repositories](https://code.visualstudio.com/docs/devcontainers/containers#_personalizing-with-dotfile-repositories)
@@ -59,7 +58,8 @@ cd ~/dotfiles
 
 - `mise install` はコンテナ作成時にスキップされる（[理由](#mise-と-github-api)）。コンテナ起動後にステップ 3 の手順で手動実行する
 - Docker, Go tools, draw.io 等の非 mise 管理ツール（`run_once_after_30-install-tools.sh`）はスキップされる。必要な場合はベースイメージまたは Dev Container Feature で導入する
-- 非対話環境のため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる
+- 非対話環境で作成されるため `corpUser` / `windowsUser` のプロンプトはスキップされ、空文字になる
+- コミット署名（`commit.gpgsign`）は自動で無効化される（1Password SSH エージェントが利用できないため）
 
 ### Windows
 
@@ -445,6 +445,7 @@ reference/windows/             ← デプロイしない参照ファイル
 - **mise** が全プラットフォームでツールバージョンを管理 (`.config/mise/config.toml`)
 - **uv** が Python 実行を管理 — システム Python のインストールは不要
 - **Git includeIf** パターンを維持し、プラットフォーム別 gitconfig を自動読み込み
+- **コミット署名**: 1Password SSH エージェント経由の SSH 署名をデフォルトで有効化。Dev Container / Codespaces では 1Password エージェントが利用できないため自動で無効化
 - **Copilot Guard** フック: bash + PowerShell の二重実装を Python 単一スクリプトに統一
 - **uv Enforcer** フック: Copilot エージェントの python/pip 直接実行をブロックし uv 経由を強制
 - **SAML SSO ワークアラウンド**: Codespaces の `mise install` で SAML SSO 要求による 403 を回避するため、失敗したツールを認証なしで自動リトライ
@@ -479,6 +480,19 @@ reference/windows/             ← デプロイしない参照ファイル
 - この dotfiles は「Windows 上のローカル clone は `C:/` または `D:/` 配下」という前提。別の drive を使う場合は `includeIf "gitdir/i:E:/"` のように追加する
 - WSL はパス判定上は Linux (`/home/`) なので `~/.gitconfig-linux` を読み込み、その中で `.isWSL` を使って 1Password 連携パスだけを切り替える
 - template の制御構文は `{{- ... -}}` で前後の余分な空行を抑える。`dot_gitconfig-linux.tmpl` の `core.editor` だけは Git に埋め込む引用符を保つため、WSL 側で `\"` を使っている
+
+### コミット署名
+
+1Password の SSH エージェントを使った SSH 署名をデフォルトで有効化している（`commit.gpgsign = true`, `gpg.format = ssh`）。プラットフォーム別の `gpg.ssh.program` は `includeIf` で読み込まれる各 gitconfig で設定される。
+
+| 環境 | `gpg.ssh.program` | ソース |
+|------|-------------------|--------|
+| macOS | `/Applications/1Password.app/Contents/MacOS/op-ssh-sign` | `dot_gitconfig-mac.tmpl` |
+| Linux | `/opt/1Password/op-ssh-sign` | `dot_gitconfig-linux.tmpl` |
+| WSL | `/mnt/c/Users/<windowsUser>/.../op-ssh-sign-wsl.exe` | `dot_gitconfig-linux.tmpl` |
+| Windows | `C:/Users/<windowsUser>/.../op-ssh-sign.exe` | `dot_gitconfig-windows.tmpl` |
+
+**Dev Container / Codespaces**: 1Password SSH エージェントがコンテナ内に転送されないため、chezmoi テンプレートで `commit.gpgsign = false` に自動切替する（`.codespaces` / `.devcontainer` 変数で判定）。Codespaces では GitHub の [GPG verification](https://docs.github.com/en/codespaces/managing-your-codespaces/managing-gpg-verification-for-github-codespaces) を有効にすることで、GitHub 管理の鍵による署名が可能。
 
 ## トラブルシューティング
 
