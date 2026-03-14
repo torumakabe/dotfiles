@@ -13,7 +13,12 @@ from __future__ import annotations
 import json
 import re
 import sys
+from typing import Any
 
+
+# ---------------------------------------------------------------------------
+# Output helpers
+# ---------------------------------------------------------------------------
 
 def deny(reason: str) -> None:
     print(json.dumps({"permissionDecision": "deny", "permissionDecisionReason": reason}))
@@ -26,16 +31,31 @@ def allow() -> None:
 
 
 # ---------------------------------------------------------------------------
-# stdin handling (absorb Windows encoding differences)
+# Input handling (absorb Windows encoding differences)
 # ---------------------------------------------------------------------------
 
 def read_input() -> dict:
+    """Read and parse JSON from stdin, handling Windows BOM/encoding."""
     if hasattr(sys.stdin, "reconfigure"):
         sys.stdin.reconfigure(encoding="utf-8")
 
     raw = sys.stdin.read().strip()
     raw = raw.lstrip("\ufeff\ufffe")
     return json.loads(raw)
+
+
+def parse_tool_args(raw: Any) -> dict[str, Any]:
+    """Normalize toolArgs from the hook input.
+
+    toolArgs may arrive as a JSON string, a dict, or something else
+    entirely.  This function always returns a dict.
+    """
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return {}
+    return raw if isinstance(raw, dict) else {}
 
 
 # ---------------------------------------------------------------------------
@@ -129,14 +149,7 @@ def main() -> None:
     if tool_name not in ("bash", "powershell"):
         allow()
 
-    tool_args_raw = input_data.get("toolArgs", {})
-    if isinstance(tool_args_raw, str):
-        try:
-            tool_args = json.loads(tool_args_raw)
-        except (json.JSONDecodeError, ValueError):
-            tool_args = {}
-    else:
-        tool_args = tool_args_raw if isinstance(tool_args_raw, dict) else {}
+    tool_args = parse_tool_args(input_data.get("toolArgs", {}))
 
     command: str = tool_args.get("command", "")
     if not command:

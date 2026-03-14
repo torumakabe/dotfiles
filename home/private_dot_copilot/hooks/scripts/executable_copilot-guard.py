@@ -6,6 +6,14 @@
 Reads a JSON tool-call from stdin, checks against blocked-files.txt and
 allowed-urls.txt, and emits a JSON permission decision on stdout.
 
+Architecture:
+    Each security check is implemented as a *checker function* with the
+    signature ``(CheckContext) -> str | None``.  Returning a string means
+    "deny with this reason"; returning ``None`` means "pass".  All checkers
+    are registered in the ``CHECKERS`` list and executed in order by
+    ``main()``.  To add a new check, write a checker function and append
+    it to ``CHECKERS``.
+
 Run via: uv run copilot-guard.py
 """
 from __future__ import annotations
@@ -15,7 +23,88 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any, Callable, NamedTuple, Optional
 from urllib.parse import unquote, urlsplit
+
+
+# ---------------------------------------------------------------------------
+# Output helpers
+# ---------------------------------------------------------------------------
+
+def deny(reason: str) -> None:
+    print(json.dumps({"permissionDecision": "deny", "permissionDecisionReason": reason}))
+    sys.exit(0)
+
+
+def allow() -> None:
+    print(json.dumps({"permissionDecision": "allow"}))
+    sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
+# Input handling (absorb Windows encoding differences)
+# ---------------------------------------------------------------------------
+
+def read_input() -> dict:
+    """Read and parse JSON from stdin, handling Windows BOM/encoding."""
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8")
+
+    raw = sys.stdin.read().strip()
+    raw = raw.lstrip("\ufeff\ufffe")
+    return json.loads(raw)
+
+
+def parse_tool_args(raw: Any) -> dict[str, Any]:
+    """Normalize toolArgs from the hook input.
+
+    toolArgs may arrive as a JSON string, a dict, or something else
+    entirely.  This function always returns a dict.
+    """
+    if isinstance(raw, str):
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+# ---------------------------------------------------------------------------
+# Config file loading
+# ---------------------------------------------------------------------------
+
+def load_config_lines(path: Path) -> list[str]:
+    """Load non-empty, non-comment lines from a config file."""
+    if not path.is_file():
+        return []
+    lines: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            lines.append(line)
+    return lines
+
+
+# ---------------------------------------------------------------------------
+# CheckContext
+# ---------------------------------------------------------------------------
+
+class CheckContext(NamedTuple):
+    """Immutable bundle of data available to every checker function."""
+    tool_name: str
+    tool_args: dict[str, Any]
+    command: str
+    blocked_patterns: list[str]
+    allowed_domains: list[str]
+
+
+# Checker function contract: (CheckContext) -> deny reason or None.
+Checker = Callable[[CheckContext], Optional[str]]
+
+
+# ---------------------------------------------------------------------------
+# Path normalization and glob matching (shared utilities)
+# ---------------------------------------------------------------------------
 
 COMMAND_STRIP_CHARS = "\"'`()[]{};,"
 # Match one shell-ish token composed of unquoted text, double-quoted text,
@@ -23,8 +112,135 @@ COMMAND_STRIP_CHARS = "\"'`()[]{};,"
 # Quoted spans also allow backslash escapes such as \" and \'.
 COMMAND_TOKEN_RE = re.compile(r"""(?:[^\s"']+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+""")
 
+
+def normalize_pattern(pattern: str) -> str:
+    """Normalize a blocked-files glob pattern to a canonical POSIX form."""
+    normalized = pattern.strip().replace("\\", "/")
+    normalized = re.sub(r"/+", "/", normalized)
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.lstrip("/")
+
+
+def normalize_path(value: str) -> str:
+    """Normalize path-like values from tool args for cross-platform matching."""
+    normalized = value.strip().strip("\"'")
+    if normalized.lower().startswith("file://"):
+        parsed = urlsplit(normalized)
+        normalized = unquote(parsed.path)
+        if parsed.netloc:
+            normalized = f"{parsed.netloc}/{normalized.lstrip('/')}"
+    normalized = normalized.replace("\\", "/")
+    normalized = re.sub(r"/+", "/", normalized)
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    # file:// URIs on Windows are parsed as /C:/path, so drop that extra slash.
+    if re.match(r"^/[A-Za-z]:/", normalized):
+        normalized = normalized[1:]
+    return normalized.lstrip("/")
+
+
+@lru_cache(maxsize=None)
+def compile_glob(pattern: str) -> re.Pattern[str]:
+    """Compile a path-aware glob pattern.
+
+    Rules:
+    - ``*`` matches within one path segment.
+    - ``?`` matches one character within one path segment.
+    - ``**`` matches across path segments.
+    - Compiled patterns are cached because the same blocked globs are reused
+      across multiple path and command checks within one hook invocation.
+    """
+    normalized = normalize_pattern(pattern)
+    parts = ["^"]
+    index = 0
+    while index < len(normalized):
+        char = normalized[index]
+        if char == "*":
+            if index + 1 < len(normalized) and normalized[index + 1] == "*":
+                index += 2
+                if index < len(normalized) and normalized[index] == "/":
+                    index += 1
+                    # Match zero or more directory segments for the special ``**/`` case.
+                    parts.append("(?:[^/]+/)*")
+                else:
+                    parts.append(".*")
+                continue
+            parts.append("[^/]*")
+        elif char == "?":
+            parts.append("[^/]")
+        elif char == "/":
+            parts.append("/")
+        else:
+            parts.append(re.escape(char))
+        index += 1
+    parts.append("$")
+    return re.compile("".join(parts))
+
+
+def matches_blocked_pattern(target: str, pattern: str) -> bool:
+    """Return True when a normalized target path matches a blocked glob."""
+    normalized_target = normalize_path(target)
+    if not normalized_target:
+        return False
+    return bool(compile_glob(pattern).match(normalized_target))
+
+
 # ---------------------------------------------------------------------------
-# Environment variable access blocking
+# Checker: Blocked files
+# ---------------------------------------------------------------------------
+
+def check_blocked_path(target: str, patterns: list[str]) -> str | None:
+    """Path-aware glob match for path arguments."""
+    for pat in patterns:
+        if matches_blocked_pattern(target, pat):
+            return pat
+    return None
+
+
+def extract_command_candidates(command: str) -> list[str]:
+    """Extract path-like command tokens while preserving quoted substrings."""
+    candidates: list[str] = []
+    for token in COMMAND_TOKEN_RE.findall(command):
+        cleaned = token.strip(COMMAND_STRIP_CHARS)
+        if not cleaned:
+            continue
+        candidates.append(cleaned)
+        if "=" in cleaned:
+            _, rhs = cleaned.rsplit("=", 1)
+            if rhs:
+                candidates.append(rhs)
+    return candidates
+
+
+def check_blocked_command(target: str, patterns: list[str]) -> str | None:
+    """Path-aware glob match for command arguments."""
+    candidates = extract_command_candidates(target)
+    for pat in patterns:
+        if any(matches_blocked_pattern(candidate, pat) for candidate in candidates):
+            return pat
+    return None
+
+
+def check_blocked_files(ctx: CheckContext) -> str | None:
+    """Check path-like tool args and command tokens against blocked-files patterns."""
+    for prop in ("path", "file", "uri", "glob"):
+        prop_value = ctx.tool_args.get(prop, "")
+        if prop_value:
+            matched_pattern = check_blocked_path(prop_value, ctx.blocked_patterns)
+            if matched_pattern:
+                return f"Blocked pattern: {matched_pattern}"
+
+    if ctx.command:
+        matched_pattern = check_blocked_command(ctx.command, ctx.blocked_patterns)
+        if matched_pattern:
+            return f"Blocked pattern: {matched_pattern}"
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Checker: Environment variable access
 # ---------------------------------------------------------------------------
 
 # Commands that dump all environment variables.
@@ -178,177 +394,95 @@ def check_env_access(command: str) -> str | None:
     return None
 
 
-def deny(reason: str) -> None:
-    print(json.dumps({"permissionDecision": "deny", "permissionDecisionReason": reason}))
-    sys.exit(0)
-
-
-def allow() -> None:
-    print(json.dumps({"permissionDecision": "allow"}))
-    sys.exit(0)
+def check_env(ctx: CheckContext) -> str | None:
+    """Check for environment variable access in shell commands."""
+    if ctx.tool_name not in ("bash", "powershell") or not ctx.command:
+        return None
+    return check_env_access(ctx.command)
 
 
 # ---------------------------------------------------------------------------
-# stdin handling (absorb Windows encoding differences)
-# ---------------------------------------------------------------------------
-
-def read_input() -> dict:
-    # Windows PowerShell may default to CP932; force UTF-8
-    if hasattr(sys.stdin, "reconfigure"):
-        sys.stdin.reconfigure(encoding="utf-8")
-
-    raw = sys.stdin.read().strip()
-    # Strip BOM if present
-    raw = raw.lstrip("\ufeff\ufffe")
-    return json.loads(raw)
-
-
-# ---------------------------------------------------------------------------
-# Config file loaders
-# ---------------------------------------------------------------------------
-
-def load_patterns(path: Path) -> list[str]:
-    """Load non-empty, non-comment lines from a config file."""
-    if not path.is_file():
-        return []
-    lines: list[str] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#"):
-            lines.append(line)
-    return lines
-
-
-def normalize_pattern(pattern: str) -> str:
-    """Normalize a blocked-files glob pattern to a canonical POSIX form."""
-    normalized = pattern.strip().replace("\\", "/")
-    normalized = re.sub(r"/+", "/", normalized)
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized.lstrip("/")
-
-
-def normalize_path(value: str) -> str:
-    """Normalize path-like values from tool args for cross-platform matching."""
-    normalized = value.strip().strip("\"'")
-    if normalized.lower().startswith("file://"):
-        parsed = urlsplit(normalized)
-        normalized = unquote(parsed.path)
-        if parsed.netloc:
-            normalized = f"{parsed.netloc}/{normalized.lstrip('/')}"
-    normalized = normalized.replace("\\", "/")
-    normalized = re.sub(r"/+", "/", normalized)
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    # file:// URIs on Windows are parsed as /C:/path, so drop that extra slash.
-    if re.match(r"^/[A-Za-z]:/", normalized):
-        normalized = normalized[1:]
-    return normalized.lstrip("/")
-
-
-@lru_cache(maxsize=None)
-def compile_glob(pattern: str) -> re.Pattern[str]:
-    """Compile a path-aware glob pattern.
-
-    Rules:
-    - ``*`` matches within one path segment.
-    - ``?`` matches one character within one path segment.
-    - ``**`` matches across path segments.
-    - Compiled patterns are cached because the same blocked globs are reused
-      across multiple path and command checks within one hook invocation.
-    """
-    normalized = normalize_pattern(pattern)
-    parts = ["^"]
-    index = 0
-    while index < len(normalized):
-        char = normalized[index]
-        if char == "*":
-            if index + 1 < len(normalized) and normalized[index + 1] == "*":
-                index += 2
-                if index < len(normalized) and normalized[index] == "/":
-                    index += 1
-                    # Match zero or more directory segments for the special ``**/`` case.
-                    parts.append("(?:[^/]+/)*")
-                else:
-                    parts.append(".*")
-                continue
-            parts.append("[^/]*")
-        elif char == "?":
-            parts.append("[^/]")
-        elif char == "/":
-            parts.append("/")
-        else:
-            parts.append(re.escape(char))
-        index += 1
-    parts.append("$")
-    return re.compile("".join(parts))
-
-
-def matches_blocked_pattern(target: str, pattern: str) -> bool:
-    """Return True when a normalized target path matches a blocked glob."""
-    normalized_target = normalize_path(target)
-    if not normalized_target:
-        return False
-    return bool(compile_glob(pattern).match(normalized_target))
-
-
-# ---------------------------------------------------------------------------
-# Blocked-file checks
-# ---------------------------------------------------------------------------
-
-def check_blocked_path(target: str, patterns: list[str]) -> str | None:
-    """Path-aware glob match for path arguments."""
-    for pat in patterns:
-        if matches_blocked_pattern(target, pat):
-            return pat
-    return None
-
-
-def extract_command_candidates(command: str) -> list[str]:
-    """Extract path-like command tokens while preserving quoted substrings."""
-    candidates: list[str] = []
-    for token in COMMAND_TOKEN_RE.findall(command):
-        cleaned = token.strip(COMMAND_STRIP_CHARS)
-        if not cleaned:
-            continue
-        candidates.append(cleaned)
-        if "=" in cleaned:
-            _, rhs = cleaned.rsplit("=", 1)
-            if rhs:
-                candidates.append(rhs)
-    return candidates
-
-
-def check_blocked_command(target: str, patterns: list[str]) -> str | None:
-    """Path-aware glob match for command arguments."""
-    candidates = extract_command_candidates(target)
-    for pat in patterns:
-        if any(matches_blocked_pattern(candidate, pat) for candidate in candidates):
-            return pat
-    return None
-
-
-# ---------------------------------------------------------------------------
-# URL allowlist
+# Checker: URL allowlist
 # ---------------------------------------------------------------------------
 
 def extract_urls(text: str) -> list[str]:
     return re.findall(r"https?://[^\s\"']+", text)
 
 
-def url_host(url: str) -> str:
-    # Simple host extraction without urllib (no external deps)
+def extract_url_host(url: str) -> str:
+    """Extract the hostname from a URL without external dependencies."""
     host = re.sub(r"^https?://", "", url)
     host = host.split("/")[0].split(":")[0]
     return host
 
 
 def is_url_allowed(url: str, allowed_domains: list[str]) -> bool:
-    host = url_host(url)
+    host = extract_url_host(url)
     for domain in allowed_domains:
         if host == domain or host.endswith("." + domain):
             return True
     return False
+
+
+def check_url_allowlist(ctx: CheckContext) -> str | None:
+    """Check URLs in commands and web_fetch args against the domain allowlist."""
+    if not ctx.allowed_domains:
+        return None
+
+    if ctx.command:
+        for url in extract_urls(ctx.command):
+            if not is_url_allowed(url, ctx.allowed_domains):
+                return f"URL not in allowlist: {url}"
+
+    if ctx.tool_name == "web_fetch":
+        url = ctx.tool_args.get("url", "")
+        if url and not is_url_allowed(url, ctx.allowed_domains):
+            return f"URL not in allowlist: {url}"
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Checker registry
+# ---------------------------------------------------------------------------
+
+CHECKERS: list[Checker] = [
+    check_blocked_files,
+    check_env,
+    check_url_allowlist,
+]
+
+
+# ---------------------------------------------------------------------------
+# Context builder
+# ---------------------------------------------------------------------------
+
+def build_context() -> CheckContext:
+    """Read stdin, load config files, and return an immutable CheckContext."""
+    try:
+        input_data = read_input()
+    except Exception:
+        deny("Failed to parse input - fail-safe deny")
+
+    tool_name: str = input_data.get("toolName", "")
+    tool_args = parse_tool_args(input_data.get("toolArgs", {}))
+    command: str = tool_args.get("command", "")
+
+    script_dir = Path(__file__).resolve().parent
+    hooks_dir = script_dir.parent
+    blocked_file = hooks_dir / "blocked-files.txt"
+    allowed_urls_file = hooks_dir / "allowed-urls.txt"
+
+    if not blocked_file.is_file():
+        deny("blocked-files.txt not found - fail-safe deny")
+
+    return CheckContext(
+        tool_name=tool_name,
+        tool_args=tool_args,
+        command=command,
+        blocked_patterns=load_config_lines(blocked_file),
+        allowed_domains=load_config_lines(allowed_urls_file),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -356,68 +490,11 @@ def is_url_allowed(url: str, allowed_domains: list[str]) -> bool:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    try:
-        input_data = read_input()
-    except Exception:
-        deny("Failed to parse input - fail-safe deny")
-
-    tool_name: str = input_data.get("toolName", "")
-    tool_args_raw = input_data.get("toolArgs", {})
-
-    # toolArgs may be a JSON string — re-parse if so
-    if isinstance(tool_args_raw, str):
-        try:
-            tool_args = json.loads(tool_args_raw)
-        except (json.JSONDecodeError, ValueError):
-            tool_args = {}
-    else:
-        tool_args = tool_args_raw if isinstance(tool_args_raw, dict) else {}
-
-    # Locate config files relative to this script
-    script_dir = Path(__file__).resolve().parent
-    hooks_dir = script_dir.parent
-    blocked_file = hooks_dir / "blocked-files.txt"
-    allowed_file = hooks_dir / "allowed-urls.txt"
-
-    if not blocked_file.is_file():
-        deny("blocked-files.txt not found - fail-safe deny")
-
-    blocked_patterns = load_patterns(blocked_file)
-    allowed_domains = load_patterns(allowed_file)
-
-    # --- Check path-like properties (path-aware glob match) ---
-    for prop in ("path", "file", "uri", "glob"):
-        val = tool_args.get(prop, "")
-        if val:
-            hit = check_blocked_path(val, blocked_patterns)
-            if hit:
-                deny(f"Blocked pattern: {hit}")
-
-    # --- Check command property (path-aware glob match) ---
-    command: str = tool_args.get("command", "")
-    if command:
-        hit = check_blocked_command(command, blocked_patterns)
-        if hit:
-            deny(f"Blocked pattern: {hit}")
-
-    # --- Environment variable access check (bash / powershell only) ---
-    if tool_name in ("bash", "powershell") and command:
-        env_hit = check_env_access(command)
-        if env_hit:
-            deny(env_hit)
-
-    # --- URL allowlist ---
-    if allowed_domains:
-        if command:
-            for url in extract_urls(command):
-                if not is_url_allowed(url, allowed_domains):
-                    deny(f"URL not in allowlist: {url}")
-
-        if tool_name == "web_fetch":
-            url = tool_args.get("url", "")
-            if url and not is_url_allowed(url, allowed_domains):
-                deny(f"URL not in allowlist: {url}")
-
+    ctx = build_context()
+    for checker in CHECKERS:
+        reason = checker(ctx)
+        if reason:
+            deny(reason)
     allow()
 
 
