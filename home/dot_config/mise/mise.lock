@@ -161,25 +161,20 @@ url = "https://github.com/cue-lang/cue/releases/download/v0.16.0/cue_v0.16.0_win
 version = "10.0.201"
 backend = "core:dotnet"
 
-[[tools.edit]]
-version = "1.2.1"
-backend = "aqua:microsoft/edit"
+[tools.dotnet."platforms.linux-arm64"]
+url = "https://dot.net/v1/dotnet-install.sh"
 
-[tools.edit."platforms.linux-arm64"]
-checksum = "sha256:4e320240586ecc5cdfdcff0488647879077027506c68c919ccdd2754642d0fbb"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-aarch64-linux-gnu.tar.zst"
+[tools.dotnet."platforms.linux-x64"]
+url = "https://dot.net/v1/dotnet-install.sh"
 
-[tools.edit."platforms.linux-x64"]
-checksum = "sha256:aee9f2f21ebc90cc1dbfb20ee93d3aa03d325127a8e3f7f91dd02c5a9e0a7b25"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-x86_64-linux-gnu.tar.zst"
+[tools.dotnet."platforms.macos-arm64"]
+url = "https://dot.net/v1/dotnet-install.sh"
 
-[tools.edit."platforms.windows-arm64"]
-checksum = "sha256:7f44bb48b2891163cf5b9c996e8a917c29d82c7a765c07e89e74b47aff542ca9"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-aarch64-windows.zip"
+[tools.dotnet."platforms.windows-arm64"]
+url = "https://dot.net/v1/dotnet-install.ps1"
 
-[tools.edit."platforms.windows-x64"]
-checksum = "sha256:be3affb7e5e0cd856fc0fb9c8b2004e9fbbc364e69797f7c2e9d8fcc94bfc4ff"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-x86_64-windows.zip"
+[tools.dotnet."platforms.windows-x64"]
+url = "https://dot.net/v1/dotnet-install.ps1"
 
 [[tools.fzf]]
 version = "0.70.0"
@@ -233,63 +228,113 @@ url = "https://github.com/x-motemen/ghq/releases/download/v1.9.4/ghq_windows_amd
 version = "2.88.1"
 backend = "aqua:cli/cli"
 
+[tools.github-cli."platforms.linux-arm64"]
+checksum = "sha256:039ce25aab0cfa0ea5160e3db75ed44699bde4b20ff63ec5991f82201f1b33b8"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_linux_arm64.tar.gz"
+
+[tools.github-cli."platforms.linux-x64"]
+checksum = "sha256:36352a993b97e9758793cdb87f9ba674bd6d88c914488e122be78a1962203803"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_linux_amd64.tar.gz"
+
+[tools.github-cli."platforms.macos-arm64"]
+checksum = "sha256:bdbeed4821d450ef0d14821d856c05b308ab449fbf60527f298d96fbf5d2447b"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_macOS_arm64.zip"
+
+[tools.github-cli."platforms.windows-arm64"]
+checksum = "sha256:9175948357a3833447e6c9fc9fb650a310d13cf04cf3bc59b7f5d3d2d9e7bf1e"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_arm64.zip"
+
+[tools.github-cli."platforms.windows-x64"]
+checksum = "sha256:8fdaac525d8919f9f8c265f99ffa26189e5f1fd3a35636adad4fd890a141a555"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_amd64.zip"
+
 [[tools."github:Azure/azure-dev"]]
-version = "azure-dev-cli_1.23.8"
+version = "azure-dev-cli_1.23.9"
 backend = "github:Azure/azure-dev"
 
 [tools."github:Azure/azure-dev"."platforms.linux-arm64"]
-checksum = "sha256:0dba7b5fcd763a8e29dd9264a313984069acb48ea529dccc7f42d3590a67f7b3"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.8/azd-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/368650268"
+checksum = "sha256:c32d489ac550fdfa7c7f94c1296ff5a8f94e2981f8e6af31e7061846acc0bfb6"
+url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387443"
+
+[tools."github:Azure/azure-dev"."platforms.linux-arm64-musl"]
+checksum = "sha256:c32d489ac550fdfa7c7f94c1296ff5a8f94e2981f8e6af31e7061846acc0bfb6"
+url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387443"
 
 [tools."github:Azure/azure-dev"."platforms.linux-x64"]
-checksum = "sha256:357df9fe867cec4aaa69e2160afd94e8ff9303200364299608f188af8a179397"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.8/azd-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/368650269"
+checksum = "sha256:f3776d0510e0d1319cf8ab0dba1762873987639eee1b9834dae189f5208fa752"
+url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387441"
+
+[tools."github:Azure/azure-dev"."platforms.linux-x64-musl"]
+checksum = "sha256:f3776d0510e0d1319cf8ab0dba1762873987639eee1b9834dae189f5208fa752"
+url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-linux-amd64.tar.gz"
+url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387441"
 
 [tools."github:Azure/azure-dev"."platforms.macos-arm64"]
-checksum = "sha256:146a8231d403ccce2a4e228a2a858a5fcde79b11e82b657d8f2c366180a17ef0"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.8/azd-darwin-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/368650265"
+checksum = "sha256:4f68c0b6110141256efd579fd73193d432ce489ae6d193210fdefbb15e1ff983"
+url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-darwin-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387442"
+
+[tools."github:Azure/azure-dev"."platforms.macos-x64"]
+checksum = "sha256:19a09c591510f793f2edc64bf259da8f9499357325816b6805446a222a0bc1ac"
+url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-darwin-amd64.zip"
+url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387435"
 
 [tools."github:Azure/azure-dev"."platforms.windows-arm64"]
-checksum = "sha256:b177d80159a6ab0ccec3601823d380dcb100347be971d6c4a122762ce2bfe4b2"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.8/azd-windows-arm64-alpha.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/368650276"
+checksum = "sha256:3e61ab6eca1bbb68704007bc96c803f042da2cc11c340864e777911b6b1bf7b6"
+url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-windows-arm64-alpha.zip"
+url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387454"
 
 [tools."github:Azure/azure-dev"."platforms.windows-x64"]
-checksum = "sha256:0c9c084c1c0f9f6eea11bd63bd7faf36c857e540a433fd6d89b32a5ad9a577e4"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.8/azd-windows-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/368650266"
+checksum = "sha256:a1644c786366974709ecd4a03b66fe1c816ef33216f7f1658f66a367047ee234"
+url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-windows-amd64.zip"
+url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387447"
 
 [[tools."github:github/copilot-cli"]]
-version = "1.0.4"
+version = "1.0.5"
 backend = "github:github/copilot-cli"
 
 [tools."github:github/copilot-cli"."platforms.linux-arm64"]
-checksum = "sha256:b2cc3c86a70f5a436c1d3ad8824199ac4f1fb79354eabba438489d63ad0539f9"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.4/copilot-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/371786369"
+checksum = "sha256:ebb0dd1b5c8a6011dc2c79ce02e5c06a49ea757f39fa9394f3cf17d09c0a6f78"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006357"
+
+[tools."github:github/copilot-cli"."platforms.linux-arm64-musl"]
+checksum = "sha256:ebb0dd1b5c8a6011dc2c79ce02e5c06a49ea757f39fa9394f3cf17d09c0a6f78"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006357"
 
 [tools."github:github/copilot-cli"."platforms.linux-x64"]
-checksum = "sha256:c5990f9b02ae6a40c1f3cee1702741645deec10221ae5f5aa3813a10e8382670"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.4/copilot-linux-x64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/371786375"
+checksum = "sha256:40d146228ca4f8133e5fc5071b34526cecb0363b1f1a59ece4807c25990eb990"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-linux-x64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006359"
+
+[tools."github:github/copilot-cli"."platforms.linux-x64-musl"]
+checksum = "sha256:40d146228ca4f8133e5fc5071b34526cecb0363b1f1a59ece4807c25990eb990"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-linux-x64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006359"
 
 [tools."github:github/copilot-cli"."platforms.macos-arm64"]
-checksum = "sha256:4d8869353a75e0e890a1ae84a7cc2936c3016147903744d664f9177190635a8f"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.4/copilot-darwin-arm64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/371786372"
+checksum = "sha256:54b0063d78fc0727491ff3f8fa251eddfeec80e76b3ffba04e2ccae56977039a"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006356"
+
+[tools."github:github/copilot-cli"."platforms.macos-x64"]
+checksum = "sha256:f1cca1917cde79abf65d089fb2dea77198e7a2d6ba4760c5a77ec84243541b94"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-darwin-x64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006353"
 
 [tools."github:github/copilot-cli"."platforms.windows-arm64"]
-checksum = "sha256:df8878ba3f83bde8e78d358a836bdeb3caa75d8d72b25f792da6c06308c8768e"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.4/copilot-win32-arm64.zip"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/371786391"
+checksum = "sha256:ebd65a4d3839a7e70314baf4a3f29a3b30a7d830175860766055cbbdb4bded30"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-win32-arm64.zip"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006377"
 
 [tools."github:github/copilot-cli"."platforms.windows-x64"]
-checksum = "sha256:c02ae06cf72b929b122210800ea08202072e4bf2c2d78708b9d97f09130eea1f"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.4/copilot-win32-x64.zip"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/371786400"
+checksum = "sha256:6fdd6d60d766f57aa89868f576090b5c141f5efd077965a530b5618af93d53ad"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-win32-x64.zip"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006382"
 
 [[tools."github:microsoft/dev-proxy"]]
 version = "2.2.0"
@@ -671,28 +716,41 @@ url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.6
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.10.9"
+version = "0.10.10"
 backend = "aqua:astral-sh/uv"
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:05b0d3087e913ebe11756365a90dd47c05d6728752fdbe129ad4c3ccd769826d"
-url = "https://github.com/astral-sh/uv/releases/download/0.10.9/uv-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:d08c08b82cdcaf2bd3d928ffe844d3558dda53f90066db6ef9174157cc763252"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-aarch64-unknown-linux-musl.tar.gz"
+
+[tools.uv."platforms.linux-arm64-musl"]
+checksum = "sha256:d08c08b82cdcaf2bd3d928ffe844d3558dda53f90066db6ef9174157cc763252"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-aarch64-unknown-linux-musl.tar.gz"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:433e56874739e92c7cfd661ba9e5f287b376ca612c08c8194a41a98a13158aea"
-url = "https://github.com/astral-sh/uv/releases/download/0.10.9/uv-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:74544e8755fbc27559e22e29fd561bdc48f91b8bd8323e760a1130f32433bea4"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-x86_64-unknown-linux-musl.tar.gz"
+
+[tools.uv."platforms.linux-x64-musl"]
+checksum = "sha256:74544e8755fbc27559e22e29fd561bdc48f91b8bd8323e760a1130f32433bea4"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-x86_64-unknown-linux-musl.tar.gz"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:a92f61e9ac9b0f29668c15f56152e4a60143fca148ff5bfadb86718472c3f376"
-url = "https://github.com/astral-sh/uv/releases/download/0.10.9/uv-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:8a09f0ef51ee7f7170731b4cb8bde5bf9ba6da5304f49a7df6cdab42a1f37b5d"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-aarch64-apple-darwin.tar.gz"
+provenance = "github-attestations"
+
+[tools.uv."platforms.macos-x64"]
+checksum = "sha256:dd18420591d625f9b4ca2b57a7a6fe3cce43910f02e02d90e47a4101428de14a"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-x86_64-apple-darwin.tar.gz"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:f58dc40896000229db7c52b8bdd931394040ef2ad59abd1eda841f6d70b13d7a"
-url = "https://github.com/astral-sh/uv/releases/download/0.10.9/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:d31a30f1dfb96e630a08d5a9b3f3f551254b7ed6e9b7e495f46a4232661c7252"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-x86_64-pc-windows-msvc.zip"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:f58dc40896000229db7c52b8bdd931394040ef2ad59abd1eda841f6d70b13d7a"
-url = "https://github.com/astral-sh/uv/releases/download/0.10.9/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:d31a30f1dfb96e630a08d5a9b3f3f551254b7ed6e9b7e495f46a4232661c7252"
+url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-x86_64-pc-windows-msvc.zip"
 
 [[tools.yq]]
 version = "4.52.4"
