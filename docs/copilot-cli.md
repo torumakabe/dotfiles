@@ -1,6 +1,12 @@
 # GitHub Copilot CLI Guide
 
-chezmoi は `~/.copilot/` 配下の一部を管理する。プラグインはプラグインマネージャが管理するため chezmoi の対象外である。
+GitHub Copilot CLI の設定・運用ガイドである。chezmoi が `~/.copilot/` 配下のカスタム指示、フック、スキルを管理する。プラグインは Copilot CLI のプラグインマネージャが管理するため chezmoi の対象外である。
+
+このガイドでは以下を扱う。
+
+- **管理対象ファイル**: chezmoi で管理するファイルと管理外のファイルの一覧
+- **プラグイン / スキル**: 追加・更新の手順
+- **セキュリティフック**: 設定のカスタマイズとテスト方法（設計の詳細は [`docs/architecture.md`](architecture.md#copilot-guard-の設計) を参照）
 
 ## 管理対象ファイル
 
@@ -34,16 +40,13 @@ chezmoi は `~/.copilot/` 配下の一部を管理する。プラグインはプ
 /plugin update azure@azure-skills
 ```
 
-前提: Node.js 18+、Azure CLI (`az login`)、Azure Developer CLI (`azd auth login`) が必要である。
+> **注意**: Azure Skills Plugin は Node.js 18+、Azure CLI (`az login`)、Azure Developer CLI (`azd auth login`) が前提である。他のプラグインの前提条件は各プラグインのドキュメントを参照する。
 
 ## スキルの管理
 
 ユーザーレベルのスキル（`~/.copilot/skills/`）は chezmoi で管理する。
 
 ```bash
-npx skills add -g <owner>/<repo>/<path>
-chezmoi re-add ~/.copilot/skills/<skill-name>
-
 npx skills add -g <owner>/<repo>/<path>
 chezmoi re-add ~/.copilot/skills/<skill-name>
 chezmoi diff
@@ -55,7 +58,34 @@ chezmoi diff
 |--------|--------|------|
 | `microsoft-skill-creator` | [github/awesome-copilot](https://github.com/github/awesome-copilot) (MIT) | MS Learn MCP を使って Microsoft 技術のスキルを生成 |
 
-## フックのテスト
+## セキュリティフック
+
+コーディングエージェントは `bash` ツールを通じてファイル読み取りやコマンド実行を行える。便利な一方で、秘匿情報の意図しない読み取りや外部送信のリスクがある。このリポジトリでは `preToolUse` フックで **ツール実行前に検査し、危険な操作を自動拒否する** ガードを提供している。
+
+脅威モデル、多層防御の構造、各チェック層の判定ロジックについては [`docs/architecture.md` の Copilot Guard セクション](architecture.md#copilot-guard-の設計) を参照する。
+
+### 設定ファイルのカスタマイズ
+
+#### blocked-files.txt
+
+ブロック対象のファイルパスをグロブパターンで記述する。1 行 1 パターン、`#` で始まる行はコメント。
+
+**パターン記法**:
+
+| 記法 | 意味 | 例 |
+|------|------|------|
+| `*` | 1 つのパスセグメント内の任意の文字列 | `*.pem` → `server.pem` にマッチ |
+| `?` | 1 つのパスセグメント内の任意の 1 文字 | `?.key` → `a.key` にマッチ |
+| `**` | パスセグメントをまたぐ任意の文字列 | `**/.env` → `src/app/.env` にマッチ |
+| `**/` | 0 個以上のディレクトリプレフィックス | `**/.azure/*` → `.azure/config` にも `a/b/.azure/config` にもマッチ |
+
+**パス正規化**: マッチング前に `\` → `/` への変換、連続 `/` の圧縮、先頭 `./` の除去、`file://` URI の展開が行われる。Windows パス（`C:\Users\...`）も正しくマッチする。
+
+#### allowed-urls.txt
+
+許可するドメインを 1 行 1 つ記述する。サブドメインも自動的に許可される（例: `github.com` は `api.github.com` も許可）。全行コメントアウトすると URL チェック自体が無効になる。
+
+### フックのテスト
 
 フックは stdin に JSON を受け取り、stdout に許可 / 拒否の JSON を返す。
 
