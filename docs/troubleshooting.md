@@ -16,7 +16,7 @@ chezmoi init torumakabe
 
 GitHub API のレート制限が原因の場合は、[`docs/operations.md`](operations.md#mise-と-github-api) の手順でトークンを設定してリトライする。
 
-lockfile にないツールがある場合は lockfile を再生成する。
+lockfile にないツールがある場合は lockfile を再生成する。[`docs/operations.md`](operations.md#mise-lockfile-の再構築) に詳細な手順がある。
 
 ```bash
 mise ls --missing
@@ -27,11 +27,13 @@ mise install
 
 ## `run_once_` スクリプトの warning / error
 
+各スクリプトの役割と実行順は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順と依存関係) を参照。
+
 warning として継続するもの:
 
-- `run_once_after_10-setup-shell.sh`: デフォルトシェルを zsh に変更できない場合
-- `run_once_after_20-mise-install.sh`: `mise install` 後の一部ツールが未導入のまま残る場合、または状態確認・認証なしリトライの一部が失敗した場合
-- `run_once_after_30-install-tools.sh`: 追加の Go ツール、macOS の cask、Linux の draw.io など任意ツールの導入に失敗した場合
+- `run_once_after_10-setup-shell.sh`（シェル設定）: デフォルトシェルを zsh に変更できない場合
+- `run_once_after_20-mise-install.sh`（mise ツール導入）: `mise install` 後の一部ツールが未導入のまま残る場合、または状態確認・認証なしリトライの一部が失敗した場合
+- `run_once_after_30-install-tools.sh`（追加ツール導入）: 追加の Go ツール、macOS の cask、Linux の draw.io など任意ツールの導入に失敗した場合
 
 error として停止するもの:
 

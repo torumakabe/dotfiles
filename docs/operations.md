@@ -30,9 +30,13 @@
 
 ## 設定ファイルの編集
 
+`chezmoi edit` を使う方法と、ソースディレクトリを直接編集する方法がある。通常は `chezmoi edit` が簡潔だが、テンプレート全体を見ながら編集したい場合はソース側で作業する。
+
 ```bash
+# chezmoi edit を使う場合
 chezmoi edit ~/.zshrc
 
+# ソースディレクトリを直接編集する場合
 cd $(chezmoi source-path)/..
 vim home/dot_zshrc.tmpl
 chezmoi apply
@@ -117,7 +121,7 @@ chezmoi re-add ~/.config/mise/mise.lock
 
 ## Bootstrap / shell pin の更新
 
-初期セットアップ系スクリプトは、上流の最新版をその場で実行せず、リリース番号・コミット・SHA256 をリポジトリ内に pin している。更新時は **バージョンの更新 → 公式チェックサムの照合 → スクリプト反映** の順で行う。
+初期セットアップ系スクリプトは、上流の最新版をその場で実行せず、リリース番号・コミット・SHA256 をリポジトリ内に pin している。これは上流の意図しない変更や改竄からの保護と、どの端末でも同じバージョンを導入する再現性を確保するためである。更新時は **バージョンの更新 → 公式チェックサムの照合 → スクリプト反映** の順で行う。
 
 - `install.sh`
   - `CHEZMOI_VERSION` を更新
@@ -153,7 +157,7 @@ gh auth login
 $env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
 ```
 
-`run_once_after_20` は gh が認証済みなら `GITHUB_TOKEN` を自動設定する。初回セットアップで gh が未認証の場合は、セットアップ完了後に上記コマンドでリトライする。
+`run_once_after_20-mise-install.sh`（初回セットアップで `mise install` を実行するスクリプト。詳細は [`docs/architecture.md` の実行順セクション](architecture.md#run_once_-スクリプトの実行順と依存関係)を参照）は gh が認証済みなら `GITHUB_TOKEN` を自動設定する。初回セットアップで gh が未認証の場合は、セットアップ完了後に上記コマンドでリトライする。
 
 `mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `lockfile = true` を設定しており、`mise install` / `mise upgrade` ともに lockfile を自動更新する。
 
@@ -167,6 +171,18 @@ $env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
 
 - `GITHUB_TOKEN` を `.zshrc` や `$PROFILE` に常駐させない
 - ツール追加時は `mise lock --platform` で全プラットフォーム分の lockfile を再生成してからコミットする
+
+## mise lockfile の対象プラットフォーム
+
+`mise` の lockfile は、現在次のプラットフォームに絞って更新している。
+
+- `linux-x64`
+- `linux-arm64`
+- `macos-arm64`
+- `windows-x64`
+- `windows-arm64`
+
+それ以外のプラットフォームでも動作する可能性があるが、lockfile の更新や検証はこの一覧を前提にしている。`mise lock` で `--platform` を指定する際は上記を使う。
 
 ## git pre-commit フックの追加・更新
 
@@ -205,20 +221,4 @@ chezmoi apply
 
 ## run_once_ スクリプトの実行順と依存関係
 
-このリポジトリでは、`run_once_before_*` → 通常のファイル適用 → `run_once_after_*` の順に処理される。さらに同じフェーズ内ではファイル名の数字順で実行される。
-
-| 順序 | スクリプト | 役割 | 後続が依存している前提 |
-|------|-----------|------|------------------------|
-| 1 | `run_once_before_10-install-packages.sh` | OS パッケージを導入 | `git` / `zsh` が後続の shell setup と mise bootstrap までに使える |
-| 2 | `run_once_before_20-install-mise.sh` | `mise` 自体を導入 | `run_once_after_20-mise-install.sh` 開始時点で `mise` コマンドが存在する |
-| 3 | `run_once_after_10-setup-shell.sh` | Oh My Zsh / plugin / default shell を設定 | `git` / `zsh` は 1 で導入済み |
-| 4 | `run_once_after_20-mise-install.sh` | `~/.config/mise/config.toml` と `mise.lock` を使ってツール本体を導入 | chezmoi による dotfiles 配置完了後に実行される |
-| 5 | `run_once_after_30-install-tools.sh` | Docker, Go tools, GUI アプリなどの追加導入 | `mise install` 済みで `go` などのコマンドが PATH に存在する |
-
-変更時は少なくとも次を確認すること。
-
-- `before_` / `after_` の跨ぎを変えても、`mise` 設定ファイルや lockfile が生成される前に `mise install` しないこと
-- `run_once_before_10-install-packages.sh` のパッケージ変更で、後続の前提を壊していないこと
-- `run_once_after_10-setup-shell.sh` は非対話実行でも失敗しないこと
-- `run_once_after_20-mise-install.sh` の retry / workaround を変える場合、Codespaces とローカル Dev Container の分岐を壊していないこと
-- `run_once_after_30-install-tools.sh` の skip 条件を変える場合、Codespaces / Dev Container では引き続きベースイメージや Features 側で補う前提か確認すること
+実行順と各スクリプトの依存関係は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順と依存関係) を参照する。変更時の確認事項もそちらにまとめている。

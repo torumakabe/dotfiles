@@ -56,6 +56,43 @@ reference/windows/             ← デプロイしない参照ファイル
 - **gitleaks + git pre-commit** により、コミット前に secret scan を走らせつつ、各リポジトリ固有のフックも併用できる
 - **Codespaces / Dev Container** では、非対話での作成や認証制約に合わせたワークアラウンドとフォールバックを持つ
 
+## Copilot Guard の設計
+
+`copilot-guard.py` は `preToolUse` フックとして、エージェントのツール呼び出しを**実行前にテキスト検査**し、秘匿情報の漏洩リスクがある操作を拒否する。
+
+### 設計上の位置づけ
+
+このフックは**エージェント向けのガードレール**である。LLM エージェントは通常、最も自然なコード（`printenv`、`echo $SECRET`、`os.environ` 等）を生成するため、そのパターンをブロックするだけで大部分のリスクをカバーできる。Base64 エンコードや変数間接参照などの難読化には対応しないが、プロンプトインジェクション等の悪意ある介入がない限り、エージェントがそのようなコードを生成する可能性は低い。`blocked-files.txt` によるファイルブロックも同様に、テキストベースの検査で実用上十分なカバー範囲を得る設計である。
+
+### 3 つのチェック層
+
+```text
+preToolUse 入力 (JSON)
+  │
+  ├─ 1. ファイルアクセスチェック ← blocked-files.txt
+  │     対象: 全ツールの path/file/uri/glob/command 引数
+  │
+  ├─ 2. 環境変数アクセスチェック ← コード内定義
+  │     対象: bash/powershell の command 引数のみ
+  │     - 列挙コマンド (printenv, env, declare -p, ...)
+  │     - 秘匿変数展開 ($SECRET, $TOKEN, ...)
+  │     - ランタイム全体ダンプ (os.environ, process.env, ...)
+  │     ※ 汎用変数 ($PATH, $HOME, ...) は許可リストで除外
+  │
+  └─ 3. URL 許可リストチェック ← allowed-urls.txt
+        対象: command 内の URL、web_fetch の url 引数
+```
+
+### 環境変数の許可リスト設計
+
+環境変数チェックでは `$VAR` / `${VAR}` 展開を検査するが、全変数をブロックするとエージェントの通常作業が阻害される。そこで以下のルールで判定する:
+
+1. 変数名が許可リスト（`PATH`、`HOME`、`SHELL`、`SSH_AUTH_SOCK` 等 50 以上）に含まれれば**常に許可**
+2. 変数名に秘匿フラグメント（`secret`、`token`、`key`、`password`、`credential`、`auth` 等）が含まれれば**ブロック**
+3. 上記のいずれにも該当しない変数は**許可**（未知の変数はブロックしない）
+
+この設計は「偽陽性（正当な操作のブロック）を最小化し、明らかに危険なパターンだけを止める」方針に基づく。
+
 ## git pre-commit フック
 
 グローバル `pre-commit` フックは `home/dot_config/git/hooks/executable_pre-commit` から `~/.config/git/hooks/pre-commit` に配置され、`~/.gitconfig` の `core.hooksPath` で有効化される構成である。
@@ -106,3 +143,23 @@ reference/windows/             ← デプロイしない参照ファイル
 | Windows | `C:/Users/<windowsUser>/.../op-ssh-sign.exe` | `dot_gitconfig-windows.tmpl` |
 
 Dev Container / Codespaces では 1Password SSH エージェントがコンテナ内に転送されないため、chezmoi テンプレートで `commit.gpgsign = false` に自動切替する。Codespaces では GitHub の [GPG verification](https://docs.github.com/en/codespaces/managing-your-codespaces/managing-gpg-verification-for-github-codespaces) を有効にすることで、GitHub 管理の鍵による署名が可能である。
+
+## `run_once_` スクリプトの実行順と依存関係
+
+chezmoi は `run_once_before_*` → 通常のファイル適用 → `run_once_after_*` の順に処理する。さらに同じフェーズ内ではファイル名の数字順で実行される。
+
+| 順序 | スクリプト | 役割 | 後続が依存している前提 |
+|------|-----------|------|------------------------|
+| 1 | `run_once_before_10-install-packages.sh` | OS パッケージを導入 | `git` / `zsh` が後続の shell setup と mise bootstrap までに使える |
+| 2 | `run_once_before_20-install-mise.sh` | `mise` 自体を導入 | `run_once_after_20-mise-install.sh` 開始時点で `mise` コマンドが存在する |
+| 3 | `run_once_after_10-setup-shell.sh` | Oh My Zsh / plugin / default shell を設定 | `git` / `zsh` は 1 で導入済み |
+| 4 | `run_once_after_20-mise-install.sh` | `~/.config/mise/config.toml` と `mise.lock` を使ってツール本体を導入 | chezmoi による dotfiles 配置完了後に実行される |
+| 5 | `run_once_after_30-install-tools.sh` | Docker, Go tools, GUI アプリなどの追加導入 | `mise install` 済みで `go` などのコマンドが PATH に存在する |
+
+### 変更時の確認事項
+
+- `before_` / `after_` の跨ぎを変えても、`mise` 設定ファイルや lockfile が生成される前に `mise install` しないこと
+- `run_once_before_10-install-packages.sh` のパッケージ変更で、後続の前提を壊していないこと
+- `run_once_after_10-setup-shell.sh` は非対話実行でも失敗しないこと
+- `run_once_after_20-mise-install.sh` の retry / workaround を変える場合、Codespaces とローカル Dev Container の分岐を壊していないこと
+- `run_once_after_30-install-tools.sh` の skip 条件を変える場合、Codespaces / Dev Container では引き続きベースイメージや Features 側で補う前提か確認すること
