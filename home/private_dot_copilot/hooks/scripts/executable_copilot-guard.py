@@ -23,6 +23,160 @@ COMMAND_STRIP_CHARS = "\"'`()[]{};,"
 # Quoted spans also allow backslash escapes such as \" and \'.
 COMMAND_TOKEN_RE = re.compile(r"""(?:[^\s"']+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+""")
 
+# ---------------------------------------------------------------------------
+# Environment variable access blocking
+# ---------------------------------------------------------------------------
+
+# Commands that dump all environment variables.
+ENV_DUMP_COMMANDS: frozenset[str] = frozenset({
+    "printenv",
+})
+
+# Commands that dump all variables when invoked *without meaningful arguments*.
+# ``env`` is allowed with ``-i`` / ``-u`` / ``--`` (environment manipulation),
+# so only a bare ``env`` (optionally with trailing pipe) is blocked.
+_BARE_ENV_RE = re.compile(
+    r"(?:^|\s*(?:&&|\|\||;)\s*)"  # start or after shell operator
+    r"env"
+    r"(?:\s*(?:\||;|&&|\|\||$))",  # followed by pipe, operator, or end
+)
+
+# ``set`` without arguments dumps all variables; ``set -e`` etc. is fine.
+_BARE_SET_RE = re.compile(
+    r"(?:^|\s*(?:&&|\|\||;)\s*)"
+    r"set"
+    r"(?:\s*(?:\||;|&&|\|\||$))",
+)
+
+# Full-variable enumeration builtins.
+_ENUM_BUILTINS_RE = re.compile(
+    r"\b(?:declare|typeset)\s+-p\b"
+    r"|\bexport\s+-p\b"
+    r"|\bcompgen\s+-[ve]\b",
+)
+
+# Language-runtime patterns that dump the *entire* environment mapping.
+_RUNTIME_ENV_DUMP_RE = re.compile(
+    r"\bos\.environ\b"         # Python  os.environ  (whole mapping)
+    r"|\bos\.getenv\(\s*\)"    # Python  os.getenv() with no arg
+    r"|\bprocess\.env\b"       # Node.js process.env (whole object)
+    r"|%ENV\b"                 # Perl    %ENV
+    r"|\bENV\.to_h\b"         # Ruby    ENV.to_h
+    r"|\bENV\.each\b"         # Ruby    ENV.each
+    r"|\bSystem\.getenv\(\s*\)"  # Java  System.getenv()
+    r"|\bDeno\.env\.toObject\b"  # Deno  Deno.env.toObject()
+    r"|\bGet-ChildItem\s+Env:"   # PowerShell Get-ChildItem Env:
+    r"|\\\$env:",              # PowerShell $env: variable access
+    re.IGNORECASE,
+)
+
+# Sensitive variable name fragments.  If a shell expansion ``$VAR`` or
+# ``${VAR}`` contains one of these (case-insensitive), it is blocked.
+_SENSITIVE_FRAGMENTS: frozenset[str] = frozenset({
+    "secret", "token", "key", "password", "credential",
+    "api_key", "apikey", "access_key", "accesskey",
+    "private_key", "privatekey",
+    "connection_string", "connectionstring",
+    "client_secret", "clientsecret",
+    "db_password", "dbpassword",
+    "auth",
+})
+
+# Safe variable names that are never blocked even if they match fragments
+# above (e.g. ``SSH_AUTH_SOCK`` contains ``auth``).
+_SAFE_VARIABLES: frozenset[str] = frozenset({
+    "path", "home", "shell", "user", "logname",
+    "lang", "language", "lc_all", "lc_ctype", "lc_messages",
+    "term", "colorterm",
+    "pwd", "oldpwd", "tmpdir",
+    "editor", "visual", "pager",
+    "hostname", "hosttype", "ostype", "machtype",
+    "display", "wayland_display",
+    "xdg_config_home", "xdg_data_home", "xdg_cache_home",
+    "xdg_runtime_dir", "xdg_state_home",
+    "xdg_current_desktop", "xdg_session_type",
+    "node_env", "npm_config_prefix",
+    "gopath", "goroot",
+    "cargo_home", "rustup_home",
+    "ssh_auth_sock", "ssh_agent_pid",
+    "shlvl", "lines", "columns",
+    "histsize", "histfile", "histcontrol",
+    "ps1", "ps2", "ps4",
+    "ifs",
+    "uid", "euid", "groups",
+    "browser", "http_proxy", "https_proxy", "no_proxy",
+    "ftp_proxy", "all_proxy",
+    "mise_shell",
+    "_",  # last command
+})
+
+# Regex that captures ``$VAR`` or ``${VAR}`` references.
+_SHELL_VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
+
+
+def _is_sensitive_var(name: str) -> bool:
+    """Return True if *name* looks like a secret variable."""
+    lower = name.lower()
+    if lower in _SAFE_VARIABLES:
+        return False
+    return any(frag in lower for frag in _SENSITIVE_FRAGMENTS)
+
+
+def check_env_access(command: str) -> str | None:
+    """Detect environment-variable access patterns in a shell command.
+
+    Returns a deny reason string when the command appears to read
+    environment variables in a way that could leak secrets, or ``None``
+    if the command looks safe.
+    """
+    stripped = command.strip()
+    if not stripped:
+        return None
+
+    # --- 1. Dump-all commands in leading position (per shell segment) ---
+    # Split by shell operators so ``ls && printenv`` catches ``printenv``.
+    segments = re.split(r"\s*(?:&&|\|\||;)\s*", stripped)
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+        # Also look past pipes — ``foo | printenv`` should be caught.
+        pipe_parts = seg.split("|")
+        for part in pipe_parts:
+            part = part.strip()
+            if not part:
+                continue
+            seg_tokens = part.split()
+            seg_lead = seg_tokens[0] if seg_tokens else ""
+            if seg_lead in ENV_DUMP_COMMANDS:
+                return f"Blocked env dump command: {seg_lead}"
+            if seg_lead == "env":
+                if len(seg_tokens) == 1:
+                    return "Blocked env dump command: env (use 'env -i' to run with clean environment)"
+                second = seg_tokens[1]
+                if not (second.startswith("-") or "=" in second or second == "--"):
+                    return "Blocked env dump command: env (use 'env -i' to run with clean environment)"
+
+    if _BARE_SET_RE.search(stripped):
+        return "Blocked env dump command: set (without arguments lists all variables)"
+
+    # --- 2. Enumeration builtins ---
+    if _ENUM_BUILTINS_RE.search(stripped):
+        return "Blocked env enumeration builtin"
+
+    # --- 3. Runtime env dump patterns ---
+    m = _RUNTIME_ENV_DUMP_RE.search(stripped)
+    if m:
+        return f"Blocked runtime env dump pattern: {m.group(0)}"
+
+    # --- 4. Sensitive variable expansion ---
+    for var_match in _SHELL_VAR_REF_RE.finditer(stripped):
+        var_name = var_match.group(1)
+        if _is_sensitive_var(var_name):
+            return f"Blocked sensitive variable reference: ${var_name}"
+
+    return None
+
 
 def deny(reason: str) -> None:
     print(json.dumps({"permissionDecision": "deny", "permissionDecisionReason": reason}))
@@ -245,6 +399,12 @@ def main() -> None:
         hit = check_blocked_command(command, blocked_patterns)
         if hit:
             deny(f"Blocked pattern: {hit}")
+
+    # --- Environment variable access check (bash / powershell only) ---
+    if tool_name in ("bash", "powershell") and command:
+        env_hit = check_env_access(command)
+        if env_hit:
+            deny(env_hit)
 
     # --- URL allowlist ---
     if allowed_domains:

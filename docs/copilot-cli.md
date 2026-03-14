@@ -9,7 +9,7 @@ chezmoi は `~/.copilot/` 配下の一部を管理する。プラグインはプ
 | `copilot-instructions.md` | ユーザーレベルのカスタム指示 | chezmoi |
 | `mcp-config.json` | MCP サーバー設定 | chezmoi（`/mcp add` 後は `re-add`） |
 | `hooks/hooks.json` | preToolUse フック定義 | chezmoi |
-| `hooks/scripts/copilot-guard.py` | セキュリティガード | chezmoi |
+| `hooks/scripts/copilot-guard.py` | セキュリティガード（ファイル・URL・環境変数） | chezmoi |
 | `hooks/scripts/uv-enforcer.py` | Python / pip 直接実行をブロック | chezmoi |
 | `hooks/blocked-files.txt` | ブロック対象ファイルパターン | chezmoi |
 | `hooks/allowed-urls.txt` | URL 許可リスト | chezmoi |
@@ -62,6 +62,13 @@ chezmoi diff
 ```bash
 # copilot-guard: ファイル・URL アクセス制御
 echo '{"toolName":"edit","toolArgs":{"path":".env"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
+
+# copilot-guard: 環境変数アクセスのブロック（bash ツールのみ対象）
+echo '{"toolName":"bash","toolArgs":{"command":"printenv"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
+echo '{"toolName":"bash","toolArgs":{"command":"echo $GITHUB_TOKEN"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
+
+# copilot-guard: 安全な変数参照は許可
+echo '{"toolName":"bash","toolArgs":{"command":"echo $HOME"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
 
 # uv-enforcer: python/pip 直接実行のブロック
 echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/.copilot/hooks/scripts/uv-enforcer.py
