@@ -47,3 +47,6 @@
 **/*.pem
 **/*.key
 **/*.token
+
+# proc 環境変数 (Linux)
+**/proc/*/environ

@@ -81,5 +81,198 @@ class CopilotGuardCommandMatchingTests(unittest.TestCase):
         self.assertEqual(hit, "**/accessTokens.json")
 
 
+class CopilotGuardEnvBlockingTests(unittest.TestCase):
+    """Tests for environment variable access blocking."""
+
+    # --- Dump commands ---
+
+    def test_blocks_printenv(self) -> None:
+        result = copilot_guard.check_env_access("printenv")
+        self.assertIsNotNone(result)
+        self.assertIn("printenv", result)
+
+    def test_blocks_printenv_with_pipe(self) -> None:
+        result = copilot_guard.check_env_access("printenv | grep SECRET")
+        self.assertIsNotNone(result)
+
+    def test_blocks_bare_env(self) -> None:
+        result = copilot_guard.check_env_access("env")
+        self.assertIsNotNone(result)
+
+    def test_allows_env_i(self) -> None:
+        result = copilot_guard.check_env_access("env -i PATH=/usr/bin bash")
+        self.assertIsNone(result)
+
+    def test_allows_env_u(self) -> None:
+        result = copilot_guard.check_env_access("env -u SECRET command")
+        self.assertIsNone(result)
+
+    def test_allows_env_with_assignment(self) -> None:
+        result = copilot_guard.check_env_access("env FOO=bar command")
+        self.assertIsNone(result)
+
+    def test_allows_env_double_dash(self) -> None:
+        result = copilot_guard.check_env_access("env -- command")
+        self.assertIsNone(result)
+
+    def test_blocks_bare_set(self) -> None:
+        result = copilot_guard.check_env_access("set")
+        self.assertIsNotNone(result)
+
+    def test_allows_set_with_options(self) -> None:
+        result = copilot_guard.check_env_access("set -e")
+        self.assertIsNone(result)
+
+    def test_allows_set_euo_pipefail(self) -> None:
+        result = copilot_guard.check_env_access("set -euo pipefail")
+        self.assertIsNone(result)
+
+    def test_blocks_declare_p(self) -> None:
+        result = copilot_guard.check_env_access("declare -p")
+        self.assertIsNotNone(result)
+
+    def test_blocks_export_p(self) -> None:
+        result = copilot_guard.check_env_access("export -p")
+        self.assertIsNotNone(result)
+
+    def test_blocks_compgen_v(self) -> None:
+        result = copilot_guard.check_env_access("compgen -v")
+        self.assertIsNotNone(result)
+
+    def test_blocks_compgen_e(self) -> None:
+        result = copilot_guard.check_env_access("compgen -e")
+        self.assertIsNotNone(result)
+
+    # --- Sensitive variable expansion ---
+
+    def test_blocks_github_token(self) -> None:
+        result = copilot_guard.check_env_access("echo $GITHUB_TOKEN")
+        self.assertIsNotNone(result)
+
+    def test_blocks_secret_key_braces(self) -> None:
+        result = copilot_guard.check_env_access("echo ${SECRET_KEY}")
+        self.assertIsNotNone(result)
+
+    def test_blocks_azure_client_secret(self) -> None:
+        result = copilot_guard.check_env_access('echo "$AZURE_CLIENT_SECRET"')
+        self.assertIsNotNone(result)
+
+    def test_blocks_api_key(self) -> None:
+        result = copilot_guard.check_env_access("curl -H 'Authorization: $API_KEY'")
+        self.assertIsNotNone(result)
+
+    def test_blocks_db_password(self) -> None:
+        result = copilot_guard.check_env_access("mysql -p$DB_PASSWORD")
+        self.assertIsNotNone(result)
+
+    def test_blocks_connection_string(self) -> None:
+        result = copilot_guard.check_env_access("echo $DATABASE_CONNECTION_STRING")
+        self.assertIsNotNone(result)
+
+    def test_blocks_auth_token(self) -> None:
+        result = copilot_guard.check_env_access("echo $AUTH_TOKEN")
+        self.assertIsNotNone(result)
+
+    # --- Safe variables ---
+
+    def test_allows_path(self) -> None:
+        result = copilot_guard.check_env_access("echo $PATH")
+        self.assertIsNone(result)
+
+    def test_allows_home(self) -> None:
+        result = copilot_guard.check_env_access("echo $HOME")
+        self.assertIsNone(result)
+
+    def test_allows_shell(self) -> None:
+        result = copilot_guard.check_env_access("echo $SHELL")
+        self.assertIsNone(result)
+
+    def test_allows_user(self) -> None:
+        result = copilot_guard.check_env_access("echo $USER")
+        self.assertIsNone(result)
+
+    def test_allows_node_env(self) -> None:
+        result = copilot_guard.check_env_access("echo $NODE_ENV")
+        self.assertIsNone(result)
+
+    def test_allows_editor(self) -> None:
+        result = copilot_guard.check_env_access("echo $EDITOR")
+        self.assertIsNone(result)
+
+    def test_allows_ssh_auth_sock(self) -> None:
+        result = copilot_guard.check_env_access("echo $SSH_AUTH_SOCK")
+        self.assertIsNone(result)
+
+    def test_allows_xdg_config_home(self) -> None:
+        result = copilot_guard.check_env_access("echo $XDG_CONFIG_HOME")
+        self.assertIsNone(result)
+
+    def test_allows_tmpdir(self) -> None:
+        result = copilot_guard.check_env_access("echo $TMPDIR")
+        self.assertIsNone(result)
+
+    def test_allows_pwd(self) -> None:
+        result = copilot_guard.check_env_access("echo $PWD")
+        self.assertIsNone(result)
+
+    # --- Language runtime env dumps ---
+
+    def test_blocks_python_os_environ(self) -> None:
+        result = copilot_guard.check_env_access(
+            'uv run python -c "import os; print(os.environ)"'
+        )
+        self.assertIsNotNone(result)
+
+    def test_blocks_node_process_env(self) -> None:
+        result = copilot_guard.check_env_access(
+            'node -e "console.log(process.env)"'
+        )
+        self.assertIsNotNone(result)
+
+    def test_blocks_perl_env(self) -> None:
+        result = copilot_guard.check_env_access(
+            'perl -e \'foreach (keys %ENV) { print }\''
+        )
+        self.assertIsNotNone(result)
+
+    def test_blocks_ruby_env_to_h(self) -> None:
+        result = copilot_guard.check_env_access(
+            'ruby -e "puts ENV.to_h"'
+        )
+        self.assertIsNotNone(result)
+
+    def test_blocks_powershell_get_childitem_env(self) -> None:
+        result = copilot_guard.check_env_access(
+            "Get-ChildItem Env:"
+        )
+        self.assertIsNotNone(result)
+
+    # --- Compound commands ---
+
+    def test_blocks_env_in_pipe_chain(self) -> None:
+        result = copilot_guard.check_env_access("ls && printenv | grep SECRET")
+        self.assertIsNotNone(result)
+
+    def test_blocks_sensitive_var_in_chained_command(self) -> None:
+        result = copilot_guard.check_env_access(
+            "cd /tmp && echo $GITHUB_TOKEN"
+        )
+        self.assertIsNotNone(result)
+
+    # --- Empty / safe commands ---
+
+    def test_allows_empty_command(self) -> None:
+        result = copilot_guard.check_env_access("")
+        self.assertIsNone(result)
+
+    def test_allows_normal_command(self) -> None:
+        result = copilot_guard.check_env_access("ls -la /tmp")
+        self.assertIsNone(result)
+
+    def test_allows_git_commands(self) -> None:
+        result = copilot_guard.check_env_access("git --no-pager status")
+        self.assertIsNone(result)
+
+
 if __name__ == "__main__":
     unittest.main()
