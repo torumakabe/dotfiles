@@ -149,17 +149,43 @@ case $(uname) in
   ;;
 esac
 
-# Tool completions
-command -v zoxide >/dev/null && source <(zoxide init zsh --cmd cd)
+# Completion cache: generate once, source from file on subsequent loads.
+# Cache is invalidated when the tool binary is updated (mtime comparison).
+# Usage: _cached_source <cache_name> <command> <generation_command>
+_cached_source() {
+  local name=$1 cmd=$2 gen_cmd=$3
+  local cmd_path
+  cmd_path=$(command -v "$cmd" 2>/dev/null) || return 1
+
+  local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/zsh-completions"
+  local cache_file="$cache_dir/$name.zsh"
+  mkdir -p "$cache_dir"
+
+  if [[ -f "$cache_file" && "$cache_file" -nt "$cmd_path" ]]; then
+    source "$cache_file"
+    return
+  fi
+
+  eval "$gen_cmd" > "$cache_file" 2>/dev/null || { rm -f "$cache_file"; return 1; }
+  source "$cache_file"
+}
+
+_completion_cache_clear() {
+  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/zsh-completions"
+  echo "Completion cache cleared. Restart shell to regenerate."
+}
+
+# Tool completions (cached)
+_cached_source zoxide zoxide "zoxide init zsh --cmd cd"
 alias z='cd'
 alias zi='cdi'
-command -v kubectl >/dev/null && source <(kubectl completion zsh) && complete -o default -F __start_kubectl k
-command -v helm >/dev/null && source <(helm completion zsh)
+_cached_source kubectl kubectl "kubectl completion zsh" && complete -o default -F __start_kubectl k
+_cached_source helm helm "helm completion zsh"
 command -v terraform >/dev/null && complete -o nospace -C "$(command -v terraform)" terraform
-command -v rad >/dev/null && . <(rad completion zsh)
-command -v gh >/dev/null && source <(gh completion -s zsh)
-command -v azd >/dev/null && source <(azd completion zsh)
-command -v trivy >/dev/null && source <(trivy completion zsh)
+_cached_source rad rad "rad completion zsh"
+_cached_source gh gh "gh completion -s zsh"
+_cached_source azd azd "azd completion zsh"
+_cached_source trivy trivy "trivy completion zsh"
 
 if [ -z "$SSH_AUTH_SOCK" ] ; then
   if agent_output=$(ssh-agent -s 2>/dev/null); then
