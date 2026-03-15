@@ -176,6 +176,26 @@ url = "https://dot.net/v1/dotnet-install.ps1"
 [tools.dotnet."platforms.windows-x64"]
 url = "https://dot.net/v1/dotnet-install.ps1"
 
+[[tools.edit]]
+version = "1.2.1"
+backend = "aqua:microsoft/edit"
+
+[tools.edit."platforms.linux-arm64"]
+checksum = "sha256:4e320240586ecc5cdfdcff0488647879077027506c68c919ccdd2754642d0fbb"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-aarch64-linux-gnu.tar.zst"
+
+[tools.edit."platforms.linux-x64"]
+checksum = "sha256:aee9f2f21ebc90cc1dbfb20ee93d3aa03d325127a8e3f7f91dd02c5a9e0a7b25"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-x86_64-linux-gnu.tar.zst"
+
+[tools.edit."platforms.windows-arm64"]
+checksum = "sha256:7f44bb48b2891163cf5b9c996e8a917c29d82c7a765c07e89e74b47aff542ca9"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-aarch64-windows.zip"
+
+[tools.edit."platforms.windows-x64"]
+checksum = "sha256:be3affb7e5e0cd856fc0fb9c8b2004e9fbbc364e69797f7c2e9d8fcc94bfc4ff"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-x86_64-windows.zip"
+
 [[tools.fzf]]
 version = "0.70.0"
 backend = "aqua:junegunn/fzf"
@@ -335,35 +355,6 @@ url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/37300
 checksum = "sha256:6fdd6d60d766f57aa89868f576090b5c141f5efd077965a530b5618af93d53ad"
 url = "https://github.com/github/copilot-cli/releases/download/v1.0.5/copilot-win32-x64.zip"
 url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/373006382"
-
-[[tools."github:microsoft/dev-proxy"]]
-version = "2.2.0"
-backend = "github:microsoft/dev-proxy"
-
-[tools."github:microsoft/dev-proxy"."platforms.linux-arm64"]
-checksum = "sha256:2d5a1182682d298fb92f4684555b4f293ba9ecd85c375f41e82fffe6930e3182"
-url = "https://github.com/dotnet/dev-proxy/releases/download/v2.2.0/dev-proxy-linux-arm64-v2.2.0.zip"
-url_api = "https://api.github.com/repos/dotnet/dev-proxy/releases/assets/366708245"
-
-[tools."github:microsoft/dev-proxy"."platforms.linux-x64"]
-checksum = "sha256:ffa6fc3cb828d26416398bef3091e87ea126248f5e3ab18c065e98aa9a81bc79"
-url = "https://github.com/dotnet/dev-proxy/releases/download/v2.2.0/dev-proxy-linux-x64-v2.2.0.zip"
-url_api = "https://api.github.com/repos/dotnet/dev-proxy/releases/assets/366708243"
-
-[tools."github:microsoft/dev-proxy"."platforms.macos-arm64"]
-checksum = "sha256:1dc1155a7c95684f9ea56839aee6925bc842a693b454fc6bb2e59d3d58227bee"
-url = "https://github.com/dotnet/dev-proxy/releases/download/v2.2.0/DevProxy.Abstractions-v2.2.0.zip"
-url_api = "https://api.github.com/repos/dotnet/dev-proxy/releases/assets/366708242"
-
-[tools."github:microsoft/dev-proxy"."platforms.windows-arm64"]
-checksum = "sha256:1dc1155a7c95684f9ea56839aee6925bc842a693b454fc6bb2e59d3d58227bee"
-url = "https://github.com/dotnet/dev-proxy/releases/download/v2.2.0/DevProxy.Abstractions-v2.2.0.zip"
-url_api = "https://api.github.com/repos/dotnet/dev-proxy/releases/assets/366708242"
-
-[tools."github:microsoft/dev-proxy"."platforms.windows-x64"]
-checksum = "sha256:6b5ea8f7cda0a411dc7cf997012f4df2636595475761f05d187236f122c0347f"
-url = "https://github.com/dotnet/dev-proxy/releases/download/v2.2.0/dev-proxy-win-x64-v2.2.0.zip"
-url_api = "https://api.github.com/repos/dotnet/dev-proxy/releases/assets/366708247"
 
 [[tools.gitleaks]]
 version = "8.30.0"
@@ -751,6 +742,7 @@ url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-x86_64-pc-wi
 [tools.uv."platforms.windows-x64"]
 checksum = "sha256:d31a30f1dfb96e630a08d5a9b3f3f551254b7ed6e9b7e495f46a4232661c7252"
 url = "https://github.com/astral-sh/uv/releases/download/0.10.10/uv-x86_64-pc-windows-msvc.zip"
+provenance = "github-attestations"
 
 [[tools.yq]]
 version = "4.52.4"
