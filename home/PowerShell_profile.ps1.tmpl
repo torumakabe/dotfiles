@@ -136,10 +136,47 @@ Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
     Remove-Item $completion_file, Env:\_ARGCOMPLETE_STDOUT_FILENAME, Env:\ARGCOMPLETE_USE_TEMPFILES, Env:\COMP_LINE, Env:\COMP_POINT, Env:\_ARGCOMPLETE, Env:\_ARGCOMPLETE_SUPPRESS_SPACE, Env:\_ARGCOMPLETE_IFS, Env:\_ARGCOMPLETE_SHELL
 }
 
-kubectl completion powershell | Out-String | Invoke-Expression
-Register-ArgumentCompleter -CommandName k -ScriptBlock $__kubectlCompleterBlock
+# Completion cache: generate once, dot-source from file on subsequent loads.
+# Cache is invalidated when the tool binary is updated (mtime comparison).
+function Invoke-CachedSource {
+    param(
+        [string]$Name,
+        [string]$Command,
+        [scriptblock]$Generator
+    )
+    $cmdInfo = Get-Command $Command -ErrorAction SilentlyContinue
+    if (-not $cmdInfo) { return }
+    $cmdPath = $cmdInfo.Source
+
+    $cacheDir = Join-Path $env:LOCALAPPDATA 'shell-completions'
+    $cacheFile = Join-Path $cacheDir "$Name.ps1"
+    if (-not (Test-Path $cacheDir)) { [void](New-Item -ItemType Directory -Path $cacheDir -Force) }
+
+    $cmdMtime = (Get-Item $cmdPath).LastWriteTime
+    if ((Test-Path $cacheFile) -and (Get-Item $cacheFile).LastWriteTime -gt $cmdMtime) {
+        . $cacheFile
+        return
+    }
+
+    $output = & $Generator 2>$null | Out-String
+    if ($output) {
+        Set-Content -Path $cacheFile -Value $output -Encoding utf8
+        . $cacheFile
+    }
+}
+
+function Clear-CompletionCache {
+    $cacheDir = Join-Path $env:LOCALAPPDATA 'shell-completions'
+    if (Test-Path $cacheDir) { Remove-Item -Recurse -Force $cacheDir }
+    Write-Host "Completion cache cleared. Restart shell to regenerate."
+}
+
+Invoke-CachedSource -Name kubectl -Command kubectl -Generator { kubectl completion powershell }
+if ($__kubectlCompleterBlock) {
+    Register-ArgumentCompleter -CommandName k -ScriptBlock $__kubectlCompleterBlock
+}
 
 # zoxide (smarter cd)
-Invoke-Expression (& { (zoxide init powershell --cmd cd | Out-String) })
+Invoke-CachedSource -Name zoxide -Command zoxide -Generator { zoxide init powershell --cmd cd }
 Set-Alias -Name z -Value cd
 {{ end -}}
