@@ -57,9 +57,13 @@ fi
 {{ else if eq .chezmoi.os "darwin" -}}
 echo "Installing system packages via brew..."
 brew update --quiet
+# gh: mise install 前にトークン取得手段を確保する（mise 版 gh が shim で shadow する）
+# azure/azd/azd, dev-proxy: mise github: バックエンドが macOS で正しく動作しないため brew で管理
 brew install \
   azure-cli \
+  azure/azd/azd \
   gh \
+  microsoft/dev-proxy/dev-proxy \
   watch \
   zsh-completions
 

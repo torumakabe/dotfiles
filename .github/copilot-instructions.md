@@ -17,7 +17,8 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 - **cargo-make**: linux/arm64 未提供（[sagiegurari/cargo-make#541](https://github.com/sagiegurari/cargo-make/issues/541)）
 - **edit**: macOS 未提供（[releases](https://github.com/microsoft/edit/releases) を確認）
-- **azure-dev**: aqua レジストリが linux/arm64 未対応。現在 `github:` バックエンド使用（[aqua registry](https://github.com/aquaproj/aqua-registry/blob/main/pkgs/Azure/azure-dev/registry.yaml) を確認）
+- **azure-dev**: macOS では mise `github:` バックエンドがバイナリ名を正規化しない（`azd-darwin-arm64` → `azd`）ため brew で管理。非 macOS は `github:` バックエンド使用（aqua レジストリが linux/arm64 未対応: [aqua registry](https://github.com/aquaproj/aqua-registry/blob/main/pkgs/Azure/azure-dev/registry.yaml) を確認）
+- **dev-proxy**: macOS では mise `github:` バックエンドが誤アセット（`DevProxy.Abstractions`）を取得するため brew で管理（[dotnet/dev-proxy releases](https://github.com/dotnet/dev-proxy/releases) で macOS arm64 対応を確認）
 
 ## ワークアラウンド（定期チェック対象）
 
