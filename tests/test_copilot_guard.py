@@ -274,5 +274,165 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class CopilotGuardNewBlockedPatternsTests(unittest.TestCase):
+    """Tests for newly added blocked-files.txt patterns (Copilot hooks, SSH, .github/hooks)."""
+
+    # --- Copilot CLI 設定・Hook (改変防止) ---
+
+    def test_blocks_copilot_hooks_direct_child(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.copilot/hooks/hooks.json",
+            ["**/.copilot/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.copilot/hooks/**")
+
+    def test_blocks_copilot_hooks_config_file(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.copilot/hooks/blocked-files.txt",
+            ["**/.copilot/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.copilot/hooks/**")
+
+    def test_blocks_copilot_hooks_nested_script(self) -> None:
+        """Critical: scripts/ subdirectory must be protected to prevent 2-step attacks."""
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.copilot/hooks/scripts/copilot-guard.py",
+            ["**/.copilot/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.copilot/hooks/**")
+
+    def test_blocks_copilot_hooks_nested_audit_log(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.copilot/hooks/scripts/audit-log.py",
+            ["**/.copilot/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.copilot/hooks/**")
+
+    def test_blocks_copilot_mcp_config(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.copilot/mcp-config.json",
+            ["**/.copilot/mcp-config.json"],
+        )
+        self.assertEqual(hit, "**/.copilot/mcp-config.json")
+
+    def test_blocks_copilot_config(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.copilot/config.json",
+            ["**/.copilot/config.json"],
+        )
+        self.assertEqual(hit, "**/.copilot/config.json")
+
+    def test_blocks_github_hooks_file(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/workspace/project/.github/hooks/check-sensitive-access.sh",
+            ["**/.github/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.github/hooks/**")
+
+    def test_blocks_github_hooks_json(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            ".github/hooks/pre-tool-use.json",
+            ["**/.github/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.github/hooks/**")
+
+    def test_blocks_github_hooks_nested_script(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            ".github/hooks/scripts/check.sh",
+            ["**/.github/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.github/hooks/**")
+
+    # --- SSH ---
+
+    def test_blocks_ssh_directory(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.ssh/known_hosts",
+            ["**/.ssh/*"],
+        )
+        self.assertEqual(hit, "**/.ssh/*")
+
+    def test_blocks_ssh_config(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.ssh/config",
+            ["**/.ssh/*"],
+        )
+        self.assertEqual(hit, "**/.ssh/*")
+
+    def test_blocks_id_rsa(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.ssh/id_rsa",
+            ["**/id_rsa"],
+        )
+        self.assertEqual(hit, "**/id_rsa")
+
+    def test_blocks_id_ed25519(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.ssh/id_ed25519",
+            ["**/id_ed25519"],
+        )
+        self.assertEqual(hit, "**/id_ed25519")
+
+    def test_blocks_id_ecdsa(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.ssh/id_ecdsa",
+            ["**/id_ecdsa"],
+        )
+        self.assertEqual(hit, "**/id_ecdsa")
+
+    def test_does_not_match_id_rsa_pub(self) -> None:
+        hit = copilot_guard.check_blocked_path(
+            "/home/user/.ssh/id_rsa.pub",
+            ["**/id_rsa"],
+        )
+        self.assertIsNone(hit)
+
+    # --- Command matching for hook file modification ---
+
+    def test_command_blocks_cat_copilot_hooks(self) -> None:
+        hit = copilot_guard.check_blocked_command(
+            "cat ~/.copilot/hooks/blocked-files.txt",
+            ["**/.copilot/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.copilot/hooks/**")
+
+    def test_command_blocks_cat_copilot_guard_script(self) -> None:
+        """Critical: must block reading the guard script itself."""
+        hit = copilot_guard.check_blocked_command(
+            "cat ~/.copilot/hooks/scripts/copilot-guard.py",
+            ["**/.copilot/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.copilot/hooks/**")
+
+    def test_command_blocks_sed_modify_guard_script(self) -> None:
+        """Critical: must block modification of the guard script."""
+        hit = copilot_guard.check_blocked_command(
+            "sed -i 's/deny/allow/g' ~/.copilot/hooks/scripts/copilot-guard.py",
+            ["**/.copilot/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.copilot/hooks/**")
+
+    def test_command_blocks_rm_github_hooks(self) -> None:
+        hit = copilot_guard.check_blocked_command(
+            "rm .github/hooks/check-sensitive-access.sh",
+            ["**/.github/hooks/**"],
+        )
+        self.assertEqual(hit, "**/.github/hooks/**")
+
+    def test_command_blocks_cat_ssh_key(self) -> None:
+        hit = copilot_guard.check_blocked_command(
+            "cat ~/.ssh/id_ed25519",
+            ["**/id_ed25519"],
+        )
+        self.assertEqual(hit, "**/id_ed25519")
+
+    def test_command_blocks_cat_copilot_mcp_config(self) -> None:
+        hit = copilot_guard.check_blocked_command(
+            "cat ~/.copilot/mcp-config.json",
+            ["**/.copilot/mcp-config.json"],
+        )
+        self.assertEqual(hit, "**/.copilot/mcp-config.json")
+
+
 if __name__ == "__main__":
     unittest.main()

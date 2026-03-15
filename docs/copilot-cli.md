@@ -14,9 +14,10 @@ GitHub Copilot CLI の設定・運用ガイドである。chezmoi が `~/.copilo
 |---------|------|----------|
 | `copilot-instructions.md` | ユーザーレベルのカスタム指示 | chezmoi |
 | `mcp-config.json` | MCP サーバー設定 | chezmoi（`/mcp add` 後は `re-add`） |
-| `hooks/hooks.json` | preToolUse フック定義 | chezmoi |
+| `hooks/hooks.json` | preToolUse / postToolUse フック定義 | chezmoi |
 | `hooks/scripts/copilot-guard.py` | セキュリティガード（ファイル・URL・環境変数） | chezmoi |
 | `hooks/scripts/uv-enforcer.py` | Python / pip 直接実行をブロック | chezmoi |
+| `hooks/scripts/audit-log.py` | ツール実行の監査ログ記録 | chezmoi |
 | `hooks/blocked-files.txt` | ブロック対象ファイルパターン | chezmoi |
 | `hooks/allowed-urls.txt` | URL 許可リスト | chezmoi |
 | `skills/` | エージェントスキル | chezmoi（上流更新時は `re-add`） |
@@ -100,6 +101,56 @@ echo '{"toolName":"bash","toolArgs":{"command":"echo $GITHUB_TOKEN"}}' | uv run 
 # copilot-guard: 安全な変数参照は許可
 echo '{"toolName":"bash","toolArgs":{"command":"echo $HOME"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
 
+# copilot-guard: Hook ファイル改変のブロック
+echo '{"toolName":"edit","toolArgs":{"path":"/home/user/.copilot/hooks/hooks.json"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
+
+# copilot-guard: SSH 鍵アクセスのブロック
+echo '{"toolName":"bash","toolArgs":{"command":"cat ~/.ssh/id_ed25519"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
+
 # uv-enforcer: python/pip 直接実行のブロック
 echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/.copilot/hooks/scripts/uv-enforcer.py
 ```
+
+### 自動テスト
+
+```bash
+# ユニットテスト（65 テストケース）
+uv run -m unittest tests.test_copilot_guard -v
+```
+
+CI でも自動実行される（`.github/workflows/test-copilot-guard.yml`）。Hook 関連ファイルの変更時と週次スケジュールで実行し、fail-open リグレッションを検知する。
+
+### Autopilot モードでの安全な利用
+
+`--allow-all` 下ではツール承認・パス権限・URL 権限がすべて無効化されるが、`--deny-tool` と Hooks は引き続き有効である。`.zshrc` に定義された `copilot-safe` エイリアスは、多層防御を固定化した Autopilot 起動設定である。
+
+```bash
+copilot-safe -p "YOUR PROMPT"
+```
+
+このエイリアスには以下が含まれる:
+
+- `--deny-tool` による外部送信コマンド（curl, wget, nslookup, dig）のブロック（fail-open リスクなし）
+- `--secret-env-vars` による機微な環境変数値の隠蔽
+- `--max-autopilot-continues 20` による実行ステップ数の上限
+
+ファイルの読み取り・書き込み保護は `--deny-tool` ではなく preToolUse Hook（copilot-guard.py + blocked-files.txt）が担う。`--deny-tool` がサポートする kind は `shell(cmd)`, `write`（パス指定不可）, `url(domain)`, `<MCP>(tool)` のみであり、`read(...)` kind は存在しない。
+
+環境に応じて `--disable-mcp-server` や `--excluded-tools` を追加して攻撃面をさらに縮小できる。
+
+### 監査ログ
+
+`postToolUse` フックにより、ツール実行ごとに `~/.copilot/audit.jsonl` へログが記録される。
+
+```bash
+# 直近のツール実行を確認
+tail -5 ~/.copilot/audit.jsonl | python3 -m json.tool
+
+# 環境変数 COPILOT_AUDIT_DIR でログ出力先を変更可能
+COPILOT_AUDIT_DIR=/path/to/logs copilot
+```
+
+### 参考資料
+
+- [GitHub Copilot CLI — Permissions](https://docs.github.com/en/copilot/copilot-cli/using-copilot-cli/permissions) — 公式のパーミッション設計ドキュメント
+- [GitHub Copilot CLI — Hooks](https://docs.github.com/en/copilot/copilot-cli/using-copilot-cli/using-copilot-cli-hooks) — 公式の Hooks 設定リファレンス

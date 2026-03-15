@@ -115,6 +115,23 @@ Set-Alias -Name e -Value Open-EditInNewConsole
 Set-Alias -Name k -Value kubectl
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 
+# Copilot CLI: Autopilot + multi-layer defense (based on security report recommendations)
+# --deny-tool overrides --allow-all and has no fail-open risk.
+# File read/write protection is handled by preToolUse hooks (copilot-guard.py), not --deny-tool.
+# Supported --deny-tool kinds: shell(cmd), write, url(domain), <MCP>(tool)
+function Invoke-CopilotSafe {
+    copilot --autopilot `
+      --allow-all `
+      --deny-tool 'shell(curl)' `
+      --deny-tool 'shell(wget)' `
+      --deny-tool 'shell(nslookup)' `
+      --deny-tool 'shell(dig)' `
+      --secret-env-vars 'AZURE_CLIENT_SECRET,ARM_CLIENT_SECRET,ARM_ACCESS_KEY,AZURE_STORAGE_CONNECTION_STRING' `
+      --max-autopilot-continues 20 `
+      @args
+}
+Set-Alias -Name copilot-safe -Value Invoke-CopilotSafe
+
 # === Completers and tool setup ===
 
 # https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?tabs=azure-cli#enable-tab-completion-in-powershell

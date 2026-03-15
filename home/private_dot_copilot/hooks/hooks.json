@@ -14,6 +14,14 @@
         "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\uv-enforcer.py\"",
         "timeoutSec": 10
       }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/audit-log.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\audit-log.py\"",
+        "timeoutSec": 5
+      }
     ]
   }
 }

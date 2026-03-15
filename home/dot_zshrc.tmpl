@@ -128,6 +128,19 @@ command -v mise >/dev/null && source <(mise activate zsh)
 alias k=kubectl
 alias ll='ls -ahl'
 
+# Copilot CLI: Autopilot + multi-layer defense alias (based on security report recommendations)
+# --deny-tool overrides --allow-all and has no fail-open risk.
+# File read/write protection is handled by preToolUse hooks (copilot-guard.py), not --deny-tool.
+# Supported --deny-tool kinds: shell(cmd), write, url(domain), <MCP>(tool)
+alias copilot-safe='copilot --autopilot \
+  --allow-all \
+  --deny-tool "shell(curl)" \
+  --deny-tool "shell(wget)" \
+  --deny-tool "shell(nslookup)" \
+  --deny-tool "shell(dig)" \
+  --secret-env-vars "AZURE_CLIENT_SECRET,ARM_CLIENT_SECRET,ARM_ACCESS_KEY,AZURE_STORAGE_CONNECTION_STRING" \
+  --max-autopilot-continues 20'
+
 # FPATH for completions (must be before compinit)
 [ -f "$HOME/.zfunc/_rustup" ] && FPATH=$HOME/.zfunc:$FPATH
 
