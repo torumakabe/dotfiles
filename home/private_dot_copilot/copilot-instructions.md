@@ -2,15 +2,29 @@
 
 ## ツール操作の制約（デフォルト動作より優先）
 
-- **[Windows]** ファイルをエディタで開く → `Start-Process edit <path>`（Microsoft Edit が別ウィンドウで起動する）
-- Python 実行・パッケージ管理 → 常に `uv` 経由。`python` / `pip` の直接実行は禁止（preToolUse フックで強制）
-- **[Unix]** コマンド存在チェック → `command -v`（`which` は使わない）
-- **[Windows]** Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
+### 共通
+
+- Python → `python` / `pip` の直接実行は禁止。以下を使うこと:
+  - スクリプト実行: `uv run script.py`（依存は PEP 723 インラインメタデータで宣言）
+  - パッケージ追加: `uv add <pkg>`（プロジェクト）/ `uv pip install <pkg>`（グローバル）
+  - REPL: `uv run python`
+
+### Windows
+
+- ファイルをエディタで開く → `Start-Process edit <path>`（Microsoft Edit が別ウィンドウで起動する）
+- Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
+
+### macOS / Linux
+
+- コマンド存在チェック → `command -v`（`which` は使わない）
 
 ## 言語
 
 - 日本語で応答する（文脈上明らかに英語が必要な場合を除く）
 - コードコメント: README が英語のリポジトリでは英語、それ以外は日本語
+- コミットメッセージ: Conventional Commits プレフィックスは英語。説明文は README の言語に従う
+- PR タイトル/本文: README の言語に従う
+- ブランチ名: 常に英語（URL/CLI の互換性）
 
 ## 基本方針
 
