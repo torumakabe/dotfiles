@@ -41,6 +41,22 @@
 # Publish Profile
 **/*.PublishSettings
 
+# Copilot CLI 設定・Hook (改変防止)
+# read/write 両方をブロック。--allow-all 下での 2 ステップ攻撃対策:
+# 攻撃者が Hook ファイルを改変→機密ファイルにアクセスする経路を遮断する。
+# ** を使い hooks/scripts/ 配下のスクリプトも保護する。
+**/.copilot/hooks/**
+**/.copilot/mcp-config.json
+**/.copilot/config.json
+**/.github/hooks/**
+
+# SSH
+**/.ssh/*
+**/id_rsa
+**/id_ed25519
+**/id_ecdsa
+**/id_dsa
+
 # 汎用
 **/.env
 **/.env.*

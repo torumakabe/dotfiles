@@ -1,0 +1,66 @@
+name: Test Copilot Guard
+on:
+  pull_request:
+    paths:
+      - 'home/private_dot_copilot/hooks/**'
+      - 'tests/test_copilot_guard.py'
+  push:
+    branches: [main]
+    paths:
+      - 'home/private_dot_copilot/hooks/**'
+      - 'tests/test_copilot_guard.py'
+  schedule:
+    # Weekly Monday 00:00 UTC — detect fail-open regressions
+    - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: false
+
+      - name: Run copilot-guard unit tests
+        run: uv run -m unittest tests.test_copilot_guard -v
+
+      - name: Smoke test — .env access is blocked
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat .env"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke test — .azure access is blocked
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat ~/.azure/azureProfile.json"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke test — terraform.tfstate access is blocked
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat terraform.tfstate"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke test — copilot hooks modification is blocked
+        run: |
+          RESULT=$(echo '{"toolName":"edit","toolArgs":{"path":"/home/user/.copilot/hooks/hooks.json"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke test — SSH key access is blocked
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat ~/.ssh/id_ed25519"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke test — printenv is blocked
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"printenv"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
