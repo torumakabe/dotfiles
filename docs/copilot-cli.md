@@ -114,7 +114,7 @@ echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/
 ### 自動テスト
 
 ```bash
-# ユニットテスト（65 テストケース）
+# ユニットテスト（70 テストケース）
 uv run -m unittest tests.test_copilot_guard -v
 ```
 
