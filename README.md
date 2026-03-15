@@ -9,7 +9,7 @@ Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](h
 - **1つのソースで複数環境を管理**: `chezmoi` のテンプレートで、プラットフォームごとの差分を吸収しながら設定を一元管理している
 - **ツールチェーンを再現しやすい**: `mise` と lockfile で、開発ツールのバージョンと取得元をそろえやすい構成である
 - **GitHub Copilot CLI 向け設定を共通化**: カスタム指示、フック、スキルを dotfiles として管理している
-- **安全なデフォルト**: `gitleaks` を組み込んだ `git pre-commit` フックと Copilot CLI の `preToolUse` フックにより、コミット前とエージェント実行時のガードをそろえている。エージェント向けフックは秘匿ファイルへのアクセス、環境変数の読み取り、許可外 URL への送信を自動拒否する（[詳細](docs/copilot-cli.md#セキュリティフック)）
+- **安全なデフォルト**: `gitleaks` を組み込んだ `git pre-commit` フックと Copilot CLI の `preToolUse` フックにより、コミット前とエージェント実行時のガードをそろえている。エージェント向けフックは秘匿ファイルへのアクセス、環境変数の読み取り、許可外 URL への送信を自動拒否する。さらに `postToolUse` フックによる監査ログと、Autopilot モード向けの `copilot-safe` エイリアスで多層防御を構成している（[詳細](docs/copilot-cli.md#セキュリティフック)）
 - **制約の多いコンテナ環境でも破綻しにくい**: 非対話での作成やホスト側ツールにアクセスできないケースを考慮し、必要な分岐やフォールバックを組み込んでいる
 
 ## 対応環境
@@ -152,5 +152,5 @@ mise-upgrade
 
 - [`docs/operations.md`](docs/operations.md): 運用詳細、`mise` の追加・削除、lockfile 再構築、`git pre-commit` フックの追加・更新、`run_once_*` の扱い
 - [`docs/architecture.md`](docs/architecture.md): ディレクトリ構造、主要な設計判断、`git pre-commit` フックの構造、プラットフォーム検出、Git `includeIf` 設計
-- [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の管理対象ファイル、プラグイン、スキル、フックのテスト方法
+- [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の管理対象ファイル、プラグイン、スキル、セキュリティフック、Autopilot 安全利用、監査ログ
 - [`docs/troubleshooting.md`](docs/troubleshooting.md): よくあるエラーと復旧手順

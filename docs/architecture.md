@@ -27,12 +27,13 @@ home/                          ← chezmoi source (.chezmoiroot で指定)
 │   ├── copilot-instructions.md
 │   ├── mcp-config.json        ← MCP サーバー設定 (/mcp add 後は re-add)
 │   ├── hooks/
-│   │   ├── hooks.json         ← preToolUse フック定義
+│   │   ├── hooks.json         ← preToolUse / postToolUse フック定義
 │   │   ├── blocked-files.txt  ← ブロックパターン
 │   │   ├── allowed-urls.txt   ← URL 許可リスト
 │   │   └── scripts/
 │   │       ├── copilot-guard.py
-│   │       └── uv-enforcer.py
+│   │       ├── uv-enforcer.py
+│   │       └── audit-log.py
 │   └── skills/
 ├── run_once_before_*          ← パッケージ・mise インストール
 └── run_once_after_*           ← シェル・ツールセットアップ
@@ -53,6 +54,8 @@ reference/windows/             ← デプロイしない参照ファイル
 - **Git includeIf** を使って、プラットフォーム別 gitconfig の差分だけを自動読込する
 - **コミット署名** は 1Password SSH エージェント経由を基本とし、コンテナ系環境では自動無効化する
 - **Copilot Guard / uv Enforcer** により、危険なファイルアクセスや Python / pip の直接実行を抑止する
+- **postToolUse 監査ログ** により、ツール実行履歴を `~/.copilot/audit.jsonl` に記録し、事後検証を可能にする
+- **`copilot-safe` エイリアス** により、Autopilot モードでの多層防御（`--deny-tool` による外部送信ブロック、`--secret-env-vars` による機微変数隠蔽、ステップ数上限）を固定化する
 - **gitleaks + git pre-commit** により、コミット前に secret scan を走らせつつ、各リポジトリ固有のフックも併用できる
 - **Codespaces / Dev Container** では、非対話での作成や認証制約に合わせたワークアラウンドとフォールバックを持つ
 
