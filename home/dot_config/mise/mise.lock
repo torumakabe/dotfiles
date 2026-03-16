@@ -84,6 +84,10 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 version = "0.115.0"
 backend = "aqua:openai/codex"
 
+[tools.codex."platforms.linux-x64"]
+checksum = "sha256:8aedf14e762568e6bbb60b1617a38a34a74f2e497870b85820bbe3807ee39105"
+url = "https://github.com/openai/codex/releases/download/rust-v0.115.0/codex-x86_64-unknown-linux-musl.zst"
+
 [tools.codex."platforms.windows-x64"]
 checksum = "sha256:3a948e30610fd64f9ed2df748e3b9a20370041ebb1abe919ba85f0bc67127000"
 url = "https://github.com/openai/codex/releases/download/rust-v0.115.0/codex-x86_64-pc-windows-msvc.exe.zst"
