@@ -176,26 +176,6 @@ url = "https://dot.net/v1/dotnet-install.ps1"
 [tools.dotnet."platforms.windows-x64"]
 url = "https://dot.net/v1/dotnet-install.ps1"
 
-[[tools.edit]]
-version = "1.2.1"
-backend = "aqua:microsoft/edit"
-
-[tools.edit."platforms.linux-arm64"]
-checksum = "sha256:4e320240586ecc5cdfdcff0488647879077027506c68c919ccdd2754642d0fbb"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-aarch64-linux-gnu.tar.zst"
-
-[tools.edit."platforms.linux-x64"]
-checksum = "sha256:aee9f2f21ebc90cc1dbfb20ee93d3aa03d325127a8e3f7f91dd02c5a9e0a7b25"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-x86_64-linux-gnu.tar.zst"
-
-[tools.edit."platforms.windows-arm64"]
-checksum = "sha256:7f44bb48b2891163cf5b9c996e8a917c29d82c7a765c07e89e74b47aff542ca9"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-aarch64-windows.zip"
-
-[tools.edit."platforms.windows-x64"]
-checksum = "sha256:be3affb7e5e0cd856fc0fb9c8b2004e9fbbc364e69797f7c2e9d8fcc94bfc4ff"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-x86_64-windows.zip"
-
 [[tools.fzf]]
 version = "0.70.0"
 backend = "aqua:junegunn/fzf"
@@ -267,50 +247,6 @@ url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_ar
 [tools.github-cli."platforms.windows-x64"]
 checksum = "sha256:8fdaac525d8919f9f8c265f99ffa26189e5f1fd3a35636adad4fd890a141a555"
 url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_amd64.zip"
-
-[[tools."github:Azure/azure-dev"]]
-version = "azure-dev-cli_1.23.9"
-backend = "github:Azure/azure-dev"
-
-[tools."github:Azure/azure-dev"."platforms.linux-arm64"]
-checksum = "sha256:c32d489ac550fdfa7c7f94c1296ff5a8f94e2981f8e6af31e7061846acc0bfb6"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387443"
-
-[tools."github:Azure/azure-dev"."platforms.linux-arm64-musl"]
-checksum = "sha256:c32d489ac550fdfa7c7f94c1296ff5a8f94e2981f8e6af31e7061846acc0bfb6"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387443"
-
-[tools."github:Azure/azure-dev"."platforms.linux-x64"]
-checksum = "sha256:f3776d0510e0d1319cf8ab0dba1762873987639eee1b9834dae189f5208fa752"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387441"
-
-[tools."github:Azure/azure-dev"."platforms.linux-x64-musl"]
-checksum = "sha256:f3776d0510e0d1319cf8ab0dba1762873987639eee1b9834dae189f5208fa752"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387441"
-
-[tools."github:Azure/azure-dev"."platforms.macos-arm64"]
-checksum = "sha256:4f68c0b6110141256efd579fd73193d432ce489ae6d193210fdefbb15e1ff983"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-darwin-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387442"
-
-[tools."github:Azure/azure-dev"."platforms.macos-x64"]
-checksum = "sha256:19a09c591510f793f2edc64bf259da8f9499357325816b6805446a222a0bc1ac"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-darwin-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387435"
-
-[tools."github:Azure/azure-dev"."platforms.windows-arm64"]
-checksum = "sha256:3e61ab6eca1bbb68704007bc96c803f042da2cc11c340864e777911b6b1bf7b6"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-windows-arm64-alpha.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387454"
-
-[tools."github:Azure/azure-dev"."platforms.windows-x64"]
-checksum = "sha256:a1644c786366974709ecd4a03b66fe1c816ef33216f7f1658f66a367047ee234"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.9/azd-windows-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/373387447"
 
 [[tools."github:github/copilot-cli"]]
 version = "1.0.5"
