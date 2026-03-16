@@ -55,7 +55,7 @@ reference/windows/             ← デプロイしない参照ファイル
 - **コミット署名** は 1Password SSH エージェント経由を基本とし、コンテナ系環境では自動無効化する
 - **Copilot Guard / uv Enforcer** により、危険なファイルアクセスや Python / pip の直接実行を抑止する
 - **postToolUse 監査ログ** により、ツール実行履歴を `~/.copilot/audit.jsonl` に記録し、事後検証を可能にする
-- **`copilot-safe` エイリアス** により、Autopilot モードでの多層防御（`--deny-tool` による外部送信ブロック、`--secret-env-vars` による機微変数隠蔽、ステップ数上限）を固定化する
+- **`copilot-safe` エイリアス** により、Autopilot モードでの多層防御（`--deny-tool` によるネットワークコマンド・リモート転送・DNS ルックアップのブロック、`--secret-env-vars` による機微変数隠蔽、ステップ数上限）を固定化する
 - **gitleaks + git pre-commit** により、コミット前に secret scan を走らせつつ、各リポジトリ固有のフックも併用できる
 - **Codespaces / Dev Container** では、非対話での作成や認証制約に合わせたワークアラウンドとフォールバックを持つ
 
