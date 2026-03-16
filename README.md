@@ -82,7 +82,7 @@ GITHUB_TOKEN=$(gh auth token) mise install --yes
 
 1. chezmoi インストール: `winget install twpayne.chezmoi`
 2. 設定適用: `chezmoi init --apply torumakabe`
-3. GUI アプリ: `winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"`
+3. Windows セットアップ (DSC): `winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"`
 4. PowerShell Profile のローダー設定（初回のみ）:
 
 ```powershell
