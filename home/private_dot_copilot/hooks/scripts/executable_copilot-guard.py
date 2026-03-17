@@ -279,7 +279,6 @@ _RUNTIME_ENV_DUMP_RE = re.compile(
     r"|%ENV\b"                 # Perl    %ENV
     r"|\bENV\.to_h\b"         # Ruby    ENV.to_h
     r"|\bENV\.each\b"         # Ruby    ENV.each
-    r"|\bSystem\.getenv\(\s*\)"  # Java  System.getenv()
     r"|\bDeno\.env\.toObject\b"  # Deno  Deno.env.toObject()
     r"|\bGet-ChildItem\s+Env:"   # PowerShell Get-ChildItem Env:
     r"|\\\$env:",              # PowerShell $env: variable access
