@@ -277,50 +277,6 @@ url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_ar
 checksum = "sha256:8fdaac525d8919f9f8c265f99ffa26189e5f1fd3a35636adad4fd890a141a555"
 url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_amd64.zip"
 
-[[tools."github:Azure/azure-dev"]]
-version = "azure-dev-cli_1.23.10"
-backend = "github:Azure/azure-dev"
-
-[tools."github:Azure/azure-dev"."platforms.linux-arm64"]
-checksum = "sha256:1daf11e6946c0fdf8dd2c2978f3584db49ea020025923bfbb2ab17165b1337d0"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.10/azd-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/375447306"
-
-[tools."github:Azure/azure-dev"."platforms.linux-arm64-musl"]
-checksum = "sha256:1daf11e6946c0fdf8dd2c2978f3584db49ea020025923bfbb2ab17165b1337d0"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.10/azd-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/375447306"
-
-[tools."github:Azure/azure-dev"."platforms.linux-x64"]
-checksum = "sha256:f896f6da681ce4ae2e03715edebc2b5b105e5c03a67094caf9847ebf4d135208"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.10/azd-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/375447307"
-
-[tools."github:Azure/azure-dev"."platforms.linux-x64-musl"]
-checksum = "sha256:f896f6da681ce4ae2e03715edebc2b5b105e5c03a67094caf9847ebf4d135208"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.10/azd-linux-amd64.tar.gz"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/375447307"
-
-[tools."github:Azure/azure-dev"."platforms.macos-arm64"]
-checksum = "sha256:8b2daaa0a27e38f9bc71ec2ff74a1d96f82ba1cd89d979acbe7be23164f57bd3"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.10/azd-darwin-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/375447304"
-
-[tools."github:Azure/azure-dev"."platforms.macos-x64"]
-checksum = "sha256:eb28b6c80db34dbd95682f750eadfcb9638347ccca7a4fa06d0d1006819aa22d"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.10/azd-darwin-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/375447283"
-
-[tools."github:Azure/azure-dev"."platforms.windows-arm64"]
-checksum = "sha256:69c5045d9cdfb43f056247668375b938e9256d87a45033a95bbd0f9e4faa3975"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.10/azd-windows-arm64-alpha.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/375447319"
-
-[tools."github:Azure/azure-dev"."platforms.windows-x64"]
-checksum = "sha256:248dd5e257ce1358316bc78756897fc71a8ad5e2e1b07e1416552d59dc888854"
-url = "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_1.23.10/azd-windows-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/azure-dev/releases/assets/375447312"
-
 [[tools."github:github/copilot-cli"]]
 version = "1.0.7"
 backend = "github:github/copilot-cli"
