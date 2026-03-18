@@ -51,6 +51,13 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: "Install Azure Developer CLI"
+        allowPrerelease: false
+      settings:
+        id: Microsoft.Azd
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install mise"
         allowPrerelease: false
       settings:
