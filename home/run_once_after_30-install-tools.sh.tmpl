@@ -47,6 +47,9 @@ fi
 if ! brew install --cask --force drawio; then
   echo "Warning: failed to install draw.io via Homebrew. Retry manually with 'brew install --cask --force drawio'." >&2
 fi
+if ! brew install --cask --force stats; then
+  echo "Warning: failed to install Stats via Homebrew. Retry manually with 'brew install --cask --force stats'." >&2
+fi
 {{ end -}}
 
 {{ if and (eq .chezmoi.os "linux") (not .isWSL) -}}
