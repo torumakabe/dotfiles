@@ -93,9 +93,25 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 version = "0.116.0"
 backend = "aqua:openai/codex"
 
+[tools.codex."platforms.linux-arm64"]
+checksum = "sha256:a7d19f3ee6aa41bd3267797e8d246c686d7835ed78ec227b98202e10e4b95ca7"
+url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-aarch64-unknown-linux-musl.zst"
+
+[tools.codex."platforms.linux-x64"]
+checksum = "sha256:e63d27d8d28aa8b0db04d2431f508120a09f9548cdac29cc25208983d484b1bb"
+url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-x86_64-unknown-linux-musl.zst"
+
 [tools.codex."platforms.macos-arm64"]
 checksum = "sha256:c64fccd1fc4bad129ea7184da9c9832072681d3ebc963e7adc89c0fa244ea16c"
 url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-aarch64-apple-darwin.zst"
+
+[tools.codex."platforms.windows-arm64"]
+checksum = "sha256:56ef51db7b015dcef872b34325e5a1bd9a66c03fd44ee161be7b95a2184acba1"
+url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-x86_64-pc-windows-msvc.exe.zst"
+
+[tools.codex."platforms.windows-x64"]
+checksum = "sha256:56ef51db7b015dcef872b34325e5a1bd9a66c03fd44ee161be7b95a2184acba1"
+url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
 version = "3.0.5"
@@ -242,72 +258,84 @@ checksum = "sha256:8fdaac525d8919f9f8c265f99ffa26189e5f1fd3a35636adad4fd890a141a
 url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_amd64.zip"
 
 [[tools."github:github/copilot-cli"]]
-version = "1.0.9"
+version = "1.0.10"
 backend = "github:github/copilot-cli"
 
 [tools."github:github/copilot-cli"."platforms.linux-arm64"]
-checksum = "sha256:6056955acced9cc046df1a380d200fce51003133cb442614b77e06f0ceffca5b"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.9/copilot-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/376908662"
+checksum = "sha256:2bdeddf816f63a39a3b129278770af19dd371392424260a52d10c44c68774751"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060596"
 
 [tools."github:github/copilot-cli"."platforms.linux-arm64-musl"]
-checksum = "sha256:6056955acced9cc046df1a380d200fce51003133cb442614b77e06f0ceffca5b"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.9/copilot-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/376908662"
+checksum = "sha256:2bdeddf816f63a39a3b129278770af19dd371392424260a52d10c44c68774751"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060596"
 
 [tools."github:github/copilot-cli"."platforms.linux-x64"]
-checksum = "sha256:17044b1e089b49ea8ebaad78d92448b8f6c8c3c6151e04a09b0b87e3592f583d"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.9/copilot-linux-x64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/376908667"
+checksum = "sha256:b9b8a67a023f3923a76a6819a11d069293a0ff1209a04588c4f3d048c03c7328"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-linux-x64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060602"
 
 [tools."github:github/copilot-cli"."platforms.linux-x64-musl"]
-checksum = "sha256:17044b1e089b49ea8ebaad78d92448b8f6c8c3c6151e04a09b0b87e3592f583d"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.9/copilot-linux-x64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/376908667"
+checksum = "sha256:b9b8a67a023f3923a76a6819a11d069293a0ff1209a04588c4f3d048c03c7328"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-linux-x64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060602"
 
 [tools."github:github/copilot-cli"."platforms.macos-arm64"]
-checksum = "sha256:a735e046bafd76bc8155a336b5a7f525289d1b6ce00daf52c7ae8c7b0e334195"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.9/copilot-darwin-arm64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/376908663"
+checksum = "sha256:920efac66dd43d7259f226f3eb6acb5e38062069e96933b4e8b09c3e5b4f9617"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060599"
 
 [tools."github:github/copilot-cli"."platforms.macos-x64"]
-checksum = "sha256:61dada5d5c297d530f567cee0c21d374a9ae1e58239403f3c1a8330ca5b946c1"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.9/copilot-darwin-x64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/376908661"
+checksum = "sha256:5dad4d662feb9fbb8fa0596cd9f8837fa0fb234cd5a992b13f2be5eab0d02e75"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-darwin-x64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060598"
 
 [tools."github:github/copilot-cli"."platforms.windows-arm64"]
-checksum = "sha256:b433b3976642c01ccf6bbf499dabf624b54b3cd34ca407f7125fa3c57aace946"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.9/copilot-win32-arm64.zip"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/376908705"
+checksum = "sha256:125ae7cc5ddf52512ef58bdfb25f2619f23f2a9b33a6f9422a61234b8eaf8b9f"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-win32-arm64.zip"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060618"
 
 [tools."github:github/copilot-cli"."platforms.windows-x64"]
-checksum = "sha256:0907fad8ba5b011b6696ac1e786e71ab2a854117058c42fd70709e4fe3e9df37"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.9/copilot-win32-x64.zip"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/376908712"
+checksum = "sha256:1942372646d8531f9530c3d5d37bf22717a58057666d32150a63138d06134537"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-win32-x64.zip"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060619"
 
 [[tools.gitleaks]]
-version = "8.30.0"
+version = "8.30.1"
 backend = "aqua:gitleaks/gitleaks"
 
 [tools.gitleaks."platforms.linux-arm64"]
-checksum = "sha256:b4cbbb6ddf7d1b2a603088cd03a4e3f7ce48ee7fd449b51f7de6ee2906f5fa2f"
-url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_linux_arm64.tar.gz"
+checksum = "sha256:e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz"
+
+[tools.gitleaks."platforms.linux-arm64-musl"]
+checksum = "sha256:e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz"
 
 [tools.gitleaks."platforms.linux-x64"]
-checksum = "sha256:79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
-url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_linux_x64.tar.gz"
+checksum = "sha256:551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+
+[tools.gitleaks."platforms.linux-x64-musl"]
+checksum = "sha256:551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
 
 [tools.gitleaks."platforms.macos-arm64"]
-checksum = "sha256:b251ab2bcd4cd8ba9e56ff37698c033ebf38582b477d21ebd86586d927cf87e7"
-url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_darwin_arm64.tar.gz"
+checksum = "sha256:b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz"
+
+[tools.gitleaks."platforms.macos-x64"]
+checksum = "sha256:dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_x64.tar.gz"
 
 [tools.gitleaks."platforms.windows-arm64"]
-checksum = "sha256:54fe94f644b832dd08e8c3a5915efb3bfa862386d59fb27ca0792cb687a83573"
-url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_windows_x64.zip"
+checksum = "sha256:d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip"
 
 [tools.gitleaks."platforms.windows-x64"]
-checksum = "sha256:54fe94f644b832dd08e8c3a5915efb3bfa862386d59fb27ca0792cb687a83573"
-url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.0/gitleaks_8.30.0_windows_x64.zip"
+checksum = "sha256:d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip"
 
 [[tools.go]]
 version = "1.26.1"
