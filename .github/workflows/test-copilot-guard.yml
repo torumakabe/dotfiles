@@ -4,11 +4,13 @@ on:
     paths:
       - 'home/private_dot_copilot/hooks/**'
       - 'tests/test_copilot_guard.py'
+      - '.github/workflows/test-copilot-guard.yml'
   push:
     branches: [main]
     paths:
       - 'home/private_dot_copilot/hooks/**'
       - 'tests/test_copilot_guard.py'
+      - '.github/workflows/test-copilot-guard.yml'
   schedule:
     # Weekly Monday 00:00 UTC — detect fail-open regressions
     - cron: '0 0 * * 1'
@@ -20,9 +22,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
 
