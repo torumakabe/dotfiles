@@ -1,0 +1,23 @@
+# Path glob rules:
+# - Write patterns with `/` separators even for Windows paths.
+# - Matching normalizes `\` to `/`, collapses repeated separators, and strips `file://`.
+# - `*` matches within one path segment, `?` matches one character, `**` matches across segments.
+# - Patterns are evaluated as path globs, not as plain substrings.
+#
+# Patterns listed here trigger a user confirmation prompt ("ask") instead of
+# an outright block ("deny"). The agent cannot proceed without explicit approval.
+
+# Copilot CLI 設定・Hook (確認付きアクセス)
+# エージェントの自律操作は抑止しつつ、ユーザーが明示的に承認すればアクセス可能にする。
+# 2 ステップ攻撃（Hook 改変→機密ファイルアクセス）のリスクは残るが、
+# ユーザー確認が入るため意図しない改変は防げる。
+**/.copilot/hooks/**
+**/.copilot/mcp-config.json
+**/.copilot/config.json
+**/.github/hooks/**
+
+# Terraform / Bicep パラメータ
+**/terraform.tfvars
+**/*.auto.tfvars
+**/*.bicepparam
+**/*.parameters.json

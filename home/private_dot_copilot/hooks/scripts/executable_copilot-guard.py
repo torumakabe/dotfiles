@@ -3,16 +3,18 @@
 # ///
 """Copilot Guard — cross-platform preToolUse hook (bash / powershell).
 
-Reads a JSON tool-call from stdin, checks against blocked-files.txt and
-allowed-urls.txt, and emits a JSON permission decision on stdout.
+Reads a JSON tool-call from stdin, checks against blocked-files.txt,
+ask-files.txt, and allowed-urls.txt, and emits a JSON permission decision
+on stdout.
 
 Architecture:
     Each security check is implemented as a *checker function* with the
-    signature ``(CheckContext) -> str | None``.  Returning a string means
-    "deny with this reason"; returning ``None`` means "pass".  All checkers
-    are registered in the ``CHECKERS`` list and executed in order by
-    ``main()``.  To add a new check, write a checker function and append
-    it to ``CHECKERS``.
+    signature ``(CheckContext) -> CheckResult | None``.  Returning a
+    ``CheckResult`` means "deny or ask with this reason"; returning ``None``
+    means "pass".  All checkers are registered in the ``CHECKERS`` list and
+    executed in order by ``main()``.  Results are aggregated with the priority
+    deny > ask > allow.  To add a new check, write a checker function and
+    append it to ``CHECKERS``.
 
 Run via: uv run copilot-guard.py
 """
@@ -33,6 +35,11 @@ from urllib.parse import unquote, urlsplit
 
 def deny(reason: str) -> None:
     print(json.dumps({"permissionDecision": "deny", "permissionDecisionReason": reason}))
+    sys.exit(0)
+
+
+def ask(reason: str) -> None:
+    print(json.dumps({"permissionDecision": "ask", "permissionDecisionReason": reason}))
     sys.exit(0)
 
 
@@ -86,8 +93,14 @@ def load_config_lines(path: Path) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# CheckContext
+# CheckResult and CheckContext
 # ---------------------------------------------------------------------------
+
+class CheckResult(NamedTuple):
+    """Result of a checker function: a decision and the reason for it."""
+    decision: str   # "deny" or "ask"
+    reason: str
+
 
 class CheckContext(NamedTuple):
     """Immutable bundle of data available to every checker function."""
@@ -95,11 +108,12 @@ class CheckContext(NamedTuple):
     tool_args: dict[str, Any]
     command: str
     blocked_patterns: list[str]
+    ask_patterns: list[str]
     allowed_domains: list[str]
 
 
-# Checker function contract: (CheckContext) -> deny reason or None.
-Checker = Callable[[CheckContext], Optional[str]]
+# Checker function contract: (CheckContext) -> CheckResult or None.
+Checker = Callable[[CheckContext], Optional[CheckResult]]
 
 
 # ---------------------------------------------------------------------------
@@ -222,19 +236,37 @@ def check_blocked_command(target: str, patterns: list[str]) -> str | None:
     return None
 
 
-def check_blocked_files(ctx: CheckContext) -> str | None:
-    """Check path-like tool args and command tokens against blocked-files patterns."""
+def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
+    """Check path-like tool args and command tokens against blocked/ask patterns.
+
+    Returns CheckResult("deny", ...) for blocked patterns,
+    CheckResult("ask", ...) for ask patterns, or None if no match.
+    Blocked patterns are checked first (deny takes priority over ask).
+    """
     for prop in ("path", "file", "uri", "glob"):
         prop_value = ctx.tool_args.get(prop, "")
         if prop_value:
             matched_pattern = check_blocked_path(prop_value, ctx.blocked_patterns)
             if matched_pattern:
-                return f"Blocked pattern: {matched_pattern}"
+                return CheckResult("deny", f"Blocked pattern: {matched_pattern}")
 
     if ctx.command:
         matched_pattern = check_blocked_command(ctx.command, ctx.blocked_patterns)
         if matched_pattern:
-            return f"Blocked pattern: {matched_pattern}"
+            return CheckResult("deny", f"Blocked pattern: {matched_pattern}")
+
+    # Ask patterns (lower priority than deny)
+    for prop in ("path", "file", "uri", "glob"):
+        prop_value = ctx.tool_args.get(prop, "")
+        if prop_value:
+            matched_pattern = check_blocked_path(prop_value, ctx.ask_patterns)
+            if matched_pattern:
+                return CheckResult("ask", f"Confirm access — matched pattern: {matched_pattern}")
+
+    if ctx.command:
+        matched_pattern = check_blocked_command(ctx.command, ctx.ask_patterns)
+        if matched_pattern:
+            return CheckResult("ask", f"Confirm access — matched pattern: {matched_pattern}")
 
     return None
 
@@ -393,11 +425,14 @@ def check_env_access(command: str) -> str | None:
     return None
 
 
-def check_env(ctx: CheckContext) -> str | None:
+def check_env(ctx: CheckContext) -> CheckResult | None:
     """Check for environment variable access in shell commands."""
     if ctx.tool_name not in ("bash", "powershell") or not ctx.command:
         return None
-    return check_env_access(ctx.command)
+    reason = check_env_access(ctx.command)
+    if reason:
+        return CheckResult("deny", reason)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +458,7 @@ def is_url_allowed(url: str, allowed_domains: list[str]) -> bool:
     return False
 
 
-def check_url_allowlist(ctx: CheckContext) -> str | None:
+def check_url_allowlist(ctx: CheckContext) -> CheckResult | None:
     """Check URLs in commands and web_fetch args against the domain allowlist."""
     if not ctx.allowed_domains:
         return None
@@ -431,12 +466,12 @@ def check_url_allowlist(ctx: CheckContext) -> str | None:
     if ctx.command:
         for url in extract_urls(ctx.command):
             if not is_url_allowed(url, ctx.allowed_domains):
-                return f"URL not in allowlist: {url}"
+                return CheckResult("deny", f"URL not in allowlist: {url}")
 
     if ctx.tool_name == "web_fetch":
         url = ctx.tool_args.get("url", "")
         if url and not is_url_allowed(url, ctx.allowed_domains):
-            return f"URL not in allowlist: {url}"
+            return CheckResult("deny", f"URL not in allowlist: {url}")
 
     return None
 
@@ -470,6 +505,7 @@ def build_context() -> CheckContext:
     script_dir = Path(__file__).resolve().parent
     hooks_dir = script_dir.parent
     blocked_file = hooks_dir / "blocked-files.txt"
+    ask_file = hooks_dir / "ask-files.txt"
     allowed_urls_file = hooks_dir / "allowed-urls.txt"
 
     if not blocked_file.is_file():
@@ -480,6 +516,7 @@ def build_context() -> CheckContext:
         tool_args=tool_args,
         command=command,
         blocked_patterns=load_config_lines(blocked_file),
+        ask_patterns=load_config_lines(ask_file),
         allowed_domains=load_config_lines(allowed_urls_file),
     )
 
@@ -490,10 +527,20 @@ def build_context() -> CheckContext:
 
 def main() -> None:
     ctx = build_context()
+    results: list[CheckResult] = []
     for checker in CHECKERS:
-        reason = checker(ctx)
-        if reason:
-            deny(reason)
+        result = checker(ctx)
+        if result:
+            results.append(result)
+    if not results:
+        allow()
+    # Priority: deny > ask > allow
+    denies = [r for r in results if r.decision == "deny"]
+    if denies:
+        deny(denies[0].reason)
+    asks = [r for r in results if r.decision == "ask"]
+    if asks:
+        ask(asks[0].reason)
     allow()
 
 

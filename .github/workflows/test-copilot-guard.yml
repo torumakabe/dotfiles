@@ -47,11 +47,11 @@ jobs:
             | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
           echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
 
-      - name: Smoke test — copilot hooks modification is blocked
+      - name: Smoke test — copilot hooks modification requires confirmation (ask)
         run: |
           RESULT=$(echo '{"toolName":"edit","toolArgs":{"path":"/home/user/.copilot/hooks/hooks.json"}}' \
             | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
-          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='ask', f'Expected ask, got {d}'"
 
       - name: Smoke test — SSH key access is blocked
         run: |

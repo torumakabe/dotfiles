@@ -9,7 +9,7 @@ Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](h
 - **1つのソースで複数環境を管理**: `chezmoi` のテンプレートで、プラットフォームごとの差分を吸収しながら設定を一元管理している
 - **ツールチェーンを再現しやすい**: `mise` と lockfile で、開発ツールのバージョンと取得元をそろえやすい構成である
 - **GitHub Copilot CLI 向け設定を共通化**: カスタム指示、フック、スキルを dotfiles として管理している
-- **安全なデフォルト**: `gitleaks` を組み込んだ `git pre-commit` フックと Copilot CLI の `preToolUse` フックにより、コミット前とエージェント実行時のガードをそろえている。エージェント向けフックは秘匿ファイルへのアクセス、環境変数の読み取り、許可外 URL への送信を自動拒否する。さらに `postToolUse` フックによる監査ログと、Autopilot モード向けの `copilot-safe` エイリアスで多層防御を構成している（[詳細](docs/copilot-cli.md#セキュリティフック)）
+- **安全なデフォルト**: `gitleaks` を組み込んだ `git pre-commit` フックと Copilot CLI の `preToolUse` フックにより、コミット前とエージェント実行時のガードをそろえている。エージェント向けフックは秘匿ファイルへのアクセスを自動拒否（`blocked-files.txt`）または確認付きアクセス（`ask-files.txt`）に振り分け、環境変数の読み取りや許可外 URL への送信も自動拒否する。さらに `postToolUse` フックによる監査ログと、Autopilot モード向けの `copilot-safe` エイリアスで多層防御を構成している（[詳細](docs/copilot-cli.md#セキュリティフック)）
 - **制約の多いコンテナ環境でも破綻しにくい**: 非対話での作成やホスト側ツールにアクセスできないケースを考慮し、必要な分岐やフォールバックを組み込んでいる
 
 ## 対応環境

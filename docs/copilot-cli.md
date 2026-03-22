@@ -18,7 +18,8 @@ GitHub Copilot CLI の設定・運用ガイドである。chezmoi が `~/.copilo
 | `hooks/scripts/copilot-guard.py` | セキュリティガード（ファイル・URL・環境変数） | chezmoi |
 | `hooks/scripts/uv-enforcer.py` | Python / pip 直接実行をブロック | chezmoi |
 | `hooks/scripts/audit-log.py` | ツール実行の監査ログ記録 | chezmoi |
-| `hooks/blocked-files.txt` | ブロック対象ファイルパターン | chezmoi |
+| `hooks/blocked-files.txt` | ブロック対象ファイルパターン (deny) | chezmoi |
+| `hooks/ask-files.txt` | 確認付きアクセスパターン (ask) | chezmoi |
 | `hooks/allowed-urls.txt` | URL 許可リスト | chezmoi |
 | `skills/` | エージェントスキル | chezmoi（上流更新時は `re-add`） |
 | `installed-plugins/` | プラグイン | `/plugin install` で管理 |
@@ -61,7 +62,7 @@ chezmoi diff
 
 ## セキュリティフック
 
-コーディングエージェントは `bash` ツールを通じてファイル読み取りやコマンド実行を行える。便利な一方で、秘匿情報の意図しない読み取りや外部送信のリスクがある。このリポジトリでは `preToolUse` フックで **ツール実行前に検査し、危険な操作を自動拒否する** ガードを提供している。
+コーディングエージェントは `bash` ツールを通じてファイル読み取りやコマンド実行を行える。便利な一方で、秘匿情報の意図しない読み取りや外部送信のリスクがある。このリポジトリでは `preToolUse` フックで **ツール実行前に検査し、危険な操作を自動拒否（deny）または確認付きアクセス（ask）に振り分ける** ガードを提供している。
 
 脅威モデル、多層防御の構造、各チェック層の判定ロジックについては [`docs/architecture.md` の Copilot Guard セクション](architecture.md#copilot-guard-の設計) を参照する。
 
@@ -69,7 +70,7 @@ chezmoi diff
 
 #### blocked-files.txt
 
-ブロック対象のファイルパスをグロブパターンで記述する。1 行 1 パターン、`#` で始まる行はコメント。
+ブロック対象（deny）のファイルパスをグロブパターンで記述する。1 行 1 パターン、`#` で始まる行はコメント。マッチしたファイルへのアクセスは即座に拒否される。
 
 **パターン記法**:
 
@@ -86,6 +87,14 @@ chezmoi diff
 
 許可するドメインを 1 行 1 つ記述する。サブドメインも自動的に許可される（例: `github.com` は `api.github.com` も許可）。全行コメントアウトすると URL チェック自体が無効になる。
 
+#### ask-files.txt
+
+確認付きアクセス（ask）のファイルパスをグロブパターンで記述する。`blocked-files.txt` と同じ書式・パターン記法。マッチしたファイルへのアクセスはユーザーに確認プロンプトが表示され、明示的な承認が必要になる。
+
+同一パスが `blocked-files.txt` と `ask-files.txt` の両方にマッチした場合は deny が優先される。
+
+判定の優先度: **deny > ask > allow**
+
 ### フックのテスト
 
 フックは stdin に JSON を受け取り、stdout に許可 / 拒否の JSON を返す。
@@ -101,7 +110,7 @@ echo '{"toolName":"bash","toolArgs":{"command":"echo $GITHUB_TOKEN"}}' | uv run 
 # copilot-guard: 安全な変数参照は許可
 echo '{"toolName":"bash","toolArgs":{"command":"echo $HOME"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
 
-# copilot-guard: Hook ファイル改変のブロック
+# copilot-guard: Hook ファイルへの確認付きアクセス (ask)
 echo '{"toolName":"edit","toolArgs":{"path":"/home/user/.copilot/hooks/hooks.json"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
 
 # copilot-guard: SSH 鍵アクセスのブロック
@@ -114,7 +123,7 @@ echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/
 ### 自動テスト
 
 ```bash
-# ユニットテスト（70 テストケース）
+# ユニットテスト（86 テストケース）
 uv run -m unittest tests.test_copilot_guard -v
 ```
 
@@ -155,7 +164,7 @@ copilot-safe -p "YOUR PROMPT"
 
 これらは copilot-guard.py の URL 許可リストチェック、環境変数アクセスチェック、および OS レベルのネットワーク制御で補完する。`--deny-tool` は多層防御の第一層（fail-open リスクなし）として機能し、copilot-guard.py（第二層）と組み合わせて使う設計である。
 
-ファイルの読み取り・書き込み保護は `--deny-tool` ではなく preToolUse Hook（copilot-guard.py + blocked-files.txt）が担う。`--deny-tool` がサポートする kind は `shell(cmd)`, `write`（パス指定不可）, `url(domain)`, `<MCP>(tool)` のみであり、`read(...)` kind は存在しない（`copilot help permissions` で確認済み）。
+ファイルの読み取り・書き込み保護は `--deny-tool` ではなく preToolUse Hook（copilot-guard.py + blocked-files.txt / ask-files.txt）が担う。`--deny-tool` がサポートする kind は `shell(cmd)`, `write`（パス指定不可）, `url(domain)`, `<MCP>(tool)` のみであり、`read(...)` kind は存在しない（`copilot help permissions` で確認済み）。
 
 環境に応じて `--disable-mcp-server` や `--excluded-tools` を追加して攻撃面をさらに縮小できる。
 
