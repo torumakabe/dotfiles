@@ -28,7 +28,8 @@ home/                          ← chezmoi source (.chezmoiroot で指定)
 │   ├── mcp-config.json        ← MCP サーバー設定 (/mcp add 後は re-add)
 │   ├── hooks/
 │   │   ├── hooks.json         ← preToolUse / postToolUse フック定義
-│   │   ├── blocked-files.txt  ← ブロックパターン
+│   │   ├── blocked-files.txt  ← ブロックパターン (deny)
+│   │   ├── ask-files.txt      ← 確認付きアクセスパターン (ask)
 │   │   ├── allowed-urls.txt   ← URL 許可リスト
 │   │   └── scripts/
 │   │       ├── copilot-guard.py
@@ -61,23 +62,27 @@ reference/windows/             ← デプロイしない参照ファイル
 
 ## Copilot Guard の設計
 
-`copilot-guard.py` は `preToolUse` フックとして、エージェントのツール呼び出しを**実行前にテキスト検査**し、以下の 3 種類の操作を拒否する。
+`copilot-guard.py` は `preToolUse` フックとして、エージェントのツール呼び出しを**実行前にテキスト検査**し、以下の判定を行う。
 
-1. **秘匿ファイルへのアクセス** — `.env`、`*.pem`、認証トークンファイル等（`blocked-files.txt` で定義）
-2. **環境変数からの秘匿情報読み取り** — `printenv`、`$GITHUB_TOKEN` 展開、`os.environ` 等
-3. **許可外 URL への送信** — `allowed-urls.txt` に含まれないドメインへのリクエスト
+1. **秘匿ファイルへのアクセス拒否** — `.env`、`*.pem`、認証トークンファイル等（`blocked-files.txt` で定義）
+2. **確認付きアクセス (ask)** — Copilot Hook 設定、Terraform パラメータ等（`ask-files.txt` で定義）。ユーザーの明示的な承認が必要
+3. **環境変数からの秘匿情報読み取り拒否** — `printenv`、`$GITHUB_TOKEN` 展開、`os.environ` 等
+4. **許可外 URL への送信拒否** — `allowed-urls.txt` に含まれないドメインへのリクエスト
+
+判定の優先度は deny > ask > allow であり、複数のチェック層が異なる判定を返した場合は最も制限的な判定が採用される。
 
 ### 設計上の位置づけ
 
 このフックは**エージェント向けのガードレール**であり、上記の操作をコマンド文字列のパターンマッチで検出する。LLM エージェントは通常、最も自然なコード（`printenv`、`echo $SECRET`、`os.environ` 等）を生成するため、そのパターンをブロックするだけで大部分のリスクをカバーできる。Base64 エンコードや変数間接参照などの難読化には対応しないが、プロンプトインジェクション等の悪意ある介入がない限り、エージェントがそのようなコードを生成する可能性は低い。`blocked-files.txt` によるファイルブロックも同様に、テキストベースの検査で実用上十分なカバー範囲を得る設計である。
 
-### 3 つのチェック層
+### チェック層
 
 ```text
 preToolUse 入力 (JSON)
   │
-  ├─ 1. ファイルアクセスチェック ← blocked-files.txt
+  ├─ 1. ファイルアクセスチェック ← blocked-files.txt / ask-files.txt
   │     対象: 全ツールの path/file/uri/glob/command 引数
+  │     判定: blocked → deny, ask → ask (ユーザー確認)
   │
   ├─ 2. 環境変数アクセスチェック ← コード内定義
   │     対象: bash/powershell の command 引数のみ

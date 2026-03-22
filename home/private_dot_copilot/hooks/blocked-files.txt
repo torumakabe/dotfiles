@@ -27,10 +27,6 @@
 
 # Terraform / Bicep
 **/terraform.tfstate
-# **/terraform.tfvars
-# **/*.auto.tfvars
-# **/*.bicepparam
-# **/*.parameters.json
 
 # Terraform Cloud
 **/.terraform.d/credentials.tfrc.json
@@ -45,10 +41,7 @@
 # read/write 両方をブロック。--allow-all 下での 2 ステップ攻撃対策:
 # 攻撃者が Hook ファイルを改変→機密ファイルにアクセスする経路を遮断する。
 # ** を使い hooks/scripts/ 配下のスクリプトも保護する。
-**/.copilot/hooks/**
-**/.copilot/mcp-config.json
-**/.copilot/config.json
-**/.github/hooks/**
+# → 確認付きアクセス (ask) に移設: ask-files.txt を参照。
 
 # SSH
 **/.ssh/*

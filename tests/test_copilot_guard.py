@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import pathlib
 import unittest
 
@@ -19,6 +20,25 @@ def load_module():
 
 
 copilot_guard = load_module()
+
+
+# Helper to build a CheckContext for testing.
+def make_ctx(
+    tool_name: str = "",
+    tool_args: dict | None = None,
+    command: str = "",
+    blocked_patterns: list[str] | None = None,
+    ask_patterns: list[str] | None = None,
+    allowed_domains: list[str] | None = None,
+) -> "copilot_guard.CheckContext":
+    return copilot_guard.CheckContext(
+        tool_name=tool_name,
+        tool_args=tool_args or {},
+        command=command,
+        blocked_patterns=blocked_patterns or [],
+        ask_patterns=ask_patterns or [],
+        allowed_domains=allowed_domains or [],
+    )
 
 
 class CopilotGuardPathMatchingTests(unittest.TestCase):
@@ -432,6 +452,172 @@ class CopilotGuardNewBlockedPatternsTests(unittest.TestCase):
             ["**/.copilot/mcp-config.json"],
         )
         self.assertEqual(hit, "**/.copilot/mcp-config.json")
+
+
+class CopilotGuardCheckResultTests(unittest.TestCase):
+    """Tests for the CheckResult type and ask() output helper."""
+
+    def test_check_result_is_named_tuple(self) -> None:
+        result = copilot_guard.CheckResult("deny", "test reason")
+        self.assertEqual(result.decision, "deny")
+        self.assertEqual(result.reason, "test reason")
+
+    def test_check_result_ask(self) -> None:
+        result = copilot_guard.CheckResult("ask", "confirm this")
+        self.assertEqual(result.decision, "ask")
+        self.assertEqual(result.reason, "confirm this")
+
+
+class CopilotGuardAskPatternsTests(unittest.TestCase):
+    """Tests for ask-files.txt pattern matching via check_blocked_files."""
+
+    def test_ask_pattern_returns_ask_decision(self) -> None:
+        ctx = make_ctx(
+            tool_name="edit",
+            tool_args={"path": "/home/user/.copilot/hooks/hooks.json"},
+            ask_patterns=["**/.copilot/hooks/**"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+        self.assertIn("**/.copilot/hooks/**", result.reason)
+
+    def test_blocked_pattern_returns_deny_decision(self) -> None:
+        ctx = make_ctx(
+            tool_name="view",
+            tool_args={"path": "/home/user/.ssh/id_rsa"},
+            blocked_patterns=["**/id_rsa"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "deny")
+
+    def test_deny_takes_priority_over_ask_same_file(self) -> None:
+        """When a path matches both blocked and ask patterns, deny wins."""
+        ctx = make_ctx(
+            tool_name="edit",
+            tool_args={"path": "/home/user/.copilot/hooks/hooks.json"},
+            blocked_patterns=["**/.copilot/hooks/**"],
+            ask_patterns=["**/.copilot/hooks/**"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "deny")
+
+    def test_no_match_returns_none(self) -> None:
+        ctx = make_ctx(
+            tool_name="view",
+            tool_args={"path": "/home/user/project/src/main.py"},
+            blocked_patterns=["**/id_rsa"],
+            ask_patterns=["**/.copilot/hooks/**"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNone(result)
+
+    def test_ask_pattern_command_matching(self) -> None:
+        ctx = make_ctx(
+            tool_name="bash",
+            tool_args={"command": "cat ~/.copilot/hooks/hooks.json"},
+            command="cat ~/.copilot/hooks/hooks.json",
+            ask_patterns=["**/.copilot/hooks/**"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_ask_pattern_terraform_tfvars(self) -> None:
+        ctx = make_ctx(
+            tool_name="edit",
+            tool_args={"path": "/project/infra/terraform.tfvars"},
+            ask_patterns=["**/terraform.tfvars"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_ask_pattern_bicepparam(self) -> None:
+        ctx = make_ctx(
+            tool_name="view",
+            tool_args={"path": "/project/infra/main.bicepparam"},
+            ask_patterns=["**/*.bicepparam"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_ask_copilot_mcp_config(self) -> None:
+        ctx = make_ctx(
+            tool_name="edit",
+            tool_args={"path": "/home/user/.copilot/mcp-config.json"},
+            ask_patterns=["**/.copilot/mcp-config.json"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_ask_copilot_config_json(self) -> None:
+        ctx = make_ctx(
+            tool_name="view",
+            tool_args={"path": "/home/user/.copilot/config.json"},
+            ask_patterns=["**/.copilot/config.json"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_ask_github_hooks(self) -> None:
+        ctx = make_ctx(
+            tool_name="edit",
+            tool_args={"path": "/workspace/.github/hooks/policy.json"},
+            ask_patterns=["**/.github/hooks/**"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_empty_ask_patterns_skips(self) -> None:
+        ctx = make_ctx(
+            tool_name="edit",
+            tool_args={"path": "/project/terraform.tfvars"},
+            ask_patterns=[],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNone(result)
+
+
+class CopilotGuardCheckerReturnTypeTests(unittest.TestCase):
+    """Tests that existing checkers now return CheckResult instead of raw str."""
+
+    def test_check_env_returns_check_result(self) -> None:
+        ctx = make_ctx(
+            tool_name="bash",
+            tool_args={"command": "printenv"},
+            command="printenv",
+        )
+        result = copilot_guard.check_env(ctx)
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, copilot_guard.CheckResult)
+        self.assertEqual(result.decision, "deny")
+
+    def test_check_env_returns_none_for_safe(self) -> None:
+        ctx = make_ctx(
+            tool_name="bash",
+            tool_args={"command": "ls -la"},
+            command="ls -la",
+        )
+        result = copilot_guard.check_env(ctx)
+        self.assertIsNone(result)
+
+    def test_check_url_returns_check_result(self) -> None:
+        ctx = make_ctx(
+            tool_name="web_fetch",
+            tool_args={"url": "https://evil.example.com"},
+            allowed_domains=["github.com"],
+        )
+        result = copilot_guard.check_url_allowlist(ctx)
+        self.assertIsNotNone(result)
+        self.assertIsInstance(result, copilot_guard.CheckResult)
+        self.assertEqual(result.decision, "deny")
 
 
 if __name__ == "__main__":
