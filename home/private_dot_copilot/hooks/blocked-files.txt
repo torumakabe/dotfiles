@@ -27,10 +27,10 @@
 
 # Terraform / Bicep
 **/terraform.tfstate
-**/terraform.tfvars
-**/*.auto.tfvars
-**/*.bicepparam
-**/*.parameters.json
+# **/terraform.tfvars
+# **/*.auto.tfvars
+# **/*.bicepparam
+# **/*.parameters.json
 
 # Terraform Cloud
 **/.terraform.d/credentials.tfrc.json
