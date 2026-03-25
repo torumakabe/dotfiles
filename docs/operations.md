@@ -61,7 +61,7 @@ chezmoi add ~/.some-config
 
 1. `gh auth token` で一時トークンを取得
 2. `mise upgrade` で全ツールを最新化
-3. `mise lock --global --platform` で全プラットフォームの lockfile を更新
+3. lockfile を削除し、`mise lock --global --platform` で全プラットフォーム分を再生成
 4. `chezmoi re-add` で lockfile をソースに反映
 5. git commit + push
 
@@ -78,17 +78,18 @@ mise-upgrade
 
 ### 手動で実行する場合
 
-`mise lock` はデフォルトでプロジェクトレベルの設定のみ対象にするため、グローバル設定には **`--global`** が必須。また引数なしだと既定の 8 プラットフォーム（musl 含む）を対象にするため、**`--platform` も常に指定する**。
+`mise lock` はデフォルトでプロジェクトレベルの設定のみ対象にするため、グローバル設定には **`--global`** が必須。また引数なしだと既定の 8 プラットフォーム（musl 含む）を対象にするため、**`--platform` も常に指定する**。`mise upgrade` 後は lockfile を削除してから再生成する。`mise lock` は既存エントリのリフレッシュしか行わず、`mise upgrade` がバックエンドによっては新バージョンのエントリを追加しないことがあるため。
 
 ```bash
 GITHUB_TOKEN=$(gh auth token) mise upgrade
+rm -f ~/.config/mise/mise.lock
 GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
 chezmoi re-add ~/.config/mise/mise.lock
 cd $(chezmoi source-path)/.. && git add -A && git commit -m "chore: upgrade mise tools" && git push
 ```
 
 ```powershell
-$env:GITHUB_TOKEN = (gh auth token); mise upgrade; mise lock --global --platform "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64"; $env:GITHUB_TOKEN = $null
+$env:GITHUB_TOKEN = (gh auth token); mise upgrade; Remove-Item ~\.config\mise\mise.lock -ErrorAction SilentlyContinue; mise lock --global --platform "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64"; $env:GITHUB_TOKEN = $null
 chezmoi re-add ~\.config\mise\mise.lock
 cd (Join-Path (chezmoi source-path) ".."); git add -A; git commit -m "chore: upgrade mise tools"; git push
 ```
