@@ -25,6 +25,22 @@ url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.33.0/op_darwin_amd64_v2.33
 [tools.1password."platforms.windows-x64"]
 url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.33.0/op_windows_amd64_v2.33.0.zip"
 
+[[tools.1password]]
+version = "2.33.1"
+backend = "vfox:mise-plugins/vfox-1password"
+
+[tools.1password."platforms.linux-arm64"]
+url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.33.1/op_linux_arm64_v2.33.1.zip"
+
+[tools.1password."platforms.linux-x64"]
+url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.33.1/op_linux_amd64_v2.33.1.zip"
+
+[tools.1password."platforms.macos-arm64"]
+url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.33.1/op_darwin_arm64_v2.33.1.zip"
+
+[tools.1password."platforms.windows-x64"]
+url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.33.1/op_windows_amd64_v2.33.1.zip"
+
 [[tools.azure-kubelogin]]
 version = "0.2.16"
 backend = "aqua:Azure/kubelogin"
@@ -333,6 +349,35 @@ checksum = "sha256:1942372646d8531f9530c3d5d37bf22717a58057666d32150a63138d06134
 url = "https://github.com/github/copilot-cli/releases/download/v1.0.10/copilot-win32-x64.zip"
 url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/378060619"
 
+[[tools."github:github/copilot-cli"]]
+version = "1.0.11"
+backend = "github:github/copilot-cli"
+
+[tools."github:github/copilot-cli"."platforms.linux-arm64"]
+checksum = "sha256:39630d4fb1c20aed09e625f7054984187728f59c30de04ab74bb542361bec481"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.11/copilot-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/379967004"
+
+[tools."github:github/copilot-cli"."platforms.linux-x64"]
+checksum = "sha256:45dcb7b18f1eabdb4247216cf6b543505bbdc934c2c72afa4cdc441a3291b66e"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.11/copilot-linux-x64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/379967010"
+
+[tools."github:github/copilot-cli"."platforms.macos-arm64"]
+checksum = "sha256:91bf60ce4c5e26f09ed2a47df22a0b28b4c7994b4c074e2b8f1a4f28e3cb672e"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.11/copilot-darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/379967008"
+
+[tools."github:github/copilot-cli"."platforms.windows-arm64"]
+checksum = "sha256:64b796ab8a1bd2e16feb6e71086738d344672ad3e676300a0f736802be7dccbf"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.11/copilot-win32-arm64.zip"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/379967039"
+
+[tools."github:github/copilot-cli"."platforms.windows-x64"]
+checksum = "sha256:17ddc8df6e22a4bdf5fb8a6aeb65b44f28c61140d85b41287663160ecc95d961"
+url = "https://github.com/github/copilot-cli/releases/download/v1.0.11/copilot-win32-x64.zip"
+url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/379967050"
+
 [[tools.gitleaks]]
 version = "8.30.1"
 backend = "aqua:gitleaks/gitleaks"
@@ -619,30 +664,6 @@ url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15
 version = "1.94.0"
 backend = "core:rust"
 
-[[tools.shellcheck]]
-version = "0.11.0"
-backend = "aqua:koalaman/shellcheck"
-
-[tools.shellcheck."platforms.linux-arm64"]
-checksum = "sha256:12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.xz"
-
-[tools.shellcheck."platforms.linux-x64"]
-checksum = "sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
-
-[tools.shellcheck."platforms.macos-arm64"]
-checksum = "sha256:56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz"
-
-[tools.shellcheck."platforms.windows-arm64"]
-checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
-
-[tools.shellcheck."platforms.windows-x64"]
-checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
-
 [[tools.sqlc]]
 version = "1.30.0"
 backend = "github:sqlc-dev/sqlc"
@@ -757,6 +778,30 @@ url = "https://github.com/astral-sh/uv/releases/download/0.10.12/uv-x86_64-pc-wi
 checksum = "sha256:4c1d55501869b3330d4aabf45ad6024ce2367e0f3af83344395702d272c22e88"
 url = "https://github.com/astral-sh/uv/releases/download/0.10.12/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
+
+[[tools.uv]]
+version = "0.11.1"
+backend = "aqua:astral-sh/uv"
+
+[tools.uv."platforms.linux-arm64"]
+checksum = "sha256:bd04ffce77ee8d77f39823c13606183581847c2f5dcd704f2ea0f15e376b1a27"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-aarch64-unknown-linux-musl.tar.gz"
+
+[tools.uv."platforms.linux-x64"]
+checksum = "sha256:4e949471a95b37088a1ff1a585f69abed4d3cd3f921f50709a46b6ba62986d38"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-x86_64-unknown-linux-musl.tar.gz"
+
+[tools.uv."platforms.macos-arm64"]
+checksum = "sha256:f7815f739ed5d0e4202e6292acedb8659b9ae7de663d07188d8c6cbd7f96303f"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-aarch64-apple-darwin.tar.gz"
+
+[tools.uv."platforms.windows-arm64"]
+checksum = "sha256:6659250cebbd3bb6ee48bcb21a3f0c6656450d63fb97f0f069bcb532bdb688ed"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-x86_64-pc-windows-msvc.zip"
+
+[tools.uv."platforms.windows-x64"]
+checksum = "sha256:6659250cebbd3bb6ee48bcb21a3f0c6656450d63fb97f0f069bcb532bdb688ed"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-x86_64-pc-windows-msvc.zip"
 
 [[tools.yq]]
 version = "4.52.4"
