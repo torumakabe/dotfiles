@@ -68,7 +68,7 @@ function Invoke-MiseUpgrade {
         if ($LASTEXITCODE -ne 0) { throw "mise upgrade に失敗しました" }
 
         Write-Host "==> mise lock: 全プラットフォームの lockfile を更新..."
-        mise lock --platform "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64"
+        mise lock --global --platform "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64"
         if ($LASTEXITCODE -ne 0) { throw "lockfile の更新に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください" }
 
         Write-Host "==> chezmoi re-add: lockfile をソースに反映..."
