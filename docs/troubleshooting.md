@@ -21,7 +21,7 @@ lockfile にないツールがある場合は lockfile を再生成する。[`do
 ```bash
 mise ls --missing
 rm ~/.config/mise/mise.lock
-GITHUB_TOKEN=$(gh auth token) mise lock --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
+GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
 mise install
 ```
 

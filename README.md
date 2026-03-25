@@ -146,7 +146,7 @@ chezmoi update
 mise-upgrade
 ```
 
-`mise-upgrade` は `gh auth token` の一時取得、`mise upgrade`、`mise lock --platform`、`chezmoi re-add`、git commit + push までをまとめて実行するシェル関数である。詳細な手順や例外系は [`docs/operations.md`](docs/operations.md) を参照する。
+`mise-upgrade` は `gh auth token` の一時取得、`mise upgrade`、`mise lock --global --platform`、`chezmoi re-add`、git commit + push までをまとめて実行するシェル関数である。詳細な手順や例外系は [`docs/operations.md`](docs/operations.md) を参照する。
 
 ## 詳細ドキュメント
 
