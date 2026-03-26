@@ -81,28 +81,8 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 
 [[tools.codex]]
-version = "0.116.0"
+version = "0.117.0"
 backend = "aqua:openai/codex"
-
-[tools.codex."platforms.linux-arm64"]
-checksum = "sha256:a7d19f3ee6aa41bd3267797e8d246c686d7835ed78ec227b98202e10e4b95ca7"
-url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-aarch64-unknown-linux-musl.zst"
-
-[tools.codex."platforms.linux-x64"]
-checksum = "sha256:e63d27d8d28aa8b0db04d2431f508120a09f9548cdac29cc25208983d484b1bb"
-url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-x86_64-unknown-linux-musl.zst"
-
-[tools.codex."platforms.macos-arm64"]
-checksum = "sha256:c64fccd1fc4bad129ea7184da9c9832072681d3ebc963e7adc89c0fa244ea16c"
-url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-aarch64-apple-darwin.zst"
-
-[tools.codex."platforms.windows-arm64"]
-checksum = "sha256:56ef51db7b015dcef872b34325e5a1bd9a66c03fd44ee161be7b95a2184acba1"
-url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-x86_64-pc-windows-msvc.exe.zst"
-
-[tools.codex."platforms.windows-x64"]
-checksum = "sha256:56ef51db7b015dcef872b34325e5a1bd9a66c03fd44ee161be7b95a2184acba1"
-url = "https://github.com/openai/codex/releases/download/rust-v0.116.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
 version = "3.0.5"
@@ -230,28 +210,8 @@ checksum = "sha256:4b7adbbfd2c3b74ef01739aad053aa4952cd5f1b0520450c2dcd2dccc502c
 url = "https://github.com/x-motemen/ghq/releases/download/v1.9.4/ghq_windows_amd64.zip"
 
 [[tools.github-cli]]
-version = "2.88.1"
+version = "2.89.0"
 backend = "aqua:cli/cli"
-
-[tools.github-cli."platforms.linux-arm64"]
-checksum = "sha256:039ce25aab0cfa0ea5160e3db75ed44699bde4b20ff63ec5991f82201f1b33b8"
-url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_linux_arm64.tar.gz"
-
-[tools.github-cli."platforms.linux-x64"]
-checksum = "sha256:36352a993b97e9758793cdb87f9ba674bd6d88c914488e122be78a1962203803"
-url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_linux_amd64.tar.gz"
-
-[tools.github-cli."platforms.macos-arm64"]
-checksum = "sha256:bdbeed4821d450ef0d14821d856c05b308ab449fbf60527f298d96fbf5d2447b"
-url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_macOS_arm64.zip"
-
-[tools.github-cli."platforms.windows-arm64"]
-checksum = "sha256:9175948357a3833447e6c9fc9fb650a310d13cf04cf3bc59b7f5d3d2d9e7bf1e"
-url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_arm64.zip"
-
-[tools.github-cli."platforms.windows-x64"]
-checksum = "sha256:8fdaac525d8919f9f8c265f99ffa26189e5f1fd3a35636adad4fd890a141a555"
-url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_amd64.zip"
 
 [[tools."github:github/copilot-cli"]]
 version = "1.0.11"
@@ -528,7 +488,7 @@ checksum = "sha256:124510b94b6baa3380d051fdf4650eaa80a302c876d611e9dba0b2e18d874
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15.1.0-x86_64-pc-windows-msvc.zip"
 
 [[tools.rust]]
-version = "1.94.0"
+version = "1.94.1"
 backend = "core:rust"
 
 [[tools.sqlc]]
@@ -609,52 +569,32 @@ url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.6
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.11.1"
+version = "0.11.2"
 backend = "aqua:astral-sh/uv"
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:bd04ffce77ee8d77f39823c13606183581847c2f5dcd704f2ea0f15e376b1a27"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:275d91dd1f1955136591e7ec5e1fa21e84d0d37ead7da7c35c3683df748d9855"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.2/uv-aarch64-unknown-linux-musl.tar.gz"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:4e949471a95b37088a1ff1a585f69abed4d3cd3f921f50709a46b6ba62986d38"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:4700d9fc75734247587deb3e25dd2c6c24f4ac69e8fe91d6acad4a6013115c06"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.2/uv-x86_64-unknown-linux-musl.tar.gz"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:f7815f739ed5d0e4202e6292acedb8659b9ae7de663d07188d8c6cbd7f96303f"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:4beaa9550f93ef7f0fc02f7c28c9c48cd61fe30db00f5ac8947e0a425c3fb282"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.2/uv-aarch64-apple-darwin.tar.gz"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:6659250cebbd3bb6ee48bcb21a3f0c6656450d63fb97f0f069bcb532bdb688ed"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:171b7ccda1bbd562da6babeffcf533a1c6cc7862cf998da826e1db534fc43e48"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.2/uv-x86_64-pc-windows-msvc.zip"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:6659250cebbd3bb6ee48bcb21a3f0c6656450d63fb97f0f069bcb532bdb688ed"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.1/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:171b7ccda1bbd562da6babeffcf533a1c6cc7862cf998da826e1db534fc43e48"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.2/uv-x86_64-pc-windows-msvc.zip"
 
 [[tools.yq]]
-version = "4.52.4"
+version = "4.52.5"
 backend = "aqua:mikefarah/yq"
-
-[tools.yq."platforms.linux-arm64"]
-checksum = "sha256:4c2cc022a129be5cc1187959bb4b09bebc7fb543c5837b93001c68f97ce39a5d"
-url = "https://github.com/mikefarah/yq/releases/download/v4.52.4/yq_linux_arm64"
-
-[tools.yq."platforms.linux-x64"]
-checksum = "sha256:0c4d965ea944b64b8fddaf7f27779ee3034e5693263786506ccd1c120f184e8c"
-url = "https://github.com/mikefarah/yq/releases/download/v4.52.4/yq_linux_amd64"
-
-[tools.yq."platforms.macos-arm64"]
-checksum = "sha256:6bfa43a439936644d63c70308832390c8838290d064970eaada216219c218a13"
-url = "https://github.com/mikefarah/yq/releases/download/v4.52.4/yq_darwin_arm64"
-
-[tools.yq."platforms.windows-arm64"]
-checksum = "sha256:ca8c95235198204b4e74ea79b416367bc373cda6b591ca38d4a8cbc0ea8b9a6e"
-url = "https://github.com/mikefarah/yq/releases/download/v4.52.4/yq_windows_arm64.exe"
-
-[tools.yq."platforms.windows-x64"]
-checksum = "sha256:b7c4186f8a3e32879ddf99389bf59a4b2861f0f1b41ef58647d903b0a11e8151"
-url = "https://github.com/mikefarah/yq/releases/download/v4.52.4/yq_windows_amd64.exe"
 
 [[tools.zoxide]]
 version = "0.9.9"
