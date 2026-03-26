@@ -79,6 +79,12 @@ function Invoke-MiseUpgrade {
         $sourceRoot = Join-Path (chezmoi source-path) ".."
         Push-Location $sourceRoot
 
+        $branch = git rev-parse --abbrev-ref HEAD
+        if ($branch -ne "main") {
+            Pop-Location
+            throw "chezmoi ソースが main ブランチではありません (現在: $branch)。git checkout main してから再実行してください"
+        }
+
         git add -A
         $diff = git diff --cached --quiet 2>&1
         if ($LASTEXITCODE -eq 0) {
