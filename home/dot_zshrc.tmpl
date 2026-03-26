@@ -299,6 +299,13 @@ mise-upgrade() {
     return 1
   }
 
+  local branch
+  branch=$(git rev-parse --abbrev-ref HEAD)
+  if [[ "$branch" != "main" ]]; then
+    echo "❌ chezmoi ソースが main ブランチではありません (現在: $branch)。git checkout main してから再実行してください" >&2
+    return 1
+  fi
+
   git add -A
   if git diff --cached --quiet; then
     echo "✅ 更新するツールはありませんでした"
