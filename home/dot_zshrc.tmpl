@@ -324,3 +324,8 @@ mise-upgrade() {
 
   echo "✅ mise ツールの更新が完了しました"
 }
+
+{{ if eq .chezmoi.os "darwin" -}}
+# Copilot Desktop に mise 管理の copilot CLI パスを公開
+launchctl setenv COPILOT_CLI_PATH "$HOME/.local/share/mise/shims/copilot"
+{{ end -}}
