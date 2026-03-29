@@ -1,91 +1,78 @@
 # Operations Guide
 
-`README.md` には日常的に使う手順だけを残し、このファイルには運用の詳細と非日常作業をまとめる。
+`README.md` には日常的に使う操作だけを残し、このファイルには **このリポジトリ固有の運用** をまとめる。一般的な `chezmoi` / `mise` の使い方は各公式ドキュメントを参照。
 
-## パッケージの管理
+## ツールの管理境界
 
-| 環境 | 管理ツール | 対象 |
-|------|-----------|------|
-| Linux / WSL | `apt` + `mise` | apt: OS パッケージ + Azure CLI、mise: 開発ツール + `copilot-cli` |
-| macOS | `brew` + `mise` | brew: OS パッケージ・GUI アプリ + Azure CLI + `copilot-cli`、mise: その他の開発ツール |
-| Codespaces / Dev Container | ベースイメージ / Feature + `mise` | Feature: Azure CLI など、mise: 開発ツール + `copilot-cli` |
-| Windows | `winget` (DSC) + `mise` | winget: GUI/CLI アプリ + Azure CLI + `copilot-cli`、mise: その他の開発ツール |
+| 環境 | 管理ツール | 主な対象 |
+|------|-----------|----------|
+| Linux / WSL | `apt` + `mise` | OS パッケージ、Azure CLI、開発ツール、`copilot-cli` |
+| macOS | `brew` + `mise` | OS パッケージ、GUI アプリ、Azure CLI、開発ツール |
+| Codespaces / Dev Container | ベースイメージ / Feature + `mise` | コンテナ基盤側ツール、開発ツール |
+| Windows | `winget` (DSC) + `mise` | GUI/CLI アプリ、Azure CLI、開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行 |
 
-> **Azure CLI / Copilot CLI**: GUI アプリやプラットフォーム固有の導入都合があるため、必要に応じて各プラットフォームの公式パッケージマネージャーで管理する。Codespaces / Dev Container では Linux 系の流れに合わせて `mise` または devcontainer Feature を使う。
+`copilot-cli` は例外で、Linux 系は `mise`、macOS は `brew`、Windows は `winget` で管理する。
 
-## chezmoi コマンドリファレンス
+## 定期チェック対象の制約
 
-| コマンド | 参照先 | 用途 |
-|----------|--------|------|
-| `chezmoi init <repo>` | リモート | 初回セットアップ、構成テンプレート変更時の再初期化 |
-| `chezmoi update` | リモート | `git pull` + `apply` を一括実行 |
-| `chezmoi apply` | ローカル | ソース → ホームに反映 |
-| `chezmoi diff` | ローカル | ソースとホームの差分表示 |
-| `chezmoi cat <file>` | ローカル | テンプレート展開結果の確認 |
-| `chezmoi edit <file>` | ローカル | ソースを編集 |
-| `chezmoi add <file>` | ローカル | ホームの変更をソースに取り込み |
+`mise` 設定や導入元を見直すときは、次の制約がまだ残っているか確認する。
 
-リモート参照は `init` と `update` のみである。変更を共有するには、chezmoi のソースディレクトリで `git commit` + `git push` する。
+- **cargo-make**: linux/arm64 向け配布がない
+- **edit**: macOS 向け配布がない
+- **azure-dev**: macOS / Windows では `github:` バックエンドが実行ファイル名を正規化しないため、macOS は `brew`、Windows は `winget` を使う。Linux は `github:` バックエンドを使う
 
-## 設定ファイルの編集
+解消されていれば、条件分岐や導入元のワークアラウンドを外せる。
 
-`chezmoi edit` を使う方法と、ソースディレクトリを直接編集する方法がある。通常は `chezmoi edit` が簡潔だが、テンプレート全体を見ながら編集したい場合はソース側で作業する。
+## chezmoi での編集
+
+通常は `chezmoi edit` を使う。テンプレート全体を見ながら編集したいときだけ、ソースディレクトリを直接触る。
 
 ```bash
-# chezmoi edit を使う場合
 chezmoi edit ~/.zshrc
+chezmoi diff
+chezmoi apply
+```
 
-# ソースディレクトリを直接編集する場合
-cd $(chezmoi source-path)/..
+```bash
+cd "$(chezmoi source-path)/.."
 vim home/dot_zshrc.tmpl
 chezmoi apply
 ```
 
-## 変更の確認
+## mise の保守
 
-```bash
-chezmoi diff
-chezmoi cat ~/.gitconfig
-```
+### `mise-upgrade`
 
-## 新しいファイルを chezmoi 管理下に追加
-
-```bash
-chezmoi add ~/.some-config
-```
-
-## mise 管理ツールの更新
-
-シェル関数 `mise-upgrade`（`.zshrc` / `$PROFILE` で定義済み）が以下を一括実行する。
+シェル関数 `mise-upgrade` が次を一括実行する。
 
 1. `gh auth token` で一時トークンを取得
-2. `mise upgrade` で全ツールを最新化
-3. lockfile を削除し、`mise lock --global --platform` で全プラットフォーム分を再生成
-4. `chezmoi re-add` で lockfile をソースに反映
+2. `mise upgrade` を実行
+3. 既存 lockfile を削除し、`mise lock --global --platform ...` で再生成
+4. `chezmoi re-add` でソースへ戻す
 5. git commit + push
 
 ```bash
 mise-upgrade
 ```
 
-初期構築直後は、現セッションにシェル設定が読み込まれていないことがある。使う前にターミナルを再起動するか、手動で読み込む。
+初期構築直後はシェル設定が未読込のことがある。必要なら bash / zsh では `source ~/.zshrc`、PowerShell では `. $PROFILE` を実行する。
 
-- bash / zsh: `source ~/.zshrc`
-- PowerShell: `. $PROFILE`
+### 手動で更新する場合
 
-他の端末では `chezmoi update` で lockfile が同期され、`mise install` は lockfile の URL から直接ダウンロードする。
+この repo では次の 2 点が重要である。
 
-### 手動で実行する場合
+- `mise lock` は **`--global` が必須**
+- lockfile 再生成時は **`--platform` を常に指定**
 
-`mise lock` はデフォルトでプロジェクトレベルの設定のみ対象にするため、グローバル設定には **`--global`** が必須。また引数なしだと既定の 8 プラットフォーム（musl 含む）を対象にするため、**`--platform` も常に指定する**。`mise upgrade` 後は lockfile を削除してから再生成する。`mise lock` は既存エントリのリフレッシュしか行わず、`mise upgrade` がバックエンドによっては新バージョンのエントリを追加しないことがあるため。
+さらに `mise upgrade` 後は lockfile を削除してから再生成する。既存エントリだけが残り、新版が反映されないことがあるため。
 
 ```bash
 GITHUB_TOKEN=$(gh auth token) mise upgrade
 rm -f ~/.config/mise/mise.lock
 GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
 chezmoi re-add ~/.config/mise/mise.lock
-cd $(chezmoi source-path)/.. && git add -A && git commit -m "chore: upgrade mise tools" && git push
+cd "$(chezmoi source-path)/.." && git add -A && git commit -m "chore: upgrade mise tools" && git push
 ```
 
 ```powershell
@@ -94,7 +81,7 @@ chezmoi re-add ~\.config\mise\mise.lock
 cd (Join-Path (chezmoi source-path) ".."); git add -A; git commit -m "chore: upgrade mise tools"; git push
 ```
 
-## mise のツール追加・削除
+### ツールの追加・削除
 
 ```bash
 chezmoi edit ~/.config/mise/config.toml
@@ -104,15 +91,13 @@ chezmoi re-add ~/.config/mise/config.toml
 chezmoi re-add ~/.config/mise/mise.lock
 ```
 
-PowerShell の場合は `$env:GITHUB_TOKEN = (gh auth token); <command>; $env:GITHUB_TOKEN = $null` で囲む。`--platform` の値は必ずクォートする。
+PowerShell では `$env:GITHUB_TOKEN = (gh auth token); <command>; $env:GITHUB_TOKEN = $null` で囲む。`--platform` の値は必ずクォートする。
 
-`copilot-cli` は例外で、Linux 系のみ `mise` で管理する。macOS は `brew`、Windows は `winget` (DSC) 側を更新する。
+### lockfile の再構築
 
-## mise lockfile の再構築
+次のときは lockfile を削除してから再生成する。
 
-以下の状況では lockfile を削除してから `--platform` 付きで再生成する。
-
-- 新しいプラットフォームの端末を使い始める
+- 新しいプラットフォームの端末を使い始めた
 - 不要なプラットフォームのエントリを除去したい
 - lockfile が壊れた
 
@@ -122,33 +107,17 @@ GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm6
 chezmoi re-add ~/.config/mise/mise.lock
 ```
 
-## Bootstrap / shell pin の更新
+この repo で lockfile を更新対象にしているのは次の 5 プラットフォームである。
 
-初期セットアップ系スクリプトは、上流の最新版をその場で実行せず、リリース番号・コミット・SHA256 をリポジトリ内に pin している。これは上流の意図しない変更や改竄からの保護と、どの端末でも同じバージョンを導入する再現性を確保するためである。更新時は **バージョンの更新 → 公式チェックサムの照合 → スクリプト反映** の順で行う。
+- `linux-x64`
+- `linux-arm64`
+- `macos-arm64`
+- `windows-x64`
+- `windows-arm64`
 
-- `install.sh`
-  - `CHEZMOI_VERSION` を更新
-  - `chezmoi_<version>_checksums.txt` から利用中プラットフォーム分の SHA256 を更新
-- `home/run_once_before_20-install-mise.sh.tmpl`
-  - `MISE_VERSION` を更新
-  - `SHASUMS256.txt` から利用中プラットフォーム分の SHA256 を更新
-- `home/run_once_after_10-setup-shell.sh.tmpl`
-  - `OH_MY_ZSH_COMMIT` を更新
-  - `ZSH_COMPLETIONS_TAG` を安定版へ更新
+## GitHub API と `GITHUB_TOKEN`
 
-更新後は最低限次を実行して差分を確認する。
-
-```bash
-shellcheck install.sh
-sed '/^{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
-sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
-```
-
-## mise と GitHub API
-
-mise はツールのダウンロードに GitHub API を使う。未認証の場合、レート制限（60 req/hr）に抵触する可能性がある。
-
-`gh` は mise より先にシステムパッケージとして導入される。認証後に `gh auth token` で `GITHUB_TOKEN` を取得できる。
+`mise` は GitHub API を使ってダウンロード情報を解決する。未認証だとレート制限に当たりやすい。
 
 ```bash
 gh auth login
@@ -160,46 +129,41 @@ gh auth login
 $env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
 ```
 
-`run_once_after_20-mise-install.sh`（初回セットアップで `mise install` を実行するスクリプト。詳細は [`docs/architecture.md` の実行順セクション](architecture.md#run_once_-スクリプトの実行順と依存関係)を参照）は gh が認証済みなら `GITHUB_TOKEN` を自動設定する。初回セットアップで gh が未認証の場合は、セットアップ完了後に上記コマンドでリトライする。
+`GITHUB_TOKEN` を `.zshrc` や `$PROFILE` に常駐させないこと。
 
-`mise.lock` は各ツールのダウンロード URL とチェックサムを事前に解決したファイル。config.toml で `lockfile = true` を設定しており、`mise install` / `mise upgrade` ともに lockfile を自動更新する。
+## 既知のワークアラウンド
 
-| 操作 | GitHub API | トークン |
-|------|-----------|---------|
-| `mise install`（lockfile あり） | 最小限 | 推奨 |
-| `mise upgrade`（ツール更新） | 呼ぶ | 必要 |
-| `mise lock`（lockfile 再生成） | 呼ぶ | 必要 |
+- **Azure CLI SyntaxWarning**: `dot_zshrc.tmpl` の `az()` ラッパーで回避している。上流修正が入ったら削除を再検討する
 
-注意事項:
+## Bootstrap / shell pin の更新
 
-- `GITHUB_TOKEN` を `.zshrc` や `$PROFILE` に常駐させない
-- ツール追加時は `mise lock --global --platform` で全プラットフォーム分の lockfile を再生成してからコミットする
+初期セットアップ系スクリプトは、上流の最新版をその場で実行せず、リリース番号や SHA256 を pin している。更新時は **バージョン更新 → 公式チェックサム確認 → スクリプト反映** の順で行う。
 
-## mise lockfile の対象プラットフォーム
+- `install.sh`: `CHEZMOI_VERSION` と対応する SHA256
+- `home/run_once_before_20-install-mise.sh.tmpl`: `MISE_VERSION` と対応する SHA256
+- `home/run_once_after_10-setup-shell.sh.tmpl`: `OH_MY_ZSH_COMMIT`, `ZSH_COMPLETIONS_TAG`
 
-`mise` の lockfile は、現在次のプラットフォームに絞って更新している。
+最低限の確認:
 
-- `linux-x64`
-- `linux-arm64`
-- `macos-arm64`
-- `windows-x64`
-- `windows-arm64`
+```bash
+shellcheck install.sh
+sed '/^{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
+sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
+```
 
-それ以外のプラットフォームでも動作する可能性があるが、lockfile の更新や検証はこの一覧を前提にしている。`mise lock` で `--global --platform` を指定する際は上記を使う。
+## git pre-commit フック
 
-## git pre-commit フックの追加・更新
+この repo では、dotfiles として配布するグローバル `pre-commit` フックを使う。`gitleaks` で staged 変更を検査したあと、必要なら各リポジトリの `.git/hooks/pre-commit` へ委譲する。
 
-このリポジトリでは、グローバル `git pre-commit` フックを dotfiles の一部として配布している。フックは `gitleaks` による secret scan を実行した後、必要であれば各リポジトリ固有の `.git/hooks/pre-commit` へ処理を委譲する。
-
-初回適用後に有効化を確認する場合:
+有効化確認:
 
 ```bash
 git config --global core.hooksPath
 ```
 
-想定される出力は `~/.config/git/hooks` である。
+期待値は `~/.config/git/hooks`。
 
-グローバルフック自体を更新した場合は、dotfiles 側を修正してから通常どおり反映する。
+フック自体を更新したら通常どおり反映する。
 
 ```bash
 chezmoi edit ~/.config/git/hooks/pre-commit
@@ -207,21 +171,11 @@ chezmoi diff
 chezmoi apply
 ```
 
-新しい端末で `gitleaks` が未導入なら、`mise` で導入する。
-
-```bash
-mise install gitleaks
-```
-
-各リポジトリでローカルの `pre-commit` フックも併用したい場合は、従来どおり `.git/hooks/pre-commit` を配置してよい。グローバルフック側がそれを明示的に呼び出す構成である。
-
-## run_once_ スクリプトの再実行
+## `run_once_*` の再実行
 
 ```bash
 chezmoi state delete-bucket --bucket=scriptState
 chezmoi apply
 ```
 
-## run_once_ スクリプトの実行順と依存関係
-
-実行順と各スクリプトの依存関係は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順と依存関係) を参照する。変更時の確認事項もそちらにまとめている。
+実行順や依存関係は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順と依存関係) を参照。

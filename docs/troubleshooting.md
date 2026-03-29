@@ -1,22 +1,22 @@
 # Troubleshooting
 
-README に載せきらない復旧手順をまとめる。
+README に載せない復旧手順だけをまとめる。一般的な `chezmoi` / `mise` の仕様説明は各公式ドキュメントを参照。
 
 ## `warning: config file template has changed`
 
-`.chezmoi.toml.tmpl` が更新された場合に表示される。設定を再生成する。
+`.chezmoi.toml.tmpl` の更新後に出る。設定を再生成する。
 
 ```bash
 chezmoi init torumakabe
 ```
 
-> **注意**: リポジトリ名を省略すると、ソースディレクトリが空になり `chezmoi update` が動かなくなる。必ず `torumakabe` を指定すること。
+リポジトリ名を省略すると、ソースディレクトリが空になり `chezmoi update` が動かなくなる。必ず `torumakabe` を指定する。
 
 ## `mise install` が部分失敗する
 
-GitHub API のレート制限が原因の場合は、[`docs/operations.md`](operations.md#mise-と-github-api) の手順でトークンを設定してリトライする。
+まず [`docs/operations.md`](operations.md#github-api-と-github_token) の手順で `GITHUB_TOKEN` を付けて再実行する。
 
-lockfile にないツールがある場合は lockfile を再生成する。[`docs/operations.md`](operations.md#mise-lockfile-の再構築) に詳細な手順がある。
+lockfile 側の問題なら再生成する。
 
 ```bash
 mise ls --missing
@@ -25,26 +25,19 @@ GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm6
 mise install
 ```
 
-## `run_once_` スクリプトの warning / error
+## `run_once_*` スクリプトの warning / error
 
-各スクリプトの役割と実行順は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順と依存関係) を参照。
+実行順と役割は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順と依存関係) を参照。
 
-warning として継続するもの:
+- **warning で継続**: shell 設定の一部、`mise install` 後の任意ツール、追加ツール導入の失敗
+- **error で停止**: Oh My Zsh の clone、Docker 本体導入など継続に必要な処理
 
-- `run_once_after_10-setup-shell.sh`（シェル設定）: デフォルトシェルを zsh に変更できない場合
-- `run_once_after_20-mise-install.sh`（mise ツール導入）: `mise install` 後の一部ツールが未導入のまま残る場合、または状態確認・認証なしリトライの一部が失敗した場合
-- `run_once_after_30-install-tools.sh`（追加ツール導入）: 追加の Go ツール、macOS の cask、Linux の draw.io など任意ツールの導入に失敗した場合
+warning は標準エラーに表示される。表示されたコマンドを手動で再実行して復旧する。
 
-error として停止するもの:
+## `run_once_*` スクリプトが sudo を要求して停止する
 
-- Oh My Zsh の clone、Docker 本体の導入など、セットアップ継続に必要な主要処理
-
-warning は標準エラーに明示表示される。表示されたコマンドを手動で再実行して復旧できる。
-
-## `run_once_` スクリプトが sudo を要求して停止する
-
-Codespaces 以外の環境では、パッケージインストールに sudo が必要である。パスワードを入力するか、sudoers を設定する。
+Codespaces 以外ではパッケージ導入に sudo が必要である。パスワードを入力するか、sudoers を設定する。
 
 ## Dev Container で mise ツールが入っていない
 
-コンテナ作成時に `mise install` は自動スキップされる。README の Dev Container セクション、または [`docs/operations.md`](operations.md#mise-と-github-api) を参照して手動実行する。
+コンテナ作成時は `mise install` を自動実行しない。README の Dev Container セクション、または [`docs/operations.md`](operations.md#github-api-と-github_token) の手順で起動後に実行する。
