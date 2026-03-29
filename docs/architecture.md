@@ -1,177 +1,136 @@
 # Architecture Guide
 
-README から分離した、構成と設計判断の詳細である。
+README から分離した、構成と設計判断の詳細である。運用手順は [`docs/operations.md`](operations.md) を参照。
 
 ## ディレクトリ構造
 
 ```text
-home/                          ← chezmoi source (.chezmoiroot で指定)
-├── .chezmoi.toml.tmpl         ← 共通 platform flag・変数定義
-├── .chezmoiignore             ← 共通 flag を使ってファイルをスキップ
-├── .chezmoiremove             ← レガシーファイル自動削除
-├── dot_gitconfig.tmpl         ← ベース gitconfig (includeIf で分岐)
-├── dot_gitconfig-linux.tmpl   ← Linux/WSL 共通 (内部で WSL 分岐)
-├── dot_gitconfig-mac.tmpl     ← macOS 用
-├── dot_gitconfig-windows.tmpl ← Windows 用
-├── dot_gitconfig-corp.tmpl    ← 所属企業リポジトリ用
-├── dot_zshrc.tmpl             ← シェル設定
+home/                           ← chezmoi source (.chezmoiroot で指定)
+├── .chezmoi.toml.tmpl          ← 共通 flag・変数定義
+├── .chezmoiignore              ← 条件付き除外
+├── .chezmoiremove              ← 不要ファイルの削除
+├── dot_gitconfig*.tmpl         ← Git 設定
+├── dot_zshrc.tmpl              ← zsh 設定
 ├── dot_config/
-│   ├── git/
-│   │   └── hooks/
-│   │       └── pre-commit     ← gitleaks + ローカルフック委譲のグローバル pre-commit
+│   ├── git/hooks/pre-commit    ← gitleaks + ローカルフック委譲
 │   └── mise/
-│       ├── config.toml.tmpl   ← mise ツールバージョン定義
-│       └── mise.lock          ← mise lockfile (mise lock で生成)
-├── PowerShell_profile.ps1.tmpl ← Windows PowerShell Profile (mise activate 含む)
-├── private_dot_copilot/       ← ~/.copilot/ に配置
+│       ├── config.toml.tmpl    ← ツール定義
+│       └── mise.lock           ← lockfile
+├── PowerShell_profile.ps1.tmpl ← PowerShell 設定
+├── private_dot_copilot/        ← ~/.copilot/ に配置
 │   ├── copilot-instructions.md
-│   ├── mcp-config.json        ← MCP サーバー設定 (/mcp add 後は re-add)
+│   ├── mcp-config.json
 │   ├── hooks/
-│   │   ├── hooks.json         ← preToolUse / postToolUse フック定義
-│   │   ├── blocked-files.txt  ← ブロックパターン (deny)
-│   │   ├── ask-files.txt      ← 確認付きアクセスパターン (ask)
-│   │   ├── allowed-urls.txt   ← URL 許可リスト
+│   │   ├── hooks.json
+│   │   ├── blocked-files.txt
+│   │   ├── ask-files.txt
+│   │   ├── allowed-urls.txt
 │   │   └── scripts/
-│   │       ├── copilot-guard.py
-│   │       ├── uv-enforcer.py
-│   │       └── audit-log.py
 │   └── skills/
-├── run_once_before_*          ← パッケージ・mise インストール
-└── run_once_after_*           ← シェル・ツールセットアップ
-reference/windows/             ← デプロイしない参照ファイル
-├── configuration.dsc.yaml     ← WinGet DSC (手動実行)
-└── winterm-settings.json      ← Windows Terminal テーマ
-.github/
-└── copilot-instructions.md    ← リポジトリレベル Copilot 指示
+├── run_once_before_*           ← パッケージ・mise 自体の導入
+└── run_once_after_*            ← shell・追加ツールの設定
+reference/windows/              ← 参照専用ファイル
+└── configuration.dsc.yaml      ← WinGet DSC
 ```
 
-`.chezmoiremove` は `chezmoi apply` 時にホームディレクトリから不要になったファイルを自動削除する。現在は `~/.mise.toml` を対象としている。
+`.chezmoiremove` は `chezmoi apply` 時に不要ファイルを自動削除する。現在は `~/.mise.toml` が対象。
 
 ## 主要な決定事項
 
-- **chezmoi** が設定ファイルの配置・テンプレート化・プラットフォーム分岐を担当
-- **mise** が全プラットフォームでツールバージョンを管理
-- **uv** が Python 実行を管理し、システム Python 依存を減らす
-- **Git includeIf** を使って、プラットフォーム別 gitconfig の差分だけを自動読込する
-- **コミット署名** は 1Password SSH エージェント経由を基本とし、コンテナ系環境では自動無効化する
-- **Copilot Guard / uv Enforcer** により、危険なファイルアクセスや Python / pip の直接実行を抑止する
-- **postToolUse 監査ログ** により、ツール実行履歴を `~/.copilot/audit.jsonl` に記録し、事後検証を可能にする
-- **`copilot-safe` エイリアス** により、Autopilot モードでの多層防御（`--deny-tool` によるネットワークコマンド・リモート転送・DNS ルックアップのブロック、`--secret-env-vars` による機微変数隠蔽、ステップ数上限）を固定化する
-- **gitleaks + git pre-commit** により、コミット前に secret scan を走らせつつ、各リポジトリ固有のフックも併用できる
-- **Codespaces / Dev Container** では、非対話での作成や認証制約に合わせたワークアラウンドとフォールバックを持つ
+- **設定の配布** は `chezmoi`
+- **ツール版管理** は `mise`
+- **Python 実行** は `uv`
+- **Git 差分の分岐** は `includeIf`
+- **コミット署名** は 1Password SSH エージェントを基本にし、コンテナ系環境では自動無効化
+- **Copilot Guard / uv Enforcer** で危険な操作を抑止
+- **postToolUse 監査ログ** で事後確認を可能にする
+- **`copilot-safe`** で Autopilot の既定値を安全寄りに固定する
+- **gitleaks 付き pre-commit** で共通の secret scan を配布する
 
 ## Copilot Guard の設計
 
-`copilot-guard.py` は `preToolUse` フックとして、エージェントのツール呼び出しを**実行前にテキスト検査**し、以下の判定を行う。
+`copilot-guard.py` は `preToolUse` フックとして、ツール呼び出しを実行前に検査する。
 
-1. **秘匿ファイルへのアクセス拒否** — `.env`、`*.pem`、認証トークンファイル等（`blocked-files.txt` で定義）
-2. **確認付きアクセス (ask)** — Copilot Hook 設定、Terraform パラメータ等（`ask-files.txt` で定義）。ユーザーの明示的な承認が必要
-3. **環境変数からの秘匿情報読み取り拒否** — `printenv`、`$GITHUB_TOKEN` 展開、`os.environ` 等
-4. **許可外 URL への送信拒否** — `allowed-urls.txt` に含まれないドメインへのリクエスト
+### 役割
 
-判定の優先度は deny > ask > allow であり、複数のチェック層が異なる判定を返した場合は最も制限的な判定が採用される。
+1. **秘匿ファイルへのアクセス拒否** — `blocked-files.txt`
+2. **確認付きアクセス** — `ask-files.txt`
+3. **機微な環境変数読み取りの拒否** — `printenv`, `$TOKEN`, `os.environ` など
+4. **許可外 URL の拒否** — `allowed-urls.txt`
 
-### 設計上の位置づけ
+判定優先度は **deny > ask > allow**。
 
-このフックは**エージェント向けのガードレール**であり、上記の操作をコマンド文字列のパターンマッチで検出する。LLM エージェントは通常、最も自然なコード（`printenv`、`echo $SECRET`、`os.environ` 等）を生成するため、そのパターンをブロックするだけで大部分のリスクをカバーできる。Base64 エンコードや変数間接参照などの難読化には対応しないが、プロンプトインジェクション等の悪意ある介入がない限り、エージェントがそのようなコードを生成する可能性は低い。`blocked-files.txt` によるファイルブロックも同様に、テキストベースの検査で実用上十分なカバー範囲を得る設計である。
+### パス判定
+
+パス比較前に `\` を `/` へ正規化する。パターンファイルは `/` 前提で書く。
 
 ### チェック層
 
 ```text
-preToolUse 入力 (JSON)
-  │
-  ├─ 1. ファイルアクセスチェック ← blocked-files.txt / ask-files.txt
-  │     対象: 全ツールの path/file/uri/glob/command 引数
-  │     判定: blocked → deny, ask → ask (ユーザー確認)
-  │
-  ├─ 2. 環境変数アクセスチェック ← コード内定義
-  │     対象: bash/powershell の command 引数のみ
-  │     - 列挙コマンド (printenv, env, declare -p, ...)
-  │     - 秘匿変数展開 ($SECRET, $TOKEN, ...)
-  │     - ランタイム全体ダンプ (os.environ, process.env, ...)
-  │     ※ 汎用変数 ($PATH, $HOME, ...) は許可リストで除外
-  │
-  └─ 3. URL 許可リストチェック ← allowed-urls.txt
-        対象: command 内の URL、web_fetch の url 引数
+preToolUse 入力
+  ├─ ファイルアクセスチェック
+  ├─ 環境変数アクセスチェック
+  └─ URL 許可リストチェック
 ```
 
-### 環境変数の許可リスト設計
-
-環境変数チェックでは `$VAR` / `${VAR}` 展開を検査するが、全変数をブロックするとエージェントの通常作業が阻害される。そこで以下のルールで判定する:
-
-1. 変数名が許可リスト（`PATH`、`HOME`、`SHELL`、`SSH_AUTH_SOCK` 等 50 以上）に含まれれば**常に許可**
-2. 変数名に秘匿フラグメント（`secret`、`token`、`key`、`password`、`credential`、`auth` 等）が含まれれば**ブロック**
-3. 上記のいずれにも該当しない変数は**許可**（未知の変数はブロックしない）
-
-この設計は「偽陽性（正当な操作のブロック）を最小化し、明らかに危険なパターンだけを止める」方針に基づく。
+環境変数チェックは「明らかに危険な列挙や展開を止める」方針で、通常作業でよく使う変数は許可リストで除外する。
 
 ## git pre-commit フック
 
-グローバル `pre-commit` フックは `home/dot_config/git/hooks/executable_pre-commit` から `~/.config/git/hooks/pre-commit` に配置され、`~/.gitconfig` の `core.hooksPath` で有効化される構成である。
+グローバル `pre-commit` フックは `~/.config/git/hooks/pre-commit` に配置し、`core.hooksPath` で有効化する。
 
-このフックは次の 2 段構えで動作する。
+処理は次の 2 段構えである。
 
-1. `gitleaks git --pre-commit --staged --redact --verbose --no-banner` で staged 変更を検査する
-2. 各リポジトリに `.git/hooks/pre-commit` が存在すれば、それを追加で呼び出す
+1. `gitleaks git --pre-commit --staged --redact --verbose --no-banner`
+2. 各リポジトリの `.git/hooks/pre-commit` があれば追加で実行
 
-これにより、dotfiles 側で共通の secret scan を強制しつつ、各リポジトリ固有のフック実装も失わない構成になっている。
+これにより、共通の secret scan を強制しつつローカルフックも共存できる。
 
 ## プラットフォーム検出
 
 | 変数名 | 説明 |
 |--------|------|
-| `.chezmoi.os` | chezmoi 組み込みの OS 値 (`linux`, `darwin`, `windows`) |
-| `.isLinux` / `.isMac` / `.isWindows` | `.chezmoi.os` から導出した共通 flag |
-| `.isWSL` | Linux 上で `kernel.osrelease` に `microsoft` を含む場合に true |
+| `.chezmoi.os` | `linux`, `darwin`, `windows` |
+| `.isLinux` / `.isMac` / `.isWindows` | `.chezmoi.os` から導出 |
+| `.isWSL` | Linux かつ `kernel.osrelease` に `microsoft` を含む |
 | `.codespaces` | GitHub Codespaces |
 | `.devcontainer` | Dev Container |
 | `.windowsUser` | Windows ユーザー名 |
-| `.corpUser` | 所属企業での Git ユーザー名 |
+| `.corpUser` | 企業用 Git ユーザー名 |
 
-## Git `includeIf` の設計
+## Git `includeIf`
 
-`home/dot_gitconfig.tmpl` ではベース設定を `~/.gitconfig` に集約し、`includeIf` でプラットフォーム別の差分だけを読み込む。
+`home/dot_gitconfig.tmpl` ではベース設定を `~/.gitconfig` に置き、プラットフォーム差分だけを `includeIf` で切り替える。
 
-- `gitdir:/home/` → Linux / WSL のリポジトリ
-- `gitdir:/Users/` → macOS のリポジトリ
-- `gitdir/i:C:/`, `gitdir/i:D:/` → Windows のリポジトリ
+- `gitdir:/home/` → Linux / WSL
+- `gitdir:/Users/` → macOS
+- `gitdir/i:C:/`, `gitdir/i:D:/` → Windows
 
-補足:
-
-- `gitdir` はリポジトリの `.git` ディレクトリのパス接頭辞で判定される
-- Windows では drive letter の大文字小文字差を吸収するため `gitdir/i:` を使う
-- WSL はパス判定上は Linux (`/home/`) なので `~/.gitconfig-linux` を読み込み、その中で `.isWSL` を使って 1Password 連携パスだけを切り替える
-- template の制御構文は `{{- ... -}}` で前後の余分な空行を抑える
+WSL は Linux 側の設定を読みつつ、内部で `.isWSL` を使って 1Password 連携パスだけを切り替える。
 
 ## コミット署名
 
-1Password の SSH エージェントを使った SSH 署名をデフォルトで有効化している（`commit.gpgsign = true`, `gpg.format = ssh`）。`gpg.ssh.program` はプラットフォームごとに切り替える。
+1Password の SSH エージェントによる SSH 署名を既定で有効化している。
 
-| 環境 | `gpg.ssh.program` | ソース |
-|------|-------------------|--------|
-| macOS | `/Applications/1Password.app/Contents/MacOS/op-ssh-sign` | `dot_gitconfig-mac.tmpl` |
-| Linux | `/opt/1Password/op-ssh-sign` | `dot_gitconfig-linux.tmpl` |
-| WSL | `/mnt/c/Users/<windowsUser>/.../op-ssh-sign-wsl.exe` | `dot_gitconfig-linux.tmpl` |
-| Windows | `C:/Users/<windowsUser>/.../op-ssh-sign.exe` | `dot_gitconfig-windows.tmpl` |
+| 環境 | `gpg.ssh.program` |
+|------|-------------------|
+| macOS | `/Applications/1Password.app/Contents/MacOS/op-ssh-sign` |
+| Linux | `/opt/1Password/op-ssh-sign` |
+| WSL | `/mnt/c/Users/<windowsUser>/.../op-ssh-sign-wsl.exe` |
+| Windows | `C:/Users/<windowsUser>/.../op-ssh-sign.exe` |
 
-Dev Container / Codespaces では 1Password SSH エージェントがコンテナ内に転送されないため、chezmoi テンプレートで `commit.gpgsign = false` に自動切替する。Codespaces では GitHub の [GPG verification](https://docs.github.com/en/codespaces/managing-your-codespaces/managing-gpg-verification-for-github-codespaces) を有効にすることで、GitHub 管理の鍵による署名が可能である。
+Dev Container / Codespaces では 1Password SSH エージェントを前提にできないため、`commit.gpgsign = false` に切り替える。
 
-## `run_once_` スクリプトの実行順と依存関係
+## `run_once_*` スクリプトの実行順と依存関係
 
-chezmoi は `run_once_before_*` → 通常のファイル適用 → `run_once_after_*` の順に処理する。さらに同じフェーズ内ではファイル名の数字順で実行される。
+chezmoi は `run_once_before_*` → 通常ファイル適用 → `run_once_after_*` の順に処理し、同じフェーズ内では数字順で実行する。
 
-| 順序 | スクリプト | 役割 | 後続が依存している前提 |
-|------|-----------|------|------------------------|
-| 1 | `run_once_before_10-install-packages.sh` | OS パッケージを導入 | `git` / `zsh` が後続の shell setup と mise bootstrap までに使える |
-| 2 | `run_once_before_20-install-mise.sh` | `mise` 自体を導入 | `run_once_after_20-mise-install.sh` 開始時点で `mise` コマンドが存在する |
-| 3 | `run_once_after_10-setup-shell.sh` | Oh My Zsh / plugin / default shell を設定 | `git` / `zsh` は 1 で導入済み |
-| 4 | `run_once_after_20-mise-install.sh` | `~/.config/mise/config.toml` と `mise.lock` を使ってツール本体を導入 | chezmoi による dotfiles 配置完了後に実行される |
-| 5 | `run_once_after_30-install-tools.sh` | Docker, Go tools, GUI アプリなどの追加導入 | `mise install` 済みで `go` などのコマンドが PATH に存在する |
+| 順序 | スクリプト | 役割 | 依存前提 |
+|------|-----------|------|----------|
+| 1 | `run_once_before_10-install-packages.sh` | OS パッケージ導入 | 後続で `git` / `zsh` を使える |
+| 2 | `run_once_before_20-install-mise.sh` | `mise` 自体を導入 | 後続で `mise` が存在する |
+| 3 | `run_once_after_10-setup-shell.sh` | shell 設定 | `git` / `zsh` は導入済み |
+| 4 | `run_once_after_20-mise-install.sh` | `config.toml` / `mise.lock` を使ってツール導入 | dotfiles 配置後に動く |
+| 5 | `run_once_after_30-install-tools.sh` | 追加ツール導入 | `mise install` 済み |
 
-### 変更時の確認事項
-
-- `before_` / `after_` の跨ぎを変えても、`mise` 設定ファイルや lockfile が生成される前に `mise install` しないこと
-- `run_once_before_10-install-packages.sh` のパッケージ変更で、後続の前提を壊していないこと
-- `run_once_after_10-setup-shell.sh` は非対話実行でも失敗しないこと
-- `run_once_after_20-mise-install.sh` の retry / workaround を変える場合、Codespaces とローカル Dev Container の分岐を壊していないこと
-- `run_once_after_30-install-tools.sh` の skip 条件を変える場合、Codespaces / Dev Container では引き続きベースイメージや Features 側で補う前提か確認すること
+変更時は、`mise` 設定が配置される前に `mise install` しないことと、Codespaces / Dev Container の分岐を壊さないことを優先して確認する。
