@@ -20,7 +20,7 @@ Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](h
 | WSL | [クイックスタート → Linux / macOS / WSL](#linux--macos--wsl) | 1Password パスが Windows 側、初回 `windowsUser` 入力が必要 |
 | GitHub Codespaces | [クイックスタート → GitHub Codespaces](#github-codespaces) | `corpUser` 未設定 |
 | Dev Container (ローカル) | [クイックスタート → Dev Container](#dev-container-ローカル) | 初回 `mise install --yes` を手動実行 |
-| Windows | [クイックスタート → Windows](#windows) | — |
+| Windows | [クイックスタート → Windows](#windows) | `copilot` は DSC + winget で導入 |
 
 ## クイックスタート
 
@@ -93,12 +93,14 @@ if (!(Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
 }
 ```
 
-5. ツールインストール:
+5. 残りのツールを mise でインストール:
 
 ```powershell
 gh auth login
 $env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
 ```
+
+`copilot` は step 3 の `winget configure` で導入されるため、Windows では `mise install` の対象外である。
 
 ## 日常操作
 
@@ -110,6 +112,8 @@ $env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
 | **mise 管理** | Go, Node, Terraform などのバージョン | `.config/mise/config.toml` を更新 → `mise install` |
 | **手動管理** | `reference/windows/` 配下 | 直接編集して git commit |
 | **リポジトリメタ情報** | `README.md`, `.github/copilot-instructions.md` | 直接編集して git commit |
+
+`copilot` は例外で、Linux / WSL / Codespaces / Dev Container では `mise`、macOS では `brew`、Windows では `winget` で管理する。
 
 **重要**: chezmoi 管理下のファイルを直接編集しても、次回の `chezmoi apply` で上書きされる。永続化するには `chezmoi edit` またはソース側の編集を使う。
 

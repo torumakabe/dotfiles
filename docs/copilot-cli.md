@@ -24,6 +24,18 @@ GitHub Copilot CLI の設定・運用ガイドである。chezmoi が `~/.copilo
 | `skills/` | エージェントスキル | chezmoi（上流更新時は `re-add`） |
 | `installed-plugins/` | プラグイン | `/plugin install` で管理 |
 
+## CLI 本体の導入元
+
+`copilot` CLI の本体は、プラットフォームごとに導入元を分けている。
+
+| 環境 | 導入元 |
+|------|--------|
+| Linux / WSL / Codespaces / Dev Container | `mise` |
+| macOS | `brew` |
+| Windows | `winget` (`reference/windows/configuration.dsc.yaml`) |
+
+macOS では Copilot Desktop が GUI プロセスとして起動するため、`.zshrc` から `launchctl setenv COPILOT_CLI_PATH` を設定して Homebrew 側の `copilot` パスを公開する。
+
 ## プラグインの管理
 
 プラグインは `/plugin` コマンドで管理する。chezmoi の管理外である。

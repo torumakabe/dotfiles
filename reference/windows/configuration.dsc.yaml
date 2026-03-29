@@ -3,7 +3,7 @@
 #
 # Usage: winget configure -f configuration.dsc.yaml (管理者権限の PowerShell で実行)
 #
-# Note: CLI tool versions are managed by mise (~/.config/mise/config.toml).
+# Note: Most CLI tool versions are managed by mise (~/.config/mise/config.toml).
 # DSC contains only: OS settings, GUI/CLI apps not managed by mise, and
 # bootstrap tooling (mise itself).
 properties:
@@ -48,6 +48,13 @@ properties:
         allowPrerelease: false
       settings:
         id: GitHub.cli
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: "Install GitHub Copilot CLI"
+        allowPrerelease: false
+      settings:
+        id: GitHub.Copilot
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:

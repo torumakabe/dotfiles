@@ -6,13 +6,13 @@
 
 | 環境 | 管理ツール | 対象 |
 |------|-----------|------|
-| Linux / WSL | `apt` + `mise` | apt: OS パッケージ + Azure CLI、mise: 開発ツール |
-| macOS | `brew` + `mise` | brew: OS パッケージ・GUI アプリ + Azure CLI、mise: 開発ツール |
-| Codespaces / Dev Container | ベースイメージ / Feature + `mise` | Feature: Azure CLI など、mise: 開発ツール |
-| Windows | `winget` (DSC) + `mise` | winget: GUI/CLI アプリ + Azure CLI、mise: 開発ツール |
+| Linux / WSL | `apt` + `mise` | apt: OS パッケージ + Azure CLI、mise: 開発ツール + `copilot-cli` |
+| macOS | `brew` + `mise` | brew: OS パッケージ・GUI アプリ + Azure CLI + `copilot-cli`、mise: その他の開発ツール |
+| Codespaces / Dev Container | ベースイメージ / Feature + `mise` | Feature: Azure CLI など、mise: 開発ツール + `copilot-cli` |
+| Windows | `winget` (DSC) + `mise` | winget: GUI/CLI アプリ + Azure CLI + `copilot-cli`、mise: その他の開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行 |
 
-> **Azure CLI**: mise ではなく各プラットフォームの公式パッケージマネージャーで管理する。Codespaces / Dev Container では devcontainer Feature を使う。
+> **Azure CLI / Copilot CLI**: GUI アプリやプラットフォーム固有の導入都合があるため、必要に応じて各プラットフォームの公式パッケージマネージャーで管理する。Codespaces / Dev Container では Linux 系の流れに合わせて `mise` または devcontainer Feature を使う。
 
 ## chezmoi コマンドリファレンス
 
@@ -105,6 +105,8 @@ chezmoi re-add ~/.config/mise/mise.lock
 ```
 
 PowerShell の場合は `$env:GITHUB_TOKEN = (gh auth token); <command>; $env:GITHUB_TOKEN = $null` で囲む。`--platform` の値は必ずクォートする。
+
+`copilot-cli` は例外で、Linux 系のみ `mise` で管理する。macOS は `brew`、Windows は `winget` (DSC) 側を更新する。
 
 ## mise lockfile の再構築
 

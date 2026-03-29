@@ -326,6 +326,8 @@ mise-upgrade() {
 }
 
 {{ if eq .chezmoi.os "darwin" -}}
-# Copilot Desktop に mise 管理の copilot CLI パスを公開
-launchctl setenv COPILOT_CLI_PATH "$HOME/.local/share/mise/shims/copilot"
+# Copilot Desktop に brew 管理の copilot CLI パスを公開
+if command -v copilot >/dev/null 2>&1; then
+  launchctl setenv COPILOT_CLI_PATH "$(command -v copilot)"
+fi
 {{ end -}}

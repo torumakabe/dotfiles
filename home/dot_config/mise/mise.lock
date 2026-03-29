@@ -262,21 +262,6 @@ checksum = "sha256:42a1593bd04d5b3fbc7b8042f4ab7160ef4cdf2e637b2e6cc7b8cca71dfb5
 url = "https://github.com/github/copilot-cli/releases/download/v1.0.12/copilot-linux-x64.tar.gz"
 url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/382420209"
 
-[tools."github:github/copilot-cli"."platforms.macos-arm64"]
-checksum = "sha256:9ab09d670bff7f432e9a6b6d02f3319496c07e8959686a881bd43e513a1e6153"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.12/copilot-darwin-arm64.tar.gz"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/382420199"
-
-[tools."github:github/copilot-cli"."platforms.windows-arm64"]
-checksum = "sha256:be39865d93390679f5d84f7dc5ea986ffb444a806e16d558ccf034984ab64b16"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.12/copilot-win32-arm64.zip"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/382420252"
-
-[tools."github:github/copilot-cli"."platforms.windows-x64"]
-checksum = "sha256:80877eb2db2197cddccf001dc170a6fe14fef125253a3a3f52c456d78fcd4ab1"
-url = "https://github.com/github/copilot-cli/releases/download/v1.0.12/copilot-win32-x64.zip"
-url_api = "https://api.github.com/repos/github/copilot-cli/releases/assets/382420257"
-
 [[tools.gitleaks]]
 version = "8.30.1"
 backend = "aqua:gitleaks/gitleaks"
