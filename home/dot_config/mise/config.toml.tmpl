@@ -31,8 +31,11 @@ rust = "latest"
 # macOS は brew、Windows は winget で管理
 # aqua レジストリが linux/arm64 未対応のため github バックエンドを使用
 "github:Azure/azure-dev" = "latest"
-{{ end -}}
+# Copilot Desktop などの GUI アプリから検出できるよう、macOS は brew、
+# Windows は winget で管理する。Codespaces / Dev Container を含む Linux 系は
+# 既存どおり mise 管理を維持する。
 "github:github/copilot-cli" = "latest"
+{{ end -}}
 {{ if ne .chezmoi.os "darwin" -}}
 # macOS 向けプリビルドバイナリが未提供のためスキップ
 edit = "latest"
