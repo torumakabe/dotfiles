@@ -326,32 +326,32 @@ checksum = "sha256:4932cfca5e75bf60fe1c576edf459e5e809e6644664a068185d64b84af3fa
 url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golangci-lint-2.11.4-windows-amd64.zip"
 
 [[tools.goreleaser]]
-version = "2.14.3"
+version = "2.15.1"
 backend = "aqua:goreleaser/goreleaser"
 
 [tools.goreleaser."platforms.linux-arm64"]
-checksum = "sha256:581a10e53c1176b3e81ee45cf531e02dbf899db0bc7b795669347df4276ce948"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.14.3/goreleaser_Linux_arm64.tar.gz"
+checksum = "sha256:5792af3ed70393834abb5ac0f42ebf2b0b9fe31392cca56432fdb6d1b72e6b85"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.1/goreleaser_Linux_arm64.tar.gz"
 provenance = "cosign"
 
 [tools.goreleaser."platforms.linux-x64"]
-checksum = "sha256:dc7faeeeb6da8bdfda788626263a4ae725892a8c7504b975c3234127d4a44579"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.14.3/goreleaser_Linux_x86_64.tar.gz"
+checksum = "sha256:de49941ff1fbb4de46a1404eeae08d52a5b1bfab84b1b87a1fd62768d341f968"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.1/goreleaser_Linux_x86_64.tar.gz"
 provenance = "cosign"
 
 [tools.goreleaser."platforms.macos-arm64"]
-checksum = "sha256:3507798489e107a78aff36b169de48148a335ac26eb3161608d905f3f3a957bd"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.14.3/goreleaser_Darwin_all.tar.gz"
+checksum = "sha256:df0955cba1263ea9cce7df99ea86ddb03fce883dc745ec3e63b06fc62975c27d"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.1/goreleaser_Darwin_all.tar.gz"
 provenance = "cosign"
 
 [tools.goreleaser."platforms.windows-arm64"]
-checksum = "sha256:09c21cf3b2c9587fd4f8877163a928c1beb9790e2ab4ce174b18b5fbeaa6c653"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.14.3/goreleaser_Windows_arm64.zip"
+checksum = "sha256:211a7174c5a8bd0d5de3214edfa592424496960ddbad8e8b56db06a42b37b6d3"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.1/goreleaser_Windows_arm64.zip"
 provenance = "cosign"
 
 [tools.goreleaser."platforms.windows-x64"]
-checksum = "sha256:3deea8ff471aa258a2d99f3e5302971d7028647ae8ddaf103257a8113e485a31"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.14.3/goreleaser_Windows_x86_64.zip"
+checksum = "sha256:eea84855c779e0fca328da9e0b9683e888707fefeec361ea3fe64f4c990ce652"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.1/goreleaser_Windows_x86_64.zip"
 provenance = "cosign"
 
 [[tools.helm]]
