@@ -12,6 +12,7 @@
 ### Windows
 
 - ファイルをエディタで開く → `Start-Process edit <path>`（Microsoft Edit が別ウィンドウで起動する）
+- Markdown ファイルを閲覧する → `Show-Markdown -Path <path> -UseBrowser`（既定のブラウザでレンダリング表示）
 - Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
 
 ### macOS / Linux
