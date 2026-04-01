@@ -20,7 +20,7 @@
 
 - **cargo-make**: linux/arm64 向け配布がない
 - **edit**: macOS 向け配布がない
-- **azure-dev**: macOS / Windows では `github:` バックエンドが実行ファイル名を正規化しないため、macOS は `brew`、Windows は `winget` を使う。Linux は `github:` バックエンドを使う
+- **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため、全 OS で mise 外で管理。macOS は `brew`、Windows は `winget`、Linux は公式インストーラー (`install-azd.sh`) を使い、更新は `azd update` で行う
 
 解消されていれば、条件分岐や導入元のワークアラウンドを外せる。
 

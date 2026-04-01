@@ -27,10 +27,6 @@ gitleaks = "latest"
 jq = "latest"
 rust = "latest"
 {{ if eq .chezmoi.os "linux" -}}
-# macOS/Windows では github: バックエンドがバイナリ名を正規化しないため
-# macOS は brew、Windows は winget で管理
-# aqua レジストリが linux/arm64 未対応のため github バックエンドを使用
-"github:Azure/azure-dev" = "latest"
 # Copilot Desktop などの GUI アプリから検出できるよう、macOS は brew、
 # Windows は winget で管理する。Codespaces / Dev Container を含む Linux 系は
 # 既存どおり mise 管理を維持する。
