@@ -52,6 +52,14 @@ if ! command -v az >/dev/null 2>&1; then
   echo "Installing Azure CLI via official script..."
   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 fi
+
+# Azure Developer CLI — 公式インストールスクリプト (https://aka.ms/install-azd.sh)
+# github: バックエンドはバイナリ名を正規化しないため、macOS (brew) / Windows (winget) と同様に
+# mise 外で管理する。更新は azd update で行う
+if ! command -v azd >/dev/null 2>&1; then
+  echo "Installing Azure Developer CLI via official script..."
+  curl -fsSL https://aka.ms/install-azd.sh | bash
+fi
 {{ end -}}
 
 {{ else if eq .chezmoi.os "darwin" -}}
