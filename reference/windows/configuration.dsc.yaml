@@ -79,6 +79,20 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: "Install LibreOffice"
+        allowPrerelease: false
+      settings:
+        id: TheDocumentFoundation.LibreOffice
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
+        description: "Install Poppler"
+        allowPrerelease: false
+      settings:
+        id: oschwartz10612.Poppler
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install draw.io"
         allowPrerelease: false
       settings:
