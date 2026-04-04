@@ -1,0 +1,96 @@
+name: Test Copilot Hooks
+on:
+  pull_request:
+    paths:
+      - 'home/private_dot_copilot/hooks/**'
+      - 'tests/**'
+      - '.github/workflows/test-copilot-hooks.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'home/private_dot_copilot/hooks/**'
+      - 'tests/**'
+      - '.github/workflows/test-copilot-hooks.yml'
+  schedule:
+    # Weekly Monday 00:00 UTC — detect fail-open regressions
+    - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+
+      # ── Unit tests (auto-discover all test_*.py) ──────────────────────
+      - name: Run all unit tests
+        run: uv run -m unittest discover -s tests -v
+
+      # ── Smoke tests — copilot-guard ───────────────────────────────────
+      - name: Smoke — copilot-guard denies .env access
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat .env"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke — copilot-guard denies .azure access
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat ~/.azure/azureProfile.json"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke — copilot-guard denies terraform.tfstate access
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat terraform.tfstate"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke — copilot-guard asks for hooks modification
+        run: |
+          RESULT=$(echo '{"toolName":"edit","toolArgs":{"path":"/home/user/.copilot/hooks/hooks.json"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='ask', f'Expected ask, got {d}'"
+
+      - name: Smoke — copilot-guard denies SSH key access
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat ~/.ssh/id_ed25519"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke — copilot-guard denies printenv
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"printenv"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      # ── Smoke tests — uv-enforcer ────────────────────────────────────
+      - name: Smoke — uv-enforcer denies bare python
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke — uv-enforcer allows uv run
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"uv run python script.py"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='allow', f'Expected allow, got {d}'"
+
+      # ── Smoke tests — node-global-enforcer ────────────────────────────
+      - name: Smoke — node-global-enforcer denies npm install -g
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"npm install -g typescript"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+      - name: Smoke — node-global-enforcer allows local npm install
+        run: |
+          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"npm install typescript"}}' \
+            | uv run home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py)
+          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='allow', f'Expected allow, got {d}'"
