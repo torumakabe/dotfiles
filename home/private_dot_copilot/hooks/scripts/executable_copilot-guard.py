@@ -436,6 +436,111 @@ def check_env(ctx: CheckContext) -> CheckResult | None:
 
 
 # ---------------------------------------------------------------------------
+# Checker: git commit approval
+# ---------------------------------------------------------------------------
+
+# Git global options that consume the next token as their argument.
+_GIT_ARG_OPTIONS: frozenset[str] = frozenset({
+    "-c", "-C", "--git-dir", "--work-tree",
+    "--namespace", "--super-prefix", "--config-env",
+})
+
+# Shell operators that delimit independent commands.
+_SHELL_OPERATORS: frozenset[str] = frozenset({"&&", "||", ";", "|"})
+
+# Shell wrapper commands that delegate to the next command on the line.
+_SHELL_WRAPPERS: frozenset[str] = frozenset({
+    "command", "exec", "nice", "nohup", "time", "sudo",
+})
+
+
+def _normalize_executable(token: str) -> str:
+    """Extract the base executable name from a possibly-qualified path.
+
+    Handles ``/usr/bin/git``, ``git.exe``, and quoted variants.
+    """
+    name = token.strip("\"'")
+    name = name.replace("\\", "/").rsplit("/", 1)[-1]
+    if name.lower().endswith(".exe"):
+        name = name[:-4]
+    return name
+
+
+def _has_git_commit(command: str) -> bool:
+    """Return True if *command* contains a ``git commit`` invocation.
+
+    Uses the quote-aware ``COMMAND_TOKEN_RE`` tokenizer so that shell
+    operators inside quoted strings are not treated as command separators.
+    Skips ``env``, ``command``, ``sudo`` and other common shell wrappers,
+    and normalises the executable name (basename, strip ``.exe``).
+    """
+    tokens = COMMAND_TOKEN_RE.findall(command.strip())
+
+    # Split token list into segments by shell operators.
+    segments: list[list[str]] = [[]]
+    for tok in tokens:
+        if tok in _SHELL_OPERATORS:
+            segments.append([])
+        else:
+            segments[-1].append(tok)
+
+    for seg in segments:
+        if not seg:
+            continue
+        idx = 0
+        # Skip env-var assignments before the command (VAR=value …).
+        while idx < len(seg) and re.match(r"^[A-Za-z_]\w*=", seg[idx]):
+            idx += 1
+        if idx >= len(seg):
+            continue
+        # Skip shell wrappers (env, command, sudo, …).
+        while idx < len(seg):
+            name = _normalize_executable(seg[idx])
+            if name == "env":
+                idx += 1
+                # Skip env's own flags and VAR=value arguments.
+                while idx < len(seg):
+                    t = seg[idx]
+                    if t.startswith("-") or re.match(r"^[A-Za-z_]\w*=", t):
+                        idx += 1
+                        continue
+                    break
+                continue
+            if name in _SHELL_WRAPPERS:
+                idx += 1
+                while idx < len(seg) and seg[idx].startswith("-"):
+                    idx += 1
+                continue
+            break
+        if idx >= len(seg):
+            continue
+        # Check if the resolved command is git.
+        if _normalize_executable(seg[idx]) != "git":
+            continue
+        # Walk past git global options to find the subcommand.
+        idx += 1
+        while idx < len(seg):
+            tok = seg[idx]
+            if not tok.startswith("-"):
+                break
+            if tok in _GIT_ARG_OPTIONS:
+                idx += 1  # skip the option's argument
+            idx += 1
+        if idx < len(seg) and seg[idx] == "commit":
+            return True
+    return False
+
+
+def check_git_commit(ctx: CheckContext) -> CheckResult | None:
+    """Require explicit user approval for ``git commit`` commands."""
+    if ctx.tool_name not in ("bash", "powershell") or not ctx.command:
+        return None
+    if _has_git_commit(ctx.command):
+        return CheckResult("ask", "git commit requires user approval")
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Checker: URL allowlist
 # ---------------------------------------------------------------------------
 
@@ -483,6 +588,7 @@ def check_url_allowlist(ctx: CheckContext) -> CheckResult | None:
 CHECKERS: list[Checker] = [
     check_blocked_files,
     check_env,
+    check_git_commit,
     check_url_allowlist,
 ]
 
