@@ -620,5 +620,162 @@ class CopilotGuardCheckerReturnTypeTests(unittest.TestCase):
         self.assertEqual(result.decision, "deny")
 
 
+class GitCommitCheckerTests(unittest.TestCase):
+    """Tests for the git commit approval checker."""
+
+    # --- Positive cases: should require approval ---
+
+    def test_bare_git_commit(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="git commit", tool_args={"command": "git commit"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_git_commit_with_message(self) -> None:
+        ctx = make_ctx(tool_name="bash", command='git commit -m "feat: add feature"', tool_args={"command": 'git commit -m "feat: add feature"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_git_commit_amend(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="git commit --amend", tool_args={"command": "git commit --amend"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_git_commit_with_global_option(self) -> None:
+        ctx = make_ctx(tool_name="bash", command='git -c user.name=test commit -m "msg"', tool_args={"command": 'git -c user.name=test commit -m "msg"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_git_commit_with_C_option(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="git -C /tmp/repo commit", tool_args={"command": "git -C /tmp/repo commit"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_git_commit_in_chain(self) -> None:
+        ctx = make_ctx(tool_name="bash", command='git add . && git commit -m "msg"', tool_args={"command": 'git add . && git commit -m "msg"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_git_commit_with_env_vars(self) -> None:
+        ctx = make_ctx(tool_name="bash", command='GIT_AUTHOR_NAME=bot git commit -m "msg"', tool_args={"command": 'GIT_AUTHOR_NAME=bot git commit -m "msg"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_powershell_git_commit(self) -> None:
+        ctx = make_ctx(tool_name="powershell", command='git commit -m "msg"', tool_args={"command": 'git commit -m "msg"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_git_commit_after_pipe(self) -> None:
+        ctx = make_ctx(tool_name="bash", command='echo ok | git commit --allow-empty -m "msg"', tool_args={"command": 'echo ok | git commit --allow-empty -m "msg"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    # --- Negative cases: should NOT trigger ---
+
+    def test_git_add_no_match(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="git add .", tool_args={"command": "git add ."})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+    def test_git_status_no_match(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="git status", tool_args={"command": "git status"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+    def test_git_log_no_match(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="git log --oneline", tool_args={"command": "git log --oneline"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+    def test_git_diff_no_match(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="git --no-pager diff", tool_args={"command": "git --no-pager diff"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+    def test_non_bash_tool_no_match(self) -> None:
+        ctx = make_ctx(tool_name="edit", command="git commit", tool_args={"command": "git commit"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+    def test_empty_command_no_match(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="", tool_args={"command": ""})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+    def test_echo_git_commit_no_match(self) -> None:
+        ctx = make_ctx(tool_name="bash", command='echo "git commit"', tool_args={"command": 'echo "git commit"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+    def test_has_git_commit_helper(self) -> None:
+        """Direct unit test for the _has_git_commit helper."""
+        self.assertTrue(copilot_guard._has_git_commit("git commit"))
+        self.assertTrue(copilot_guard._has_git_commit("git commit -m 'msg'"))
+        self.assertTrue(copilot_guard._has_git_commit("git -c k=v commit"))
+        self.assertFalse(copilot_guard._has_git_commit("git add ."))
+        self.assertFalse(copilot_guard._has_git_commit("git push"))
+        self.assertFalse(copilot_guard._has_git_commit("echo git commit"))
+
+    # --- Bypass resistance (GPT 5.4 review findings) ---
+
+    def test_env_wrapper_git_commit(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="env GIT_AUTHOR_NAME=bot git commit -m msg", tool_args={"command": "env GIT_AUTHOR_NAME=bot git commit -m msg"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_command_wrapper_git_commit(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="command git commit -m msg", tool_args={"command": "command git commit -m msg"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_absolute_path_git_commit(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="/usr/bin/git commit -m msg", tool_args={"command": "/usr/bin/git commit -m msg"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_git_exe_commit(self) -> None:
+        ctx = make_ctx(tool_name="powershell", command="git.exe commit -m msg", tool_args={"command": "git.exe commit -m msg"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_sudo_git_commit(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="sudo git commit -m msg", tool_args={"command": "sudo git commit -m msg"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_env_with_flags_git_commit(self) -> None:
+        ctx = make_ctx(tool_name="bash", command="env -i git commit -m msg", tool_args={"command": "env -i git commit -m msg"})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    # --- False-positive resistance (Opus 4.6 review findings) ---
+
+    def test_quoted_semicolon_git_commit_no_match(self) -> None:
+        """Operators inside quotes must not trigger false positives."""
+        ctx = make_ctx(tool_name="bash", command='echo "test; git commit -m msg"', tool_args={"command": 'echo "test; git commit -m msg"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+    def test_quoted_ampersand_git_commit_no_match(self) -> None:
+        ctx = make_ctx(tool_name="bash", command='echo "foo && git commit"', tool_args={"command": 'echo "foo && git commit"'})
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
+
+
 if __name__ == "__main__":
     unittest.main()
