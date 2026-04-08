@@ -19,7 +19,7 @@ home/                           ← chezmoi source (.chezmoiroot で指定)
 ├── PowerShell_profile.ps1.tmpl ← PowerShell 設定
 ├── private_dot_copilot/        ← ~/.copilot/ に配置
 │   ├── copilot-instructions.md
-│   ├── mcp-config.json
+│   ├── mcp-config.json          ← 手動 MCP サーバー設定
 │   ├── hooks/
 │   │   ├── hooks.json
 │   │   ├── blocked-files.txt
