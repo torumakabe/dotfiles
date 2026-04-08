@@ -7,7 +7,7 @@
 | パス | 用途 | 管理方法 |
 |------|------|----------|
 | `copilot-instructions.md` | ユーザーレベルのカスタム指示 | chezmoi |
-| `mcp-config.json` | MCP サーバー設定 | chezmoi (`/mcp add` 後は `chezmoi re-add`) |
+| `mcp-config.json` | 手動 MCP サーバー設定 | chezmoi (`/mcp add` 後は `chezmoi re-add`) |
 | `hooks/hooks.json` | `preToolUse` / `postToolUse` 設定 | chezmoi |
 | `hooks/scripts/copilot-guard.py` | ファイル・URL・環境変数アクセスのガード | chezmoi |
 | `hooks/scripts/uv-enforcer.py` | `python` / `pip` 直接実行の抑止 | chezmoi |
@@ -15,7 +15,7 @@
 | `hooks/blocked-files.txt` | deny パターン | chezmoi |
 | `hooks/ask-files.txt` | ask パターン | chezmoi |
 | `hooks/allowed-urls.txt` | URL 許可リスト | chezmoi |
-| `skills/` | ユーザーレベルのスキル | chezmoi |
+| `skills/` | ユーザーレベルのスキル（手動管理分） | chezmoi |
 | `installed-plugins/` | プラグイン | Copilot CLI 側で管理 |
 
 ## CLI 本体の導入元
@@ -31,12 +31,22 @@ macOS では Copilot Desktop からも参照できるよう、`.zshrc` で `COPI
 ## プラグインとスキル
 
 - **プラグイン**: `/plugin` コマンドで管理する。chezmoi の管理外
-- **スキル**: `~/.copilot/skills/` を chezmoi で管理する
+- **スキル**: プラグイン由来のスキルはプラグイン側で管理される。手動追加のスキルのみ `~/.copilot/skills/` を chezmoi で管理する
 
-スキル追加後はソースへ戻す。
+### 手動スキルの追加
+
+プラグインに含まれないスキルを手動で追加する場合、外部スキルの取り込みまたは自作する。
 
 ```bash
+# 外部スキルの取り込み
 npx skills add -g <owner>/<repo>/<path>
+
+# 自作の場合は ~/.copilot/skills/<skill-name>/SKILL.md を作成
+```
+
+いずれも chezmoi ソースへ戻す。
+
+```bash
 chezmoi re-add ~/.copilot/skills/<skill-name>
 chezmoi diff
 ```
