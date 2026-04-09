@@ -17,28 +17,28 @@ url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.33.1/op_darwin_arm64_v2.33
 url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.33.1/op_windows_amd64_v2.33.1.zip"
 
 [[tools.azure-kubelogin]]
-version = "0.2.16"
+version = "0.2.17"
 backend = "aqua:Azure/kubelogin"
 
 [tools.azure-kubelogin."platforms.linux-arm64"]
-checksum = "sha256:5716aa7f62275cd6393215cbcfa80baf5e79f105dc286043631845c60cd021ec"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.16/kubelogin-linux-arm64.zip"
+checksum = "sha256:39608e328d87a98f84c7f5af780d9303ac8eda7a27a6d463f43cc2ae85196184"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-linux-arm64.zip"
 
 [tools.azure-kubelogin."platforms.linux-x64"]
-checksum = "sha256:82772946d7424f8ff3b3e6e13509c985a70c2f2d5d1918175bab288923b37f9b"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.16/kubelogin-linux-amd64.zip"
+checksum = "sha256:9a5484504ab1c91cdafdcd55a9e439bb3f55a0fe29fe253a169df5538c0a2c86"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-linux-amd64.zip"
 
 [tools.azure-kubelogin."platforms.macos-arm64"]
-checksum = "sha256:f19d17f5076b87a3d2775cae182efaac62698238fc65da61185352a43b4981a8"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.16/kubelogin-darwin-arm64.zip"
+checksum = "sha256:c10f9f34bfdb32894ed05a6be39262bca0d4a2fd47f59d8fa1aa7b5216f92f91"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-darwin-arm64.zip"
 
 [tools.azure-kubelogin."platforms.windows-arm64"]
-checksum = "sha256:6365bbc13dd414564d66b91fdcac29249f4c84b4c8bd0f9e53df4e63ea12d823"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.16/kubelogin-win-arm64.zip"
+checksum = "sha256:83c49a6fb8bd8eaca0ee05d1e71aebe7a7fff3d9577512b3cf28e510f520595a"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-win-arm64.zip"
 
 [tools.azure-kubelogin."platforms.windows-x64"]
-checksum = "sha256:98b893c7a49d3fa2d2b287c36b5221c6c2212bb325d4b8aa2e94bb48c742f9ec"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.16/kubelogin-win-amd64.zip"
+checksum = "sha256:75fffa09b5ccbcf4791e8d3d30091c7846f3b2858f00e27715e6c6e1a8375c33"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-win-amd64.zip"
 
 [[tools.bat]]
 version = "0.26.1"
@@ -206,28 +206,28 @@ checksum = "sha256:15bf30fa658c596d740f0ce9a9a97b6b5d90566124903657d09fd109dd097
 url = "https://github.com/junegunn/fzf/releases/download/v0.71.0/fzf-0.71.0-windows_amd64.zip"
 
 [[tools.ghq]]
-version = "1.9.4"
+version = "1.10.0"
 backend = "aqua:x-motemen/ghq"
 
 [tools.ghq."platforms.linux-arm64"]
-checksum = "sha256:9952724ef1369d9f3fc8cc566a7dedfc8770f56015d5f751e4d6d69a8aa0a07e"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.9.4/ghq_linux_arm64.zip"
+checksum = "sha256:0e4742e24b11c2e23fdc8513e2d277cca52ac2a81fd4566680cd1d6192ea75ea"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_linux_arm64.zip"
 
 [tools.ghq."platforms.linux-x64"]
-checksum = "sha256:33752b7c4fea9751c6d3fa092ea6fb33c3671cde641f20dd7f8328a3a9e240b3"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.9.4/ghq_linux_amd64.zip"
+checksum = "sha256:079a329c80ef028aeba6957a99b896656537b51dedd083cebb47d7b620d891a6"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_linux_amd64.zip"
 
 [tools.ghq."platforms.macos-arm64"]
-checksum = "sha256:4f778cacf48f41bf5ba7af8dd011d3af874f585b447a925c4b389ce724e0335c"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.9.4/ghq_darwin_arm64.zip"
+checksum = "sha256:94e973afdbb58e3f2560aaca689767f379c3badd934a68d611673f89d7bfc19e"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_darwin_arm64.zip"
 
 [tools.ghq."platforms.windows-arm64"]
-checksum = "sha256:44f06fd34d4bbacb185cbc81238fd4c67b9e9c5765f5db840004df61ce7ffd26"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.9.4/ghq_windows_arm64.zip"
+checksum = "sha256:4b041483b9cfaa6b7665396dbea56b2f0894a8ec14700537d4207972fb4b1d1d"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_windows_arm64.zip"
 
 [tools.ghq."platforms.windows-x64"]
-checksum = "sha256:4b7adbbfd2c3b74ef01739aad053aa4952cd5f1b0520450c2dcd2dccc502c58b"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.9.4/ghq_windows_amd64.zip"
+checksum = "sha256:04428613f5f3901e923d6ee87fe963b3f1e4e467661c9740bebb18af4d08fae9"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_windows_amd64.zip"
 
 [[tools.github-cli]]
 version = "2.89.0"
@@ -365,28 +365,28 @@ url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.2/gorele
 provenance = "github-attestations"
 
 [[tools.helm]]
-version = "4.1.3"
+version = "4.1.4"
 backend = "aqua:helm/helm"
 
 [tools.helm."platforms.linux-arm64"]
-checksum = "sha256:5db45e027cc8de4677ec869e5d803fc7631b0bab1c1eb62ac603a62d22359a43"
-url = "https://get.helm.sh/helm-v4.1.3-linux-arm64.tar.gz"
+checksum = "sha256:13d03672be289045d2ff00e4e345d61de1c6f21c1257a45955a30e8ae036d8f1"
+url = "https://get.helm.sh/helm-v4.1.4-linux-arm64.tar.gz"
 
 [tools.helm."platforms.linux-x64"]
-checksum = "sha256:02ce9722d541238f81459938b84cf47df2fdf1187493b4bfb2346754d82a4700"
-url = "https://get.helm.sh/helm-v4.1.3-linux-amd64.tar.gz"
+checksum = "sha256:70b2c30a19da4db264dfd68c8a3664e05093a361cefd89572ffb36f8abfa3d09"
+url = "https://get.helm.sh/helm-v4.1.4-linux-amd64.tar.gz"
 
 [tools.helm."platforms.macos-arm64"]
-checksum = "sha256:21c02fe2f7e27d08e24a6bf93103f9d2b25aab6f13f91814b2cfabc99b108a5e"
-url = "https://get.helm.sh/helm-v4.1.3-darwin-arm64.tar.gz"
+checksum = "sha256:7c2eca678e8001fa863cdf8cbf6ac1b3799f9404a89eb55c08260ef5732e658d"
+url = "https://get.helm.sh/helm-v4.1.4-darwin-arm64.tar.gz"
 
 [tools.helm."platforms.windows-arm64"]
-checksum = "sha256:571d63457a5002af6d0b7fdf92f53ecf194a1c0b92d3727080f8b285dcfaf59c"
-url = "https://get.helm.sh/helm-v4.1.3-windows-arm64.tar.gz"
+checksum = "sha256:44dbb375a7dc2e59e9496882c35bf15d3103f6d4bb8df6124c40de0eed680927"
+url = "https://get.helm.sh/helm-v4.1.4-windows-arm64.tar.gz"
 
 [tools.helm."platforms.windows-x64"]
-checksum = "sha256:fb8dc9b5c2f74456443a6a1bb431fe109d744151423133d921ec8a43b63cab90"
-url = "https://get.helm.sh/helm-v4.1.3-windows-amd64.tar.gz"
+checksum = "sha256:f6a7bca730093d5b859a33141d34361f1cc7bc358657b48c75ce36e1e8bdf8b6"
+url = "https://get.helm.sh/helm-v4.1.4-windows-amd64.tar.gz"
 
 [[tools.jq]]
 version = "1.8.1"
@@ -595,32 +595,32 @@ url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.6
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.11.4"
+version = "0.11.6"
 backend = "aqua:astral-sh/uv"
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:a02ec7667d7bb1d33cdb7e1de22f7e4242967e3df7e350bac6212515e3bce8ac"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.4/uv-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:d14ebd6f200047264152daaf97b8bd36c7885a5033e9e8bba8366cb0049c0d00"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.6/uv-aarch64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:36ce1c5d8997db9b6a24d0f41646d5509b6d1d8b9448c7325f8248a6ea5d4b00"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.4/uv-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:aa342a53abe42364093506d7704214d2cdca30b916843e520bc67759a5d20132"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.6/uv-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:9b9cb6c6f58c3246dbf3351ed4e97c500bc3266f5f237d2fd620b66e1c31dc56"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.4/uv-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:4b69a4e366ec38cd5f305707de95e12951181c448679a00dce2a78868dfc9f5b"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.6/uv-aarch64-apple-darwin.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:26d84455a40b0272b2ab4785cad298ff2c89cd0765b482e9f85b5a1bd880a863"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.4/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:99aa60edd017a256dbf378f372d1cff3292dbc6696e0ea01716d9158d773ab77"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.6/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:26d84455a40b0272b2ab4785cad298ff2c89cd0765b482e9f85b5a1bd880a863"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.4/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:99aa60edd017a256dbf378f372d1cff3292dbc6696e0ea01716d9158d773ab77"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.6/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
 
 [[tools.yq]]
