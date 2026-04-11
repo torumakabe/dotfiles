@@ -81,8 +81,28 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 
 [[tools.codex]]
-version = "0.118.0"
+version = "0.120.0"
 backend = "aqua:openai/codex"
+
+[tools.codex."platforms.linux-arm64"]
+checksum = "sha256:9eac8e152adde337fd75edfc9f6a10bbd3437733d6d0079db42fb16473cbb59b"
+url = "https://github.com/openai/codex/releases/download/rust-v0.120.0/codex-aarch64-unknown-linux-musl.zst"
+
+[tools.codex."platforms.linux-x64"]
+checksum = "sha256:068799e3bab9bedc5c79a145ff1998c258fac52d4f458a912c371e6b1cf44097"
+url = "https://github.com/openai/codex/releases/download/rust-v0.120.0/codex-x86_64-unknown-linux-musl.zst"
+
+[tools.codex."platforms.macos-arm64"]
+checksum = "sha256:637cc201e477639c9b601804f077ff82ac092d7f209a26914ce85c3570f4163d"
+url = "https://github.com/openai/codex/releases/download/rust-v0.120.0/codex-aarch64-apple-darwin.zst"
+
+[tools.codex."platforms.windows-arm64"]
+checksum = "sha256:b387acc517dfa3476a6ad700b96f43768182ce2e7a2133ea17891578a75a2072"
+url = "https://github.com/openai/codex/releases/download/rust-v0.120.0/codex-x86_64-pc-windows-msvc.exe.zst"
+
+[tools.codex."platforms.windows-x64"]
+checksum = "sha256:b387acc517dfa3476a6ad700b96f43768182ce2e7a2133ea17891578a75a2072"
+url = "https://github.com/openai/codex/releases/download/rust-v0.120.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
 version = "3.0.6"
@@ -181,28 +201,28 @@ checksum = "sha256:15bf30fa658c596d740f0ce9a9a97b6b5d90566124903657d09fd109dd097
 url = "https://github.com/junegunn/fzf/releases/download/v0.71.0/fzf-0.71.0-windows_amd64.zip"
 
 [[tools.ghq]]
-version = "1.10.0"
+version = "1.10.1"
 backend = "aqua:x-motemen/ghq"
 
 [tools.ghq."platforms.linux-arm64"]
-checksum = "sha256:0e4742e24b11c2e23fdc8513e2d277cca52ac2a81fd4566680cd1d6192ea75ea"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_linux_arm64.zip"
+checksum = "sha256:7ed154f62751e91c8a2d415280caeeba3d114050d01e39f3d0f4aa1be15f3954"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_linux_arm64.zip"
 
 [tools.ghq."platforms.linux-x64"]
-checksum = "sha256:079a329c80ef028aeba6957a99b896656537b51dedd083cebb47d7b620d891a6"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_linux_amd64.zip"
+checksum = "sha256:32e380aa8ac76fdd58758cc06174d9ee5db7270bd0cbcc18138b5d36def91b6b"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_linux_amd64.zip"
 
 [tools.ghq."platforms.macos-arm64"]
-checksum = "sha256:94e973afdbb58e3f2560aaca689767f379c3badd934a68d611673f89d7bfc19e"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_darwin_arm64.zip"
+checksum = "sha256:5e3100de0c5a248eebe6ab176ad94d6e12386af70a58c535368a4301861b1398"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_darwin_arm64.zip"
 
 [tools.ghq."platforms.windows-arm64"]
-checksum = "sha256:4b041483b9cfaa6b7665396dbea56b2f0894a8ec14700537d4207972fb4b1d1d"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_windows_arm64.zip"
+checksum = "sha256:a84a149636cf934c3c1773de76f9758cb146e5f376e96d2861cb279176ddb768"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_windows_arm64.zip"
 
 [tools.ghq."platforms.windows-x64"]
-checksum = "sha256:04428613f5f3901e923d6ee87fe963b3f1e4e467661c9740bebb18af4d08fae9"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.0/ghq_windows_amd64.zip"
+checksum = "sha256:a526da44d5f67250598fa95e5654815e9f672b2c05d1d98c28bce0e60d3cfa6c"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_windows_amd64.zip"
 
 [[tools.github-cli]]
 version = "2.89.0"
