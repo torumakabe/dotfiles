@@ -159,22 +159,27 @@ url = "https://github.com/cue-lang/cue/releases/download/v0.16.1/cue_v0.16.1_win
 
 [[tools.dotnet]]
 version = "10.0.201"
-backend = "vfox:dotnet"
+backend = "core:dotnet"
 
-[tools.dotnet."platforms.linux-arm64"]
-url = "https://dot.net/v1/dotnet-install.sh"
+[[tools.edit]]
+version = "1.2.1"
+backend = "aqua:microsoft/edit"
 
-[tools.dotnet."platforms.linux-x64"]
-url = "https://dot.net/v1/dotnet-install.sh"
+[tools.edit."platforms.linux-arm64"]
+checksum = "sha256:4e320240586ecc5cdfdcff0488647879077027506c68c919ccdd2754642d0fbb"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-aarch64-linux-gnu.tar.zst"
 
-[tools.dotnet."platforms.macos-arm64"]
-url = "https://dot.net/v1/dotnet-install.sh"
+[tools.edit."platforms.linux-x64"]
+checksum = "sha256:aee9f2f21ebc90cc1dbfb20ee93d3aa03d325127a8e3f7f91dd02c5a9e0a7b25"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-x86_64-linux-gnu.tar.zst"
 
-[tools.dotnet."platforms.windows-arm64"]
-url = "https://dot.net/v1/dotnet-install.ps1"
+[tools.edit."platforms.windows-arm64"]
+checksum = "sha256:7f44bb48b2891163cf5b9c996e8a917c29d82c7a765c07e89e74b47aff542ca9"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-aarch64-windows.zip"
 
-[tools.dotnet."platforms.windows-x64"]
-url = "https://dot.net/v1/dotnet-install.ps1"
+[tools.edit."platforms.windows-x64"]
+checksum = "sha256:be3affb7e5e0cd856fc0fb9c8b2004e9fbbc364e69797f7c2e9d8fcc94bfc4ff"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-x86_64-windows.zip"
 
 [[tools.fzf]]
 version = "0.71.0"
@@ -511,30 +516,6 @@ url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15
 [[tools.rust]]
 version = "1.94.1"
 backend = "core:rust"
-
-[[tools.shellcheck]]
-version = "0.11.0"
-backend = "aqua:koalaman/shellcheck"
-
-[tools.shellcheck."platforms.linux-arm64"]
-checksum = "sha256:12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.xz"
-
-[tools.shellcheck."platforms.linux-x64"]
-checksum = "sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
-
-[tools.shellcheck."platforms.macos-arm64"]
-checksum = "sha256:56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz"
-
-[tools.shellcheck."platforms.windows-arm64"]
-checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
-
-[tools.shellcheck."platforms.windows-x64"]
-checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
 
 [[tools.sqlc]]
 version = "1.30.0"
