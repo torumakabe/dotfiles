@@ -76,11 +76,11 @@ jobs:
             | uv run home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py)
           echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
 
-      - name: Smoke — uv-enforcer allows uv run
+      - name: Smoke — uv-enforcer passes through uv run (no output)
         run: |
           RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"uv run python script.py"}}' \
             | uv run home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py)
-          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='allow', f'Expected allow, got {d}'"
+          [ -z "$RESULT" ] || { echo "Expected empty output, got: $RESULT"; exit 1; }
 
       # ── Smoke tests — node-global-enforcer ────────────────────────────
       - name: Smoke — node-global-enforcer denies npm install -g
@@ -89,8 +89,8 @@ jobs:
             | uv run home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py)
           echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
 
-      - name: Smoke — node-global-enforcer allows local npm install
+      - name: Smoke — node-global-enforcer passes through local npm install (no output)
         run: |
           RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"npm install typescript"}}' \
             | uv run home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py)
-          echo "$RESULT" | python3 -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='allow', f'Expected allow, got {d}'"
+          [ -z "$RESULT" ] || { echo "Expected empty output, got: $RESULT"; exit 1; }
