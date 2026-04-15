@@ -89,9 +89,9 @@ echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/
 uv run -m unittest tests.test_copilot_guard -v
 ```
 
-## `copilot-safe`
+## `copilot-cruise`
 
-`.zshrc` / `PowerShell_profile.ps1` の `copilot-safe` は、Autopilot での事故を減らすための起動ラッパーである。主に次を固定する。
+`.zshrc` / `PowerShell_profile.ps1` の `copilot-cruise` は、Autopilot での事故を減らすための起動ラッパーである。主に次を固定する。
 
 - `--deny-tool` による外部送信系コマンドの制限
 - `--secret-env-vars` による機微な環境変数の隠蔽

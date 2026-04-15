@@ -44,7 +44,7 @@ reference/windows/              ← 参照専用ファイル
 - **コミット署名** は 1Password SSH エージェントを基本にし、コンテナ系環境では自動無効化
 - **Copilot Guard / uv Enforcer** で危険な操作を抑止
 - **postToolUse 監査ログ** で事後確認を可能にする
-- **`copilot-safe`** で Autopilot の既定値を安全寄りに固定する
+- **`copilot-cruise`** で Autopilot の既定値を安全寄りに固定する
 - **gitleaks 付き pre-commit** で共通の secret scan を配布する
 
 ## Copilot Guard の設計

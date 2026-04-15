@@ -128,7 +128,7 @@ Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 # Supported --deny-tool kinds: shell(cmd), write, url(domain), <MCP>(tool)
 # NOTE: shell() performs exact command-name matching. On Windows, .exe suffix and
 #       PowerShell aliases are distinct names and must be listed separately.
-function Invoke-CopilotSafe {
+function Invoke-CopilotCruise {
     copilot --autopilot `
       --allow-all `
       --deny-tool 'shell(curl)' `
@@ -173,7 +173,7 @@ function Invoke-CopilotSafe {
       --max-autopilot-continues 20 `
       @args
 }
-Set-Alias -Name copilot-safe -Value Invoke-CopilotSafe
+Set-Alias -Name copilot-cruise -Value Invoke-CopilotCruise
 
 # === Completers and tool setup ===
 
