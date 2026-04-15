@@ -45,11 +45,6 @@ def ask(reason: str) -> None:
     sys.exit(0)
 
 
-def allow() -> None:
-    print(json.dumps({"permissionDecision": "allow"}))
-    sys.exit(0)
-
-
 # ---------------------------------------------------------------------------
 # Input handling (absorb Windows encoding differences)
 # ---------------------------------------------------------------------------

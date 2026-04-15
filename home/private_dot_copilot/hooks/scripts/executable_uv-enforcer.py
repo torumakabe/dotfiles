@@ -25,11 +25,6 @@ def deny(reason: str) -> None:
     sys.exit(0)
 
 
-def allow() -> None:
-    print(json.dumps({"permissionDecision": "allow"}))
-    sys.exit(0)
-
-
 # ---------------------------------------------------------------------------
 # Input handling (absorb Windows encoding differences)
 # ---------------------------------------------------------------------------
@@ -163,19 +158,19 @@ def main() -> None:
 
     # Only bash / powershell commands
     if tool_name not in ("bash", "powershell"):
-        allow()
+        return  # Not our concern — defer to CLI default
 
     tool_args = parse_tool_args(input_data.get("toolArgs", {}))
 
     command: str = tool_args.get("command", "")
     if not command:
-        allow()
+        return  # Nothing to check — defer to CLI default
 
     reason = check_command(command)
     if reason:
         deny(reason)
 
-    allow()
+    return  # Command is fine — defer to CLI default
 
 
 if __name__ == "__main__":

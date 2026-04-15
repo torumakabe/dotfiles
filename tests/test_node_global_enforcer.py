@@ -299,18 +299,30 @@ class TestMainIntegration(unittest.TestCase):
         self.assertEqual(out["permissionDecision"], "deny")
 
     def test_allow_local_install(self) -> None:
-        out = self._run_hook({
-            "toolName": "bash",
-            "toolArgs": {"command": "npm install typescript"},
-        })
-        self.assertEqual(out["permissionDecision"], "allow")
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH)],
+            input=json.dumps({
+                "toolName": "bash",
+                "toolArgs": {"command": "npm install typescript"},
+            }),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
 
     def test_allow_non_bash_tool(self) -> None:
-        out = self._run_hook({
-            "toolName": "edit",
-            "toolArgs": {"path": "/tmp/foo.txt"},
-        })
-        self.assertEqual(out["permissionDecision"], "allow")
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH)],
+            input=json.dumps({
+                "toolName": "edit",
+                "toolArgs": {"path": "/tmp/foo.txt"},
+            }),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
 
     def test_invalid_json_denies(self) -> None:
         result = subprocess.run(
