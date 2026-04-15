@@ -13,8 +13,10 @@ Architecture:
     ``CheckResult`` means "deny or ask with this reason"; returning ``None``
     means "pass".  All checkers are registered in the ``CHECKERS`` list and
     executed in order by ``main()``.  Results are aggregated with the priority
-    deny > ask > allow.  To add a new check, write a checker function and
-    append it to ``CHECKERS``.
+    deny > ask > (no output).  When no checker has an opinion the hook
+    produces no output, deferring to the CLI's built-in approval flow.
+    To add a new check, write a checker function and append it to
+    ``CHECKERS``.
 
 Run via: uv run copilot-guard.py
 """
@@ -639,7 +641,7 @@ def main() -> None:
         if result:
             results.append(result)
     if not results:
-        allow()
+        return  # No opinion — let the CLI's default approval flow decide
     # Priority: deny > ask > allow
     denies = [r for r in results if r.decision == "deny"]
     if denies:
@@ -647,7 +649,8 @@ def main() -> None:
     asks = [r for r in results if r.decision == "ask"]
     if asks:
         ask(asks[0].reason)
-    allow()
+    # All results are neither deny nor ask — defer to CLI default
+    return
 
 
 if __name__ == "__main__":
