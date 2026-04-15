@@ -108,5 +108,5 @@ chezmoi update
 
 - [`docs/operations.md`](docs/operations.md): `mise` の更新、lockfile 再生成、pre-commit フック管理、`run_once_*` の再実行
 - [`docs/architecture.md`](docs/architecture.md): ディレクトリ構造、設計判断、プラットフォーム分岐、Copilot Guard の構成
-- [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の管理対象、フック、`copilot-safe`、監査ログ
+- [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の管理対象、フック、`copilot-cruise`、監査ログ
 - [`docs/troubleshooting.md`](docs/troubleshooting.md): よくある失敗と復旧手順
