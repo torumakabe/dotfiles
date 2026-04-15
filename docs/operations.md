@@ -6,13 +6,13 @@
 
 | 環境 | 管理ツール | 主な対象 |
 |------|-----------|----------|
-| Linux / WSL | `apt` + `mise` | OS パッケージ、Azure CLI、開発ツール、`copilot-cli` |
+| Linux / WSL | `apt` + `mise` | OS パッケージ、Azure CLI、開発ツール |
 | macOS | `brew` + `mise` | OS パッケージ、GUI アプリ、Azure CLI、開発ツール |
 | Codespaces / Dev Container | ベースイメージ / Feature + `mise` | コンテナ基盤側ツール、開発ツール |
 | Windows | `winget` (DSC) + `mise` | GUI/CLI アプリ、Azure CLI、開発ツール |
 | 全環境共通 | `uv` | Python スクリプト実行 |
 
-`copilot-cli` は例外で、Linux 系は `mise`、macOS は `brew`、Windows は `winget` で管理する。
+`copilot-cli` は全 OS で mise 外で管理する。macOS は `brew`、Windows は `winget`、Linux は公式インストールスクリプト (`gh.io/copilot-install`) を使い、更新は `copilot update` で行う。
 
 ## 定期チェック対象の制約
 
@@ -21,6 +21,7 @@
 - **cargo-make**: linux/arm64 向け配布がない
 - **edit**: macOS 向け配布がない
 - **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため、全 OS で mise 外で管理。macOS は `brew`、Windows は `winget`、Linux は公式インストーラー (`install-azd.sh`) を使い、更新は `azd update` で行う
+- **copilot-cli**: mise の `github:` バックエンドでは更新が遅れ、自己更新後のバージョン誤認が発生するため、全 OS で mise 外で管理。macOS は `brew`、Windows は `winget`、Linux は公式インストールスクリプト (`gh.io/copilot-install`) を使い、更新は `copilot update` で行う
 
 解消されていれば、条件分岐や導入元のワークアラウンドを外せる。
 

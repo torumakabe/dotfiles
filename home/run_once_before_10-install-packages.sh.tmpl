@@ -28,6 +28,13 @@ sudo apt-get install -y -qq \
   xdg-utils \
   zsh
 
+# Copilot CLI — mise の github: バックエンドでは更新が遅れるため、
+# 公式インストールスクリプトで導入し、更新は copilot update で行う
+if ! command -v copilot >/dev/null 2>&1; then
+  echo "Installing GitHub Copilot CLI via official script..."
+  curl -fsSL https://gh.io/copilot-install | bash
+fi
+
 {{ if not .codespaces -}}
 # GitHub CLI — mise install 前にトークン取得手段を確保する
 # Codespaces はベースイメージに gh 同梱 + GITHUB_TOKEN 自動設定のため対象外
