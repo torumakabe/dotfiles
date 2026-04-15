@@ -158,7 +158,7 @@ checksum = "sha256:2f24123f458229fcf283db534bd86692ad1074da806defee0f0cc62976c03
 url = "https://github.com/cue-lang/cue/releases/download/v0.16.1/cue_v0.16.1_windows_amd64.zip"
 
 [[tools.dotnet]]
-version = "10.0.201"
+version = "10.0.202"
 backend = "core:dotnet"
 
 [[tools.edit]]
@@ -336,32 +336,32 @@ url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golan
 provenance = "github-attestations"
 
 [[tools.goreleaser]]
-version = "2.15.2"
+version = "2.15.3"
 backend = "aqua:goreleaser/goreleaser"
 
 [tools.goreleaser."platforms.linux-arm64"]
-checksum = "sha256:5db66761a98f6693161e49e1a95d28d2673a892ba60cb4a5e16736cafd41c4c9"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.2/goreleaser_Linux_arm64.tar.gz"
+checksum = "sha256:646b8f36329cf1ec02af18d40e7096973f62524bdef19c3690414e390a9f757d"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Linux_arm64.tar.gz"
 provenance = "github-attestations"
 
 [tools.goreleaser."platforms.linux-x64"]
-checksum = "sha256:0ebdbf0353aba566b969dde746cc4e4806f96c27aa2f3971b229a9df7611fedc"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.2/goreleaser_Linux_x86_64.tar.gz"
+checksum = "sha256:3b24b3a1629be21a9527d2f46f08b9bbf012c52fe33395714fe2c70acee57e0f"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Linux_x86_64.tar.gz"
 provenance = "github-attestations"
 
 [tools.goreleaser."platforms.macos-arm64"]
-checksum = "sha256:0e6bd67688ac949780bf1166813a91f89856898ef4c40d7d46c2c74ebaa4b9ee"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.2/goreleaser_Darwin_all.tar.gz"
+checksum = "sha256:b8525b87b2cc722efd8dc5cd2af95d9f3a6e69dcb73990131e18e1d2372cf579"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Darwin_all.tar.gz"
 provenance = "github-attestations"
 
 [tools.goreleaser."platforms.windows-arm64"]
-checksum = "sha256:078e274df1f5a6f2477a8938dec417bc3c1946cc442be4a9df6775d301e48359"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.2/goreleaser_Windows_arm64.zip"
+checksum = "sha256:73dfb04a17a9d2fd2d064de0daa63bef0d08620268bc5ba654735b5c69afde65"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Windows_arm64.zip"
 provenance = "github-attestations"
 
 [tools.goreleaser."platforms.windows-x64"]
-checksum = "sha256:7459832946dbe122c144f8d7f87484d8572ca005b779310aa6bb03346e8de17a"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.2/goreleaser_Windows_x86_64.zip"
+checksum = "sha256:8722fdebfc23e10a36356ddd59af0c1f52c4120ca847afd091bd34e09d8aae8c"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Windows_x86_64.zip"
 provenance = "github-attestations"
 
 [[tools.helm]]
