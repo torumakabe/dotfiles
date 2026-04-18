@@ -1,0 +1,22 @@
+{{ if eq .chezmoi.os "windows" -}}
+# 非対話シェル用に mise shims をユーザー PATH へ冪等追加（対話シェルの mise activate とは共存可）
+$ErrorActionPreference = 'Stop'
+
+$shimsDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+
+$normalizedShims = $shimsDir.TrimEnd('\').ToLowerInvariant()
+$entries = if ($userPath) { $userPath -split ';' | Where-Object { $_ -ne '' } } else { @() }
+$alreadyPresent = $entries | Where-Object { $_.TrimEnd('\').ToLowerInvariant() -eq $normalizedShims }
+
+if (-not $alreadyPresent) {
+    Write-Host "Adding mise shims directory to user PATH: $shimsDir"
+    $newPath = if ($userPath) { "$shimsDir;$userPath" } else { $shimsDir }
+    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+    if (($env:Path -split ';') -notcontains $shimsDir) {
+        $env:Path = "$shimsDir;$env:Path"
+    }
+} else {
+    Write-Host "mise shims directory already in user PATH: $shimsDir"
+}
+{{ end -}}

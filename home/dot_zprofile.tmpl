@@ -1,0 +1,4 @@
+{{ if ne .chezmoi.os "windows" -}}
+# 非対話シェル用に shims を PATH 追加（対話シェルの mise activate とは共存可）
+command -v mise >/dev/null && eval "$(mise activate zsh --shims)"
+{{ end -}}
