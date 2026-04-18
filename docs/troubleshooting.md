@@ -41,3 +41,37 @@ Codespaces 以外ではパッケージ導入に sudo が必要である。パス
 ## Dev Container で mise ツールが入っていない
 
 コンテナ作成時は `mise install` を自動実行しない。README の Dev Container セクション、または [`docs/operations.md`](operations.md#github-api-と-github_token) の手順で起動後に実行する。
+
+## 非対話シェルで mise 管理ツールが見つからない
+
+症状: Copilot CLI エージェント、IDE のタスク、`bash script.sh` などから `uv`, `node`, `kubectl` などが `command not found` / `CommandNotFoundException`。
+
+原因: `mise activate` は `.zshrc` / `$PROFILE` 経由でのみ PATH を注入するが、これらは非対話シェルでは読まれない。
+
+### 確認
+
+```bash
+# Unix
+command -v uv     # shims 配下なら OK
+echo "$PATH" | tr ':' '\n' | grep mise/shims
+```
+
+```powershell
+# Windows
+(Get-Command uv).Source
+[Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-String 'mise\\shims'
+```
+
+### 復旧
+
+設計は [`docs/architecture.md`](architecture.md#mise-shims-による非対話シェル対応) を参照。新規環境で反映されていない場合:
+
+- **Unix**: `chezmoi apply` で `~/.zprofile` が配置されるか確認。新規 login シェル（新しい Terminal タブなど）を開くと有効化される
+- **Windows**: `run_once_after_05-setup-mise-shims-path.ps1` を再実行する
+
+```bash
+chezmoi state delete-bucket --bucket=scriptState
+chezmoi apply
+```
+
+新規シェルを開き直してから再確認する。

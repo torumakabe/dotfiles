@@ -10,7 +10,8 @@ home/                           ← chezmoi source (.chezmoiroot で指定)
 ├── .chezmoiignore              ← 条件付き除外
 ├── .chezmoiremove              ← 不要ファイルの削除
 ├── dot_gitconfig*.tmpl         ← Git 設定
-├── dot_zshrc.tmpl              ← zsh 設定
+├── dot_zshrc.tmpl              ← zsh 設定（対話シェル）
+├── dot_zprofile.tmpl           ← zsh 設定（login / 非対話向け PATH）
 ├── dot_config/
 │   ├── git/hooks/pre-commit    ← gitleaks + ローカルフック委譲
 │   └── mise/
@@ -121,6 +122,31 @@ WSL は Linux 側の設定を読みつつ、内部で `.isWSL` を使って 1Pas
 
 Dev Container / Codespaces では 1Password SSH エージェントを前提にできないため、`commit.gpgsign = false` に切り替える。
 
+## mise shims による非対話シェル対応
+
+非対話シェル（Copilot CLI エージェント、IDE、スクリプト）では `mise activate` を仕込むフック元（`.zshrc` / `$PROFILE`）が読まれないため、mise 管理ツールが見えない問題が起きる。これを解消するため、mise 公式推奨の shims ディレクトリを常時 PATH に通す。
+
+| OS | 仕込み先 | 仕込み内容 |
+|----|----------|-----------|
+| macOS / Linux / WSL | `~/.zprofile` | `eval "$(mise activate zsh --shims)"` |
+| Windows | ユーザー環境変数 `Path` | `%LOCALAPPDATA%\mise\shims` を先頭追記（`run_once_after_05` が実施） |
+
+zsh で `.zshrc` ではなく `.zprofile` を使うのは、`.zshrc` が **non-interactive zsh では読まれない** ため。`.zprofile` は login 時に 1 回実行され、設定した PATH は子プロセスに環境変数継承で伝播する。
+
+`mise activate` と shims は **共存可能**。`mise activate` は shims を PATH から除去してから自前挿入を行うため、対話シェルでは従来どおり hooks や環境変数注入が有効。
+
+### shims 方式の制限
+
+`mise activate` のみで有効で shims では動かない機能:
+
+1. `mise.toml` の `[env]` セクションによる環境変数自動注入
+2. `hooks`（ディレクトリ移動時フック）
+3. `_.file` / `_.source`（env ファイル読込）
+
+このリポジトリの `~/.config/mise/config.toml` は `[tools]` と `[settings]` のみ使用しており、上記機能は未使用のため実害なし。将来 `[env]` 等を使う場合は、対話シェルでは `mise activate` が優先されるため問題ない。非対話シェルで環境変数が必要なら `mise exec -- <cmd>` を使う。
+
+参考: <https://mise.jdx.dev/dev-tools/shims.html>
+
 ## `run_once_*` スクリプトの実行順と依存関係
 
 chezmoi は `run_once_before_*` → 通常ファイル適用 → `run_once_after_*` の順に処理し、同じフェーズ内では数字順で実行する。
@@ -129,8 +155,9 @@ chezmoi は `run_once_before_*` → 通常ファイル適用 → `run_once_after
 |------|-----------|------|----------|
 | 1 | `run_once_before_10-install-packages.sh` | OS パッケージ導入 | 後続で `git` / `zsh` を使える |
 | 2 | `run_once_before_20-install-mise.sh` | `mise` 自体を導入 | 後続で `mise` が存在する |
-| 3 | `run_once_after_10-setup-shell.sh` | shell 設定 | `git` / `zsh` は導入済み |
-| 4 | `run_once_after_20-mise-install.sh` | `config.toml` / `mise.lock` を使ってツール導入 | dotfiles 配置後に動く |
-| 5 | `run_once_after_30-install-tools.sh` | 追加ツール導入 | `mise install` 済み |
+| 3 | `run_once_after_05-setup-mise-shims-path.ps1` | Windows: mise shims をユーザー PATH に追加 | `mise` 導入済み（Windows は DSC 経由） |
+| 4 | `run_once_after_10-setup-shell.sh` | shell 設定 | `git` / `zsh` は導入済み |
+| 5 | `run_once_after_20-mise-install.sh` | `config.toml` / `mise.lock` を使ってツール導入 | dotfiles 配置後に動く |
+| 6 | `run_once_after_30-install-tools.sh` | 追加ツール導入 | `mise install` 済み |
 
 変更時は、`mise` 設定が配置される前に `mise install` しないことと、Codespaces / Dev Container の分岐を壊さないことを優先して確認する。

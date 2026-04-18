@@ -12,4 +12,9 @@
 {{ end -}}
 {{ if ne .chezmoi.os "windows" -}}
 PowerShell_profile.ps1
+run_once_after_05-setup-mise-shims-path.ps1
 {{ end -}}
+{{ if eq .chezmoi.os "windows" -}}
+.zprofile
+{{ end -}}
+
