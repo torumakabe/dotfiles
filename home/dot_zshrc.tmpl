@@ -114,9 +114,9 @@ setopt autopushd
 
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
-export GOPATH=$HOME/go
 export EDITOR=vim
-export PATH=$HOME/.local/bin:$GOPATH/bin:$PATH
+# PATH / GOPATH / brew shellenv / mise shims は ~/.profile に集約し、
+# ~/.zprofile 経由で login 時に source される（非対話シェルは env 継承）。
 
 # Shell hooks that need to run in the current zsh process.
 # Prefer sourcing generated shell code over eval so command output is read as a script.

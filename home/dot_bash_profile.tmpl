@@ -1,0 +1,7 @@
+{{ if ne .chezmoi.os "windows" -}}
+# bash は ~/.bash_profile / ~/.bash_login のいずれかが存在すると ~/.profile を
+# 読まないため、共通 env (~/.profile) を明示的に source する。
+# 対話 bash は ~/.bashrc を別途読むが、このリポジトリでは管理していない
+# (既定の /etc/bash.bashrc 等に任せる)。必要なら後日 dot_bashrc.tmpl を追加する。
+[ -r "$HOME/.profile" ] && . "$HOME/.profile"
+{{ end -}}

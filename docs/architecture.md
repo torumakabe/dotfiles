@@ -11,7 +11,9 @@ home/                           ← chezmoi source (.chezmoiroot で指定)
 ├── .chezmoiremove              ← 不要ファイルの削除
 ├── dot_gitconfig*.tmpl         ← Git 設定
 ├── dot_zshrc.tmpl              ← zsh 設定（対話シェル）
-├── dot_zprofile.tmpl           ← zsh 設定（login / 非対話向け PATH）
+├── dot_zprofile.tmpl           ← zsh login 時に ~/.profile を source
+├── dot_bash_profile.tmpl       ← bash login 時に ~/.profile を source
+├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
 ├── dot_config/
 │   ├── git/hooks/pre-commit    ← gitleaks + ローカルフック委譲
 │   └── mise/
@@ -122,18 +124,36 @@ WSL は Linux 側の設定を読みつつ、内部で `.isWSL` を使って 1Pas
 
 Dev Container / Codespaces では 1Password SSH エージェントを前提にできないため、`commit.gpgsign = false` に切り替える。
 
-## mise shims による非対話シェル対応
+## PATH 管理（非対話シェル対応）
 
-非対話シェル（Copilot CLI エージェント、IDE、スクリプト）では `mise activate` を仕込むフック元（`.zshrc` / `$PROFILE`）が読まれないため、mise 管理ツールが見えない問題が起きる。これを解消するため、mise 公式推奨の shims ディレクトリを常時 PATH に通す。
+非対話シェル（Copilot CLI エージェント、IDE、スクリプト）では `.zshrc` / `$PROFILE` が読まれず、mise 管理ツールや brew 管理ツールが PATH から欠落する。これを解消するため、**POSIX 互換の `~/.profile` に共通 env を集約**し、各シェルから読み込む。
 
 | OS | 仕込み先 | 仕込み内容 |
 |----|----------|-----------|
-| macOS / Linux / WSL | `~/.zprofile` | `eval "$(mise activate zsh --shims)"` |
+| macOS / Linux / WSL | `~/.profile` | brew shellenv（macOS）、`GOPATH`、`~/.local/bin` / `~/go/bin` / `~/.cargo/bin`、mise shims |
+| macOS / Linux / WSL | `~/.zprofile` | `~/.profile` を source するだけ（zsh は `.profile` を直接読まないため） |
+| macOS / Linux / WSL | `~/.bash_profile` | `~/.profile` を source するだけ（`.bash_profile` が存在すると bash は `.profile` を読まないため） |
 | Windows | ユーザー環境変数 `Path` | `%LOCALAPPDATA%\mise\shims` を先頭追記（`run_once_after_05` が実施） |
 
-zsh で `.zshrc` ではなく `.zprofile` を使うのは、`.zshrc` が **non-interactive zsh では読まれない** ため。`.zprofile` は login 時に 1 回実行され、設定した PATH は子プロセスに環境変数継承で伝播する。
+### なぜ `~/.profile` か
 
-`mise activate` と shims は **共存可能**。`mise activate` は shims を PATH から除去してから自前挿入を行うため、対話シェルでは従来どおり hooks や環境変数注入が有効。
+- **sh / dash / bash(login)** は `~/.profile` を直接読む
+- **zsh(login)** は `.profile` を読まないため `~/.zprofile` から source する
+- **非対話 shell（`bash -c`, IDE agent の直接 exec）** は親プロセスから env 継承する。親が login shell 経由で起動される限り PATH は伝播する
+- **macOS GUI アプリ**（Dock / Finder / Spotlight から起動、launchd 直下）は shell を介さないため `~/.profile` が実行されない。プロセスは launchd の既定 PATH（`/etc/paths` + `/etc/paths.d/*`）だけを継承する。Ghostty など shell を spawn する GUI ターミナルは login shell を起動するので今回の修正で解決するが、Copilot Desktop のように shell を介さず子プロセスに外部ツールを exec するアプリは影響を受ける可能性がある。その場合のワークアラウンド:
+  - 当該アプリから呼ぶコマンドを絶対パスで指定する
+  - `~/Library/LaunchAgents/*.plist` に `launchctl setenv PATH` 相当を仕込む（環境全体に影響するため慎重に）
+  - 参考: [`launchd.plist(5)`](https://ss64.com/mac/launchd.plist.html) の `EnvironmentVariables` キー、[Apple Developer: Daemons and Services Programming Guide](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html)
+
+  現状このリポジトリでは対応していない（Copilot Desktop は `dot_zshrc.tmpl` の `launchctl setenv COPILOT_CLI_PATH` で個別対応済みのため）。
+
+### brew shellenv を入れる理由
+
+Apple Silicon の Homebrew は `/opt/homebrew/bin` にあるが、launchd 既定 PATH や `/etc/paths` には含まれない。`brew shellenv` を `~/.profile` で実行することで、非対話シェルや GUI 起動子プロセスからも `copilot`・`azd`・`gh` 等の brew 管理ツールが解決できる。
+
+### mise shims と `mise activate` の共存
+
+`mise activate` と shims は共存可能。対話 zsh では `.zshrc` の `mise activate zsh`（フル版）が shims を PATH から除去して自前挿入するため、hooks や `[env]` による環境変数注入が有効。非対話シェルでは shims のみ PATH に乗り、バイナリ解決だけ成立する。
 
 ### shims 方式の制限
 
@@ -143,7 +163,7 @@ zsh で `.zshrc` ではなく `.zprofile` を使うのは、`.zshrc` が **non-i
 2. `hooks`（ディレクトリ移動時フック）
 3. `_.file` / `_.source`（env ファイル読込）
 
-このリポジトリの `~/.config/mise/config.toml` は `[tools]` と `[settings]` のみ使用しており、上記機能は未使用のため実害なし。将来 `[env]` 等を使う場合は、対話シェルでは `mise activate` が優先されるため問題ない。非対話シェルで環境変数が必要なら `mise exec -- <cmd>` を使う。
+このリポジトリの `~/.config/mise/config.toml` は `[tools]` と `[settings]` のみ使用しており、上記機能は未使用のため実害なし。非対話シェルで環境変数が必要な場合は `mise exec -- <cmd>` を使う。
 
 参考: <https://mise.jdx.dev/dev-tools/shims.html>
 
