@@ -518,52 +518,57 @@ version = "1.95.0"
 backend = "core:rust"
 
 [[tools.sqlc]]
-version = "1.30.0"
+version = "1.31.0"
 backend = "github:sqlc-dev/sqlc"
 
 [tools.sqlc."platforms.linux-arm64"]
-checksum = "sha256:dd9ab43b022ba3b3402054f99d7ae6e5efea33c949e869c3c66b214415e0c82d"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.30.0/sqlc_1.30.0_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/288589120"
+checksum = "sha256:86ff46e7b4be67720017b55a84b948ad60f32a0c02fd8e7175d9bfa8dcf972a8"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400404816"
 
 [tools.sqlc."platforms.linux-x64"]
-checksum = "sha256:468aecee071bfe55e97fcbcac52ea0208eeca444f67736f3b8f0f3d6a106132e"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.30.0/sqlc_1.30.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/288589112"
+checksum = "sha256:e35394ba3df5e62669e76627f45172d18c6cbb1479e4762c51b29b0eafc16dc0"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400404814"
 
 [tools.sqlc."platforms.macos-arm64"]
-checksum = "sha256:ff18793b97715d08dde364446f43082a06da87b7797b9ec79ef2b31aeb0894e5"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.30.0/sqlc_1.30.0_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/288589106"
+checksum = "sha256:55322a83a913fcafef8659a0a583a79f86e9c7124a6bbc21317f3288c6004b06"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400404812"
+
+[tools.sqlc."platforms.windows-arm64"]
+checksum = "sha256:834f23e35d00b3d6ba4ba6c8edcd98434b8d473857f21bdf437142331de7afe3"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_windows_arm64.zip"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400430918"
 
 [tools.sqlc."platforms.windows-x64"]
-checksum = "sha256:1f18956ac8b38740420d5ab275df3425ee62e154310aee2dc42d5457181a2c06"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.30.0/sqlc_1.30.0_windows_amd64.zip"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/288589288"
+checksum = "sha256:ac935aea01c1f3981d02d537dc0b592d329517e25087180412057cbae8acb83a"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_windows_amd64.zip"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400404854"
 
 [[tools.terraform]]
-version = "1.14.8"
+version = "1.14.9"
 backend = "aqua:hashicorp/terraform"
 
 [tools.terraform."platforms.linux-arm64"]
-checksum = "sha256:c953171cde6b25ca0448c3b29a90d2f46c0310121e18742ec8f89631768e770c"
-url = "https://releases.hashicorp.com/terraform/1.14.8/terraform_1.14.8_linux_arm64.zip"
+checksum = "sha256:863002085b886453795d9ff4b8989b8468784478150b70ba8a1df3e3ad66da99"
+url = "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_linux_arm64.zip"
 
 [tools.terraform."platforms.linux-x64"]
-checksum = "sha256:56a5d12f47cbc1c6bedb8f5426ae7d5df984d1929572c24b56f4c82e9f9bf709"
-url = "https://releases.hashicorp.com/terraform/1.14.8/terraform_1.14.8_linux_amd64.zip"
+checksum = "sha256:2e5cffc20a0b48a67a76268723bd5a10b8666f69b2aa4f04906e206726bedd63"
+url = "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_linux_amd64.zip"
 
 [tools.terraform."platforms.macos-arm64"]
-checksum = "sha256:5593670a2d42323847bfb216db17c73a44df201a62f7587928bae16adeabba23"
-url = "https://releases.hashicorp.com/terraform/1.14.8/terraform_1.14.8_darwin_arm64.zip"
+checksum = "sha256:5bc0b11b7a63c8984a41d82523356df46f7833c2e9651a39a7f8919422de5cde"
+url = "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_darwin_arm64.zip"
 
 [tools.terraform."platforms.windows-arm64"]
-checksum = "sha256:26dd7593d22e9d99ec09380f0869718f649be7b7f954d888611335e6a84961f8"
-url = "https://releases.hashicorp.com/terraform/1.14.8/terraform_1.14.8_windows_arm64.zip"
+checksum = "sha256:c15326e1af102d2767d40208a0157d1402057f80192991f56803b66457304cf3"
+url = "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_windows_arm64.zip"
 
 [tools.terraform."platforms.windows-x64"]
-checksum = "sha256:a237008008019589c600ecb0ae0842c9ea4ca5601f7c54ddbc64d274037b0abb"
-url = "https://releases.hashicorp.com/terraform/1.14.8/terraform_1.14.8_windows_amd64.zip"
+checksum = "sha256:5518b04ea610115b17b427b57d8ec1d50a42a2ad63ab2d7a453b788d6c804d14"
+url = "https://releases.hashicorp.com/terraform/1.14.9/terraform_1.14.9_windows_amd64.zip"
 
 [[tools.trivy]]
 version = "0.70.0"
