@@ -18,6 +18,14 @@ if (Get-Command uv -ErrorAction SilentlyContinue) {
     } catch {
         Write-Warning "Failed to install ty. Retry manually with 'uv tool install ty'."
     }
+
+    # uv tool の bin ディレクトリ (~/.local/bin) を User PATH に登録。
+    # PowerShell プロファイルを読まない子プロセス (Copilot CLI 等) からも uv tool が見えるようにする。
+    try {
+        uv tool update-shell | Out-Null
+    } catch {
+        Write-Warning "Failed to run 'uv tool update-shell'. Add '$HOME\.local\bin' to PATH manually."
+    }
 }
 
 Write-Host "Tool installation complete!"
