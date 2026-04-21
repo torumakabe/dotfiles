@@ -70,9 +70,9 @@ command -v uv        # ~/.local/share/mise/shims/uv
 設計は [`docs/architecture.md`](architecture.md#path-管理非対話シェル対応) を参照。新規環境で反映されていない場合:
 
 - **Unix**: `chezmoi apply` で `~/.profile` と `~/.zprofile` が配置されるか確認。新規 login シェル（新しい Terminal タブなど）を開くと有効化される
-- **macOS GUI アプリ経由の bash**（例: GitHub Desktop の Copilot SDK、`bash --norc --noprofile` で起動）: `chezmoi apply` 時に `run_onchange_after_06-link-mise-shims.sh` が走り、mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すると反映される (GitHub Desktop 自体の再起動は不要)
-  - 新規ツールを Copilot CLI セッションで使いたい場合は `home/run_onchange_after_06-link-mise-shims.sh.tmpl` の `TOOLS` 配列に追加して `chezmoi apply` を実行
-  - 無効化したい場合は `rm ~/.local/bin/<tool>` (symlink のみが削除される)
+- **macOS GUI アプリ経由の bash**（例: GitHub Desktop の Copilot SDK、`bash --norc --noprofile` で起動）: `chezmoi apply` 時に `run_onchange_after_21-link-mise-shims.sh` が走り、mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すると反映される (GitHub Desktop 自体の再起動は不要)
+  - 対象は自動発見方式 (言語ランタイム本体などを除外)。除外を変更したい場合は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` の `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` を編集して `chezmoi apply`
+  - 手動で無効化したい個別リンクは `rm ~/.local/bin/<tool>` で削除可能 (symlink のみが消える)
 - **Windows**: `run_once_after_05-setup-mise-shims-path.ps1` を再実行する
 
 ```bash

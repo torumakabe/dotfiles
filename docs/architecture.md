@@ -12,6 +12,7 @@ home/                           ← chezmoi source (.chezmoiroot で指定)
 ├── dot_gitconfig*.tmpl         ← Git 設定
 ├── dot_zshrc.tmpl              ← zsh 設定（対話シェル）
 ├── dot_zprofile.tmpl           ← zsh login 時に ~/.profile を source
+├── dot_zshenv.tmpl             ← 非login zsh (VS Code 統合ターミナル等) から ~/.profile を source
 ├── dot_bash_profile.tmpl       ← bash login 時に ~/.profile を source
 ├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
 ├── dot_config/
