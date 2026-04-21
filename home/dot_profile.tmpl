@@ -11,21 +11,20 @@
 #   bash(interactive)        -> ~/.bashrc       (parent env is already set)
 #   zsh(interactive)         -> ~/.zshrc        (parent env is already set)
 #
-# Keep this file POSIX-compliant and fast: it runs on every login.
+# PATH entries common to all shells live in .chezmoitemplates/path-bootstrap.sh
+# and are shared with ~/.zshenv (non-login zsh bootstrap). Keep anything
+# heavier (brew shellenv, mise activate) here only.
 
 # Idempotency guard: avoid double-appending PATH on re-entry.
 # Wrap the body in a conditional instead of `return` at top level, which is
 # implementation-defined in POSIX sh when the script is sourced.
 if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
-  # Idempotency guard: avoid double-appending PATH on re-entry.
-  # Wrap the body in a conditional instead of `return` at top level, which is
-  # implementation-defined in POSIX sh when the script is sourced.
   # `export` so nested login shells (zsh -l inside bash -l, etc.) inherit the
-  # guard and skip re-prepending `mise activate ... --shims` (which is not
-  # itself idempotent; brew shellenv dedupes but mise does not).
+  # guard and skip re-running brew shellenv (which dedupes) and the path
+  # bootstrap (which is also idempotent, but cheap to skip).
   export __DOTFILES_PROFILE_LOADED=1
 
-{{ if eq .chezmoi.os "darwin" -}}
+{{ if eq .chezmoi.os "darwin" }}
   # Homebrew: GUI/launchd-started processes inherit a minimal PATH from launchd
   # that does not include /opt/homebrew/bin. brew shellenv fixes this and also
   # exports HOMEBREW_PREFIX / HOMEBREW_CELLAR / HOMEBREW_REPOSITORY.
@@ -36,37 +35,13 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
     fi
   done
   unset __brew
-{{ end -}}
-
-  # Prepend a directory to PATH only if it exists and is not already present.
-  # Missing directories are intentionally skipped silently: Go/cargo/Python
-  # user-bin dirs are created on first install of their respective toolchains,
-  # so a fresh machine legitimately lacks them. Any command not found at
-  # runtime will surface the actual problem with a clear error.
-  __add_path() {
-    case ":${PATH}:" in
-      *":$1:"*) ;;
-      *) [ -d "$1" ] && PATH="$1:${PATH}" ;;
-    esac
-  }
-
+{{ end }}
   export GOPATH="${HOME}/go"
-  __add_path "${HOME}/go/bin"
-  __add_path "${HOME}/.cargo/bin"
-  __add_path "${HOME}/.local/bin"
+
+  # Shared PATH bootstrap (go/bin, cargo/bin, ~/.local/bin, mise shims).
+  # Also loaded from ~/.zshenv so non-login zsh resolves the same tools.
+  {{- includeTemplate "path-bootstrap.sh" . | nindent 2 }}
+
   export PATH
-  unset -f __add_path
-
-  # mise shims: ensure mise-managed tools (uv, node, kubectl, ...) are on PATH
-  # for non-interactive shells. `mise activate bash --shims` emits only
-  # `export PATH="..."` lines (POSIX-compatible; no arrays, no `[[`, no
-  # bash-specific syntax). Verified against mise 2026.4.16 with dash:
-  #   dash -n -c "$(mise activate bash --shims)"
-  # Interactive shells replace this with a full `mise activate` in ~/.zshrc,
-  # which strips shims and injects its own hooks.
-  if command -v mise >/dev/null 2>&1; then
-    eval "$(mise activate bash --shims)"
-  fi
 fi
-
-{{ end -}}
+{{ end }}

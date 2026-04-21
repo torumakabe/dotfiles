@@ -1,23 +1,11 @@
-# zsh は全起動 (login/非login/interactive/非interactive) で .zshenv を読む。
-# VS Code の非login 統合ターミナル等、login shell を経由しないケースで
-# mise/user-local ツールを解決するための最小 PATH ブートストラップ。
-#
-# 共通 env (GOPATH, 追加の PATH, brew shellenv 等) は ~/.profile に集約し、
-# login shell (~/.zprofile) 経由でのみ適用する設計は維持する。
-# ここでは「mise や ~/.local/bin 配下のバイナリに到達するための最小限」だけ
-# 足す。.profile 丸ごと source は将来的な副作用 (zsh -c 全般への波及) を
-# 避けるため行わない。
+{{- /*
+zsh は全起動 (login/非login/interactive/非interactive) で .zshenv を読む。
+VS Code の非login 統合ターミナル等、login shell を経由しないケースで
+mise/user-local ツールを解決するための最小 PATH ブートストラップ。
 
-__zshenv_add_path() {
-  case ":${PATH}:" in
-    *":$1:"*) ;;
-    *) [ -d "$1" ] && PATH="$1:${PATH}" ;;
-  esac
-}
-
-__zshenv_add_path "${HOME}/.local/share/mise/shims"
-__zshenv_add_path "${HOME}/.local/bin"
-__zshenv_add_path "${HOME}/.cargo/bin"
-
+共通 env (GOPATH, brew shellenv 等) は ~/.profile に集約し、login shell
+(~/.zprofile) 経由でのみ適用する設計は維持する。ここでは PATH の共通
+エントリだけを .chezmoitemplates/path-bootstrap.sh 経由で共有する。
+*/ -}}
+{{ includeTemplate "path-bootstrap.sh" . }}
 export PATH
-unset -f __zshenv_add_path
