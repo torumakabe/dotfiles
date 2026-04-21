@@ -4,108 +4,66 @@
 
 ## 管理境界
 
-| パス | 用途 | 管理方法 |
-|------|------|----------|
-| `copilot-instructions.md` | ユーザーレベルのカスタム指示 | chezmoi |
-| `mcp-config.json` | 手動 MCP サーバー設定 | chezmoi (`/mcp add` 後は `chezmoi re-add`) |
-| `hooks/hooks.json` | `preToolUse` / `postToolUse` 設定 | chezmoi |
-| `hooks/scripts/copilot-guard.py` | ファイル・URL・環境変数アクセスのガード | chezmoi |
-| `hooks/scripts/uv-enforcer.py` | `python` / `pip` 直接実行の抑止 | chezmoi |
-| `hooks/scripts/audit-log.py` | ツール実行ログの記録 | chezmoi |
-| `hooks/blocked-files.txt` | deny パターン | chezmoi |
-| `hooks/ask-files.txt` | ask パターン | chezmoi |
-| `hooks/allowed-urls.txt` | URL 許可リスト | chezmoi |
-| `skills/` | ユーザーレベルのスキル（手動管理分） | chezmoi |
-| `installed-plugins/` | プラグイン | Copilot CLI 側で管理 |
+`~/.copilot/` 配下のうち chezmoi 管理対象:
+
+- `copilot-instructions.md` — ユーザーレベルのカスタム指示
+- `mcp-config.json` — 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
+- `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` フック（`copilot-guard.py`, `uv-enforcer.py`, `audit-log.py`）
+- `hooks/{blocked-files,ask-files,allowed-urls}.txt` — アクセス制御リスト
+- `skills/` — 手動追加分のみ（プラグイン由来は対象外）
+
+管理外: `installed-plugins/`（Copilot CLI 側で管理）。
 
 ## CLI 本体の導入元
 
 | 環境 | 導入元 |
 |------|--------|
-| Linux / WSL / Codespaces / Dev Container | `mise` |
+| Linux / WSL / Codespaces / Dev Container | 公式インストールスクリプト (`gh.io/copilot-install`) |
 | macOS | `brew` |
 | Windows | `winget` (`reference/windows/configuration.dsc.yaml`) |
 
-macOS では Copilot Desktop からも参照できるよう、`.zshrc` で `COPILOT_CLI_PATH` を公開する。
+更新は全 OS で `copilot update`。macOS では Copilot Desktop から参照できるよう、`.zshrc` で `COPILOT_CLI_PATH` を公開する。
+
+## LSP サーバー
+
+`~/.copilot/lsp-config.json` (chezmoi 管理) で設定する。Python 向け `ty` (Astral) は mise バックエンドがないため `uv tool install ty`（`run_once` で自動化）、TypeScript 等の npm パッケージは mise の `npm:` バックエンドで管理する。
 
 ## プラグインとスキル
 
-- **プラグイン**: `/plugin` コマンドで管理する。chezmoi の管理外
-- **スキル**: プラグイン由来のスキルはプラグイン側で管理される。手動追加のスキルのみ `~/.copilot/skills/` を chezmoi で管理する
-
-### 手動スキルの追加
-
-プラグインに含まれないスキルを手動で追加する場合、外部スキルの取り込みまたは自作する。
+プラグインは `/plugin` で管理（chezmoi 管理外）。プラグイン由来のスキルはプラグイン側で管理され、手動追加分のみ `~/.copilot/skills/` を chezmoi で管理する。
 
 ```bash
-# 外部スキルの取り込み
+# 外部スキルの取り込み（または ~/.copilot/skills/<skill-name>/SKILL.md を自作）
 npx skills add -g <owner>/<repo>/<path>
-
-# 自作の場合は ~/.copilot/skills/<skill-name>/SKILL.md を作成
-```
-
-いずれも chezmoi ソースへ戻す。
-
-```bash
 chezmoi re-add ~/.copilot/skills/<skill-name>
-chezmoi diff
 ```
 
 ## セキュリティフック
 
-この repo では `preToolUse` フックで、ツール実行前に次を検査する。
+`preToolUse` で以下を検査する。設計は [`architecture.md`](architecture.md#copilot-guard-の設計) を参照。
 
-- **秘匿ファイルの拒否**: `blocked-files.txt`
-- **確認付きアクセス**: `ask-files.txt`
-- **許可外 URL の拒否**: `allowed-urls.txt`
-- **機微な環境変数の読み取り拒否**: `copilot-guard.py`
-- **`python` / `pip` 直接実行の拒否**: `uv-enforcer.py`
+- `copilot-guard.py`: 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / URL 許可 (`allowed-urls.txt`) / 機微な環境変数の読み取り
+- `uv-enforcer.py`: `python` / `pip` の直接実行を抑止
 
-判定の詳細な設計は [`docs/architecture.md`](architecture.md#copilot-guard-の設計) を参照。
+パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化、`deny > ask > allow`。`allowed-urls.txt` は全行コメントアウトで無効化できる。
 
-### ガード用ファイルの編集
-
-- `blocked-files.txt` と `ask-files.txt` は 1 行 1 パターン
-- `#` 始まりの行はコメント
-- パス比較前に `\` は `/` へ正規化される
-- 同じパスが両方に当たる場合は **deny が優先**
-
-`allowed-urls.txt` は 1 行 1 ドメイン。全行コメントアウトすると URL チェックを無効化できる。
-
-## フックの確認
+動作確認:
 
 ```bash
-# ファイル・URL・環境変数アクセス
 echo '{"toolName":"edit","toolArgs":{"path":".env"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
-echo '{"toolName":"bash","toolArgs":{"command":"echo $GITHUB_TOKEN"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
-
-# python/pip 直接実行の抑止
-echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' | uv run ~/.copilot/hooks/scripts/uv-enforcer.py
-```
-
-自動テスト:
-
-```bash
 uv run -m unittest tests.test_copilot_guard -v
 ```
 
 ## `copilot-cruise`
 
-`.zshrc` / `PowerShell_profile.ps1` の `copilot-cruise` は、Autopilot での事故を減らすための起動ラッパーである。主に次を固定する。
-
-- `--deny-tool` による外部送信系コマンドの制限
-- `--secret-env-vars` による機微な環境変数の隠蔽
-- `--max-autopilot-continues 20` による連続実行数の上限
-
-`--deny-tool` の具体的な記法や制限は `copilot help permissions` と公式ドキュメントを参照。
+`.zshrc` / `PowerShell_profile.ps1` の `copilot-cruise` は Autopilot 起動ラッパー。`--deny-tool`（外部送信系の制限）、`--secret-env-vars`（環境変数隠蔽）、`--max-autopilot-continues 20` を固定する。記法は `copilot help permissions` と公式ドキュメント参照。
 
 ## 監査ログ
 
-`postToolUse` フックで `~/.copilot/audit.jsonl` に記録する。
+`postToolUse` フックで `~/.copilot/audit.jsonl` に記録。`COPILOT_AUDIT_DIR` で出力先を変更できる。
 
 ```bash
 tail -5 ~/.copilot/audit.jsonl | uv run python -m json.tool
-COPILOT_AUDIT_DIR=/path/to/logs copilot
 ```
 
 ## 参考
