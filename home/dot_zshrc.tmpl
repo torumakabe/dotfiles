@@ -81,34 +81,9 @@ source $ZSH/oh-my-zsh.sh
 
 # User configuration
 
-# export MANPATH="/usr/local/man:$MANPATH"
-
-# You may need to manually set your language environment
-# export LANG=en_US.UTF-8
-
-# Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
-
-# Compilation flags
-# export ARCHFLAGS="-arch x86_64"
-
-# Set personal aliases, overriding those provided by oh-my-zsh libs,
-# plugins, and themes. Aliases can be placed here, though oh-my-zsh
-# users are encouraged to define aliases within the ZSH_CUSTOM folder.
-# For a full list of active aliases, run `alias`.
-#
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
 DISABLE_AUTO_UPDATE=true
 DISABLE_UPDATE_PROMPT=true
 
-# Other than Oh My Zsh
-#
 setopt autocd
 setopt autopushd
 
@@ -118,11 +93,8 @@ export EDITOR=vim
 # PATH / GOPATH / brew shellenv / mise shims は ~/.profile に集約し、
 # ~/.zprofile 経由で login 時に source される（非対話シェルは env 継承）。
 
-# Shell hooks that need to run in the current zsh process.
-# Prefer sourcing generated shell code over eval so command output is read as a script.
-# - mise activate zsh: tool shims, PATH updates, and shell hooks
-# - zoxide init zsh --cmd cd: directory-jumping integration
-# - gh completion -s zsh: GitHub CLI completion definitions
+# 対話 zsh で必要なツール連携を現在のシェルプロセスに適用する。
+# eval ではなく process substitution + source を使い、出力をスクリプトとして評価する。
 command -v mise >/dev/null && source <(mise activate zsh)
 
 alias k=kubectl

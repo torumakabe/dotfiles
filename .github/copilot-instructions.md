@@ -17,8 +17,9 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 - **cargo-make**: linux/arm64 未提供（[sagiegurari/cargo-make#541](https://github.com/sagiegurari/cargo-make/issues/541)）
 - **edit**: macOS 未提供（[releases](https://github.com/microsoft/edit/releases) を確認）
-- **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため、全 OS で mise 外で管理。macOS は brew、Windows は winget、Linux は公式インストーラー (`install-azd.sh`)。更新は `azd update` で行う
-- **copilot-cli**: mise の `github:` バックエンドでは更新が遅れ、自己更新後のバージョン誤認が発生するため、全 OS で mise 外で管理。macOS は brew、Windows は winget、Linux は公式インストールスクリプト (`gh.io/copilot-install`)。更新は `copilot update` で行う
+
+- **azure-dev**: mise `github:` がバイナリ名を正規化しないため全 OS で mise 外管理 (macOS=brew / Windows=winget / Linux=`install-azd.sh`)。更新=`azd update`
+- **copilot-cli**: mise の `github:` で更新遅延・自己更新後のバージョン誤認が起きるため全 OS で mise 外管理 (macOS=brew / Windows=winget / Linux=`gh.io/copilot-install`)。更新=`copilot update`
 
 ## ワークアラウンド（定期チェック対象）
 

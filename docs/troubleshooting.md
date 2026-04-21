@@ -27,7 +27,7 @@ mise install
 
 ## `run_once_*` スクリプトの warning / error
 
-実行順と役割は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順と依存関係) を参照。
+実行順と役割は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順) を参照。
 
 - **warning で継続**: shell 設定の一部、`mise install` 後の任意ツール、追加ツール導入の失敗
 - **error で停止**: Oh My Zsh の clone、Docker 本体導入など継続に必要な処理
@@ -44,40 +44,29 @@ Codespaces 以外ではパッケージ導入に sudo が必要である。パス
 
 ## 非対話シェルで PATH が通らない
 
-症状: Copilot CLI エージェント、IDE のタスク、`bash script.sh` などから `copilot`, `uv`, `node`, `kubectl`, `azd` などが `command not found` / `CommandNotFoundException`。
+症状: Copilot CLI エージェント、IDE タスク、`bash script.sh` から `copilot` / `uv` / `node` / `kubectl` / `azd` が `command not found`。
 
-原因: `.zshrc` / `$PROFILE` は非対話シェルでは読まれない。macOS では加えて `/opt/homebrew/bin`（brew shellenv）が launchd 既定 PATH に含まれないため GUI 起動子プロセスでも brew 管理ツールが見えない。
+設計の全体像は [`docs/architecture.md`](architecture.md#path-管理非対話シェル対応) を参照。復旧は以下を試す:
 
-### 確認
+- **Unix**: `chezmoi apply` で `~/.profile` 系が配置されているか確認。新規 login シェル（新しい Terminal タブ）で有効化
+- **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）
+- **Windows**: `run_once_after_05-setup-mise-shims-path.ps1` を再実行
 
-```bash
-# Unix（login shell を新規に開いた直後）
-echo "$PATH" | tr ':' '\n'
-# 期待: ~/.local/share/mise/shims, ~/.local/bin, ~/go/bin が含まれる
-# macOS なら /opt/homebrew/bin も含まれる
-command -v copilot   # macOS: /opt/homebrew/bin/copilot, Linux: ~/.local/bin/copilot
-command -v uv        # ~/.local/share/mise/shims/uv
-```
-
-```powershell
-# Windows
-(Get-Command uv).Source
-[Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-String 'mise\\shims'
-```
-
-### 復旧
-
-設計は [`docs/architecture.md`](architecture.md#path-管理非対話シェル対応) を参照。新規環境で反映されていない場合:
-
-- **Unix**: `chezmoi apply` で `~/.profile` と `~/.zprofile` が配置されるか確認。新規 login シェル（新しい Terminal タブなど）を開くと有効化される
-- **macOS GUI アプリ経由の bash**（例: GitHub Desktop の Copilot SDK、`bash --norc --noprofile` で起動）: `chezmoi apply` 時に `run_onchange_after_06-link-mise-shims.sh` が走り、mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すると反映される (GitHub Desktop 自体の再起動は不要)
-  - 新規ツールを Copilot CLI セッションで使いたい場合は `home/run_onchange_after_06-link-mise-shims.sh.tmpl` の `TOOLS` 配列に追加して `chezmoi apply` を実行
-  - 無効化したい場合は `rm ~/.local/bin/<tool>` (symlink のみが削除される)
-- **Windows**: `run_once_after_05-setup-mise-shims-path.ps1` を再実行する
+それでも反映されないときは state を消して再実行:
 
 ```bash
 chezmoi state delete-bucket --bucket=scriptState
 chezmoi apply
 ```
 
-新規シェルを開き直してから再確認する。
+確認コマンド:
+
+```bash
+echo "$PATH" | tr ':' '\n'   # ~/.local/share/mise/shims, ~/.local/bin, ~/go/bin が含まれること
+command -v copilot uv
+```
+
+```powershell
+(Get-Command uv).Source
+[Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-String 'mise\\shims'
+```
