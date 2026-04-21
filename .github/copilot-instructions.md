@@ -2,6 +2,12 @@
 
 このリポジトリは **chezmoi** と **mise** でクロスプラットフォームの dotfiles を管理している。
 
+## 知識ソース
+
+- **設計判断**: `docs/adr/` — 永続的な判断は ADR にまとめている（`docs/adr/INDEX.md`）
+- **運用ノート**: `docs/architecture.md` / `docs/operations.md` / `docs/troubleshooting.md` / `docs/copilot-cli.md`
+- **エージェント**: `.github/agents/` — `manage-adr`（ADR ライフサイクル）、`review-repo`（リポジトリ整頓）
+
 ## Copilot Guard 変更時の注意
 
 - パス比較前に `\` → `/` へ正規化すること。パターンファイルは `/` で記述する
@@ -9,7 +15,6 @@
 ## mise 操作のトラップ
 
 - `mise lock` はデフォルトでプロジェクトレベルの設定のみ対象にするため、グローバル設定には **`--global`** が必須。また引数なしだと既定の 8 プラットフォーム（musl 含む）を対象にするため、**`--platform` も常に指定する**
-- `GITHUB_TOKEN` を `.zshrc` 等の環境変数に常駐させないこと（エージェントへの機密情報露出を防ぐため）
 
 ## プラットフォーム制約（定期チェック対象）
 
@@ -17,9 +22,6 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 - **cargo-make**: linux/arm64 未提供（[sagiegurari/cargo-make#541](https://github.com/sagiegurari/cargo-make/issues/541)）
 - **edit**: macOS 未提供（[releases](https://github.com/microsoft/edit/releases) を確認）
-
-- **azure-dev**: mise `github:` がバイナリ名を正規化しないため全 OS で mise 外管理 (macOS=brew / Windows=winget / Linux=`install-azd.sh`)。更新=`azd update`
-- **copilot-cli**: mise の `github:` で更新遅延・自己更新後のバージョン誤認が起きるため全 OS で mise 外管理 (macOS=brew / Windows=winget / Linux=`gh.io/copilot-install`)。更新=`copilot update`
 
 ## ワークアラウンド（定期チェック対象）
 
