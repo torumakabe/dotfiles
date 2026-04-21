@@ -1,0 +1,105 @@
+{{ if eq .chezmoi.os "darwin" -}}
+#!/usr/bin/env bash
+# mise shims の一部を ~/.local/bin へシンボリックリンク。
+#
+# 背景:
+#   GitHub Desktop の Copilot CLI SDK は `bash --norc --noprofile` で子 shell を
+#   起動するうえ、親プロセス (copilot --server) が独自に hardcoded PATH を組み立てる
+#   ため、dotfiles の rc/profile や launchctl setenv では mise shims を注入できない。
+#   一方 Copilot CLI の PATH には `~/.local/bin` が確実に含まれるため、ここへ
+#   必要な mise shim をシンボリックリンクすることで非対話 bash からも解決可能にする。
+#
+#   シンボリックリンクの先は mise shims なので、mise でバージョンを切り替えた際も
+#   自動で追従する (shim 本体は不変)。
+#
+# メンテナンス:
+#   - 追加したいツールは下記 TOOLS 配列に足す。
+#   - mise のツール一覧 (config.toml) が変わったら本スクリプトが再実行される。
+#   - **本スクリプトが作成したリンクだけ**を管理対象として state ファイルに記録し、
+#     TOOLS から削除されたエントリ / shim が消えたエントリのみを掃除する。
+#     ユーザーが手動で作った symlink や非 symlink は一切触れない。
+#
+# 関連: docs/architecture.md "PATH 管理（非対話シェル対応）"
+#
+# mise config hash: {{ include "dot_config/mise/config.toml.tmpl" | sha256sum }}
+
+set -euo pipefail
+
+SHIM_DIR="$HOME/.local/share/mise/shims"
+LINK_DIR="$HOME/.local/bin"
+STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-links"
+
+# Copilot CLI セッション等の非対話シェルから呼びたい mise 管理ツール。
+# ~/.local/bin は Copilot CLI の PATH に含まれるため、ここにリンクすれば解決できる。
+TOOLS=(
+  trivy
+  gitleaks
+  cosign
+  cue
+  gh
+  yq
+  jq
+)
+
+if [ ! -d "$SHIM_DIR" ]; then
+  echo "mise shims not found at $SHIM_DIR; skipping (run 'mise install' first)." >&2
+  exit 0
+fi
+
+mkdir -p "$LINK_DIR" "$(dirname "$STATE_FILE")"
+
+# 1) 直前に本スクリプトが作成したリンク一覧 (state file) を読み込み、
+#    allowlist 外になったもの / shim が消えたものを削除する。
+#    state file に載っていないリンクは管理対象外として絶対に触らない。
+if [ -f "$STATE_FILE" ]; then
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    link="$LINK_DIR/$name"
+    [ -L "$link" ] || continue
+    target=$(readlink "$link")
+    # 対象 shim を指すリンクであり、かつ allowlist から外れた or shim が消えた場合のみ削除
+    expected="$SHIM_DIR/$name"
+    if [ "$target" != "$expected" ]; then
+      continue
+    fi
+    keep=false
+    for tool in "${TOOLS[@]}"; do
+      if [ "$name" = "$tool" ] && [ -e "$expected" ]; then
+        keep=true
+        break
+      fi
+    done
+    if ! $keep; then
+      echo "Removing stale shim link: $link"
+      rm -f "$link"
+    fi
+  done < "$STATE_FILE"
+fi
+
+# 2) allowlist を適用し、今回管理するエントリを state file に記録する。
+new_state=""
+for tool in "${TOOLS[@]}"; do
+  shim="$SHIM_DIR/$tool"
+  link="$LINK_DIR/$tool"
+  if [ ! -e "$shim" ]; then
+    echo "Skip: $tool shim not found (run 'mise install $tool'?)" >&2
+    continue
+  fi
+  if [ -e "$link" ] || [ -L "$link" ]; then
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$shim" ]; then
+      # 既に本スクリプトが作成した正しいリンク。state に記録するだけ。
+      new_state+="$tool"$'\n'
+      continue
+    fi
+    # それ以外 (非 symlink / 別ターゲットの symlink / ユーザー管理) は触らない。
+    echo "Skip: $link already exists (user-managed); leaving alone" >&2
+    continue
+  fi
+  ln -s "$shim" "$link"
+  echo "Linked $link -> $shim"
+  new_state+="$tool"$'\n'
+done
+
+# state file を更新 (空でも作る: 次回実行時に掃除漏れを起こさないため)
+printf '%s' "$new_state" > "$STATE_FILE"
+{{ end -}}

@@ -1,0 +1,29 @@
+{{ if ne .chezmoi.os "windows" -}}
+# ~/.bashrc - interactive bash (non-login) 向け共通設定。
+#
+# 想定する起動経路:
+#   - ターミナル経由で nested interactive bash を起動した場合 (zsh → bash,
+#     tmux pane 等)。`~/.profile` 側の __DOTFILES_PROFILE_LOADED ガードで
+#     二重実行を防ぐ。
+#   - ssh login 後に対話的に bash を使う場合 (`~/.bash_profile → ~/.profile`
+#     の後、ユーザーが明示的に `bash` を実行したケース)。
+#   - Linux distro default で `~/.bashrc` が期待される場面の整合性確保。
+#
+# 注: GitHub Desktop の Copilot SDK のように bash を --norc --noprofile で spawn する
+# ケースでは `~/.bashrc` は読まれない。そちらは macOS 限定で
+# `run_onchange_after_06-link-mise-shims.sh` が mise shim を `~/.local/bin` に
+# symlink することで対処する (Copilot CLI の PATH には `~/.local/bin` が含まれるため)。
+#
+# Ubuntu default .bashrc に倣い非対話は早期 return する。scp / rsync /
+# 非対話 ssh で ~/.bashrc が読まれるケースで stdout 汚染 / 余計な処理を避ける。
+case $- in
+  *i*) ;;
+  *) return ;;
+esac
+
+[ -r "$HOME/.profile" ] && . "$HOME/.profile"
+
+# User-local escape hatch: distro default の ~/.bashrc にあった alias /
+# completion / PS1 等を ~/.bashrc.local に退避することで保持できる。
+[ -r "$HOME/.bashrc.local" ] && . "$HOME/.bashrc.local"
+{{ end -}}
