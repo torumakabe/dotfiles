@@ -1,11 +1,19 @@
 {{- /*
 zsh は全起動 (login/非login/interactive/非interactive) で .zshenv を読む。
-VS Code の非login 統合ターミナル等、login shell を経由しないケースで
-mise/user-local ツールを解決するための最小 PATH ブートストラップ。
 
-共通 env (GOPATH, brew shellenv 等) は ~/.profile に集約し、login shell
-(~/.zprofile) 経由でのみ適用する設計は維持する。ここでは PATH の共通
-エントリだけを .chezmoitemplates/path-bootstrap.sh 経由で共有する。
+非login zsh (VS Code 統合ターミナルで args: [] を指定した場合や、
+一部の GUI 起動プロセスから spawn された zsh) では ~/.zprofile が
+読まれないため、brew / GOPATH / PATH が揃わない。実際に ~/.zshrc から
+brew を参照する箇所 (az completion など) が壊れていた。
+
+~/.profile 側に共通 env を集約する設計を維持したまま、ここから source
+することでそのギャップを埋める。.profile 内の __DOTFILES_PROFILE_LOADED
+ガードが再実行を抑止するため、login zsh で ~/.zprofile 経由でも読まれる
+ケースや、同一プロセスツリーの nested zsh でもコストは 1 回だけ。
+
+cold コスト実測 (macOS, brew shellenv 含む): 約 30ms
+  env -i HOME=$HOME PATH=/usr/bin:/bin ZDOTDIR=/tmp zsh -c true
 */ -}}
-{{ includeTemplate "path-bootstrap.sh" . }}
-export PATH
+{{ if ne .chezmoi.os "windows" -}}
+[ -r "$HOME/.profile" ] && . "$HOME/.profile"
+{{ end -}}

@@ -8,20 +8,21 @@
 #                               (bash reads ~/.profile only when neither
 #                                ~/.bash_profile nor ~/.bash_login exists)
 #   zsh(login)               -> ~/.zprofile    -> sources this file
+#   zsh(non-login/any)       -> ~/.zshenv      -> sources this file
 #   bash(interactive)        -> ~/.bashrc       (parent env is already set)
 #   zsh(interactive)         -> ~/.zshrc        (parent env is already set)
 #
-# PATH entries common to all shells live in .chezmoitemplates/path-bootstrap.sh
-# and are shared with ~/.zshenv (non-login zsh bootstrap). Keep anything
-# heavier (brew shellenv, mise activate) here only.
+# ~/.zshenv がこのファイルを source することで、VS Code 統合ターミナル等の
+# 非login zsh からも brew / GOPATH / mise shims を解決できる。
+# __DOTFILES_PROFILE_LOADED ガードで同一プロセスツリー内の二重実行を抑止する。
 
 # Idempotency guard: avoid double-appending PATH on re-entry.
 # Wrap the body in a conditional instead of `return` at top level, which is
 # implementation-defined in POSIX sh when the script is sourced.
 if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
-  # `export` so nested login shells (zsh -l inside bash -l, etc.) inherit the
-  # guard and skip re-running brew shellenv (which dedupes) and the path
-  # bootstrap (which is also idempotent, but cheap to skip).
+  # `export` so nested login shells (zsh -l inside bash -l, etc.) and
+  # zsh -c children inherit the guard and skip re-running brew shellenv
+  # (Ruby subprocess, ~30ms on macOS) and the PATH bootstrap.
   export __DOTFILES_PROFILE_LOADED=1
 
 {{ if eq .chezmoi.os "darwin" }}
@@ -38,10 +39,29 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
 {{ end }}
   export GOPATH="${HOME}/go"
 
-  # Shared PATH bootstrap (go/bin, cargo/bin, ~/.local/bin, mise shims).
-  # Also loaded from ~/.zshenv so non-login zsh resolves the same tools.
-  {{- includeTemplate "path-bootstrap.sh" . | nindent 2 }}
+  # Prepend a user-local tool directory to PATH only if it exists and is not
+  # already present. Missing directories are intentionally skipped silently:
+  # Go/cargo/Python user-bin dirs are created on first install of their
+  # respective toolchains, so a fresh machine legitimately lacks them.
+  # Any command not found at runtime will surface the actual problem.
+  #
+  # Ordering (last prepend wins the leftmost slot):
+  #   1. ~/go/bin
+  #   2. ~/.cargo/bin
+  #   3. ~/.local/bin
+  #   4. ~/.local/share/mise/shims  (mise-managed tools take precedence)
+  __add_path() {
+    case ":${PATH}:" in
+      *":$1:"*) ;;
+      *) [ -d "$1" ] && PATH="$1:${PATH}" ;;
+    esac
+  }
+  __add_path "${HOME}/go/bin"
+  __add_path "${HOME}/.cargo/bin"
+  __add_path "${HOME}/.local/bin"
+  __add_path "${HOME}/.local/share/mise/shims"
+  unset -f __add_path
 
   export PATH
 fi
-{{ end }}
+{{ end -}}
