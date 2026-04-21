@@ -81,28 +81,28 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 
 [[tools.codex]]
-version = "0.121.0"
+version = "0.122.0"
 backend = "aqua:openai/codex"
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:a153e420cd50afb6b257a7033b719e638902b6d96e3a59de8c2ff948e380943c"
-url = "https://github.com/openai/codex/releases/download/rust-v0.121.0/codex-aarch64-unknown-linux-musl.zst"
+checksum = "sha256:0cddc02f4f2157e51c0f64ecc1749a3cfe50eda9fc178f40eece10ae3a625503"
+url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-aarch64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:96b299631c87597b744efc6fcd6e3c6cfc0b4ec2ed897638cf1d505c08c4d3ee"
-url = "https://github.com/openai/codex/releases/download/rust-v0.121.0/codex-x86_64-unknown-linux-musl.zst"
+checksum = "sha256:2b7cd55ffb39aad7801e6b807aada65461341ae604ee9f5101dadb5970c33847"
+url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-x86_64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:89ec504ef15a03bbb2a90dd90bb587a9d2ac3bef9462088a97b7c01dffc10b31"
-url = "https://github.com/openai/codex/releases/download/rust-v0.121.0/codex-aarch64-apple-darwin.zst"
+checksum = "sha256:8f6e07dad23c5dc64318a0175a2c515ee83726281323381fd2f34e999f49b866"
+url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-aarch64-apple-darwin.zst"
 
 [tools.codex."platforms.windows-arm64"]
-checksum = "sha256:92c0938d13e9e06e2844be1e50bfa2d246e295185aabe055a92d42fcdeb0b26d"
-url = "https://github.com/openai/codex/releases/download/rust-v0.121.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:7fd601eb9f4eea1875aba0526ffbd183a700d3b708eb3f0d4920bfded7b9c1c6"
+url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:92c0938d13e9e06e2844be1e50bfa2d246e295185aabe055a92d42fcdeb0b26d"
-url = "https://github.com/openai/codex/releases/download/rust-v0.121.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:7fd601eb9f4eea1875aba0526ffbd183a700d3b708eb3f0d4920bfded7b9c1c6"
+url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
 version = "3.0.6"
@@ -158,28 +158,23 @@ checksum = "sha256:2f24123f458229fcf283db534bd86692ad1074da806defee0f0cc62976c03
 url = "https://github.com/cue-lang/cue/releases/download/v0.16.1/cue_v0.16.1_windows_amd64.zip"
 
 [[tools.dotnet]]
-version = "10.0.202"
-backend = "core:dotnet"
+version = "10.0.203"
+backend = "vfox:dotnet"
 
-[[tools.edit]]
-version = "1.2.1"
-backend = "aqua:microsoft/edit"
+[tools.dotnet."platforms.linux-arm64"]
+url = "https://dot.net/v1/dotnet-install.sh"
 
-[tools.edit."platforms.linux-arm64"]
-checksum = "sha256:4e320240586ecc5cdfdcff0488647879077027506c68c919ccdd2754642d0fbb"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-aarch64-linux-gnu.tar.zst"
+[tools.dotnet."platforms.linux-x64"]
+url = "https://dot.net/v1/dotnet-install.sh"
 
-[tools.edit."platforms.linux-x64"]
-checksum = "sha256:aee9f2f21ebc90cc1dbfb20ee93d3aa03d325127a8e3f7f91dd02c5a9e0a7b25"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-x86_64-linux-gnu.tar.zst"
+[tools.dotnet."platforms.macos-arm64"]
+url = "https://dot.net/v1/dotnet-install.sh"
 
-[tools.edit."platforms.windows-arm64"]
-checksum = "sha256:7f44bb48b2891163cf5b9c996e8a917c29d82c7a765c07e89e74b47aff542ca9"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-aarch64-windows.zip"
+[tools.dotnet."platforms.windows-arm64"]
+url = "https://dot.net/v1/dotnet-install.ps1"
 
-[tools.edit."platforms.windows-x64"]
-checksum = "sha256:be3affb7e5e0cd856fc0fb9c8b2004e9fbbc364e69797f7c2e9d8fcc94bfc4ff"
-url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-x86_64-windows.zip"
+[tools.dotnet."platforms.windows-x64"]
+url = "https://dot.net/v1/dotnet-install.ps1"
 
 [[tools.fzf]]
 version = "0.71.0"
@@ -336,32 +331,32 @@ url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golan
 provenance = "github-attestations"
 
 [[tools.goreleaser]]
-version = "2.15.3"
+version = "2.15.4"
 backend = "aqua:goreleaser/goreleaser"
 
 [tools.goreleaser."platforms.linux-arm64"]
-checksum = "sha256:646b8f36329cf1ec02af18d40e7096973f62524bdef19c3690414e390a9f757d"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Linux_arm64.tar.gz"
+checksum = "sha256:de01ca1497571e9b348413cd2e7f74be49b8d57696ae386f7eedd06176544a88"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Linux_arm64.tar.gz"
 provenance = "github-attestations"
 
 [tools.goreleaser."platforms.linux-x64"]
-checksum = "sha256:3b24b3a1629be21a9527d2f46f08b9bbf012c52fe33395714fe2c70acee57e0f"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Linux_x86_64.tar.gz"
+checksum = "sha256:aae00c71a4a6d55e08cce9273a1516bdce33c1e07cffb7e502fa6fec4377dede"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Linux_x86_64.tar.gz"
 provenance = "github-attestations"
 
 [tools.goreleaser."platforms.macos-arm64"]
-checksum = "sha256:b8525b87b2cc722efd8dc5cd2af95d9f3a6e69dcb73990131e18e1d2372cf579"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Darwin_all.tar.gz"
+checksum = "sha256:82d730f3366350c90d7e5df3cf9e8e425fd1c84bf7d7e3e564f92d97c5ea9ea4"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Darwin_all.tar.gz"
 provenance = "github-attestations"
 
 [tools.goreleaser."platforms.windows-arm64"]
-checksum = "sha256:73dfb04a17a9d2fd2d064de0daa63bef0d08620268bc5ba654735b5c69afde65"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Windows_arm64.zip"
+checksum = "sha256:10227d9de3eb846f0e58529c22e75dcbd713b67879a7f83912de7abe658c5fd7"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Windows_arm64.zip"
 provenance = "github-attestations"
 
 [tools.goreleaser."platforms.windows-x64"]
-checksum = "sha256:8722fdebfc23e10a36356ddd59af0c1f52c4120ca847afd091bd34e09d8aae8c"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.3/goreleaser_Windows_x86_64.zip"
+checksum = "sha256:146695f49717dfd79d64d5d6f4b1d25e2b56d73e723bbf68a8dc13ce5cf69693"
+url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Windows_x86_64.zip"
 provenance = "github-attestations"
 
 [[tools.helm]]
@@ -524,6 +519,30 @@ url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15
 [[tools.rust]]
 version = "1.95.0"
 backend = "core:rust"
+
+[[tools.shellcheck]]
+version = "0.11.0"
+backend = "aqua:koalaman/shellcheck"
+
+[tools.shellcheck."platforms.linux-arm64"]
+checksum = "sha256:12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.xz"
+
+[tools.shellcheck."platforms.linux-x64"]
+checksum = "sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
+
+[tools.shellcheck."platforms.macos-arm64"]
+checksum = "sha256:56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz"
+
+[tools.shellcheck."platforms.windows-arm64"]
+checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
+
+[tools.shellcheck."platforms.windows-x64"]
+checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
 
 [[tools.sqlc]]
 version = "1.31.0"
