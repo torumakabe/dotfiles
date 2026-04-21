@@ -1,0 +1,24 @@
+{{ if eq .chezmoi.os "windows" -}}
+# Windows 向け追加ツールのインストール
+# 実行順序: run_once_after_20-mise-install の後。mise でインストールされた uv 等が PATH に必要
+$ErrorActionPreference = 'Stop'
+
+# mise shims を PATH に追加 (非対話シェル対応)
+$shimsDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
+if (($env:Path -split ';') -notcontains $shimsDir) {
+    $env:Path = "$shimsDir;$env:Path"
+}
+
+# --- uv tools ---
+# ty: Python LSP サーバー (Astral)。mise に ty 用バックエンドがないため uv tool で管理
+if (Get-Command uv -ErrorAction SilentlyContinue) {
+    Write-Host "Installing uv tools..."
+    try {
+        uv tool install --quiet ty
+    } catch {
+        Write-Warning "Failed to install ty. Retry manually with 'uv tool install ty'."
+    }
+}
+
+Write-Host "Tool installation complete!"
+{{ end -}}

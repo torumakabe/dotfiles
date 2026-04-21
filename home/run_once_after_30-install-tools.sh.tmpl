@@ -39,6 +39,15 @@ if command -v go >/dev/null 2>&1; then
   fi
 fi
 
+# --- uv tools ---
+# ty: Python LSP サーバー (Astral)。mise に ty 用バックエンドがないため uv tool で管理
+if command -v uv >/dev/null 2>&1; then
+  echo "Installing uv tools..."
+  if ! uv tool install --quiet ty; then
+    echo "Warning: failed to install ty. Retry manually with 'uv tool install ty'." >&2
+  fi
+fi
+
 {{ if eq .chezmoi.os "darwin" -}}
 # --- macOS-specific brew cask packages ---
 if ! brew install --cask --force devtoys; then
