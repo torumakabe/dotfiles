@@ -23,7 +23,7 @@ esac
 
 [ -r "$HOME/.profile" ] && . "$HOME/.profile"
 
-# User-local escape hatch: distro default の ~/.bashrc にあった alias /
-# completion / PS1 等を ~/.bashrc.local に退避することで保持できる。
+# distro default の ~/.bashrc にあった alias / completion / PS1 等を
+# ~/.bashrc.local に退避しておけば、本ファイルで上書きせずに保持できる。
 [ -r "$HOME/.bashrc.local" ] && . "$HOME/.bashrc.local"
 {{ end -}}
