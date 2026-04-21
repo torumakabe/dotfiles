@@ -12,12 +12,19 @@
 #   シンボリックリンクの先は mise shims なので、mise でバージョンを切り替えた際も
 #   自動で追従する (shim 本体は不変)。
 #
+# 方針:
+#   mise shims の内容を自動走査し、以下を除外したうえで全件リンクする。
+#     - 言語ランタイム本体 (EXCLUDE_EXACT): 想定外の場所で拾われると副作用が大きいため。
+#     - ランタイム付随サブコマンド / 補助ファイル (EXCLUDE_PATTERN): cargo-*, rust-*,
+#       *.bat, *.ps1, *.sh, *.zst, *.txt, *-darwin-* など。
+#     - 実行可能な通常ファイルでないもの。
+#
 # メンテナンス:
-#   - 追加したいツールは下記 TOOLS 配列に足す。
+#   - 除外を増減したい場合は EXCLUDE_EXACT / EXCLUDE_PATTERN を編集。
 #   - mise のツール一覧 (config.toml) が変わったら本スクリプトが再実行される。
-#   - **本スクリプトが作成したリンクだけ**を管理対象として state ファイルに記録し、
-#     TOOLS から削除されたエントリ / shim が消えたエントリのみを掃除する。
-#     ユーザーが手動で作った symlink や非 symlink は一切触れない。
+#   - **本スクリプトが作成したリンクだけ**を state ファイルで管理し、対象外になった or
+#     shim が消えたエントリのみを掃除する。ユーザーが手動で作った symlink や非 symlink
+#     は一切触れない。
 #
 # 関連: docs/architecture.md "PATH 管理（非対話シェル対応）"
 #
@@ -29,17 +36,29 @@ SHIM_DIR="$HOME/.local/share/mise/shims"
 LINK_DIR="$HOME/.local/bin"
 STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-links"
 
-# Copilot CLI セッション等の非対話シェルから呼びたい mise 管理ツール。
-# ~/.local/bin は Copilot CLI の PATH に含まれるため、ここにリンクすれば解決できる。
-TOOLS=(
-  trivy
-  gitleaks
-  cosign
-  cue
-  gh
-  yq
-  jq
+# 言語ランタイム本体。VS Code 等が ~/.local/bin を優先して拾うと予期せぬバージョンで
+# 起動する恐れがあるため、Copilot 経由での利用価値より副作用リスクを優先して除外。
+EXCLUDE_EXACT=(
+  node npm npx corepack
+  dotnet dnx
+  cargo rustc rustup rustfmt rustdoc clippy-driver rls
 )
+
+# glob パターン。cargo-*/rust-* は cargo/rustc 本体とセットで無効化。
+# *.bat/*.ps1/*.sh/*.zst/*.txt/*-darwin-* は shim ではない付随ファイル。
+EXCLUDE_PATTERN=('cargo-*' 'rust-*' '*.bat' '*.ps1' '*.sh' '*.zst' '*.txt' '*-darwin-*')
+
+is_excluded() {
+  local name="$1" e p
+  for p in "${EXCLUDE_PATTERN[@]}"; do
+    # shellcheck disable=SC2053
+    [[ "$name" == $p ]] && return 0
+  done
+  for e in "${EXCLUDE_EXACT[@]}"; do
+    [ "$name" = "$e" ] && return 0
+  done
+  return 1
+}
 
 if [ ! -d "$SHIM_DIR" ]; then
   echo "mise shims not found at $SHIM_DIR; skipping (run 'mise install' first)." >&2
@@ -48,56 +67,60 @@ fi
 
 mkdir -p "$LINK_DIR" "$(dirname "$STATE_FILE")"
 
-# 1) 直前に本スクリプトが作成したリンク一覧 (state file) を読み込み、
-#    allowlist 外になったもの / shim が消えたものを削除する。
+# 今回リンク対象にする shim 一覧を収集。
+eligible=()
+for shim in "$SHIM_DIR"/*; do
+  [ -f "$shim" ] || continue
+  [ -x "$shim" ] || continue
+  name=$(basename "$shim")
+  if is_excluded "$name"; then
+    continue
+  fi
+  eligible+=("$name")
+done
+
+in_eligible() {
+  local target="$1" n
+  for n in "${eligible[@]}"; do
+    [ "$n" = "$target" ] && return 0
+  done
+  return 1
+}
+
+# 1) 前回作成したリンクのうち、今回 eligible でなくなった / shim が消えたものを削除。
 #    state file に載っていないリンクは管理対象外として絶対に触らない。
 if [ -f "$STATE_FILE" ]; then
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     link="$LINK_DIR/$name"
     [ -L "$link" ] || continue
-    target=$(readlink "$link")
-    # 対象 shim を指すリンクであり、かつ allowlist から外れた or shim が消えた場合のみ削除
     expected="$SHIM_DIR/$name"
-    if [ "$target" != "$expected" ]; then
-      continue
-    fi
-    keep=false
-    for tool in "${TOOLS[@]}"; do
-      if [ "$name" = "$tool" ] && [ -e "$expected" ]; then
-        keep=true
-        break
-      fi
-    done
-    if ! $keep; then
+    [ "$(readlink "$link")" = "$expected" ] || continue
+    if ! in_eligible "$name"; then
       echo "Removing stale shim link: $link"
       rm -f "$link"
     fi
   done < "$STATE_FILE"
 fi
 
-# 2) allowlist を適用し、今回管理するエントリを state file に記録する。
+# 2) eligible shim をリンクし、新しい state を書き出す。
 new_state=""
-for tool in "${TOOLS[@]}"; do
-  shim="$SHIM_DIR/$tool"
-  link="$LINK_DIR/$tool"
-  if [ ! -e "$shim" ]; then
-    echo "Skip: $tool shim not found (run 'mise install $tool'?)" >&2
-    continue
-  fi
+for name in "${eligible[@]}"; do
+  shim="$SHIM_DIR/$name"
+  link="$LINK_DIR/$name"
   if [ -e "$link" ] || [ -L "$link" ]; then
     if [ -L "$link" ] && [ "$(readlink "$link")" = "$shim" ]; then
       # 既に本スクリプトが作成した正しいリンク。state に記録するだけ。
-      new_state+="$tool"$'\n'
+      new_state+="$name"$'\n'
       continue
     fi
-    # それ以外 (非 symlink / 別ターゲットの symlink / ユーザー管理) は触らない。
+    # 非 symlink / 別ターゲットの symlink (ユーザー管理) は触らない。
     echo "Skip: $link already exists (user-managed); leaving alone" >&2
     continue
   fi
   ln -s "$shim" "$link"
   echo "Linked $link -> $shim"
-  new_state+="$tool"$'\n'
+  new_state+="$name"$'\n'
 done
 
 # state file を更新 (空でも作る: 次回実行時に掃除漏れを起こさないため)
