@@ -489,6 +489,14 @@ url = "https://nodejs.org/dist/v24.15.0/node-v24.15.0-win-arm64.zip"
 checksum = "sha256:cc5149eabd53779ce1e7bdc5401643622d0c7e6800ade18928a767e940bb0e62"
 url = "https://nodejs.org/dist/v24.15.0/node-v24.15.0-win-x64.zip"
 
+[[tools."npm:typescript"]]
+version = "6.0.3"
+backend = "npm:typescript"
+
+[[tools."npm:typescript-language-server"]]
+version = "5.1.3"
+backend = "npm:typescript-language-server"
+
 [[tools.ripgrep]]
 version = "15.1.0"
 backend = "aqua:BurntSushi/ripgrep"

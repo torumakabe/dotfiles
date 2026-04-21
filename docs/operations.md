@@ -14,6 +14,8 @@
 
 `copilot-cli` は全 OS で mise 外で管理する。macOS は `brew`、Windows は `winget`、Linux は公式インストールスクリプト (`gh.io/copilot-install`) を使い、更新は `copilot update` で行う。
 
+Copilot CLI の LSP サーバーは `~/.copilot/lsp-config.json` (chezmoi 管理) で設定する。Python 向けの `ty` (Astral) は mise に専用バックエンドがないため、`uv tool install ty` で導入する (run_once スクリプトで自動化済み)。TypeScript など npm パッケージの LSP サーバーは mise の `npm:` バックエンドで管理する。
+
 ## 定期チェック対象の制約
 
 `mise` 設定や導入元を見直すときは、次の制約がまだ残っているか確認する。
