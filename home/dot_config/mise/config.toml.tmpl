@@ -42,3 +42,14 @@ cargo-make = "latest"
 experimental = true
 lockfile = true
 fetch_remote_versions_timeout = "60s"
+
+{{ if eq .chezmoi.os "windows" -}}
+# Windows 限定: mise が rust install 時に `~/.cargo/bin` へ symlink を張る処理は
+# 既存ディレクトリ（外部 rustup が管理する実体）と衝突し os error 183 で失敗する。
+# mise 専用の cargo/rustup home を `%LOCALAPPDATA%\mise\rust\` 配下に分離し、
+# 外部 rustup と共存させる。PATH は shims 経由のままで良いので追加調整は不要。
+# 詳細: docs/adr/009-mise-rust-windows-isolate-home.md
+[settings.rust]
+cargo_home = '{{ .chezmoi.homeDir }}/AppData/Local/mise/rust/cargo'
+rustup_home = '{{ .chezmoi.homeDir }}/AppData/Local/mise/rust/rustup'
+{{ end -}}

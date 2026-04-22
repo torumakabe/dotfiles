@@ -21,6 +21,7 @@
 | [006](006-pretooluse-hook-no-allow.md) | Copilot CLI preToolUse フックは allow を出力しない | Accepted |
 | [007](007-python-with-uv-and-pep723.md) | Python スクリプトは uv run + PEP 723 で実行する | Accepted |
 | [008](008-zshenv-sources-profile.md) | ~/.zshenv は ~/.profile を source する | Accepted |
+| [009](009-mise-rust-windows-isolate-home.md) | Windows では mise の rust home を外部 rustup から分離する | Accepted |
 
 ## テンプレート
 
