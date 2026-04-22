@@ -6,19 +6,19 @@
         "type": "command",
         "bash": "uv run \"$HOME/.copilot/hooks/scripts/copilot-guard.py\"",
         "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\copilot-guard.py\"",
-        "timeoutSec": 10
+        "timeoutSec": 30
       },
       {
         "type": "command",
         "bash": "uv run \"$HOME/.copilot/hooks/scripts/uv-enforcer.py\"",
         "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\uv-enforcer.py\"",
-        "timeoutSec": 10
+        "timeoutSec": 30
       },
       {
         "type": "command",
         "bash": "uv run \"$HOME/.copilot/hooks/scripts/node-global-enforcer.py\"",
         "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\node-global-enforcer.py\"",
-        "timeoutSec": 10
+        "timeoutSec": 30
       }
     ],
     "postToolUse": [
@@ -26,7 +26,7 @@
         "type": "command",
         "bash": "uv run \"$HOME/.copilot/hooks/scripts/audit-log.py\"",
         "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\audit-log.py\"",
-        "timeoutSec": 5
+        "timeoutSec": 15
       }
     ]
   }

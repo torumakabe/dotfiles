@@ -70,3 +70,22 @@ command -v copilot uv
 (Get-Command uv).Source
 [Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-String 'mise\\shims'
 ```
+
+## Copilot CLI: preToolUse フックが並列実行時にすり抜ける
+
+症状: 短時間に複数のツール呼び出しが走った際、`copilot-guard.py` / `uv-enforcer.py` の deny が適用されず、ブロックすべき操作が実行される。
+
+原因 (CLI v1.0.35 系で観測):
+
+- **タイムアウト時の挙動は fail-open**: `timeoutSec` を超えても hook プロセスは kill されず、CLI 側が待機を打ち切って allow フォールバックし、遅れて届く deny は破棄される
+- **hook 起動が逐次キュー化**: 同時に 5 件のツール呼び出しが来ても hook は 1.5〜4 秒間隔で順番に起動される。並列数が増えるほどキュー末尾が `timeoutSec` を超え、上記 fail-open が発動しやすい
+
+対策 (本リポジトリで適用済み):
+
+- `home/private_dot_copilot/hooks/hooks.json` の `timeoutSec` を preToolUse 30 秒 / postToolUse 15 秒に設定し、キューが長くなっても fail-open に落ちにくくする
+- 上流の挙動変更を追跡する (`github/copilot-cli` の issue)
+
+暫定回避:
+
+- 高並列が予想される作業（一括コマンド送信など）では、1 応答内のツール呼び出し数を抑える
+- deny すべき操作が通ってしまった場合は `~/.copilot/hooks/audit.jsonl` で事後検出し、手動で巻き戻す
