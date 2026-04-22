@@ -225,32 +225,32 @@ checksum = "sha256:a526da44d5f67250598fa95e5654815e9f672b2c05d1d98c28bce0e60d3cf
 url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_windows_amd64.zip"
 
 [[tools.github-cli]]
-version = "2.90.0"
+version = "2.91.0"
 backend = "aqua:cli/cli"
 
 [tools.github-cli."platforms.linux-arm64"]
-checksum = "sha256:1139e1ad912fcddb5ef4b957530184c2c30d9937ff65ff4e641fbf6ca5f28c7c"
-url = "https://github.com/cli/cli/releases/download/v2.90.0/gh_2.90.0_linux_arm64.tar.gz"
+checksum = "sha256:ccbed39c472d3dc1c501d1e164a9cffd934c5f6fce1012811a1a59d24cb7d7c6"
+url = "https://github.com/cli/cli/releases/download/v2.91.0/gh_2.91.0_linux_arm64.tar.gz"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.linux-x64"]
-checksum = "sha256:b2aef7b23ec6899bf27f37a32c57a7935d0a178568ac33dc9bb03842f724195a"
-url = "https://github.com/cli/cli/releases/download/v2.90.0/gh_2.90.0_linux_amd64.tar.gz"
+checksum = "sha256:304a0d2460f4a8847d2f192bad4e2a32cd9420d28716e7ae32198181b65b5f9c"
+url = "https://github.com/cli/cli/releases/download/v2.91.0/gh_2.91.0_linux_amd64.tar.gz"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.macos-arm64"]
-checksum = "sha256:82a6acdc3f445dc316b70e1bc15b9b7c4b4e26fd30b04de461a7829ad6c6e97f"
-url = "https://github.com/cli/cli/releases/download/v2.90.0/gh_2.90.0_macOS_arm64.zip"
+checksum = "sha256:20446cd714d9fa1b69fbd410deade3731f38fe09a2b980c8488aa388dd320ada"
+url = "https://github.com/cli/cli/releases/download/v2.91.0/gh_2.91.0_macOS_arm64.zip"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.windows-arm64"]
-checksum = "sha256:6c962692ee8285f5b2336455cbe08695ae340dcf433b4b13d8d3d534ebee8ffe"
-url = "https://github.com/cli/cli/releases/download/v2.90.0/gh_2.90.0_windows_arm64.zip"
+checksum = "sha256:ae0333d2f9b13fc28f785ca7379514f9a1cea382cd4726abb6e6f4d2a874dd15"
+url = "https://github.com/cli/cli/releases/download/v2.91.0/gh_2.91.0_windows_arm64.zip"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.windows-x64"]
-checksum = "sha256:73fcae688eb64ae67828536c9be90db1e5be3f11691a6fa1c1e5418fd24ee10b"
-url = "https://github.com/cli/cli/releases/download/v2.90.0/gh_2.90.0_windows_amd64.zip"
+checksum = "sha256:ced3e6f4bb5a9865056b594b7ad0cf42137dc92c494346f1ca705b5dbf14c88e"
+url = "https://github.com/cli/cli/releases/download/v2.91.0/gh_2.91.0_windows_amd64.zip"
 provenance = "github-attestations"
 
 [[tools.gitleaks]]
@@ -413,28 +413,28 @@ url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-windows-amd64.
 provenance = "github-attestations"
 
 [[tools.kubectl]]
-version = "1.35.4"
+version = "1.36.0"
 backend = "aqua:kubernetes/kubernetes/kubectl"
 
 [tools.kubectl."platforms.linux-arm64"]
-checksum = "sha256:6a5a4cc4e396d7626a7a693a3044b51c75520f81db30fe6816c2554e53be336f"
-url = "https://dl.k8s.io/v1.35.4/bin/linux/arm64/kubectl"
+checksum = "sha256:9f9d9c44a7b5264515ac9da5991584e2395bd50662e651132337e7b4d0c56f8f"
+url = "https://dl.k8s.io/v1.36.0/bin/linux/arm64/kubectl"
 
 [tools.kubectl."platforms.linux-x64"]
-checksum = "sha256:b529430df69a688fd61b64ad2299edb5fd71cb58be2a4779dba624c7d3510efd"
-url = "https://dl.k8s.io/v1.35.4/bin/linux/amd64/kubectl"
+checksum = "sha256:123d8c8844f46b1244c547fffb3c17180c0c26dac9890589fe7e67763298748e"
+url = "https://dl.k8s.io/v1.36.0/bin/linux/amd64/kubectl"
 
 [tools.kubectl."platforms.macos-arm64"]
-checksum = "sha256:ec644a2473b64b486987f695dfb1867963ce6d42d267b86e944585a546f92b5d"
-url = "https://dl.k8s.io/v1.35.4/bin/darwin/arm64/kubectl"
+checksum = "sha256:4bcf268eacdc1d2df74e37d86f639f27ca7dea3ae185b7b452b73b9fb5ddc14e"
+url = "https://dl.k8s.io/v1.36.0/bin/darwin/arm64/kubectl"
 
 [tools.kubectl."platforms.windows-arm64"]
-checksum = "sha256:7fc20079bf0e2b67ba3b2f9841bfb15f34d4c828d00bfce39d3d57c3dca21fdf"
-url = "https://dl.k8s.io/v1.35.4/bin/windows/arm64/kubectl.exe"
+checksum = "sha256:70ea36e915f65c92e9e97c07b7817109cc90842056b30bf92d2d56a631c95f56"
+url = "https://dl.k8s.io/v1.36.0/bin/windows/arm64/kubectl.exe"
 
 [tools.kubectl."platforms.windows-x64"]
-checksum = "sha256:d77d03309bd80de56dafe8ca59ff6f2076e2ed4ee61c6a94657a4b6e945210e6"
-url = "https://dl.k8s.io/v1.35.4/bin/windows/amd64/kubectl.exe"
+checksum = "sha256:9abf2164fe79d9d80185ff5085f6154eda9d21793ee18fa8dff34dfffffed36d"
+url = "https://dl.k8s.io/v1.36.0/bin/windows/amd64/kubectl.exe"
 
 [[tools.kustomize]]
 version = "5.8.1"
@@ -545,33 +545,33 @@ checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e7
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
 
 [[tools.sqlc]]
-version = "1.31.0"
+version = "1.31.1"
 backend = "github:sqlc-dev/sqlc"
 
 [tools.sqlc."platforms.linux-arm64"]
-checksum = "sha256:86ff46e7b4be67720017b55a84b948ad60f32a0c02fd8e7175d9bfa8dcf972a8"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400404816"
+checksum = "sha256:b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402611988"
 
 [tools.sqlc."platforms.linux-x64"]
-checksum = "sha256:e35394ba3df5e62669e76627f45172d18c6cbb1479e4762c51b29b0eafc16dc0"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400404814"
+checksum = "sha256:497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402611992"
 
 [tools.sqlc."platforms.macos-arm64"]
-checksum = "sha256:55322a83a913fcafef8659a0a583a79f86e9c7124a6bbc21317f3288c6004b06"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400404812"
+checksum = "sha256:21602158c99eb1f2bae197a66abfb1941d1e9e50b23125bb193349c6b1acc71e"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402611984"
 
 [tools.sqlc."platforms.windows-arm64"]
-checksum = "sha256:834f23e35d00b3d6ba4ba6c8edcd98434b8d473857f21bdf437142331de7afe3"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_windows_arm64.zip"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400430918"
+checksum = "sha256:b3d7a016c177923cb426f0d544d3ffbe2ff97306137bb77f668af709b5613692"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_windows_arm64.zip"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402612176"
 
 [tools.sqlc."platforms.windows-x64"]
-checksum = "sha256:ac935aea01c1f3981d02d537dc0b592d329517e25087180412057cbae8acb83a"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.0/sqlc_1.31.0_windows_amd64.zip"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/400404854"
+checksum = "sha256:352711fa7dcb05dcdfefca0ad71b2c9a74fd090f8d7fc609419de4cbc725429f"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_windows_amd64.zip"
+url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402612157"
 
 [[tools.terraform]]
 version = "1.14.9"
