@@ -125,50 +125,51 @@ Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 # Copilot CLI: Autopilot + multi-layer defense (based on security report recommendations)
 # --deny-tool overrides --allow-all and has no fail-open risk.
 # File read/write protection is handled by preToolUse hooks (copilot-guard.py), not --deny-tool.
-# Supported --deny-tool kinds: shell(cmd), write, url(domain), <MCP>(tool)
-# NOTE: shell() performs exact command-name matching. On Windows, .exe suffix and
-#       PowerShell aliases are distinct names and must be listed separately.
+# Supported --deny-tool kinds: shell(cmd:*), write, url(domain), <MCP>(tool)
+# NOTE: shell(cmd:*) uses prefix matching — command name plus any arguments.
+#       On Windows, .exe suffix and PowerShell aliases are distinct names and
+#       must be listed separately.
 function Invoke-CopilotCruise {
     copilot --autopilot `
       --allow-all `
-      --deny-tool 'shell(curl)' `
-      --deny-tool 'shell(curl.exe)' `
-      --deny-tool 'shell(wget)' `
-      --deny-tool 'shell(wget.exe)' `
-      --deny-tool 'shell(Invoke-WebRequest)' `
-      --deny-tool 'shell(iwr)' `
-      --deny-tool 'shell(Invoke-RestMethod)' `
-      --deny-tool 'shell(irm)' `
-      --deny-tool 'shell(Start-BitsTransfer)' `
-      --deny-tool 'shell(nslookup)' `
-      --deny-tool 'shell(nslookup.exe)' `
-      --deny-tool 'shell(dig)' `
-      --deny-tool 'shell(dig.exe)' `
-      --deny-tool 'shell(host)' `
-      --deny-tool 'shell(host.exe)' `
-      --deny-tool 'shell(Resolve-DnsName)' `
-      --deny-tool 'shell(nc)' `
-      --deny-tool 'shell(nc.exe)' `
-      --deny-tool 'shell(netcat)' `
-      --deny-tool 'shell(netcat.exe)' `
-      --deny-tool 'shell(ncat)' `
-      --deny-tool 'shell(ncat.exe)' `
-      --deny-tool 'shell(socat)' `
-      --deny-tool 'shell(socat.exe)' `
-      --deny-tool 'shell(telnet)' `
-      --deny-tool 'shell(telnet.exe)' `
-      --deny-tool 'shell(Test-NetConnection)' `
-      --deny-tool 'shell(tnc)' `
-      --deny-tool 'shell(ssh)' `
-      --deny-tool 'shell(ssh.exe)' `
-      --deny-tool 'shell(scp)' `
-      --deny-tool 'shell(scp.exe)' `
-      --deny-tool 'shell(sftp)' `
-      --deny-tool 'shell(sftp.exe)' `
-      --deny-tool 'shell(ftp)' `
-      --deny-tool 'shell(ftp.exe)' `
-      --deny-tool 'shell(bitsadmin)' `
-      --deny-tool 'shell(bitsadmin.exe)' `
+      --deny-tool 'shell(curl:*)' `
+      --deny-tool 'shell(curl.exe:*)' `
+      --deny-tool 'shell(wget:*)' `
+      --deny-tool 'shell(wget.exe:*)' `
+      --deny-tool 'shell(Invoke-WebRequest:*)' `
+      --deny-tool 'shell(iwr:*)' `
+      --deny-tool 'shell(Invoke-RestMethod:*)' `
+      --deny-tool 'shell(irm:*)' `
+      --deny-tool 'shell(Start-BitsTransfer:*)' `
+      --deny-tool 'shell(nslookup:*)' `
+      --deny-tool 'shell(nslookup.exe:*)' `
+      --deny-tool 'shell(dig:*)' `
+      --deny-tool 'shell(dig.exe:*)' `
+      --deny-tool 'shell(host:*)' `
+      --deny-tool 'shell(host.exe:*)' `
+      --deny-tool 'shell(Resolve-DnsName:*)' `
+      --deny-tool 'shell(nc:*)' `
+      --deny-tool 'shell(nc.exe:*)' `
+      --deny-tool 'shell(netcat:*)' `
+      --deny-tool 'shell(netcat.exe:*)' `
+      --deny-tool 'shell(ncat:*)' `
+      --deny-tool 'shell(ncat.exe:*)' `
+      --deny-tool 'shell(socat:*)' `
+      --deny-tool 'shell(socat.exe:*)' `
+      --deny-tool 'shell(telnet:*)' `
+      --deny-tool 'shell(telnet.exe:*)' `
+      --deny-tool 'shell(Test-NetConnection:*)' `
+      --deny-tool 'shell(tnc:*)' `
+      --deny-tool 'shell(ssh:*)' `
+      --deny-tool 'shell(ssh.exe:*)' `
+      --deny-tool 'shell(scp:*)' `
+      --deny-tool 'shell(scp.exe:*)' `
+      --deny-tool 'shell(sftp:*)' `
+      --deny-tool 'shell(sftp.exe:*)' `
+      --deny-tool 'shell(ftp:*)' `
+      --deny-tool 'shell(ftp.exe:*)' `
+      --deny-tool 'shell(bitsadmin:*)' `
+      --deny-tool 'shell(bitsadmin.exe:*)' `
       --secret-env-vars 'AZURE_CLIENT_SECRET,ARM_CLIENT_SECRET,ARM_ACCESS_KEY,AZURE_STORAGE_CONNECTION_STRING' `
       --max-autopilot-continues 20 `
       @args

@@ -22,13 +22,31 @@ Run via: uv run copilot-guard.py
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from functools import lru_cache
 import json
+import os
 import re
 import sys
 from pathlib import Path
 from typing import Any, Callable, NamedTuple, Optional
 from urllib.parse import unquote, urlsplit
+
+
+# Patterns to redact from audit-denies.jsonl (mirrors audit-log.py / audit-failure.py)
+_AUDIT_REDACT_RE = re.compile(
+    r"(?i)(?:"
+    r"authorization[=:\s]+\S+(?:\s+\S+){0,2}"
+    r"|(?:bearer|token|basic|key|secret|password)[=:\s]+\S+"
+    r"|ghp_\S+|github_pat_\S+|ghu_\S+|ghs_\S+"
+    r"|xox[bprs]-\S+"
+    r"|sk-[A-Za-z0-9]{20,}"
+    r"|DefaultEndpointsProtocol=\S+"
+    r"|AccountKey=[A-Za-z0-9+/=]+"
+    r"|SharedAccessSignature=\S+"
+    r")"
+)
+_AUDIT_MAX_BYTES = int(os.environ.get("COPILOT_AUDIT_MAX_BYTES", 50 * 1024 * 1024))
 
 
 # ---------------------------------------------------------------------------
@@ -625,6 +643,42 @@ def build_context() -> CheckContext:
 
 
 # ---------------------------------------------------------------------------
+# Audit logging (deny events only; best-effort)
+# ---------------------------------------------------------------------------
+
+def _log_deny(ctx: CheckContext, reason: str) -> None:
+    """Append a deny event to audit-denies.jsonl. Never raises."""
+    try:
+        log_dir = Path(os.environ.get("COPILOT_AUDIT_DIR", Path.home() / ".copilot"))
+        log_file = log_dir / "audit-denies.jsonl"
+        entry: dict[str, Any] = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "cwd": os.getcwd(),
+            "tool": ctx.tool_name,
+            "reason": reason,
+        }
+        # Capture the denied target(s): command for shell, plus path/url/etc. for file tools.
+        if ctx.command:
+            entry["command"] = _AUDIT_REDACT_RE.sub("[REDACTED]", ctx.command[:500])
+        if isinstance(ctx.tool_args, dict):
+            for key in ("path", "file", "url", "pattern", "query"):
+                val = ctx.tool_args.get(key)
+                if val and isinstance(val, str):
+                    truncated = val[:500] if len(val) > 500 else val
+                    entry[key] = _AUDIT_REDACT_RE.sub("[REDACTED]", truncated)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        if log_file.exists() and log_file.stat().st_size > _AUDIT_MAX_BYTES:
+            rotated = log_file.with_suffix(".jsonl.1")
+            if rotated.exists():
+                rotated.unlink()
+            log_file.rename(rotated)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -640,6 +694,7 @@ def main() -> None:
     # Priority: deny > ask > allow
     denies = [r for r in results if r.decision == "deny"]
     if denies:
+        _log_deny(ctx, denies[0].reason)
         deny(denies[0].reason)
     asks = [r for r in results if r.decision == "ask"]
     if asks:

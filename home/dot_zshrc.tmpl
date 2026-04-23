@@ -103,25 +103,25 @@ alias ll='ls -ahl'
 # Copilot CLI: Autopilot + multi-layer defense alias (based on security report recommendations)
 # --deny-tool overrides --allow-all and has no fail-open risk.
 # File read/write protection is handled by preToolUse hooks (copilot-guard.py), not --deny-tool.
-# Supported --deny-tool kinds: shell(cmd), write, url(domain), <MCP>(tool)
-# NOTE: shell() performs exact command-name matching — aliases and .exe suffixes
-#       are distinct names and must be listed separately where applicable.
+# Supported --deny-tool kinds: shell(cmd:*), write, url(domain), <MCP>(tool)
+# NOTE: shell(cmd:*) uses prefix matching — command name plus any arguments.
+#       Aliases and .exe suffixes are distinct names and must be listed separately.
 alias copilot-cruise='copilot --autopilot \
   --allow-all \
-  --deny-tool "shell(curl)" \
-  --deny-tool "shell(wget)" \
-  --deny-tool "shell(nslookup)" \
-  --deny-tool "shell(dig)" \
-  --deny-tool "shell(host)" \
-  --deny-tool "shell(nc)" \
-  --deny-tool "shell(netcat)" \
-  --deny-tool "shell(ncat)" \
-  --deny-tool "shell(socat)" \
-  --deny-tool "shell(telnet)" \
-  --deny-tool "shell(ssh)" \
-  --deny-tool "shell(scp)" \
-  --deny-tool "shell(sftp)" \
-  --deny-tool "shell(ftp)" \
+  --deny-tool "shell(curl:*)" \
+  --deny-tool "shell(wget:*)" \
+  --deny-tool "shell(nslookup:*)" \
+  --deny-tool "shell(dig:*)" \
+  --deny-tool "shell(host:*)" \
+  --deny-tool "shell(nc:*)" \
+  --deny-tool "shell(netcat:*)" \
+  --deny-tool "shell(ncat:*)" \
+  --deny-tool "shell(socat:*)" \
+  --deny-tool "shell(telnet:*)" \
+  --deny-tool "shell(ssh:*)" \
+  --deny-tool "shell(scp:*)" \
+  --deny-tool "shell(sftp:*)" \
+  --deny-tool "shell(ftp:*)" \
   --secret-env-vars "AZURE_CLIENT_SECRET,ARM_CLIENT_SECRET,ARM_ACCESS_KEY,AZURE_STORAGE_CONNECTION_STRING" \
   --max-autopilot-continues 20'
 
