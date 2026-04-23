@@ -28,6 +28,14 @@
         "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\audit-log.py\"",
         "timeoutSec": 15
       }
+    ],
+    "postToolUseFailure": [
+      {
+        "type": "command",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/audit-failure.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\audit-failure.py\"",
+        "timeoutSec": 15
+      }
     ]
   }
 }
