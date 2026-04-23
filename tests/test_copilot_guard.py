@@ -777,5 +777,75 @@ class GitCommitCheckerTests(unittest.TestCase):
         self.assertIsNone(result)
 
 
+class LogDenyTests(unittest.TestCase):
+    """Verify _log_deny captures enough detail to identify the denied target."""
+
+    def setUp(self) -> None:
+        import os, tempfile
+        self.tmpdir = tempfile.mkdtemp()
+        self._orig_env = os.environ.get("COPILOT_AUDIT_DIR")
+        os.environ["COPILOT_AUDIT_DIR"] = self.tmpdir
+        self.log_file = pathlib.Path(self.tmpdir) / "audit-denies.jsonl"
+
+    def tearDown(self) -> None:
+        import os, shutil
+        if self._orig_env is None:
+            os.environ.pop("COPILOT_AUDIT_DIR", None)
+        else:
+            os.environ["COPILOT_AUDIT_DIR"] = self._orig_env
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _read_entry(self) -> dict:
+        line = self.log_file.read_text(encoding="utf-8").strip()
+        return json.loads(line)
+
+    def test_logs_shell_command(self) -> None:
+        ctx = make_ctx(tool_name="powershell", command="printenv PATH")
+        copilot_guard._log_deny(ctx, "Blocked env dump command: printenv")
+        entry = self._read_entry()
+        self.assertEqual(entry["tool"], "powershell")
+        self.assertEqual(entry["command"], "printenv PATH")
+        self.assertIn("env dump", entry["reason"])
+
+    def test_logs_view_tool_path(self) -> None:
+        ctx = make_ctx(
+            tool_name="view",
+            tool_args={"path": "C:\\Users\\me\\.azure\\config"},
+        )
+        copilot_guard._log_deny(ctx, "Blocked pattern: **/.azure/*")
+        entry = self._read_entry()
+        self.assertEqual(entry["tool"], "view")
+        self.assertEqual(entry["path"], "C:\\Users\\me\\.azure\\config")
+        self.assertNotIn("command", entry)
+
+    def test_logs_url_for_fetch_tool(self) -> None:
+        ctx = make_ctx(
+            tool_name="web_fetch",
+            tool_args={"url": "https://pastebin.com/abc"},
+        )
+        copilot_guard._log_deny(ctx, "URL not in allowlist")
+        entry = self._read_entry()
+        self.assertEqual(entry["url"], "https://pastebin.com/abc")
+
+    def test_redacts_secrets_in_command(self) -> None:
+        ctx = make_ctx(
+            tool_name="powershell",
+            command="curl -H 'Authorization: Bearer ghp_abc123xyz' https://api.github.com",  # gitleaks:allow
+        )
+        copilot_guard._log_deny(ctx, "test")
+        entry = self._read_entry()
+        self.assertIn("[REDACTED]", entry["command"])
+        self.assertNotIn("ghp_abc123xyz", entry["command"])
+
+    def test_never_raises_on_unwritable_dir(self) -> None:
+        import os
+        # Point to a path that can't be a directory (a file blocking mkdir)
+        blocker = pathlib.Path(self.tmpdir) / "blocker"
+        blocker.write_text("x")
+        os.environ["COPILOT_AUDIT_DIR"] = str(blocker)
+        ctx = make_ctx(tool_name="bash", command="x")
+        copilot_guard._log_deny(ctx, "reason")  # must not raise
+
+
 if __name__ == "__main__":
     unittest.main()
