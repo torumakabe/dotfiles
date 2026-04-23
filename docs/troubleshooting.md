@@ -88,4 +88,4 @@ command -v copilot uv
 暫定回避:
 
 - 高並列が予想される作業（一括コマンド送信など）では、1 応答内のツール呼び出し数を抑える
-- deny すべき操作が通ってしまった場合は `~/.copilot/hooks/audit.jsonl` で事後検出し、手動で巻き戻す
+- deny すべき操作が通ってしまった場合は `~/.copilot/audit.jsonl`（成功ログ）/ `audit-denies.jsonl`（preToolUse deny）/ `audit-failures.jsonl`（tool handler error）で事後検出し、手動で巻き戻す

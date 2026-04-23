@@ -8,7 +8,7 @@
 
 - `copilot-instructions.md` — ユーザーレベルのカスタム指示
 - `mcp-config.json` — 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
-- `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` フック（`copilot-guard.py`, `uv-enforcer.py`, `audit-log.py`）
+- `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `audit-log.py`, `audit-failure.py`）
 - `hooks/{blocked-files,ask-files,allowed-urls}.txt` — アクセス制御リスト
 - `skills/` — 手動追加分のみ（プラグイン由来は対象外）
 
@@ -60,11 +60,23 @@ uv run -m unittest tests.test_copilot_guard -v
 
 ## 監査ログ
 
-`postToolUse` フックで `~/.copilot/audit.jsonl` に記録。`COPILOT_AUDIT_DIR` で出力先を変更できる。
+用途別に 3 ファイル。`COPILOT_AUDIT_DIR` で出力先を変更できる。
+
+| ファイル | 記録内容 | 書込元 |
+|---|---|---|
+| `~/.copilot/audit.jsonl` | ツール実行成功履歴 | `postToolUse` → `audit-log.py` |
+| `~/.copilot/audit-denies.jsonl` | `copilot-guard.py` が deny 判定した呼び出し（URL/env/blocked-files/secrets 等）| `preToolUse` → `copilot-guard.py` |
+| `~/.copilot/audit-failures.jsonl` | ツールハンドラーが返したエラー（例: `view` の path 不在） | `postToolUseFailure` → `audit-failure.py` |
 
 ```bash
 tail -5 ~/.copilot/audit.jsonl | uv run python -m json.tool
+tail -5 ~/.copilot/audit-denies.jsonl
+tail -5 ~/.copilot/audit-failures.jsonl
 ```
+
+> `shell` ツールが起動したコマンドの非 0 exit は `postToolUseFailure` の対象外（成功扱い）。検証済み (v1.0.35-4, 2026-04-23)。
+>
+> `audit-denies.jsonl` は **`copilot-guard.py` の deny のみ**を記録する。`uv-enforcer.py` / `node-global-enforcer.py` の deny（グローバル install 系・python 直接実行系）は監査対象外（= プロンプト履歴のみに残る）。理由: これらは「絶対ブロック対象の既知パターン」であり、事後監査より即時ブロック自体が目的のため。
 
 ## 参考
 
