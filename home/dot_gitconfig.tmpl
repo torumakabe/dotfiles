@@ -38,8 +38,9 @@
 	format = ssh
 [gpg "ssh"]
 	allowedSignersFile = ~/.ssh/allowed_signers
-# Need to add a public key separately
-# echo '993850+torumakabe@users.noreply.github.com ssh-ed25519 [pub-key]' > ~/.ssh/allowed_signers
+# allowed_signers is managed by chezmoi (home/private_dot_ssh/allowed_signers).
+# Format: <principal> <key-type> <base64-key>
+# Keep the entry in sync with user.email and user.signingkey above.
 [commit]
 {{- if or .codespaces .devcontainer }}
 	gpgsign = false
