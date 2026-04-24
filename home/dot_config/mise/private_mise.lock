@@ -81,28 +81,28 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 
 [[tools.codex]]
-version = "0.122.0"
+version = "0.123.0"
 backend = "aqua:openai/codex"
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:0cddc02f4f2157e51c0f64ecc1749a3cfe50eda9fc178f40eece10ae3a625503"
-url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-aarch64-unknown-linux-musl.zst"
+checksum = "sha256:b62bf00beedcd9bac7f578e55d3cb9a62f869d4bfa4906e3ab37f398b50f883c"
+url = "https://github.com/openai/codex/releases/download/rust-v0.123.0/codex-aarch64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:2b7cd55ffb39aad7801e6b807aada65461341ae604ee9f5101dadb5970c33847"
-url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-x86_64-unknown-linux-musl.zst"
+checksum = "sha256:ec794432985196f4e682877e5250599c7b81afac536d2ff05f26710510413c7d"
+url = "https://github.com/openai/codex/releases/download/rust-v0.123.0/codex-x86_64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:8f6e07dad23c5dc64318a0175a2c515ee83726281323381fd2f34e999f49b866"
-url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-aarch64-apple-darwin.zst"
+checksum = "sha256:cc24ffd3e8c7f6517122d00ad1110f4db38581c95d37e329832ce2a1ec5186cb"
+url = "https://github.com/openai/codex/releases/download/rust-v0.123.0/codex-aarch64-apple-darwin.zst"
 
 [tools.codex."platforms.windows-arm64"]
-checksum = "sha256:7fd601eb9f4eea1875aba0526ffbd183a700d3b708eb3f0d4920bfded7b9c1c6"
-url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:c97b3232809ad87204b2ce840a8ab0c1c4620727511da93752059b88bfcc4d16"
+url = "https://github.com/openai/codex/releases/download/rust-v0.123.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:7fd601eb9f4eea1875aba0526ffbd183a700d3b708eb3f0d4920bfded7b9c1c6"
-url = "https://github.com/openai/codex/releases/download/rust-v0.122.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:c97b3232809ad87204b2ce840a8ab0c1c4620727511da93752059b88bfcc4d16"
+url = "https://github.com/openai/codex/releases/download/rust-v0.123.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
 version = "3.0.6"
@@ -175,6 +175,26 @@ url = "https://dot.net/v1/dotnet-install.ps1"
 
 [tools.dotnet."platforms.windows-x64"]
 url = "https://dot.net/v1/dotnet-install.ps1"
+
+[[tools.edit]]
+version = "1.2.1"
+backend = "aqua:microsoft/edit"
+
+[tools.edit."platforms.linux-arm64"]
+checksum = "sha256:4e320240586ecc5cdfdcff0488647879077027506c68c919ccdd2754642d0fbb"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-aarch64-linux-gnu.tar.zst"
+
+[tools.edit."platforms.linux-x64"]
+checksum = "sha256:aee9f2f21ebc90cc1dbfb20ee93d3aa03d325127a8e3f7f91dd02c5a9e0a7b25"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.0-x86_64-linux-gnu.tar.zst"
+
+[tools.edit."platforms.windows-arm64"]
+checksum = "sha256:7f44bb48b2891163cf5b9c996e8a917c29d82c7a765c07e89e74b47aff542ca9"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-aarch64-windows.zip"
+
+[tools.edit."platforms.windows-x64"]
+checksum = "sha256:be3affb7e5e0cd856fc0fb9c8b2004e9fbbc364e69797f7c2e9d8fcc94bfc4ff"
+url = "https://github.com/microsoft/edit/releases/download/v1.2.1/edit-1.2.1-x86_64-windows.zip"
 
 [[tools.fzf]]
 version = "0.71.0"
@@ -519,30 +539,6 @@ url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15
 [[tools.rust]]
 version = "1.95.0"
 backend = "core:rust"
-
-[[tools.shellcheck]]
-version = "0.11.0"
-backend = "aqua:koalaman/shellcheck"
-
-[tools.shellcheck."platforms.linux-arm64"]
-checksum = "sha256:12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.xz"
-
-[tools.shellcheck."platforms.linux-x64"]
-checksum = "sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
-
-[tools.shellcheck."platforms.macos-arm64"]
-checksum = "sha256:56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz"
-
-[tools.shellcheck."platforms.windows-arm64"]
-checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
-
-[tools.shellcheck."platforms.windows-x64"]
-checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
-url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
 
 [[tools.sqlc]]
 version = "1.31.1"
