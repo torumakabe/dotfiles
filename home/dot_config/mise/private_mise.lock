@@ -330,35 +330,6 @@ checksum = "sha256:4932cfca5e75bf60fe1c576edf459e5e809e6644664a068185d64b84af3fa
 url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golangci-lint-2.11.4-windows-amd64.zip"
 provenance = "github-attestations"
 
-[[tools.goreleaser]]
-version = "2.15.4"
-backend = "aqua:goreleaser/goreleaser"
-
-[tools.goreleaser."platforms.linux-arm64"]
-checksum = "sha256:de01ca1497571e9b348413cd2e7f74be49b8d57696ae386f7eedd06176544a88"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Linux_arm64.tar.gz"
-provenance = "github-attestations"
-
-[tools.goreleaser."platforms.linux-x64"]
-checksum = "sha256:aae00c71a4a6d55e08cce9273a1516bdce33c1e07cffb7e502fa6fec4377dede"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Linux_x86_64.tar.gz"
-provenance = "github-attestations"
-
-[tools.goreleaser."platforms.macos-arm64"]
-checksum = "sha256:82d730f3366350c90d7e5df3cf9e8e425fd1c84bf7d7e3e564f92d97c5ea9ea4"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Darwin_all.tar.gz"
-provenance = "github-attestations"
-
-[tools.goreleaser."platforms.windows-arm64"]
-checksum = "sha256:10227d9de3eb846f0e58529c22e75dcbd713b67879a7f83912de7abe658c5fd7"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Windows_arm64.zip"
-provenance = "github-attestations"
-
-[tools.goreleaser."platforms.windows-x64"]
-checksum = "sha256:146695f49717dfd79d64d5d6f4b1d25e2b56d73e723bbf68a8dc13ce5cf69693"
-url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.4/goreleaser_Windows_x86_64.zip"
-provenance = "github-attestations"
-
 [[tools.helm]]
 version = "4.1.4"
 backend = "aqua:helm/helm"
