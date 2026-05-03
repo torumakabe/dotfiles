@@ -302,32 +302,32 @@ checksum = "sha256:98eb3570bade15cb826b0909338df6cc6d2cf590bc39c471142002db3832b
 url = "https://dl.google.com/go/go1.26.2.windows-amd64.zip"
 
 [[tools.golangci-lint]]
-version = "2.11.4"
+version = "2.12.1"
 backend = "aqua:golangci/golangci-lint"
 
 [tools.golangci-lint."platforms.linux-arm64"]
-checksum = "sha256:3bcfa2e6f3d32b2bf5cd75eaa876447507025e0303698633f722a05331988db4"
-url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golangci-lint-2.11.4-linux-arm64.tar.gz"
+checksum = "sha256:23c8e14f42b288d11d46ef52c622e2481d92901edfb263c2cf10875f38d386c4"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.1/golangci-lint-2.12.1-linux-arm64.tar.gz"
 provenance = "github-attestations"
 
 [tools.golangci-lint."platforms.linux-x64"]
-checksum = "sha256:200c5b7503f67b59a6743ccf32133026c174e272b930ee79aa2aa6f37aca7ef1"
-url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golangci-lint-2.11.4-linux-amd64.tar.gz"
+checksum = "sha256:82c7932d9aa10c34e22ef56961ac5aad71d4a14806a1a31b06931add2688b368"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.1/golangci-lint-2.12.1-linux-amd64.tar.gz"
 provenance = "github-attestations"
 
 [tools.golangci-lint."platforms.macos-arm64"]
-checksum = "sha256:02db2a2dae8b26812e53b0688a6f617e3ef1f489790e829ea22862cf76945675"
-url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golangci-lint-2.11.4-darwin-arm64.tar.gz"
+checksum = "sha256:393a64ef9b75a5b6c8c8bf8895b8d8208790e6690a43de19a12f3f8bc0e9ad52"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.1/golangci-lint-2.12.1-darwin-arm64.tar.gz"
 provenance = "github-attestations"
 
 [tools.golangci-lint."platforms.windows-arm64"]
-checksum = "sha256:fa90179d6377f224798b56bfa308dcd7d62bf28a7aa6889fb180f35b290e3413"
-url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golangci-lint-2.11.4-windows-arm64.zip"
+checksum = "sha256:a75111a6e839907cfba5da9bce9ef98056707ae623d9e68f7de263dd7ef99ace"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.1/golangci-lint-2.12.1-windows-arm64.zip"
 provenance = "github-attestations"
 
 [tools.golangci-lint."platforms.windows-x64"]
-checksum = "sha256:4932cfca5e75bf60fe1c576edf459e5e809e6644664a068185d64b84af3fad9e"
-url = "https://github.com/golangci/golangci-lint/releases/download/v2.11.4/golangci-lint-2.11.4-windows-amd64.zip"
+checksum = "sha256:2b2f837b2a7b91787ecb9b7493bdeae801e9f84e6588984b2c33c34dc2956478"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.1/golangci-lint-2.12.1-windows-amd64.zip"
 provenance = "github-attestations"
 
 [[tools.helm]]
@@ -545,28 +545,28 @@ url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_wi
 url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402612157"
 
 [[tools.terraform]]
-version = "1.15.0"
+version = "1.15.1"
 backend = "aqua:hashicorp/terraform"
 
 [tools.terraform."platforms.linux-arm64"]
-checksum = "sha256:7d9b8ab81790771b5c872c06a8982bc25b66971928dccb244fe0a41e2451770a"
-url = "https://releases.hashicorp.com/terraform/1.15.0/terraform_1.15.0_linux_arm64.zip"
+checksum = "sha256:d0e5707a2ef8ff05dc546b8c0acee5b6f6968ba83c1208230364187a56480b42"
+url = "https://releases.hashicorp.com/terraform/1.15.1/terraform_1.15.1_linux_arm64.zip"
 
 [tools.terraform."platforms.linux-x64"]
-checksum = "sha256:dcd4b31225dd960404f744315c0c3823a7deeda43bca0256a17fc762092d7e1b"
-url = "https://releases.hashicorp.com/terraform/1.15.0/terraform_1.15.0_linux_amd64.zip"
+checksum = "sha256:0921fee8c8435253ca49390a02109e906042e611a4e17f69e922261f5176c74f"
+url = "https://releases.hashicorp.com/terraform/1.15.1/terraform_1.15.1_linux_amd64.zip"
 
 [tools.terraform."platforms.macos-arm64"]
-checksum = "sha256:f2e52766a58f1e26e83200b4b4e5fe813c827786d20fa7aa01d9bcc1e9918b26"
-url = "https://releases.hashicorp.com/terraform/1.15.0/terraform_1.15.0_darwin_arm64.zip"
+checksum = "sha256:01535b614be222dbd1344a8eb9162c3b54cc3b65c4212e8d4d9a2be72666ccff"
+url = "https://releases.hashicorp.com/terraform/1.15.1/terraform_1.15.1_darwin_arm64.zip"
 
 [tools.terraform."platforms.windows-arm64"]
-checksum = "sha256:7a3daedb5a54be0be8dcdc4a8594811a17169d85f89077ee06c4a76a97833600"
-url = "https://releases.hashicorp.com/terraform/1.15.0/terraform_1.15.0_windows_arm64.zip"
+checksum = "sha256:bdcfc5c1e129b81118d12d8f3c534b90560ca404461bdbacb21e92584eaa2101"
+url = "https://releases.hashicorp.com/terraform/1.15.1/terraform_1.15.1_windows_arm64.zip"
 
 [tools.terraform."platforms.windows-x64"]
-checksum = "sha256:98ca429d4808bf7dd30fc2051fb7e74de0032411d914ad656869c778def942bb"
-url = "https://releases.hashicorp.com/terraform/1.15.0/terraform_1.15.0_windows_amd64.zip"
+checksum = "sha256:3890c08de67ebef2a3f8948b8b0afe53e28ed2f4eb84d1d2246f5b61d8ebd393"
+url = "https://releases.hashicorp.com/terraform/1.15.1/terraform_1.15.1_windows_amd64.zip"
 
 [[tools.trivy]]
 version = "0.70.0"
