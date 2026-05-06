@@ -23,6 +23,7 @@
 | [008](008-zshenv-sources-profile.md) | ~/.zshenv は ~/.profile を source する | Accepted |
 | [009](009-mise-rust-windows-isolate-home.md) | Windows では mise の rust home を外部 rustup から分離する | Accepted |
 | [010](010-url-allowlist-via-pretooluse-hook.md) | Copilot CLI の URL 包括制御は preToolUse Hook で行う | Accepted |
+| [011](011-edit-windows-via-winget-dsc.md) | Microsoft Edit は Windows のみ winget/DSC で管理する | Accepted |
 
 ## テンプレート
 

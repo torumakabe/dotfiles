@@ -72,6 +72,13 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: "Install Microsoft Edit"
+        allowPrerelease: false
+      settings:
+        id: Microsoft.Edit
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install Azure CLI"
         allowPrerelease: false
       settings:

@@ -176,30 +176,6 @@ url = "https://dot.net/v1/dotnet-install.ps1"
 [tools.dotnet."platforms.windows-x64"]
 url = "https://dot.net/v1/dotnet-install.ps1"
 
-[[tools.edit]]
-version = "2.0.0"
-backend = "aqua:microsoft/edit"
-
-[tools.edit."platforms.linux-arm64"]
-checksum = "sha256:b39f0b128d29d4c00f32a416c515f2c7758e0ec8d7457ee10b948e7b76636da4"
-url = "https://github.com/microsoft/edit/releases/download/v2.0.0/edit-2.0.0-aarch64-linux-gnu.tar.gz"
-
-[tools.edit."platforms.linux-x64"]
-checksum = "sha256:7854d477e73e7b94cd02f35959eea778a4d8408f6ffc657644ae1a715124786c"
-url = "https://github.com/microsoft/edit/releases/download/v2.0.0/edit-2.0.0-x86_64-linux-gnu.tar.gz"
-
-[tools.edit."platforms.macos-arm64"]
-checksum = "sha256:00093500243fa0cda3f3e90f3798943db22f09f9c4ec457360964aa337ca192c"
-url = "https://github.com/microsoft/edit/releases/download/v2.0.0/edit-2.0.0-aarch64-apple-darwin.tar.gz"
-
-[tools.edit."platforms.windows-arm64"]
-checksum = "sha256:074012a4fa080391407d4e9963d3463cd24da007729f915490362e48061d2488"
-url = "https://github.com/microsoft/edit/releases/download/v2.0.0/edit-2.0.0-aarch64-windows.zip"
-
-[tools.edit."platforms.windows-x64"]
-checksum = "sha256:97b8f2c667faea8f211af5f9c879602949164911d74d16f540bbe31ad46c14cb"
-url = "https://github.com/microsoft/edit/releases/download/v2.0.0/edit-2.0.0-x86_64-windows.zip"
-
 [[tools.fzf]]
 version = "0.72.0"
 backend = "aqua:junegunn/fzf"

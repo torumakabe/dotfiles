@@ -27,10 +27,6 @@ jq = "latest"
 rust = "latest"
 "npm:typescript" = "latest"
 "npm:typescript-language-server" = "latest"
-{{ if ne .chezmoi.os "darwin" -}}
-# macOS 向けプリビルドバイナリが未提供のためスキップ
-edit = "latest"
-{{ end -}}
 codex = "latest"
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
 # プリビルドバイナリが linux/arm64 未提供のためスキップ
