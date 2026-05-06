@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.9"
+# requires-python = ">=3.13"
 # ///
 """Copilot Guard — cross-platform preToolUse hook (bash / powershell).
 

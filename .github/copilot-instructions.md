@@ -21,7 +21,6 @@
 mise 設定を変更する際は、以下のツールの対応状況を確認し、解消されていれば条件分岐やバックエンド変更を元に戻す:
 
 - **cargo-make**: linux/arm64 未提供（[sagiegurari/cargo-make#541](https://github.com/sagiegurari/cargo-make/issues/541)）
-- **edit**: macOS 未提供（[releases](https://github.com/microsoft/edit/releases) を確認）
 
 ## ワークアラウンド（定期チェック対象）
 
