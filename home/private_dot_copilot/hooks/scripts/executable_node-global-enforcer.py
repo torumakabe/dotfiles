@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.9"
+# requires-python = ">=3.13"
 # ///
 """Node Global Install Enforcer — preToolUse hook that blocks global installs.
 
