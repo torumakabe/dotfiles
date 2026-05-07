@@ -25,3 +25,4 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 ## ワークアラウンド（定期チェック対象）
 
 - **Azure CLI SyntaxWarning**: `dot_zshrc.tmpl` の `az()` ラッパー。[Azure/azure-sdk-for-python#38618](https://github.com/Azure/azure-sdk-for-python/issues/38618) が Close されたら削除する
+- **op-ssh-sign-wsl.exe CRLF (ADR-012)**: `home/dot_local/bin/executable_op-ssh-sign-wrapper.sh.tmpl` で stdout/stderr の CR を剥がして `git verify-commit` を成立させている。1Password が WSL バイナリの改行を LF に揃えた、または git 本体が find-principals 結果の `\r` を剥がすようになったら wrapper と `.gitconfig-linux` の `program` 切替を撤去する

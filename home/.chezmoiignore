@@ -20,4 +20,7 @@ run_once_after_05-setup-mise-shims-path.ps1
 .bash_profile
 .bashrc
 {{ end -}}
+{{ if not .isWSL -}}
+.local/bin/op-ssh-sign-wrapper.sh
+{{ end -}}
 
