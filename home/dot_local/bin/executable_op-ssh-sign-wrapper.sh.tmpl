@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# WSL workaround: 1Password の op-ssh-sign-wsl.exe は Windows 流に CRLF で出力する。
+# git の SSH 署名検証は find-principals 結果から \n のみを剥がすため、
+# trailing \r を含んだ principal を後段の verify -I に渡してしまい、
+# `git verify-commit` / `git log --show-signature` が "Could not verify signature."
+# で失敗する。stdout/stderr の CR を剥がして Linux 流の改行に整える。
+#
+# 適用範囲: WSL のみ（home/.chezmoiignore で非 WSL では配置しない）。
+# 署名 (-Y sign) は -s <file> に書き出すため stdout を経由せず影響を受けない。
+
+set -o pipefail
+
+WIN_BIN="/mnt/c/Users/{{ .windowsUser }}/AppData/Local/Microsoft/WindowsApps/op-ssh-sign-wsl.exe"
+
+"${WIN_BIN}" "$@" 2> >(tr -d '\r' >&2) | tr -d '\r'
