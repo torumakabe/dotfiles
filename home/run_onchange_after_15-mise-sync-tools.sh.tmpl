@@ -1,0 +1,38 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# mise lockfile 同期フック (Linux/macOS)
+#
+# 背景:
+#   `mise upgrade` 等で `~/.config/mise/private_mise.lock` が更新されても、
+#   ローカルの `mise install` / `mise reshim` は自動で走らない。結果として shim と
+#   install marker が古いまま残り、shell 起動時の hook で `mise WARN missing:` が発生する。
+#
+# 対応:
+#   lockfile の hash 変化を chezmoi の run_onchange でフックし、`mise install` と
+#   `mise reshim` を流して install marker と shim を lockfile と同期させる。
+#
+# 関連:
+#   - docs/adr/013-mise-lockfile-sync-hook.md (本フックの設計判断)
+#
+# mise lockfile hash: {{ include "dot_config/mise/private_mise.lock" | sha256sum }}
+
+set -uo pipefail
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo 'mise not found on PATH; skipping mise lockfile sync.' >&2
+  exit 0
+fi
+
+echo 'Syncing mise tools with lockfile...'
+mise install
+install_exit=$?
+mise reshim
+reshim_exit=$?
+
+if [ "$install_exit" -ne 0 ] || [ "$reshim_exit" -ne 0 ]; then
+  echo "WARN: mise sync finished with non-zero exit codes (install=${install_exit}, reshim=${reshim_exit})." >&2
+  echo '     次回 chezmoi apply 時に再試行されます。原因を確認してください。' >&2
+fi
+
+exit 0
+{{- end -}}

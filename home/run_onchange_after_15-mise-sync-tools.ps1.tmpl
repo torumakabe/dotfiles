@@ -1,0 +1,49 @@
+{{- if eq .chezmoi.os "windows" -}}
+# mise lockfile 同期フック (Windows)
+#
+# 背景:
+#   `mise upgrade` 等で `~/.config/mise/private_mise.lock` が更新されても、
+#   ローカルの `mise install` / `mise reshim` は自動で走らない。結果として shim と
+#   install marker が古いまま残り、PowerShell 起動時の `_mise_hook` (`mise hook-env`)
+#   で `mise WARN missing:` が発生する。Windows ではさらに `installs\rust\<ver>` が
+#   `cargo\bin` への junction として作られているため、shim が一度欠落すると `MISE_AUTO_INSTALL`
+#   による自動 install が走り、rustup の `info: syncing channel updates ...` が起動の度に表示される。
+#
+# 対応:
+#   lockfile の hash 変化を chezmoi の run_onchange でフックし、`mise install` と
+#   `mise reshim` を流して install marker と shim を lockfile と同期させる。
+#
+# 関連:
+#   - docs/adr/009-mise-rust-windows-isolate-home.md (cargo_home/rustup_home の分離)
+#   - docs/adr/013-mise-lockfile-sync-hook.md (本フックの設計判断)
+#
+# mise lockfile hash: {{ include "dot_config/mise/private_mise.lock" | sha256sum }}
+
+$ErrorActionPreference = 'Continue'
+
+# `Get-Command mise` は mise activate で定義された function を返してしまい
+# Source プロパティが取れないため、Application 種別に絞って実 exe のパスを取得する。
+$miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
+  Select-Object -First 1).Source
+if (-not $miseExe) {
+  $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
+  if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
+}
+if (-not $miseExe -or -not (Test-Path -LiteralPath $miseExe)) {
+  Write-Host 'mise.exe not found on PATH; skipping mise lockfile sync.'
+  exit 0
+}
+
+Write-Host "Syncing mise tools with lockfile via $miseExe ..."
+& $miseExe install
+$installExit = $LASTEXITCODE
+& $miseExe reshim
+$reshimExit = $LASTEXITCODE
+
+if ($installExit -ne 0 -or $reshimExit -ne 0) {
+  Write-Warning ("mise sync finished with non-zero exit codes (install={0}, reshim={1}). " +
+    "次回 chezmoi apply 時に再試行されるため、原因を確認してください。" -f $installExit, $reshimExit)
+}
+
+exit 0
+{{- end -}}

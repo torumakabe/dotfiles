@@ -25,6 +25,17 @@ GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm6
 mise install
 ```
 
+## shell 起動時に `mise WARN missing:` が出る
+
+`mise upgrade` 等で `private_mise.lock` が更新された後、対応する `mise install` / `mise reshim` が走っていないと shim と install marker が古いまま残り、`mise hook-env` で `WARN missing:` が出る。Windows では rustup の `info: syncing channel updates ...` も併発する。
+
+通常は `chezmoi apply` で `run_onchange_after_15-mise-sync-tools` フック（[ADR-013](adr/013-mise-lockfile-sync-hook.md)）が自動で同期する。手動で `mise uninstall` した等のケースで残った場合は次を実行する。
+
+```bash
+mise install
+mise reshim
+```
+
 ## `run_once_*` スクリプトの warning / error
 
 実行順と役割は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順) を参照。
