@@ -81,28 +81,28 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 
 [[tools.codex]]
-version = "0.128.0"
+version = "0.129.0"
 backend = "aqua:openai/codex"
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:25e37bd69d1331d9bf29f56ff081f53c24ee8f53948dea466e7dc8e1589748a7"
-url = "https://github.com/openai/codex/releases/download/rust-v0.128.0/codex-aarch64-unknown-linux-musl.zst"
+checksum = "sha256:0d1184171539a0a7bf0f4284b89e2357386f631b5af4cd9ea34b17c4f8c0edf0"
+url = "https://github.com/openai/codex/releases/download/rust-v0.129.0/codex-aarch64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:08066a60937b081326ba9ba4daca089d1e8bda26972af68506b3ce1ace2435dc"
-url = "https://github.com/openai/codex/releases/download/rust-v0.128.0/codex-x86_64-unknown-linux-musl.zst"
+checksum = "sha256:a641a8e4fd1677404b3aa324e9c991af52f7d5a554935b060cb2fcb51f522e4e"
+url = "https://github.com/openai/codex/releases/download/rust-v0.129.0/codex-x86_64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:f00aa3d574c96c9219dea8937cd8224fb9d419bc5f4d76771ecc220e7a25a8f9"
-url = "https://github.com/openai/codex/releases/download/rust-v0.128.0/codex-aarch64-apple-darwin.zst"
+checksum = "sha256:c98721e818a149ee0fb9609d34e748487d8333fd607a551778d1cb2d4d229beb"
+url = "https://github.com/openai/codex/releases/download/rust-v0.129.0/codex-aarch64-apple-darwin.zst"
 
 [tools.codex."platforms.windows-arm64"]
-checksum = "sha256:adf0566012e7a59491dc575a6b9f0e996a5dfaa25024292aedf65d563020941a"
-url = "https://github.com/openai/codex/releases/download/rust-v0.128.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:827be248a7581fd60ca7327177da9122c1569592f57913a2a09ef2a5116b4ecc"
+url = "https://github.com/openai/codex/releases/download/rust-v0.129.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:adf0566012e7a59491dc575a6b9f0e996a5dfaa25024292aedf65d563020941a"
-url = "https://github.com/openai/codex/releases/download/rust-v0.128.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:827be248a7581fd60ca7327177da9122c1569592f57913a2a09ef2a5116b4ecc"
+url = "https://github.com/openai/codex/releases/download/rust-v0.129.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
 version = "3.0.6"
