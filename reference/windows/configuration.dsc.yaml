@@ -58,6 +58,13 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: "Install GitHub Copilot app"
+        allowPrerelease: false
+      settings:
+        id: GitHub.CopilotApp
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install Azure Developer CLI"
         allowPrerelease: false
       settings:
