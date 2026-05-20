@@ -81,28 +81,28 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 
 [[tools.codex]]
-version = "0.131.0"
+version = "0.132.0"
 backend = "aqua:openai/codex"
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:830757fd893f4ce4eb931128ee23cd497c7d6bf758e3765540cf3e80aa28a5df"
-url = "https://github.com/openai/codex/releases/download/rust-v0.131.0/codex-aarch64-unknown-linux-musl.zst"
+checksum = "sha256:ef5fe899c527e9c61422e59e15932b268d5e1971648ca7eaa5ccfb76f24a3f3a"
+url = "https://github.com/openai/codex/releases/download/rust-v0.132.0/codex-aarch64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:32a2cfe5c23b5a6b9ee6546fbadc8698611890d7f88e6950e56eae74d4583dad"
-url = "https://github.com/openai/codex/releases/download/rust-v0.131.0/codex-x86_64-unknown-linux-musl.zst"
+checksum = "sha256:544733f118318edaf70055fd2ed3c75fbd2e7463881eb1d1a2514e15e8abcf87"
+url = "https://github.com/openai/codex/releases/download/rust-v0.132.0/codex-x86_64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:ff518d1efa0d60ed976c55650d355bcd4330ef035eefbe080487b7acba30f1da"
-url = "https://github.com/openai/codex/releases/download/rust-v0.131.0/codex-aarch64-apple-darwin.zst"
+checksum = "sha256:855df01fd8cbd28deedb9c1364b55fce11ec619abeed2adc8b4f8c21434c826c"
+url = "https://github.com/openai/codex/releases/download/rust-v0.132.0/codex-aarch64-apple-darwin.zst"
 
 [tools.codex."platforms.windows-arm64"]
-checksum = "sha256:2d3e5f8f6df1356b99a4950c169772155f25ff2182491091d23f66099b2b7db5"
-url = "https://github.com/openai/codex/releases/download/rust-v0.131.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:6b794053723e6e1ba321880902073e9914e802aa04b9b8c7600f64095de276d0"
+url = "https://github.com/openai/codex/releases/download/rust-v0.132.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:2d3e5f8f6df1356b99a4950c169772155f25ff2182491091d23f66099b2b7db5"
-url = "https://github.com/openai/codex/releases/download/rust-v0.131.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:6b794053723e6e1ba321880902073e9914e802aa04b9b8c7600f64095de276d0"
+url = "https://github.com/openai/codex/releases/download/rust-v0.132.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
 version = "3.0.6"
@@ -545,28 +545,28 @@ url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_wi
 url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402612157"
 
 [[tools.terraform]]
-version = "1.15.3"
+version = "1.15.4"
 backend = "aqua:hashicorp/terraform"
 
 [tools.terraform."platforms.linux-arm64"]
-checksum = "sha256:9824eb010b835b2c872440a337a69acfa1782d36c24d3c09fe5defe75defc511"
-url = "https://releases.hashicorp.com/terraform/1.15.3/terraform_1.15.3_linux_arm64.zip"
+checksum = "sha256:87da14c6700fee1bdaffedc943c4aca7bb078aad1f3eeccbdaae0484f90e1bec"
+url = "https://releases.hashicorp.com/terraform/1.15.4/terraform_1.15.4_linux_arm64.zip"
 
 [tools.terraform."platforms.linux-x64"]
-checksum = "sha256:c3d4b579064745a5f7e918125db23b12ba52a8a7287adb9f32c49d637e02e3bf"
-url = "https://releases.hashicorp.com/terraform/1.15.3/terraform_1.15.3_linux_amd64.zip"
+checksum = "sha256:a71695fa6db9344db02ff1adb69cce891c1b2b4dc31c08df0dd4a12101a33b26"
+url = "https://releases.hashicorp.com/terraform/1.15.4/terraform_1.15.4_linux_amd64.zip"
 
 [tools.terraform."platforms.macos-arm64"]
-checksum = "sha256:b97101c62c11eebd176e83cd42a313336200d54fdd18ce7770f65a5bfb0ab098"
-url = "https://releases.hashicorp.com/terraform/1.15.3/terraform_1.15.3_darwin_arm64.zip"
+checksum = "sha256:d6b99521a436bfc0e44b18ca47e2c8fec37a74039bf3b529ecc3c71d3e5a9fbf"
+url = "https://releases.hashicorp.com/terraform/1.15.4/terraform_1.15.4_darwin_arm64.zip"
 
 [tools.terraform."platforms.windows-arm64"]
-checksum = "sha256:e4deb6e0aa7739ed8e45032a450731cc4dd7fc09bcdf61f977c881919f7cb3c3"
-url = "https://releases.hashicorp.com/terraform/1.15.3/terraform_1.15.3_windows_arm64.zip"
+checksum = "sha256:02a48ccc4a3a9cc7f0139b95c4f328983b610ad13fef61b5d2fac886562467fc"
+url = "https://releases.hashicorp.com/terraform/1.15.4/terraform_1.15.4_windows_arm64.zip"
 
 [tools.terraform."platforms.windows-x64"]
-checksum = "sha256:b9da8df3d92402551c86b8956be30fb87f600245321d2b31751afcf37218018c"
-url = "https://releases.hashicorp.com/terraform/1.15.3/terraform_1.15.3_windows_amd64.zip"
+checksum = "sha256:159169a73fcbdfb1b0ff3e2b7abf4ec94f9ebbb314ae3a0e19e494b357ef1488"
+url = "https://releases.hashicorp.com/terraform/1.15.4/terraform_1.15.4_windows_amd64.zip"
 
 [[tools.trivy]]
 version = "0.70.0"
