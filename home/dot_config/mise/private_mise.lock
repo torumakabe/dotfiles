@@ -624,6 +624,7 @@ provenance = "github-attestations"
 [tools.uv."platforms.windows-x64"]
 checksum = "sha256:dd9d6d6554bfab265bfa98aa8e8a406c5c3a7b97582f93de1f4d48d9154a0395"
 url = "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-pc-windows-msvc.zip"
+provenance = "github-attestations"
 
 [[tools.yq]]
 version = "4.53.2"
