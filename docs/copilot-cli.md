@@ -47,6 +47,8 @@ chezmoi re-add ~/.copilot/skills/<skill-name>
 
 パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化、`deny > ask > allow`。`allowed-urls.txt` は全行コメントアウトで無効化できる。
 
+`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である（ADR-006 / ADR-010 と整合）。
+
 動作確認:
 
 ```bash
@@ -57,6 +59,14 @@ uv run -m unittest tests.test_copilot_guard -v
 ## `copilot-guardrails`
 
 `.zshrc` / `PowerShell_profile.ps1` の `copilot-guardrails` は、Copilot CLI の利便性（`--allow-all`）とセキュリティ（`--deny-tool` での外部送信系制限、`--secret-env-vars` での環境変数隠蔽）のバランスを取った起動ラッパー。起動モード（interactive / plan / autopilot）は固定しない。記法は `copilot help permissions` と公式ドキュメント参照。
+
+設計上の前提と限界:
+
+- `--allow-all` は `--allow-all-tools` + `--allow-all-paths` + `--allow-all-urls` を含意し、**`--deny-url` / `--allow-url` および `~/.copilot/config.json` の `deniedUrls` を無効化する**。URL ブロックは `--deny-tool 'url(...)'`（`--allow-all` 下でも優先される）で行うこと。
+- `--deny-tool 'shell(cmd:*)'` はシェルコマンドラインの**先頭トークン**に対するプレフィックス一致であり、`bash` ツール自体や内部で実行される一般コマンドは止めない。ツール実装ごと止めたい場合は `--excluded-tools <tool>` を使う。
+- `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。
+- `/share gist`（`--share-gist`）は **ユーザー直接コマンドのため preToolUse Hook の対象外**。`--allow-all` 下で秘匿情報がエージェントのコンテキストに入った状態で実行すると、secret Gist として外部化され得る。非 EMU 環境では技術的に防ぐ手段が無いため、運用ルール（実行前に `/reset-allowed-tools` で承認状態をクリアする等）で補う。
+- `permissionRequest` / `notification` / `userPromptSubmitted` 等の Hook タイプは現状未使用。`--allow-all` を外して承認を自動化する運用に切り替える場合の拡張余地として記録しておく。
 
 ## 監査ログ
 

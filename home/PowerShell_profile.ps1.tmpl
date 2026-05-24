@@ -125,10 +125,15 @@ Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 # Copilot CLI: multi-layer defense (based on security report recommendations)
 # --deny-tool overrides --allow-all and has no fail-open risk.
 # File read/write protection is handled by preToolUse hooks (copilot-guard.py), not --deny-tool.
-# Supported --deny-tool kinds: shell(cmd:*), write, url(domain), <MCP>(tool)
-# NOTE: shell(cmd:*) uses prefix matching — command name plus any arguments.
-#       On Windows, .exe suffix and PowerShell aliases are distinct names and
-#       must be listed separately.
+# Supported --deny-tool kinds: shell(cmd:*), write, url(domain), read[(path)] (undocumented), <MCP>(tool)
+# NOTE: shell(cmd:*) is a prefix match against the *first token* of the shell command line
+#       (e.g. shell(curl:*) blocks `curl ...` but does NOT block `echo` inside the `bash` tool).
+#       To disable a whole tool implementation, use --excluded-tools instead.
+#       On Windows, .exe suffix and PowerShell aliases are distinct first tokens and must be
+#       listed separately.
+# NOTE: --allow-all implies --allow-all-urls, which disables --deny-url / --allow-url and
+#       ~/.copilot/config.json deniedUrls. URL blocking must therefore use --deny-tool 'url(...)',
+#       which is honored even under --allow-all (covers web_fetch and bash curl/wget).
 function Invoke-CopilotGuardrails {
     copilot `
       --allow-all `

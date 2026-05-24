@@ -57,5 +57,11 @@
 **/*.key
 **/*.token
 
+# パッケージレジストリ / コンテナレジストリの認証情報
+**/.netrc
+**/.npmrc
+**/.pypirc
+**/.docker/config.json
+
 # proc 環境変数 (Linux)
 **/proc/*/environ
