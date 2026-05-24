@@ -26,7 +26,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 - 設定配布 `chezmoi` / ツール版管理 `mise` / Python 実行 `uv`
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
 - `copilot-guard.py` / `uv-enforcer.py` で危険操作を抑止、`postToolUse` で監査ログ
-- `copilot-cruise` で Autopilot の既定値を安全寄りに固定
+- `copilot-guardrails` で利便性とセキュリティのバランスを取った既定値を固定
 - `gitleaks` 付き pre-commit を配布
 
 ## Copilot Guard の設計

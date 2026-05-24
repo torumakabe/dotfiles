@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Copilot CLI v1.0.35-4 時点の実機検証で、CLI 単体では「listed 以外 deny」型の URL ホワイトリスト制御が実現できないことを確認した。`--deny-url='*'` や `--deny-url='https://*'` の wildcard 単独指定はヒットせず、機能するのは個別 domain（例 `example.com`）または prefix（`https://example.com/*`）のみ。また `~/.copilot/config.json` の `deniedUrls` は `--allow-all-tools` 下でバイパスされる。`copilot-cruise` のような Autopilot 運用では、包括的ホワイトリスト方式は Hook でしか実現できない。
+Copilot CLI v1.0.35-4 / v1.0.49 時点の実機検証で、CLI 単体では「listed 以外 deny」型の URL ホワイトリスト制御が実現できないことを確認した。`--deny-url='*'` や `--deny-url='https://*'` の wildcard 単独指定はヒットせず、機能するのは個別 domain（例 `example.com`）または prefix（`https://example.com/*`）のみ。さらに `--allow-all`（`--allow-all-urls` を含む）下では `--deny-url` / `--allow-url` 自体が無効化される。`~/.copilot/config.json` の `deniedUrls` も同様で、加えて単独ワイルドカード `"*"` は設定ファイル側で非対応、リポジトリレベル設定（`.github/copilot/settings.json`）では `deniedUrls` / `allowedUrls` キー自体がサポートされない。`copilot --autopilot` のような Autopilot 運用や `--allow-all` 系オプションを伴う運用では、包括的ホワイトリスト方式は Hook でしか実現できない（`--deny-tool 'url(...)'` は `--allow-all` 下でも優先されるが、個別列挙のため包括制御には向かない）。
 
 ## Decision
 
