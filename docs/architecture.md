@@ -25,7 +25,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 - 設定配布 `chezmoi` / ツール版管理 `mise` / Python 実行 `uv`
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
-- `copilot-guard.py` / `uv-enforcer.py` で危険操作を抑止、`postToolUse` で監査ログ
+- `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` で危険操作を抑止、`postToolUse` で監査ログ
 - `copilot-guardrails` で利便性とセキュリティのバランスを取った既定値を固定
 - `gitleaks` 付き pre-commit を配布
 
@@ -60,7 +60,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 ## コミット署名
 
-1Password SSH エージェントで SSH 署名する。`gpg.ssh.program` は環境別: macOS `/Applications/1Password.app/.../op-ssh-sign`、Linux `/opt/1Password/op-ssh-sign`、WSL `/mnt/c/Users/<windowsUser>/.../op-ssh-sign-wsl.exe`、Windows `C:/Users/<windowsUser>/.../op-ssh-sign.exe`。Dev Container / Codespaces では `commit.gpgsign = false`。
+1Password SSH エージェントで SSH 署名する。`gpg.ssh.program` は環境別: macOS `/Applications/1Password.app/.../op-ssh-sign`、Linux `/opt/1Password/op-ssh-sign`、WSL `~/.local/bin/op-ssh-sign-wrapper.sh`（ADR-012: `op-ssh-sign-wsl.exe` の CRLF 出力を補正）、Windows `C:/Users/<windowsUser>/.../op-ssh-sign.exe`。Dev Container / Codespaces では `commit.gpgsign = false`。
 
 ## PATH 管理（非対話シェル対応）
 

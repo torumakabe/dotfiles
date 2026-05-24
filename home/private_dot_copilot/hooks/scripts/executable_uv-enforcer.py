@@ -117,6 +117,23 @@ BLOCKED_COMMANDS: dict[str, str] = {
     "pip3": "Use 'uv add' to install packages, or 'uv pip' for other pip operations",
 }
 
+VERSIONED_PYTHON_RE = re.compile(r"^python3(?:\.\d+)+(?:\.exe)?$")
+VERSIONED_PIP_RE = re.compile(r"^pip3(?:\.\d+)+(?:\.exe)?$")
+
+
+def blocked_command_reason(command_name: str) -> str | None:
+    """Return the deny reason for blocked Python executables."""
+    normalized = command_name.lower()
+    if normalized.endswith(".exe"):
+        normalized = normalized[:-4]
+    if normalized in BLOCKED_COMMANDS:
+        return BLOCKED_COMMANDS[normalized]
+    if VERSIONED_PYTHON_RE.match(command_name.lower()):
+        return "Use 'uv run python' instead of versioned Python executables. Example: uv run python script.py"
+    if VERSIONED_PIP_RE.match(command_name.lower()):
+        return "Use 'uv add' to install packages, or 'uv pip' for other pip operations"
+    return None
+
 
 def check_command(command: str) -> str | None:
     """Check if a command string contains blocked Python invocations.
@@ -131,15 +148,17 @@ def check_command(command: str) -> str | None:
             continue
 
         lead = extract_leading_command(segment)
-        if lead in BLOCKED_COMMANDS:
-            return BLOCKED_COMMANDS[lead]
+        reason = blocked_command_reason(lead)
+        if reason:
+            return reason
 
         # Also check right-hand side of pipes: "echo foo | python script.py"
         pipe_parts = segment.split("|")
         for part in pipe_parts[1:]:
             piped_lead = extract_leading_command(part.strip())
-            if piped_lead in BLOCKED_COMMANDS:
-                return BLOCKED_COMMANDS[piped_lead]
+            reason = blocked_command_reason(piped_lead)
+            if reason:
+                return reason
 
     return None
 

@@ -8,7 +8,7 @@
 
 - `copilot-instructions.md` — ユーザーレベルのカスタム指示
 - `mcp-config.json` — 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
-- `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `audit-log.py`, `audit-failure.py`）
+- `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`, `audit-log.py`, `audit-failure.py`）
 - `hooks/{blocked-files,ask-files,allowed-urls}.txt` — アクセス制御リスト
 - `skills/` — 手動追加分のみ（プラグイン由来は対象外）
 
@@ -44,6 +44,7 @@ chezmoi re-add ~/.copilot/skills/<skill-name>
 
 - `copilot-guard.py`: 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / URL 許可 (`allowed-urls.txt`) / 機微な環境変数の読み取り
 - `uv-enforcer.py`: `python` / `pip` の直接実行を抑止
+- `node-global-enforcer.py`: `npm` / `yarn` / `pnpm` のグローバルインストールを抑止
 
 パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化、`deny > ask > allow`。`allowed-urls.txt` は全行コメントアウトで無効化できる。
 

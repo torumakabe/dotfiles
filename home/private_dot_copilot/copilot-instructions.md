@@ -2,36 +2,20 @@
 
 ## ツール操作の制約（デフォルト動作より優先）
 
-### 共通
-
 - Python → `python` / `pip` の直接実行は禁止。以下を使うこと:
   - スクリプト実行: `uv run script.py`（依存は PEP 723 で宣言）
   - パッケージ追加: `uv add <pkg>`（プロジェクト）/ `uv pip install <pkg>`（グローバル）
   - REPL: `uv run python`
-
-### Windows
-
-- ファイルをエディタで開く → `Start-Process edit <path>`
-- Markdown ファイルを閲覧する → `Show-Markdown -Path <path> -UseBrowser`
-- Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
-
-### macOS / Linux
-
-- コマンド存在チェック → `command -v`（`which` は使わない）
-
-### 検索ツールの選択
-
+- Windows: ファイルをエディタで開く → `Start-Process edit <path>`、Markdown 閲覧 → `Show-Markdown -Path <path> -UseBrowser`
+- Windows: Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
+- macOS / Linux: コマンド存在チェック → `command -v`（`which` は使わない）
 - コード/テキスト検索は組み込み `grep` / `glob` を使う。`rg` / `Select-String` / `findstr` をシェル経由で叩かない（ヒット全文がコンテキストに残り再送され続けるため）
 
 ## 言語
 
 - 日本語で応答する（文脈上明らかに英語が必要な場合を除く）
 - コードコメント・ドキュメント・コミット説明・PR 本文: README の言語に従う
-- コミットメッセージ: Conventional Commits プレフィックスは英語
-- ブランチ名: 常に英語（URL/CLI の互換性）
-
-## 言葉遣い
-
+- コミットメッセージの Conventional Commits プレフィックスとブランチ名は英語（URL/CLI 互換性）
 - 「ベストプラクティス」は生成文に使わない（検索クエリは除く）。「推奨事項」「定番の方法」等で代替
 
 ## エージェント行動規範
@@ -42,14 +26,9 @@
 
 ## コンテキスト / コスト最適化
 
-エージェント自身が実行する:
-
 - 広範囲調査・長文読解・独立した複数調査は `task`（explore）に委譲し、メインには要約だけ残す。`web_fetch` / `view` をメインに大量に積まない
 - `task` 起動時、単純な列挙・読解・抽出系は `model` で軽量モデル（`claude-haiku-4.5` / `claude-sonnet-4.6` / `gpt-5-mini` 等）を明示指定する。`claude-opus-4.7-xhigh` をサブエージェントの既定にしない
 - 成果の永続化が必要なときは、まず会話で要約を提示し、保存先をユーザーに確認してから書く（無断でファイルを増やさない）
-
-ユーザーに提案する（エージェントからは実行不可）:
-
 - 会話が長大化（目安 30〜40 ターン）またはフェーズ切替時 → 要約提示のうえ `/new` を提案、`@path` 参照手順を併せて案内
 - 現モデルでは不足と判断したとき → `/model` で `claude-opus-4.7` 系への昇格を提案
 - 区切りで文脈が肥大化したとき → `/compact` を提案
