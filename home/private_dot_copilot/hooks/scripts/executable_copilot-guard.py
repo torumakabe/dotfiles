@@ -227,6 +227,21 @@ def check_blocked_path(target: str, patterns: list[str]) -> str | None:
     return None
 
 
+PATH_ARG_KEYS: tuple[str, ...] = ("path", "file", "uri", "glob", "paths", "files", "uris", "globs")
+
+
+def extract_path_arg_values(tool_args: dict[str, Any]) -> list[str]:
+    """Extract path-like string values from scalar and array tool arguments."""
+    values: list[str] = []
+    for prop in PATH_ARG_KEYS:
+        prop_value = tool_args.get(prop)
+        if isinstance(prop_value, str):
+            values.append(prop_value)
+        elif isinstance(prop_value, list):
+            values.extend(item for item in prop_value if isinstance(item, str))
+    return values
+
+
 def extract_command_candidates(command: str) -> list[str]:
     """Extract path-like command tokens while preserving quoted substrings."""
     candidates: list[str] = []
@@ -258,12 +273,12 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
     CheckResult("ask", ...) for ask patterns, or None if no match.
     Blocked patterns are checked first (deny takes priority over ask).
     """
-    for prop in ("path", "file", "uri", "glob"):
-        prop_value = ctx.tool_args.get(prop, "")
-        if prop_value:
-            matched_pattern = check_blocked_path(prop_value, ctx.blocked_patterns)
-            if matched_pattern:
-                return CheckResult("deny", f"Blocked pattern: {matched_pattern}")
+    path_arg_values = extract_path_arg_values(ctx.tool_args)
+
+    for prop_value in path_arg_values:
+        matched_pattern = check_blocked_path(prop_value, ctx.blocked_patterns)
+        if matched_pattern:
+            return CheckResult("deny", f"Blocked pattern: {matched_pattern}")
 
     if ctx.command:
         matched_pattern = check_blocked_command(ctx.command, ctx.blocked_patterns)
@@ -271,12 +286,10 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
             return CheckResult("deny", f"Blocked pattern: {matched_pattern}")
 
     # Ask patterns (lower priority than deny)
-    for prop in ("path", "file", "uri", "glob"):
-        prop_value = ctx.tool_args.get(prop, "")
-        if prop_value:
-            matched_pattern = check_blocked_path(prop_value, ctx.ask_patterns)
-            if matched_pattern:
-                return CheckResult("ask", f"Confirm access — matched pattern: {matched_pattern}")
+    for prop_value in path_arg_values:
+        matched_pattern = check_blocked_path(prop_value, ctx.ask_patterns)
+        if matched_pattern:
+            return CheckResult("ask", f"Confirm access — matched pattern: {matched_pattern}")
 
     if ctx.command:
         matched_pattern = check_blocked_command(ctx.command, ctx.ask_patterns)

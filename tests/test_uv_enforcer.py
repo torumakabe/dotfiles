@@ -38,6 +38,12 @@ class TestPythonBlocked(unittest.TestCase):
     def test_python3_script(self) -> None:
         self.assertIsNotNone(uve.check_command("python3 script.py"))
 
+    def test_versioned_python_script(self) -> None:
+        self.assertIsNotNone(uve.check_command("python3.13 script.py"))
+
+    def test_versioned_python_exe_script(self) -> None:
+        self.assertIsNotNone(uve.check_command("python3.13.exe script.py"))
+
     def test_python_with_flags(self) -> None:
         self.assertIsNotNone(uve.check_command("python -m pytest"))
 
@@ -97,6 +103,12 @@ class TestPipBlocked(unittest.TestCase):
 
     def test_pip3_install(self) -> None:
         self.assertIsNotNone(uve.check_command("pip3 install requests"))
+
+    def test_versioned_pip_install(self) -> None:
+        self.assertIsNotNone(uve.check_command("pip3.13 install requests"))
+
+    def test_versioned_pip_exe_install(self) -> None:
+        self.assertIsNotNone(uve.check_command("pip3.13.exe install requests"))
 
     def test_pip_freeze(self) -> None:
         self.assertIsNotNone(uve.check_command("pip freeze"))

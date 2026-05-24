@@ -492,6 +492,26 @@ class CopilotGuardAskPatternsTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(result.decision, "deny")
 
+    def test_paths_array_returns_deny_decision(self) -> None:
+        ctx = make_ctx(
+            tool_name="view",
+            tool_args={"paths": ["/home/user/project/README.md", r"C:\Users\me\.azure\accessTokens.json"]},
+            blocked_patterns=["**/accessTokens.json"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "deny")
+
+    def test_paths_array_returns_ask_decision(self) -> None:
+        ctx = make_ctx(
+            tool_name="edit",
+            tool_args={"paths": ["/home/user/project/README.md", "/home/user/.copilot/hooks/hooks.json"]},
+            ask_patterns=["**/.copilot/hooks/**"],
+        )
+        result = copilot_guard.check_blocked_files(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
     def test_deny_takes_priority_over_ask_same_file(self) -> None:
         """When a path matches both blocked and ask patterns, deny wins."""
         ctx = make_ctx(
