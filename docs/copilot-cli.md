@@ -54,9 +54,9 @@ echo '{"toolName":"edit","toolArgs":{"path":".env"}}' | uv run ~/.copilot/hooks/
 uv run -m unittest tests.test_copilot_guard -v
 ```
 
-## `copilot-cruise`
+## `copilot-guardrails`
 
-`.zshrc` / `PowerShell_profile.ps1` の `copilot-cruise` は Autopilot 起動ラッパー。`--deny-tool`（外部送信系の制限）、`--secret-env-vars`（環境変数隠蔽）、`--max-autopilot-continues 20` を固定する。記法は `copilot help permissions` と公式ドキュメント参照。
+`.zshrc` / `PowerShell_profile.ps1` の `copilot-guardrails` は、Copilot CLI の利便性（`--allow-all`）とセキュリティ（`--deny-tool` での外部送信系制限、`--secret-env-vars` での環境変数隠蔽）のバランスを取った起動ラッパー。起動モード（interactive / plan / autopilot）は固定しない。記法は `copilot help permissions` と公式ドキュメント参照。
 
 ## 監査ログ
 

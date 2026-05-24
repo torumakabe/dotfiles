@@ -122,15 +122,15 @@ Set-Alias -Name e -Value Open-EditInNewConsole
 Set-Alias -Name k -Value kubectl
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 
-# Copilot CLI: Autopilot + multi-layer defense (based on security report recommendations)
+# Copilot CLI: multi-layer defense (based on security report recommendations)
 # --deny-tool overrides --allow-all and has no fail-open risk.
 # File read/write protection is handled by preToolUse hooks (copilot-guard.py), not --deny-tool.
 # Supported --deny-tool kinds: shell(cmd:*), write, url(domain), <MCP>(tool)
 # NOTE: shell(cmd:*) uses prefix matching — command name plus any arguments.
 #       On Windows, .exe suffix and PowerShell aliases are distinct names and
 #       must be listed separately.
-function Invoke-CopilotCruise {
-    copilot --autopilot `
+function Invoke-CopilotGuardrails {
+    copilot `
       --allow-all `
       --deny-tool 'shell(curl:*)' `
       --deny-tool 'shell(curl.exe:*)' `
@@ -171,10 +171,9 @@ function Invoke-CopilotCruise {
       --deny-tool 'shell(bitsadmin:*)' `
       --deny-tool 'shell(bitsadmin.exe:*)' `
       --secret-env-vars 'AZURE_CLIENT_SECRET,ARM_CLIENT_SECRET,ARM_ACCESS_KEY,AZURE_STORAGE_CONNECTION_STRING' `
-      --max-autopilot-continues 20 `
       @args
 }
-Set-Alias -Name copilot-cruise -Value Invoke-CopilotCruise
+Set-Alias -Name copilot-guardrails -Value Invoke-CopilotGuardrails
 
 # === Completers and tool setup ===
 
