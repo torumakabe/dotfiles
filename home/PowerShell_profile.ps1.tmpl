@@ -40,6 +40,53 @@ function ghcd {
     if ($dir) { Set-Location $dir }
 }
 
+# mise 本体を winget で更新する（winget portable の誤検知回避）
+function Invoke-MiseSelfUpgrade {
+    param(
+        [switch]$SkipProcessCheck
+    )
+
+    $prevErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Stop'
+    try {
+        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            throw "winget が見つかりません。Windows App Installer を確認してください"
+        }
+
+        if (-not $SkipProcessCheck) {
+            $miseProcesses = Get-CimInstance Win32_Process |
+                Where-Object {
+                    $_.Name -ieq 'mise.exe' -and
+                    ($_.ExecutablePath -like '*\Microsoft\WinGet\Links\mise.exe' -or
+                     $_.CommandLine -like '*\Microsoft\WinGet\Links\mise.exe*' -or
+                     $_.CommandLine -like 'mise*x --*')
+                } |
+                Select-Object ProcessId, ParentProcessId, CommandLine
+
+            if ($miseProcesses) {
+                Write-Warning ($miseProcesses | Format-Table -AutoSize | Out-String)
+                throw "mise.exe を使っているプロセスがあります。Copilot CLI など mise shim 経由のプロセスを閉じてから再実行してください"
+            }
+        }
+
+        Write-Host "==> winget: mise 本体を更新..."
+        winget upgrade --id jdx.mise --source winget --disable-interactivity --force
+        if ($LASTEXITCODE -ne 0) { throw "winget による mise 本体更新に失敗しました" }
+
+        Write-Host "==> mise: shim を再生成..."
+        mise reshim
+        if ($LASTEXITCODE -ne 0) { throw "mise reshim に失敗しました" }
+
+        Write-Host "✅ mise 本体の更新が完了しました"
+    }
+    catch {
+        Write-Error "❌ $($_.Exception.Message)"
+    }
+    finally {
+        $ErrorActionPreference = $prevErrorAction
+    }
+}
+
 # mise 管理ツールの一括更新（日常操作）
 # upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
 function Invoke-MiseUpgrade {
@@ -120,6 +167,7 @@ function Invoke-MiseUpgrade {
 # === Aliases ===
 Set-Alias -Name e -Value Open-EditInNewConsole
 Set-Alias -Name k -Value kubectl
+Set-Alias -Name mise-self-upgrade -Value Invoke-MiseSelfUpgrade
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 
 # Copilot CLI: multi-layer defense (based on security report recommendations)
