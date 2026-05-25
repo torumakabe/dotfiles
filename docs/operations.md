@@ -32,6 +32,18 @@ chezmoi diff && chezmoi apply
 
 ## mise の保守
 
+### `mise-self-upgrade`
+
+Windows で mise 本体を winget 管理として更新する。
+
+```powershell
+mise-self-upgrade
+```
+
+このコマンドは `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、更新があった場合は続けて `mise reshim` を実行する。更新がない場合は正常終了する。winget portable package の symlink 判定により通常の upgrade が「変更済み」と誤検知されることがあるため、mise 本体の更新ではこの関数を使う。
+
+Copilot CLI など mise shim 経由のプロセスが動いていると winget が `mise.exe` を削除できないため、実行前に検出して停止を促す。
+
 ### `mise-upgrade`
 
 シェル関数 `mise-upgrade` が次を一括実行する。
