@@ -70,13 +70,11 @@ function Invoke-MiseSelfUpgrade {
         }
 
         Write-Host "==> winget: mise 本体を更新..."
-        $wingetOutput = winget upgrade --id jdx.mise --source winget --disable-interactivity --force 2>&1
+        winget upgrade --id jdx.mise --source winget --disable-interactivity --force
         $wingetExitCode = $LASTEXITCODE
-        $wingetOutput | ForEach-Object { Write-Host $_ }
 
-        $noUpgradeAvailable = $wingetOutput -match '利用可能なアップグレードが見つかりません|新しいパッケージ バージョンはありません|No available upgrade found|No newer package versions are available'
         if ($wingetExitCode -ne 0) {
-            if ($noUpgradeAvailable) {
+            if ($wingetExitCode -eq 0x8A15002B) {
                 Write-Host "✅ mise 本体は最新です"
                 $global:LASTEXITCODE = 0
                 return
