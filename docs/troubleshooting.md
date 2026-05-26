@@ -82,6 +82,17 @@ command -v copilot uv
 [Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-String 'mise\\shims'
 ```
 
+## Git pre-commit が `C:/Users/.../.config/git/hooks/pre-commit: No such file or directory` で失敗する
+
+グローバル hook は chezmoi で `~/.config/git/hooks/pre-commit` に配置し、`core.hooksPath` から参照する。未配置なら次で復旧する。
+
+```bash
+git config --global core.hooksPath   # 期待値: ~/.config/git/hooks
+chezmoi apply ~/.config/git/hooks/pre-commit
+```
+
+Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin/env bash` が WSL の `bash.exe` を拾い、Windows 形式の `C:/...` パスを開けていない可能性がある。この pre-commit hook はその経路を避けるため POSIX `sh` 互換で管理する。mise の Windows shim も extensionless 版は `/bin/bash` スクリプトなので、hook 内では `gitleaks.exe` を優先する。
+
 ## Copilot CLI: preToolUse フックが並列実行時にすり抜ける
 
 症状: 短時間に複数のツール呼び出しが走った際、`copilot-guard.py` / `uv-enforcer.py` の deny が適用されず、ブロックすべき操作が実行される。

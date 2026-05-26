@@ -1,39 +1,51 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # Global pre-commit hook: gitleaks secret detection + local hook delegation
 #
 # Deployed by chezmoi to ~/.config/git/hooks/pre-commit
 # Activated via core.hooksPath in ~/.gitconfig
+# Keep this POSIX sh compatible so Windows Git does not pick up WSL bash
+# through /usr/bin/env bash and pass it an unopenable C:/... hook path.
 
 # --- gitleaks secret scan ---
 
 find_gitleaks() {
+  # Windows (Git Bash): prefer the .exe shim. The extensionless mise shim is a
+  # /bin/bash script and can still route to WSL bash in this environment.
+  if [ -n "${LOCALAPPDATA:-}" ]; then
+    localappdata_unix="$(cygpath -u "${LOCALAPPDATA}" 2>/dev/null || echo "${LOCALAPPDATA}")"
+    if [ -x "${localappdata_unix}/mise/shims/gitleaks.exe" ]; then
+      echo "${localappdata_unix}/mise/shims/gitleaks.exe"
+      return 0
+    fi
+  fi
+  if [ -x "${HOME}/.local/share/mise/shims/gitleaks.exe" ]; then
+    echo "${HOME}/.local/share/mise/shims/gitleaks.exe"
+    return 0
+  fi
+  if command -v gitleaks.exe >/dev/null 2>&1; then
+    command -v gitleaks.exe
+    return 0
+  fi
+
   if command -v gitleaks >/dev/null 2>&1; then
     command -v gitleaks
     return 0
   fi
 
-  # Try mise shim locations when not in PATH (git hooks don't source shell rc)
-  local shim_dirs=(
-    "${HOME}/.local/share/mise/shims"
-  )
-  # Windows (Git Bash): LOCALAPPDATA is set by the OS
-  if [ -n "${LOCALAPPDATA:-}" ]; then
-    shim_dirs+=("$(cygpath -u "${LOCALAPPDATA}" 2>/dev/null || echo "${LOCALAPPDATA}")/mise/shims")
+  # Try mise shim locations when not in PATH (git hooks don't source shell rc).
+  if [ -x "${HOME}/.local/share/mise/shims/gitleaks" ]; then
+    echo "${HOME}/.local/share/mise/shims/gitleaks"
+    return 0
   fi
 
-  for dir in "${shim_dirs[@]}"; do
-    if [ -x "${dir}/gitleaks" ]; then
-      echo "${dir}/gitleaks"
+  if [ -n "${LOCALAPPDATA:-}" ]; then
+    if [ -x "${localappdata_unix}/mise/shims/gitleaks" ]; then
+      echo "${localappdata_unix}/mise/shims/gitleaks"
       return 0
     fi
-    # Windows shim may be .exe
-    if [ -x "${dir}/gitleaks.exe" ]; then
-      echo "${dir}/gitleaks.exe"
-      return 0
-    fi
-  done
+  fi
 
   return 1
 }
