@@ -17,28 +17,28 @@ url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.34.0/op_darwin_arm64_v2.34
 url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.34.0/op_windows_amd64_v2.34.0.zip"
 
 [[tools.azure-kubelogin]]
-version = "0.2.17"
+version = "0.2.18"
 backend = "aqua:Azure/kubelogin"
 
 [tools.azure-kubelogin."platforms.linux-arm64"]
-checksum = "sha256:39608e328d87a98f84c7f5af780d9303ac8eda7a27a6d463f43cc2ae85196184"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-linux-arm64.zip"
+checksum = "sha256:788a76a4e73f1fd8d621c814e77c38d8696d395d901be37acb15d89c21a16725"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.18/kubelogin-linux-arm64.zip"
 
 [tools.azure-kubelogin."platforms.linux-x64"]
-checksum = "sha256:9a5484504ab1c91cdafdcd55a9e439bb3f55a0fe29fe253a169df5538c0a2c86"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-linux-amd64.zip"
+checksum = "sha256:33e2907cc9aeed8f84a467bdccf0c87707a0961e4eac19224846cc1f5a4d7807"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.18/kubelogin-linux-amd64.zip"
 
 [tools.azure-kubelogin."platforms.macos-arm64"]
-checksum = "sha256:c10f9f34bfdb32894ed05a6be39262bca0d4a2fd47f59d8fa1aa7b5216f92f91"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-darwin-arm64.zip"
+checksum = "sha256:025550905a01921d1262a9a3cce1ae9fe054668830de8ab37c7fdcfc08b09840"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.18/kubelogin-darwin-arm64.zip"
 
 [tools.azure-kubelogin."platforms.windows-arm64"]
-checksum = "sha256:83c49a6fb8bd8eaca0ee05d1e71aebe7a7fff3d9577512b3cf28e510f520595a"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-win-arm64.zip"
+checksum = "sha256:600f9330d8054b70064647ebc2861cf7cb4ab05a3c9d51c3961fcb0ee8483670"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.18/kubelogin-win-arm64.zip"
 
 [tools.azure-kubelogin."platforms.windows-x64"]
-checksum = "sha256:75fffa09b5ccbcf4791e8d3d30091c7846f3b2858f00e27715e6c6e1a8375c33"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.17/kubelogin-win-amd64.zip"
+checksum = "sha256:ad8472e1f45447cac948566efd1c5cc29ee9299c52da565492589618e277b956"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.18/kubelogin-win-amd64.zip"
 
 [[tools.bat]]
 version = "0.26.1"
