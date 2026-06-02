@@ -86,6 +86,13 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        description: "Install Coreutils for Windows"
+        allowPrerelease: false
+      settings:
+        id: Microsoft.Coreutils
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install Azure CLI"
         allowPrerelease: false
       settings:
