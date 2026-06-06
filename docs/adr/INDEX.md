@@ -26,6 +26,7 @@
 | [011](011-edit-windows-via-winget-dsc.md) | Microsoft Edit は Windows のみ winget/DSC で管理する | Accepted |
 | [012](012-wsl-op-ssh-sign-crlf-wrapper.md) | WSL では op-ssh-sign-wsl.exe を CR 除去ラッパー経由で呼ぶ | Accepted |
 | [013](013-mise-lockfile-sync-hook.md) | mise lockfile 変更時に install / reshim を自動同期する | Accepted |
+| [014](014-github-multi-account-https-auth-per-owner.md) | GitHub 多アカウント HTTPS 認証は credential の URL パス方式 + gh auth token --user で解決する | Accepted |
 
 ## テンプレート
 

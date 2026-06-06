@@ -21,12 +21,23 @@
 [oh-my-zsh]
 	hide-status = 1
 	hide-dirty = 1
+# gh auth git-credential returns only the active account's token per host, so EMU
+# repositories under a different owner get the personal token and 404. useHttpPath
+# lets git match credential blocks by owner path; the owner-scoped block below pins
+# that owner's token via `gh auth token --user`, which is honored even when GH_TOKEN
+# is injected. Identity (name/email/signingkey) is intentionally left unsplit here.
 [credential "https://github.com"]
+	useHttpPath = true
 	helper =
 	helper = !gh auth git-credential
 [credential "https://gist.github.com"]
 	helper =
 	helper = !gh auth git-credential
+{{- if .corpUser }}
+[credential "https://github.com/{{ .corpUser }}"]
+	helper =
+	helper = "!f() { test \"$1\" = get && echo username={{ .corpUser }} && echo password=$(gh auth token --user {{ .corpUser }}); }; f"
+{{- end }}
 [ghq]
 	root = ~/workspace
 	user = torumakabe
