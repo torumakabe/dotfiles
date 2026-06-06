@@ -60,9 +60,21 @@ git ls-files --cached | grep -E '\.(whl|pyc|pyo)$|__pycache__|\.ruff_cache|\.DS_
 
 ### 4. mise 設定と install-packages の整合
 
+#### 4a. ソース照合（静的）
+
 - `home/dot_config/mise/config.toml.tmpl` に列挙されているツールと、`home/run_once_before_10-install-packages.sh.tmpl` で OS 別に入れているツールに重複や欠落がないか
 - ADR-004 対象（`azd`, `copilot-cli`）は **mise 外** で定義されていることを確認
 - `mise lock` 実行時は `--global --platform` が指定される運用になっているか（`dot_zshrc.tmpl` / `PowerShell_profile.ps1.tmpl` の関数）
+
+#### 4b. 実機 mise ドリフト検査（ランタイム／任意）
+
+ソース照合ではなく、**このコマンドを実行した実機**の mise 状態を点検する。
+結果は環境依存で、修正は実機のみを変更し git diff は出ない点に留意する。
+
+- `mise ls` を実行し、**Source 列が空**のエントリ（どの config にも紐づかない）を洗い出す:
+  - **孤児ツール**（config.toml に存在しないツール）→ ADR-004 対象（`copilot`/`azd` 等）が mise 経由で残っていないか特に注意。`mise uninstall --all <tool>` を提案
+  - **宣言ツールの余剰バージョン**（現行版以外）→ `mise prune --tools` を提案
+- 修正提案は他項目と同じくユーザー承認後に実施する
 
 ### 5. Python スクリプトの uv 統一（ADR-007）
 
