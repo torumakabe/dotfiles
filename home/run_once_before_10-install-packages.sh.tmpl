@@ -74,6 +74,12 @@ fi
 {{ else if eq .chezmoi.os "darwin" -}}
 echo "Installing system packages via brew..."
 brew update --quiet
+# サードパーティ tap (azure/azd) の formula は HOMEBREW_REQUIRE_TAP_TRUST 強制後に
+# 未信頼だと黙ってスキップされるため、install 前に formula 単位で信頼しておく。
+# 強制は Homebrew 5.2.0 / 6.0.0 のいずれか早い方でデフォルト化予定。
+# brew trust は冪等。古い brew に未実装でも全体を止めないよう失敗は警告に留める。
+brew trust --formula azure/azd/azd \
+  || echo "Warning: 'brew trust' unavailable or failed; azd install may be skipped under tap-trust enforcement." >&2
 # gh: mise install 前にトークン取得手段を確保する（mise 版 gh が shim で shadow する）
 # azure-cli / azd / copilot-cli: GUI アプリや github: バックエンド都合を避けるため
 # macOS では brew で管理
