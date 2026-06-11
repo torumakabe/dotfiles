@@ -81,56 +81,56 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 
 [[tools.codex]]
-version = "0.138.0"
+version = "0.139.0"
 backend = "aqua:openai/codex"
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:d67edac72f64e6a230def66863d63289b291549ddc2e3a6c31a85fbe797be91b"
-url = "https://github.com/openai/codex/releases/download/rust-v0.138.0/codex-aarch64-unknown-linux-musl.zst"
+checksum = "sha256:2faa1c8d89f5fe39b704c738b2f82364f00d47a8db462821d8d7372f0702d6f4"
+url = "https://github.com/openai/codex/releases/download/rust-v0.139.0/codex-aarch64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:9ce1e5754e28daa7084fcbf3ffb805824c5d675826e7a399bfb9f808e3f107a2"
-url = "https://github.com/openai/codex/releases/download/rust-v0.138.0/codex-x86_64-unknown-linux-musl.zst"
+checksum = "sha256:f79ebac185b6dcc826401ef660516190a8db54c5c963f1717e40261a62be1c7c"
+url = "https://github.com/openai/codex/releases/download/rust-v0.139.0/codex-x86_64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:72fb66cc5d17cec494e0330fb93c381f4bec4950cf44e14c1ec24bfcd785f4d9"
-url = "https://github.com/openai/codex/releases/download/rust-v0.138.0/codex-aarch64-apple-darwin.zst"
+checksum = "sha256:bb0110c0d51f45d35acbddb38d2eb0194f7cd03eaf2e4b3496d63933d0d269d0"
+url = "https://github.com/openai/codex/releases/download/rust-v0.139.0/codex-aarch64-apple-darwin.zst"
 
 [tools.codex."platforms.windows-arm64"]
-checksum = "sha256:5c50fcee6144cca17ca2a4ad0456e6d8f77751c159fbca8a63cf8cbcf24fe94b"
-url = "https://github.com/openai/codex/releases/download/rust-v0.138.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:295337cb916a61ec899e5bd7e2d05656c6feced34e2a41b9aeb52325a02ba8ef"
+url = "https://github.com/openai/codex/releases/download/rust-v0.139.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:5c50fcee6144cca17ca2a4ad0456e6d8f77751c159fbca8a63cf8cbcf24fe94b"
-url = "https://github.com/openai/codex/releases/download/rust-v0.138.0/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:295337cb916a61ec899e5bd7e2d05656c6feced34e2a41b9aeb52325a02ba8ef"
+url = "https://github.com/openai/codex/releases/download/rust-v0.139.0/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
-version = "3.0.6"
+version = "3.1.1"
 backend = "aqua:sigstore/cosign"
 
 [tools.cosign."platforms.linux-arm64"]
-checksum = "sha256:bedac92e8c3729864e13d4a17048007cfafa79d5deca993a43a90ffe018ef2b8"
-url = "https://github.com/sigstore/cosign/releases/download/v3.0.6/cosign-linux-arm64"
+checksum = "sha256:2ec865872e331c32fd12b08dae15332d3f92c0aa029219589684a4903ca85d11"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.1/cosign-linux-arm64"
 provenance = "cosign"
 
 [tools.cosign."platforms.linux-x64"]
-checksum = "sha256:c956e5dfcac53d52bcf058360d579472f0c1d2d9b69f55209e256fe7783f4c74"
-url = "https://github.com/sigstore/cosign/releases/download/v3.0.6/cosign-linux-amd64"
+checksum = "sha256:ae1ecd212663f3693ad9edf8b1a183900c9a52d3155ba6e354237f9a0f6463fc"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.1/cosign-linux-amd64"
 provenance = "cosign"
 
 [tools.cosign."platforms.macos-arm64"]
-checksum = "sha256:5fadd012ae6381a6a29ff86a7d39aa873878852f1073fc90b15995961ecfb084"
-url = "https://github.com/sigstore/cosign/releases/download/v3.0.6/cosign-darwin-arm64"
+checksum = "sha256:94b42a9e697be95675f6160ab031a9a5f1ec1e646d6f648d7b2f5cd59ececbc5"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.1/cosign-darwin-arm64"
 provenance = "cosign"
 
 [tools.cosign."platforms.windows-arm64"]
-checksum = "sha256:9b85a88ebff2d9dd30ff4984a6f61f2cedc232dd87d81fa7f2ff3c0ed96c241c"
-url = "https://github.com/sigstore/cosign/releases/download/v3.0.6/cosign-windows-amd64.exe"
+checksum = "sha256:9d2c026e667bfd979fa7ba1cab8c4b24d2e73f336ec2d57f7fc72c7e73e5b4b6"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.1/cosign-windows-amd64.exe"
 provenance = "cosign"
 
 [tools.cosign."platforms.windows-x64"]
-checksum = "sha256:9b85a88ebff2d9dd30ff4984a6f61f2cedc232dd87d81fa7f2ff3c0ed96c241c"
-url = "https://github.com/sigstore/cosign/releases/download/v3.0.6/cosign-windows-amd64.exe"
+checksum = "sha256:9d2c026e667bfd979fa7ba1cab8c4b24d2e73f336ec2d57f7fc72c7e73e5b4b6"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.1/cosign-windows-amd64.exe"
 provenance = "cosign"
 
 [[tools.cue]]
@@ -158,7 +158,7 @@ checksum = "sha256:2f24123f458229fcf283db534bd86692ad1074da806defee0f0cc62976c03
 url = "https://github.com/cue-lang/cue/releases/download/v0.16.1/cue_v0.16.1_windows_amd64.zip"
 
 [[tools.dotnet]]
-version = "10.0.300"
+version = "10.0.301"
 backend = "vfox:dotnet"
 
 [tools.dotnet."platforms.linux-arm64"]
@@ -545,28 +545,28 @@ url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_wi
 url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402612157"
 
 [[tools.terraform]]
-version = "1.15.5"
+version = "1.15.6"
 backend = "aqua:hashicorp/terraform"
 
 [tools.terraform."platforms.linux-arm64"]
-checksum = "sha256:06e7b48de826146c6d9331ba35b13da12332d8392be30d1dd6b789ba4713fff0"
-url = "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_linux_arm64.zip"
+checksum = "sha256:404c9cfa43728d31005f6e7a848b8a7cc701320067d9d87d8850031a5beb37b0"
+url = "https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_linux_arm64.zip"
 
 [tools.terraform."platforms.linux-x64"]
-checksum = "sha256:702b2136af6728c8ff037f843dd2dbce2b7ad88786b7381d1d72aefa250f601c"
-url = "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_linux_amd64.zip"
+checksum = "sha256:a7150d3b0e1b5c466ad42e8c499954a3c54645f8b56b385fa025d34f7e88faa9"
+url = "https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_linux_amd64.zip"
 
 [tools.terraform."platforms.macos-arm64"]
-checksum = "sha256:01137660510005b918bba82154866fbeac4393163d8277c2abe861dfb5842c3c"
-url = "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_darwin_arm64.zip"
+checksum = "sha256:8d4c6791a744332bc7ca3962c61ab2ed8e5d25a7299f176f5edffb9cb525e85f"
+url = "https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_darwin_arm64.zip"
 
 [tools.terraform."platforms.windows-arm64"]
-checksum = "sha256:45322dc7c9970594166d0981cac64917ee2bb0d24d6b7637f99508eb874541fe"
-url = "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_windows_arm64.zip"
+checksum = "sha256:02820bcae3725c9c4e91deb6656e9b96ca8af9f395fc5faccc0820dd3295d6e0"
+url = "https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_windows_arm64.zip"
 
 [tools.terraform."platforms.windows-x64"]
-checksum = "sha256:2f652dd854af7b7fbb51301afc55b5ef1d3f6e287be7889d4cc3818df891cd38"
-url = "https://releases.hashicorp.com/terraform/1.15.5/terraform_1.15.5_windows_amd64.zip"
+checksum = "sha256:56b4d3a157e346f8fc1e94254d0a944e6fec81f58ddd43eb274b8e0ebb56e334"
+url = "https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_windows_amd64.zip"
 
 [[tools.trivy]]
 version = "0.71.0"
@@ -598,32 +598,32 @@ url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.0/trivy_0.7
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.11.19"
+version = "0.11.20"
 backend = "aqua:astral-sh/uv"
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:767629b64cdf078c32e42819db28d5ca868b8dc7e3a879967fadc3e4f7f66be3"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.19/uv-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:79931fc8e82dddff6eb9cab32aa8492e35bc22767322dd68cad36012411ae6d5"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.20/uv-aarch64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:c4c0d0a383413261af5f0f0743e1292f4aafbe907987ed83bd0ac66f0a3d7e20"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.19/uv-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:a7545a1360d29baa696753af2f41849047b332bcb90e8ea75ad0568e7f865e35"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.20/uv-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:d8f59c38e8c4168ee468d423cd63184be12fa6995a4283d41ee1a14d003c9453"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.19/uv-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:0a2b6a757d5693671a7ce0002554ae869604e1e69acb10313ac14d08374be01a"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.20/uv-aarch64-apple-darwin.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:1665fc8e37b5d70a134820d6d7891747471a2ac8bc940ee7af0b69fd03b28d61"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.19/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:4c281f1b6b9ccb14d9567ebde9a218a7cabfb35e5ffe8c1d4ef5e2821a655474"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.20/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:1665fc8e37b5d70a134820d6d7891747471a2ac8bc940ee7af0b69fd03b28d61"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.19/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:4c281f1b6b9ccb14d9567ebde9a218a7cabfb35e5ffe8c1d4ef5e2821a655474"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.20/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
 
 [[tools.yq]]
