@@ -331,28 +331,28 @@ url = "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golan
 provenance = "github-attestations"
 
 [[tools.helm]]
-version = "4.2.0"
+version = "4.2.1"
 backend = "aqua:helm/helm"
 
 [tools.helm."platforms.linux-arm64"]
-checksum = "sha256:1f8de130dfbd04de64978e7b852a7a547be1404956a366608276d2520b678670"
-url = "https://get.helm.sh/helm-v4.2.0-linux-arm64.tar.gz"
+checksum = "sha256:596b9a73d366c1e72ce67d595c22805480e30914593aafbc9f547694e72814db"
+url = "https://get.helm.sh/helm-v4.2.1-linux-arm64.tar.gz"
 
 [tools.helm."platforms.linux-x64"]
-checksum = "sha256:97dbeb971be4ac4b27e3839976d9564c0fb35c6f3b1da89dd1e292d236af4096"
-url = "https://get.helm.sh/helm-v4.2.0-linux-amd64.tar.gz"
+checksum = "sha256:479dca836e5b45e8bd222400c5591b0e3a647378f03ff96597180db97c17fdae"
+url = "https://get.helm.sh/helm-v4.2.1-linux-amd64.tar.gz"
 
 [tools.helm."platforms.macos-arm64"]
-checksum = "sha256:f13f959015447b6bc309f9fd506509926543988a39035c088b52522ec95e2acb"
-url = "https://get.helm.sh/helm-v4.2.0-darwin-arm64.tar.gz"
+checksum = "sha256:896472d2ec0740c60f64a9df0fc30d478beee38a1a2a6ed91aa6e6ee177c1575"
+url = "https://get.helm.sh/helm-v4.2.1-darwin-arm64.tar.gz"
 
 [tools.helm."platforms.windows-arm64"]
-checksum = "sha256:41b8c33f7bb5ed094412b50702e70014633383e2cc32efd60239afbfe9fdbc19"
-url = "https://get.helm.sh/helm-v4.2.0-windows-arm64.tar.gz"
+checksum = "sha256:1d5b0c8b0c84016bb9c5b9ddfc00c613539506fed2f3a5710caabb9e94e14ba7"
+url = "https://get.helm.sh/helm-v4.2.1-windows-arm64.tar.gz"
 
 [tools.helm."platforms.windows-x64"]
-checksum = "sha256:34bf9659f8f04f3841a60131183b8e2acc44e260db4c93b889ff09718cacca6f"
-url = "https://get.helm.sh/helm-v4.2.0-windows-amd64.tar.gz"
+checksum = "sha256:36b603d5c4f4af526035631ead3adba5535250ad85f2b052960f7f874bdafa68"
+url = "https://get.helm.sh/helm-v4.2.1-windows-amd64.tar.gz"
 
 [[tools.jq]]
 version = "1.8.1"
@@ -569,32 +569,32 @@ checksum = "sha256:56b4d3a157e346f8fc1e94254d0a944e6fec81f58ddd43eb274b8e0ebb56e
 url = "https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_windows_amd64.zip"
 
 [[tools.trivy]]
-version = "0.71.0"
+version = "0.71.1"
 backend = "aqua:aquasecurity/trivy"
 
 [tools.trivy."platforms.linux-arm64"]
-checksum = "sha256:2561be394a3199c911f82fced606cbc05e1cb23eb6ce1da6935540adb76f4252"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.0/trivy_0.71.0_Linux-ARM64.tar.gz"
+checksum = "sha256:a7daaee66817d67a4963e8f9ddf15f5238ee021b55d3cd8695b1b7801afd34a7"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.1/trivy_0.71.1_Linux-ARM64.tar.gz"
 provenance = "cosign"
 
 [tools.trivy."platforms.linux-x64"]
-checksum = "sha256:30a3d22b23f88c233f1658f562fb477cae3b3e8b4761109d515b7698daf85814"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.0/trivy_0.71.0_Linux-64bit.tar.gz"
+checksum = "sha256:3cbae37cd440cd8676e5ce9207fe460b5641c7579a17e9d00f8894928c41a88d"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.1/trivy_0.71.1_Linux-64bit.tar.gz"
 provenance = "cosign"
 
 [tools.trivy."platforms.macos-arm64"]
-checksum = "sha256:95d4e896b120816edd0995a2df8adca26a8621b7bf62036a89b1d54a7b718a74"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.0/trivy_0.71.0_macOS-ARM64.tar.gz"
+checksum = "sha256:5eb3576d4a41c9fa274dc8a62b2e6baebb2bf423eda908ed36d81d574e293c48"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.1/trivy_0.71.1_macOS-ARM64.tar.gz"
 provenance = "cosign"
 
 [tools.trivy."platforms.windows-arm64"]
-checksum = "sha256:382250158fb9431ff9b87904205027b066a544234b8952b2dd764bd712d55387"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.0/trivy_0.71.0_windows-64bit.zip"
+checksum = "sha256:ba67daf06923f52938812d1af134b3193e22b3bc7a525743b9f2a3ded7ab5904"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.1/trivy_0.71.1_windows-64bit.zip"
 provenance = "cosign"
 
 [tools.trivy."platforms.windows-x64"]
-checksum = "sha256:382250158fb9431ff9b87904205027b066a544234b8952b2dd764bd712d55387"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.0/trivy_0.71.0_windows-64bit.zip"
+checksum = "sha256:ba67daf06923f52938812d1af134b3193e22b3bc7a525743b9f2a3ded7ab5904"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.1/trivy_0.71.1_windows-64bit.zip"
 provenance = "cosign"
 
 [[tools.uv]]
