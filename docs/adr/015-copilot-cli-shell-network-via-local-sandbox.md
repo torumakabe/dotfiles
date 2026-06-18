@@ -10,7 +10,7 @@ ADR-010 では preToolUse Hook による URL allowlist を採用した。Copilot
 
 ## Decision
 
-Copilot CLI の shell command network control は local sandbox に移行する。`sandbox.enabled=true`、`userPolicy.network.allowOutbound=false`、`allowLocalNetwork=true` を基本とし、必要な例外は `allowedHosts` / `blockedHosts` で表現する。MCP / LSP / filesystem は sandbox 対象外として `sandboxMcpServers=false`、`sandboxLspServers=false`、`addCurrentWorkingDirectory=false`、`userPolicy.filesystem` は empty / preserved arrays、`clearPolicyOnExit=false` を維持する。sandbox disabled 時の Hook fallback は持たない。
+Copilot CLI の shell command network control は local sandbox に移行する。Windows では AppContainer backend を使うため `userPolicy.version=0.4.0-alpha` を指定する。`sandbox.enabled=true`、`userPolicy.network.allowOutbound=false`、`allowLocalNetwork=true` を基本とし、必要な例外は `allowedHosts` / `blockedHosts` で表現する。MCP / LSP / filesystem は sandbox 対象外として `sandboxMcpServers=false`、`sandboxLspServers=false`、`addCurrentWorkingDirectory=false`、`userPolicy.filesystem` は empty / preserved arrays、`clearPolicyOnExit=false` を維持する。sandbox disabled 時の Hook fallback は持たない。
 
 ## Consequences
 
