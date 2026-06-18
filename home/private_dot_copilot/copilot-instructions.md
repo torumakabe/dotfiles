@@ -22,7 +22,7 @@
 ## 日本語技術文書
 
 - 日本語の技術文書、技術書原稿、記事、解説文、ADR、README、提案書を書く、推敲する、レビューするときは `japanese-technical-writing` スキルを使う
-- 文章規範の詳細は `home/private_dot_copilot/skills/japanese-technical-writing/SKILL.md` を参照し、一文一行、段落と論証、論理の厳密さ、読者の負荷、演出の節度、LLM 風の空句、冗長さを点検する
+- 文章規範の詳細は `home/private_dot_copilot/skills/japanese-technical-writing/SKILL.md` を参照し、段落と論証、論理の厳密さ、読者の負荷、演出の節度、LLM 風の空句、冗長さを点検する
 
 ## 図解
 
