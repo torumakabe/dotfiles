@@ -74,6 +74,7 @@ Set-JsonProperty -Object $network -Name 'blockedHosts' -Value (Get-JsonArrayOrEm
 
 Set-JsonProperty -Object $userPolicy -Name 'filesystem' -Value $filesystem
 Set-JsonProperty -Object $userPolicy -Name 'network' -Value $network
+Set-JsonProperty -Object $userPolicy -Name 'version' -Value '0.4.0-alpha'
 Set-JsonProperty -Object $sandbox -Name 'enabled' -Value $true
 Set-JsonProperty -Object $sandbox -Name 'sandboxMcpServers' -Value $false
 Set-JsonProperty -Object $sandbox -Name 'sandboxLspServers' -Value $false
