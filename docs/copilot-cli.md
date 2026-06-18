@@ -38,6 +38,10 @@ npx skills add -g <owner>/<repo>/<path>
 chezmoi re-add ~/.copilot/skills/<skill-name>
 ```
 
+`agentfinder` は GitHub Agent Finder (`https://agentfinder.github.com/api/v1/search`) を使って、MCP サーバー、ツール、スキル、エージェントを検索する手動追加スキル。
+GitHub Docs の Agent Finder 手順に従い、`home/private_dot_copilot/skills/agentfinder/SKILL.md` を `~/.copilot/skills/agentfinder/SKILL.md` として配置する。
+利用時は `/agentfinder <探したい連携や作業>` を実行し、返された候補はユーザーが明示的に選ぶまで自動インストールしない。
+
 ## セキュリティフック
 
 `preToolUse` で以下を検査する。設計は [`architecture.md`](architecture.md#copilot-guard-の設計) を参照。
