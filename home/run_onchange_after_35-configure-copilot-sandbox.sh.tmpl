@@ -1,0 +1,58 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# Copilot CLI local sandbox 設定 (Linux/macOS)
+#
+# Copilot sandbox policy version: 1
+
+set -euo pipefail
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo 'jq not found on PATH; cannot configure Copilot sandbox settings.' >&2
+  exit 1
+fi
+
+settings_path="${HOME}/.copilot/settings.json"
+settings_dir="$(dirname "${settings_path}")"
+mkdir -p "${settings_dir}"
+
+tmp="$(mktemp)"
+empty_input="${tmp}.empty"
+trap 'rm -f "${tmp}" "${empty_input}"' EXIT
+
+if [ -f "${settings_path}" ]; then
+  input_path="${settings_path}"
+else
+  input_path="${empty_input}"
+  printf '{}\n' >"${input_path}"
+fi
+
+jq '
+  .sandbox = (
+    (.sandbox // {})
+    | .enabled = true
+    | .sandboxMcpServers = false
+    | .sandboxLspServers = false
+    | .addCurrentWorkingDirectory = false
+    | .userPolicy = (
+      (.userPolicy // {})
+      | .filesystem = (
+        (.filesystem // {})
+        | .readwritePaths = (.readwritePaths // [])
+        | .readonlyPaths = (.readonlyPaths // [])
+        | .deniedPaths = (.deniedPaths // [])
+        | .clearPolicyOnExit = false
+      )
+      | .network = (
+        (.network // {})
+        | .allowOutbound = false
+        | .allowLocalNetwork = true
+        | .allowedHosts = (.allowedHosts // [])
+        | .blockedHosts = (.blockedHosts // [])
+      )
+    )
+  )
+' "${input_path}" >"${tmp}"
+
+mv "${tmp}" "${settings_path}"
+echo "Configured Copilot CLI local sandbox in ${settings_path}"
+{{- end -}}

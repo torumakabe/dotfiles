@@ -8,8 +8,9 @@
 
 - `copilot-instructions.md` — ユーザーレベルのカスタム指示
 - `mcp-config.json` — 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
+- `settings.json` の `sandbox` セクション — `run_onchange_after_35-configure-copilot-sandbox.*` で既存設定へマージ
 - `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`, `audit-log.py`, `audit-failure.py`）
-- `hooks/{blocked-files,ask-files,allowed-urls}.txt` — アクセス制御リスト
+- `hooks/{blocked-files,ask-files}.txt` — ファイルアクセス制御リスト
 - `skills/` — 手動追加分のみ（プラグイン由来は対象外）
 
 管理外: `installed-plugins/`（Copilot CLI 側で管理）。
@@ -46,13 +47,13 @@ GitHub Docs の Agent Finder 手順に従い、`home/private_dot_copilot/skills/
 
 `preToolUse` で以下を検査する。設計は [`architecture.md`](architecture.md#copilot-guard-の設計) を参照。
 
-- `copilot-guard.py`: 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / URL 許可 (`allowed-urls.txt`) / 機微な環境変数の読み取り
+- `copilot-guard.py`: 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / 機微な環境変数の読み取り / `git commit` の明示承認
 - `uv-enforcer.py`: `python` / `pip` の直接実行を抑止
 - `node-global-enforcer.py`: `npm` / `yarn` / `pnpm` のグローバルインストールを抑止
 
-パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化、`deny > ask > allow`。`allowed-urls.txt` は全行コメントアウトで無効化できる。
+パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化、`deny > ask > allow`。
 
-`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である（ADR-006 / ADR-010 と整合）。
+`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。shell command のネットワーク制御は ADR-015 に従い local sandbox で扱う。
 
 動作確認:
 
@@ -63,12 +64,12 @@ uv run -m unittest tests.test_copilot_guard -v
 
 ## `copilot-guardrails`
 
-`.zshrc` / `PowerShell_profile.ps1` の `copilot-guardrails` は、Copilot CLI の利便性（`--allow-all`）とセキュリティ（`--deny-tool` での外部送信系制限、`--secret-env-vars` での環境変数隠蔽）のバランスを取った起動ラッパー。起動モード（interactive / plan / autopilot）は固定しない。記法は `copilot help permissions` と公式ドキュメント参照。
+`.zshrc` / `PowerShell_profile.ps1` の `copilot-guardrails` は、Copilot CLI の利便性（`--allow-all`）と `--secret-env-vars` による環境変数隠蔽を固定する起動ラッパー。shell command の外部ネットワーク通信は local sandbox の `sandbox.userPolicy.network` で制御する。起動モード（interactive / plan / autopilot）は固定しない。
 
 設計上の前提と限界:
 
-- `--allow-all` は `--allow-all-tools` + `--allow-all-paths` + `--allow-all-urls` を含意し、**`--deny-url` / `--allow-url` および `~/.copilot/config.json` の `deniedUrls` を無効化する**。URL ブロックは `--deny-tool 'url(...)'`（`--allow-all` 下でも優先される）で行うこと。
-- `--deny-tool 'shell(cmd:*)'` はシェルコマンドラインの**先頭トークン**に対するプレフィックス一致であり、`bash` ツール自体や内部で実行される一般コマンドは止めない。ツール実装ごと止めたい場合は `--excluded-tools <tool>` を使う。
+- local sandbox は Copilot が起動する shell command の実行環境を制御する。MCP、LSP、Copilot CLI のファイル読み書きツールの sandbox 化はこの repo では設定しない。
+- `run_onchange_after_35-configure-copilot-sandbox.*` は `~/.copilot/settings.json` の他のキーを保ったまま `sandbox` セクションを更新する。`allowOutbound = false`、`allowLocalNetwork = true`、`allowedHosts = []` が初期状態である。ホスト許可は後から `/sandbox` または `settings.json` で追加する。
 - `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。
 - `/share gist`（`--share-gist`）は **ユーザー直接コマンドのため preToolUse Hook の対象外**。`--allow-all` 下で秘匿情報がエージェントのコンテキストに入った状態で実行すると、secret Gist として外部化され得る。非 EMU 環境では技術的に防ぐ手段が無いため、運用ルール（実行前に `/reset-allowed-tools` で承認状態をクリアする等）で補う。
 - `permissionRequest` / `notification` / `userPromptSubmitted` 等の Hook タイプは現状未使用。`--allow-all` を外して承認を自動化する運用に切り替える場合の拡張余地として記録しておく。
@@ -80,7 +81,7 @@ uv run -m unittest tests.test_copilot_guard -v
 | ファイル | 記録内容 | 書込元 |
 |---|---|---|
 | `~/.copilot/audit.jsonl` | ツール実行成功履歴 | `postToolUse` → `audit-log.py` |
-| `~/.copilot/audit-denies.jsonl` | `copilot-guard.py` が deny 判定した呼び出し（URL/env/blocked-files/secrets 等）| `preToolUse` → `copilot-guard.py` |
+| `~/.copilot/audit-denies.jsonl` | `copilot-guard.py` が deny 判定した呼び出し（env/blocked-files/secrets 等）| `preToolUse` → `copilot-guard.py` |
 | `~/.copilot/audit-failures.jsonl` | ツールハンドラーが返したエラー（例: `view` の path 不在） | `postToolUseFailure` → `audit-failure.py` |
 
 ```bash

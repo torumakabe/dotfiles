@@ -25,8 +25,9 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 - 設定配布 `chezmoi` / ツール版管理 `mise` / Python 実行 `uv`
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
-- `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` で危険操作を抑止、`postToolUse` で監査ログ
-- `copilot-guardrails` で利便性とセキュリティのバランスを取った既定値を固定
+- `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` でネットワーク以外の危険操作を抑止、`postToolUse` で監査ログ
+- Copilot CLI local sandbox で shell command の外部ネットワーク通信を制御
+- `copilot-guardrails` で利便性と秘匿環境変数の扱いを固定
 - `gitleaks` 付き pre-commit を配布
 
 ## Copilot Guard の設計
@@ -36,9 +37,11 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 1. 秘匿ファイル拒否 (`blocked-files.txt`)
 2. 確認付きアクセス (`ask-files.txt`)
 3. 機微な環境変数の読み取り拒否 (`printenv`, `$TOKEN`, `os.environ` 等)。通常使う変数は許可リストで除外
-4. 許可外 URL 拒否 (`allowed-urls.txt`)
+4. `git commit` の明示承認
 
 パス比較前に `\` を `/` へ正規化する。パターンファイルは `/` 前提で書く。
+
+shell command の外部ネットワーク通信は `~/.copilot/settings.json` の `sandbox.userPolicy.network` で制御する。初期状態では `allowOutbound = false` とし、必要なホストは後から `allowedHosts` に追加する。
 
 ## git pre-commit フック
 
