@@ -105,6 +105,7 @@ Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin
 対策 (本リポジトリで適用済み):
 
 - `home/private_dot_copilot/hooks/hooks.json` の `timeoutSec` を preToolUse 30 秒 / postToolUse 15 秒に設定し、キューが長くなっても fail-open に落ちにくくする
+- shell command の外部ネットワーク通信は Hook ではなく Copilot CLI local sandbox で制御する
 - 上流の挙動変更を追跡する (`github/copilot-cli` の issue)
 
 暫定回避:

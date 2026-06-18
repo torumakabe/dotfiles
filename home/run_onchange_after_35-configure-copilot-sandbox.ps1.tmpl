@@ -1,0 +1,86 @@
+{{- if eq .chezmoi.os "windows" -}}
+# Copilot CLI local sandbox 設定 (Windows)
+#
+# Copilot sandbox policy version: 1
+
+$ErrorActionPreference = 'Stop'
+
+$settingsPath = Join-Path $HOME '.copilot\settings.json'
+$settingsDir = Split-Path -Parent $settingsPath
+New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+
+if (Test-Path -LiteralPath $settingsPath) {
+  try {
+    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+  } catch {
+    Write-Error "Failed to parse $settingsPath as JSON. Configure Copilot sandbox manually or remove JSONC comments before chezmoi apply."
+    exit 1
+  }
+} else {
+  $settings = [pscustomobject]@{}
+}
+
+function Set-JsonProperty {
+  param(
+    [Parameter(Mandatory = $true)] [object] $Object,
+    [Parameter(Mandatory = $true)] [string] $Name,
+    [Parameter(Mandatory = $true)] $Value
+  )
+
+  if ($Object.PSObject.Properties[$Name]) {
+    $Object.$Name = $Value
+  } else {
+    Add-Member -InputObject $Object -NotePropertyName $Name -NotePropertyValue $Value
+  }
+}
+
+function Get-JsonArrayOrEmpty {
+  param($Value)
+  if ($null -eq $Value) { return ,@() }
+  return ,@($Value)
+}
+
+function Get-JsonProperty {
+  param(
+    $Object,
+    [Parameter(Mandatory = $true)] [string] $Name
+  )
+
+  if ($null -eq $Object) { return $null }
+  $prop = $Object.PSObject.Properties[$Name]
+  if ($null -eq $prop) { return $null }
+  return $prop.Value
+}
+
+$existingSandbox = Get-JsonProperty -Object $settings -Name 'sandbox'
+$existingPolicy = Get-JsonProperty -Object $existingSandbox -Name 'userPolicy'
+$existingFilesystem = Get-JsonProperty -Object $existingPolicy -Name 'filesystem'
+$existingNetwork = Get-JsonProperty -Object $existingPolicy -Name 'network'
+
+$sandbox = if ($null -ne $existingSandbox) { $existingSandbox } else { [pscustomobject]@{} }
+$userPolicy = if ($null -ne $existingPolicy) { $existingPolicy } else { [pscustomobject]@{} }
+$filesystem = if ($null -ne $existingFilesystem) { $existingFilesystem } else { [pscustomobject]@{} }
+$network = if ($null -ne $existingNetwork) { $existingNetwork } else { [pscustomobject]@{} }
+
+Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths'))
+Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
+Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
+Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
+
+Set-JsonProperty -Object $network -Name 'allowOutbound' -Value $false
+Set-JsonProperty -Object $network -Name 'allowLocalNetwork' -Value $true
+Set-JsonProperty -Object $network -Name 'allowedHosts' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingNetwork -Name 'allowedHosts'))
+Set-JsonProperty -Object $network -Name 'blockedHosts' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingNetwork -Name 'blockedHosts'))
+
+Set-JsonProperty -Object $userPolicy -Name 'filesystem' -Value $filesystem
+Set-JsonProperty -Object $userPolicy -Name 'network' -Value $network
+Set-JsonProperty -Object $sandbox -Name 'enabled' -Value $true
+Set-JsonProperty -Object $sandbox -Name 'sandboxMcpServers' -Value $false
+Set-JsonProperty -Object $sandbox -Name 'sandboxLspServers' -Value $false
+Set-JsonProperty -Object $sandbox -Name 'addCurrentWorkingDirectory' -Value $false
+Set-JsonProperty -Object $sandbox -Name 'userPolicy' -Value $userPolicy
+
+Set-JsonProperty -Object $settings -Name 'sandbox' -Value $sandbox
+$settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
+Write-Host "Configured Copilot CLI local sandbox in $settingsPath"
+{{- end -}}

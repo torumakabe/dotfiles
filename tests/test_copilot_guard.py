@@ -29,7 +29,6 @@ def make_ctx(
     command: str = "",
     blocked_patterns: list[str] | None = None,
     ask_patterns: list[str] | None = None,
-    allowed_domains: list[str] | None = None,
 ) -> "copilot_guard.CheckContext":
     return copilot_guard.CheckContext(
         tool_name=tool_name,
@@ -37,7 +36,6 @@ def make_ctx(
         command=command,
         blocked_patterns=blocked_patterns or [],
         ask_patterns=ask_patterns or [],
-        allowed_domains=allowed_domains or [],
     )
 
 
@@ -628,18 +626,6 @@ class CopilotGuardCheckerReturnTypeTests(unittest.TestCase):
         result = copilot_guard.check_env(ctx)
         self.assertIsNone(result)
 
-    def test_check_url_returns_check_result(self) -> None:
-        ctx = make_ctx(
-            tool_name="web_fetch",
-            tool_args={"url": "https://evil.example.com"},
-            allowed_domains=["github.com"],
-        )
-        result = copilot_guard.check_url_allowlist(ctx)
-        self.assertIsNotNone(result)
-        self.assertIsInstance(result, copilot_guard.CheckResult)
-        self.assertEqual(result.decision, "deny")
-
-
 class GitCommitCheckerTests(unittest.TestCase):
     """Tests for the git commit approval checker."""
 
@@ -838,12 +824,12 @@ class LogDenyTests(unittest.TestCase):
         self.assertEqual(entry["path"], "C:\\Users\\me\\.azure\\config")
         self.assertNotIn("command", entry)
 
-    def test_logs_url_for_fetch_tool(self) -> None:
+    def test_logs_url_field_for_fetch_tool(self) -> None:
         ctx = make_ctx(
             tool_name="web_fetch",
             tool_args={"url": "https://pastebin.com/abc"},
         )
-        copilot_guard._log_deny(ctx, "URL not in allowlist")
+        copilot_guard._log_deny(ctx, "test deny")
         entry = self._read_entry()
         self.assertEqual(entry["url"], "https://pastebin.com/abc")
 

@@ -3,9 +3,8 @@
 # ///
 """Copilot Guard — cross-platform preToolUse hook (bash / powershell).
 
-Reads a JSON tool-call from stdin, checks against blocked-files.txt,
-ask-files.txt, and allowed-urls.txt, and emits a JSON permission decision
-on stdout.
+Reads a JSON tool-call from stdin, checks against blocked-files.txt and
+ask-files.txt, and emits a JSON permission decision on stdout.
 
 Architecture:
     Each security check is implemented as a *checker function* with the
@@ -124,7 +123,6 @@ class CheckContext(NamedTuple):
     command: str
     blocked_patterns: list[str]
     ask_patterns: list[str]
-    allowed_domains: list[str]
 
 
 # Checker function contract: (CheckContext) -> CheckResult or None.
@@ -569,47 +567,6 @@ def check_git_commit(ctx: CheckContext) -> CheckResult | None:
 
 
 # ---------------------------------------------------------------------------
-# Checker: URL allowlist
-# ---------------------------------------------------------------------------
-
-def extract_urls(text: str) -> list[str]:
-    return re.findall(r"https?://[^\s\"']+", text)
-
-
-def extract_url_host(url: str) -> str:
-    """Extract the hostname from a URL without external dependencies."""
-    host = re.sub(r"^https?://", "", url)
-    host = host.split("/")[0].split(":")[0]
-    return host
-
-
-def is_url_allowed(url: str, allowed_domains: list[str]) -> bool:
-    host = extract_url_host(url)
-    for domain in allowed_domains:
-        if host == domain or host.endswith("." + domain):
-            return True
-    return False
-
-
-def check_url_allowlist(ctx: CheckContext) -> CheckResult | None:
-    """Check URLs in commands and web_fetch args against the domain allowlist."""
-    if not ctx.allowed_domains:
-        return None
-
-    if ctx.command:
-        for url in extract_urls(ctx.command):
-            if not is_url_allowed(url, ctx.allowed_domains):
-                return CheckResult("deny", f"URL not in allowlist: {url}")
-
-    if ctx.tool_name == "web_fetch":
-        url = ctx.tool_args.get("url", "")
-        if url and not is_url_allowed(url, ctx.allowed_domains):
-            return CheckResult("deny", f"URL not in allowlist: {url}")
-
-    return None
-
-
-# ---------------------------------------------------------------------------
 # Checker registry
 # ---------------------------------------------------------------------------
 
@@ -617,7 +574,6 @@ CHECKERS: list[Checker] = [
     check_blocked_files,
     check_env,
     check_git_commit,
-    check_url_allowlist,
 ]
 
 
@@ -640,7 +596,6 @@ def build_context() -> CheckContext:
     hooks_dir = script_dir.parent
     blocked_file = hooks_dir / "blocked-files.txt"
     ask_file = hooks_dir / "ask-files.txt"
-    allowed_urls_file = hooks_dir / "allowed-urls.txt"
 
     if not blocked_file.is_file():
         deny("blocked-files.txt not found - fail-safe deny")
@@ -651,7 +606,6 @@ def build_context() -> CheckContext:
         command=command,
         blocked_patterns=load_config_lines(blocked_file),
         ask_patterns=load_config_lines(ask_file),
-        allowed_domains=load_config_lines(allowed_urls_file),
     )
 
 
