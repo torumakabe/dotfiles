@@ -4,9 +4,11 @@
 
 Superseded by ADR-015
 
+ADR-015 により、本 ADR の URL allowlist Hook とネットワーク系 `--deny-tool` 補助列挙は撤去した。これらは Hook の fail-open、Hook が発火しない経路、コマンド名や URL 文字列検査の抜け道により、shell network control の境界として維持しない。
+
 ## Context
 
-Copilot CLI v1.0.35-4 / v1.0.49 時点の実機検証で、CLI 単体では「listed 以外 deny」型の URL ホワイトリスト制御が実現できないことを確認した。`--deny-url='*'` や `--deny-url='https://*'` の wildcard 単独指定はヒットせず、機能するのは個別 domain（例 `example.com`）または prefix（`https://example.com/*`）のみ。さらに `--allow-all`（`--allow-all-urls` を含む）下では `--deny-url` / `--allow-url` 自体が無効化される。`~/.copilot/config.json` の `deniedUrls` も同様で、加えて単独ワイルドカード `"*"` は設定ファイル側で非対応、リポジトリレベル設定（`.github/copilot/settings.json`）では `deniedUrls` / `allowedUrls` キー自体がサポートされない。`copilot --autopilot` のような Autopilot 運用や `--allow-all` 系オプションを伴う運用では、包括的ホワイトリスト方式は Hook でしか実現できない（`--deny-tool 'url(...)'` は `--allow-all` 下でも優先されるが、個別列挙のため包括制御には向かない）。
+Copilot CLI v1.0.35-4 / v1.0.49 時点の実機検証で、CLI 単体では「listed 以外 deny」型の URL ホワイトリスト制御が実現できないことを確認した。`--deny-url='*'` や `--deny-url='https://*'` の wildcard 単独指定はヒットせず、機能するのは個別 domain（例 `example.com`）または prefix（`https://example.com/*`）のみ。さらに `--allow-all`（`--allow-all-urls` を含む）下では `--deny-url` / `--allow-url` 自体が無効化される。`~/.copilot/config.json` の `deniedUrls` も同様で、加えて単独ワイルドカード `"*"` は設定ファイル側で非対応、リポジトリレベル設定（`.github/copilot/settings.json`）では `deniedUrls` / `allowedUrls` キー自体がサポートされない。当時は Hook で包括的ホワイトリスト方式を実装したが、ADR-015 でこの方式を撤去した。
 
 ## Decision
 
@@ -14,8 +16,8 @@ URL の包括的ホワイトリスト制御は preToolUse Hook の `check_url_al
 
 ## Consequences
 
-- Hook は fail-open（exit 1 / 不正 JSON / timeout / 空出力で通過）なため、allowlist は「うっかり外部アクセス防止」レベルの保険で完全隔離ではない
-- サブエージェント経路は Hook 未発火。危険 URL は CLI `--deny-url` で個別列挙が必須
-- 判断の前提は CLI v1.0.35-4 の挙動。アップグレード時に再検証、CLI が wildcard `--deny-url='*'` をサポートしたら allowlist 簡素化／撤去を検討する（`review-repo` の定期チェック対象）
-- 現時点では `allowed-urls.txt` は空（全行コメントアウト）で URL 制御は適用していない。本 ADR は将来ブロック対象が発生した際の実装先を定めるもの
+- Hook は fail-open（exit 1 / 不正 JSON / timeout / 空出力で通過）なため、allowlist は shell network control の境界にならない
+- Hook が発火しない経路やコマンド名検査の抜け道が残るため、URL allowlist Hook とネットワーク系 `--deny-tool` 補助列挙は復活させない
+- 判断の前提は CLI v1.0.35-4 の挙動。アップグレード時に再検証し、shell network control の見直しは ADR-015 の sandbox policy 側で扱う
+- 現時点では `allowed-urls.txt` は削除済みで URL 制御は適用していない。将来ブロック対象が発生した場合も、URL 文字列検査ではなく ADR-015 の sandbox policy で扱う
 - 検証ログ: セッション 978f18e4-1610-4819-98be-6620c6d68271（A1/A15）

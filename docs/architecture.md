@@ -26,7 +26,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 - 設定配布 `chezmoi` / ツール版管理 `mise` / Python 実行 `uv`
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
 - `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` でネットワーク以外の危険操作を抑止、`postToolUse` で監査ログ
-- Copilot CLI local sandbox で shell command の外部ネットワーク通信を制御
+- Copilot CLI local sandbox を有効化
 - `copilot-guardrails` で利便性と秘匿環境変数の扱いを固定
 - `gitleaks` 付き pre-commit を配布
 
@@ -41,7 +41,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 パス比較前に `\` を `/` へ正規化する。パターンファイルは `/` 前提で書く。
 
-shell command の外部ネットワーク通信は `~/.copilot/settings.json` の `sandbox.userPolicy.network` で制御する。初期状態では `allowOutbound = false` とし、必要なホストは後から `allowedHosts` に追加する。
+shell command の外部ネットワーク通信は、`~/.copilot/settings.json` の `sandbox.userPolicy.network` で設定する。初期状態では sandbox を有効化するだけにとどめ、外向き通信の遮断や host rule は設定しない。
 
 ## git pre-commit フック
 

@@ -53,7 +53,7 @@ GitHub Docs の Agent Finder 手順に従い、`home/private_dot_copilot/skills/
 
 パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化、`deny > ask > allow`。
 
-`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。shell command のネットワーク制御は ADR-015 に従い local sandbox で扱う。
+`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。
 
 動作確認:
 
@@ -64,12 +64,12 @@ uv run -m unittest tests.test_copilot_guard -v
 
 ## `copilot-guardrails`
 
-`.zshrc` / `PowerShell_profile.ps1` の `copilot-guardrails` は、Copilot CLI の利便性（`--allow-all`）と `--secret-env-vars` による環境変数隠蔽を固定する起動ラッパー。shell command の外部ネットワーク通信は local sandbox の `sandbox.userPolicy.network` で制御する。起動モード（interactive / plan / autopilot）は固定しない。
+`.zshrc` / `PowerShell_profile.ps1` の `copilot-guardrails` は、Copilot CLI の利便性（`--allow-all`）と `--secret-env-vars` による環境変数隠蔽を固定する起動ラッパー。起動モード（interactive / plan / autopilot）は固定しない。
 
 設計上の前提と限界:
 
 - local sandbox は Copilot が起動する shell command の実行環境を制御する。MCP、LSP、Copilot CLI のファイル読み書きツールの sandbox 化はこの repo では設定しない。
-- `run_onchange_after_35-configure-copilot-sandbox.*` は `~/.copilot/settings.json` の他のキーを保ったまま `sandbox` セクションを更新する。`userPolicy.version = 0.4.0-alpha`、`allowOutbound = false`、`allowLocalNetwork = true`、`allowedHosts = []` が初期状態である。ホスト許可は後から `/sandbox` または `settings.json` で追加する。
+- `run_onchange_after_35-configure-copilot-sandbox.*` は `~/.copilot/settings.json` の他のキーを保ったまま `sandbox` セクションを更新する。初期状態では sandbox を有効化するだけにとどめ、`allowOutbound = true`、`allowLocalNetwork = true`、`allowedHosts = []`、`blockedHosts = []` に正規化する。
 - `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。
 - `/share gist`（`--share-gist`）は **ユーザー直接コマンドのため preToolUse Hook の対象外**。`--allow-all` 下で秘匿情報がエージェントのコンテキストに入った状態で実行すると、secret Gist として外部化され得る。非 EMU 環境では技術的に防ぐ手段が無いため、運用ルール（実行前に `/reset-allowed-tools` で承認状態をクリアする等）で補う。
 - `permissionRequest` / `notification` / `userPromptSubmitted` 等の Hook タイプは現状未使用。`--allow-all` を外して承認を自動化する運用に切り替える場合の拡張余地として記録しておく。

@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # Copilot CLI local sandbox 設定 (Linux/macOS)
 #
-# Copilot sandbox policy version: 1
+# Copilot sandbox policy version: 2
 
 set -euo pipefail
 
@@ -35,7 +35,7 @@ jq '
     | .addCurrentWorkingDirectory = false
     | .userPolicy = (
       (.userPolicy // {})
-      | .version = "0.4.0-alpha"
+      | del(.version)
       | .filesystem = (
         (.filesystem // {})
         | .readwritePaths = (.readwritePaths // [])
@@ -45,10 +45,10 @@ jq '
       )
       | .network = (
         (.network // {})
-        | .allowOutbound = false
+        | .allowOutbound = true
         | .allowLocalNetwork = true
-        | .allowedHosts = (.allowedHosts // [])
-        | .blockedHosts = (.blockedHosts // [])
+        | .allowedHosts = []
+        | .blockedHosts = []
       )
     )
   )
