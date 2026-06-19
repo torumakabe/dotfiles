@@ -1,7 +1,7 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 1
+# Copilot sandbox policy version: 2
 
 $ErrorActionPreference = 'Stop'
 
@@ -52,6 +52,17 @@ function Get-JsonProperty {
   return $prop.Value
 }
 
+function Remove-JsonProperty {
+  param(
+    $Object,
+    [Parameter(Mandatory = $true)] [string] $Name
+  )
+
+  if ($null -ne $Object -and $Object.PSObject.Properties[$Name]) {
+    $Object.PSObject.Properties.Remove($Name)
+  }
+}
+
 $existingSandbox = Get-JsonProperty -Object $settings -Name 'sandbox'
 $existingPolicy = Get-JsonProperty -Object $existingSandbox -Name 'userPolicy'
 $existingFilesystem = Get-JsonProperty -Object $existingPolicy -Name 'filesystem'
@@ -67,14 +78,14 @@ Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value (Get-JsonArray
 Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
 Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
 
-Set-JsonProperty -Object $network -Name 'allowOutbound' -Value $false
+Set-JsonProperty -Object $network -Name 'allowOutbound' -Value $true
 Set-JsonProperty -Object $network -Name 'allowLocalNetwork' -Value $true
-Set-JsonProperty -Object $network -Name 'allowedHosts' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingNetwork -Name 'allowedHosts'))
-Set-JsonProperty -Object $network -Name 'blockedHosts' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingNetwork -Name 'blockedHosts'))
+Set-JsonProperty -Object $network -Name 'allowedHosts' -Value @()
+Set-JsonProperty -Object $network -Name 'blockedHosts' -Value @()
 
 Set-JsonProperty -Object $userPolicy -Name 'filesystem' -Value $filesystem
 Set-JsonProperty -Object $userPolicy -Name 'network' -Value $network
-Set-JsonProperty -Object $userPolicy -Name 'version' -Value '0.4.0-alpha'
+Remove-JsonProperty -Object $userPolicy -Name 'version'
 Set-JsonProperty -Object $sandbox -Name 'enabled' -Value $true
 Set-JsonProperty -Object $sandbox -Name 'sandboxMcpServers' -Value $false
 Set-JsonProperty -Object $sandbox -Name 'sandboxLspServers' -Value $false

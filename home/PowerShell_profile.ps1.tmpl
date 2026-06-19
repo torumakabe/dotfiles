@@ -180,8 +180,8 @@ Set-Alias -Name k -Value kubectl
 Set-Alias -Name mise-self-upgrade -Value Invoke-MiseSelfUpgrade
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 
-# Copilot CLI: local sandbox handles shell network access. preToolUse hooks
-# still protect sensitive files and shell-level secret reads.
+# Copilot CLI: local sandbox is enabled. preToolUse hooks still protect
+# sensitive files and shell-level secret reads.
 function Invoke-CopilotGuardrails {
     copilot `
       --allow-all `
