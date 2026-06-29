@@ -81,28 +81,28 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 
 [[tools.codex]]
-version = "0.142.2"
+version = "0.142.3"
 backend = "aqua:openai/codex"
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:880b61ed0871f862e3a281ad05fedfa1a90c0664de893d781b6b7517127ccaee"
-url = "https://github.com/openai/codex/releases/download/rust-v0.142.2/codex-aarch64-unknown-linux-musl.zst"
+checksum = "sha256:c77679356eda40e166d554af443a288185850c64a1db488810e374cc571acf90"
+url = "https://github.com/openai/codex/releases/download/rust-v0.142.3/codex-aarch64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:b0eb5e450a2e0bab298db724e895b3f86881f3653b4f12042e24699c112bb322"
-url = "https://github.com/openai/codex/releases/download/rust-v0.142.2/codex-x86_64-unknown-linux-musl.zst"
+checksum = "sha256:2a3c6d8a3509844296263df338a7ca494559e64bca7bd24c967a0a0ec1eb7319"
+url = "https://github.com/openai/codex/releases/download/rust-v0.142.3/codex-x86_64-unknown-linux-musl.zst"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:bda03bc5361a25a8a0315c336bb7ff22652ff5e5a0b2c17892876a9f0e2806d9"
-url = "https://github.com/openai/codex/releases/download/rust-v0.142.2/codex-aarch64-apple-darwin.zst"
+checksum = "sha256:46ecced3f25f03cf9fc51fb0e35c596c1ecf266a1b5b38cecd4ba58370034ad9"
+url = "https://github.com/openai/codex/releases/download/rust-v0.142.3/codex-aarch64-apple-darwin.zst"
 
 [tools.codex."platforms.windows-arm64"]
-checksum = "sha256:35ed3d1a8cac2a6c0fc5b72f7f1061c8dbac0d6e26e5f9553a3dba659e85a47d"
-url = "https://github.com/openai/codex/releases/download/rust-v0.142.2/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:9af24af46c923f658f5f58084688ccb1cc0da9505d31f41b9b2e1a8c9acc8f12"
+url = "https://github.com/openai/codex/releases/download/rust-v0.142.3/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:35ed3d1a8cac2a6c0fc5b72f7f1061c8dbac0d6e26e5f9553a3dba659e85a47d"
-url = "https://github.com/openai/codex/releases/download/rust-v0.142.2/codex-x86_64-pc-windows-msvc.exe.zst"
+checksum = "sha256:9af24af46c923f658f5f58084688ccb1cc0da9505d31f41b9b2e1a8c9acc8f12"
+url = "https://github.com/openai/codex/releases/download/rust-v0.142.3/codex-x86_64-pc-windows-msvc.exe.zst"
 
 [[tools.cosign]]
 version = "3.1.1"
@@ -598,32 +598,32 @@ url = "https://github.com/aquasecurity/trivy/releases/download/v0.71.2/trivy_0.7
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.11.24"
+version = "0.11.25"
 backend = "aqua:astral-sh/uv"
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:222fcd9878ed6f5a8565d121d1a10e1f958e3c7b42e4ec5cbc6927b2be20cc1a"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.24/uv-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:3d9c9a95f1868ff20ac880712f3a337d710ea4b65f135184b7a35635d1acbf84"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.25/uv-aarch64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:2f9eaa976cf8ad8574623dde6916fb87ec047524fe65b99dc11e44e33eae4bfb"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.24/uv-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:7195cfcc1785d0c559d4682ad9109f26664b8db4d828d42d66078ef454061891"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.25/uv-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:7578c6087c5cd76981732b1f5d126248101faebdf81016ba780a65ce03653cdf"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.24/uv-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:5fc334bb25d19806262efd1f6e7d380155c7e817d89bf426df4ba7ae873c9471"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.25/uv-aarch64-apple-darwin.tar.gz"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:af9573a2e36f7020b18ec5fdde20117aae74bbad3f4acb3dc3fc03319f1aa083"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.24/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:15bfd1423b7eaa7aae949922d4712ebaac2bb44a81af64ab59bbe007090cb0d0"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.25/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:af9573a2e36f7020b18ec5fdde20117aae74bbad3f4acb3dc3fc03319f1aa083"
-url = "https://github.com/astral-sh/uv/releases/download/0.11.24/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:15bfd1423b7eaa7aae949922d4712ebaac2bb44a81af64ab59bbe007090cb0d0"
+url = "https://github.com/astral-sh/uv/releases/download/0.11.25/uv-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
 
 [[tools.yq]]
