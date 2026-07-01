@@ -2,3 +2,9 @@ bash_profile
 bashrc
 __pycache__/
 *.pyc
+*.pyo
+*.whl
+.ruff_cache/
+.DS_Store
+.env
+.venv/
