@@ -88,6 +88,30 @@ properties:
         id: Rustlang.Rustup
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: VisualStudioBuildTools
+      directives:
+        # cargo/rustc の windows-msvc ターゲットビルドに必要な MSVC リンカー (link.exe) を導入する。
+        # C++ ワークロードはインストーラー引数が必要なため WinGetPackage 単体では指定できず、
+        # 下の VSComponents リソースで別途追加する。
+        # link.exe が Coreutils for Windows 版と名前衝突する問題への対応は docs/adr/017-msvc-linker-env-var-override-windows.md
+        description: "Install Visual Studio 2022 Build Tools"
+        allowPrerelease: false
+        securityContext: elevated
+      settings:
+        id: Microsoft.VisualStudio.2022.BuildTools
+        source: winget
+    - resource: Microsoft.VisualStudio.DSC/VSComponents
+      dependsOn:
+        - VisualStudioBuildTools
+      directives:
+        description: "Install C++ build tools workload (Desktop development with C++) + Windows SDK"
+        securityContext: elevated
+      settings:
+        productId: Microsoft.VisualStudio.Product.BuildTools
+        channelId: VisualStudio.17.Release
+        components: Microsoft.VisualStudio.Workload.VCTools
+        includeRecommended: true
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: "Install Microsoft Edit"
         allowPrerelease: false
@@ -96,6 +120,8 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        # 同梱の link.exe (ハードリンク作成コマンド) が MSVC リンカーと名前衝突する。
+        # 対応: docs/adr/017-msvc-linker-env-var-override-windows.md
         description: "Install Coreutils for Windows"
         allowPrerelease: false
       settings:
