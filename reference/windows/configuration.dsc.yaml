@@ -79,6 +79,16 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        # rust-toolchain.toml を持つプロジェクトでの version pinning を機能させるため、
+        # mise ではなく公式インストーラー (rustup) で管理する。
+        # 詳細: docs/adr/016-rust-external-rustup.md
+        description: "Install Rust (rustup)"
+        allowPrerelease: false
+      settings:
+        id: Rustlang.Rustup
+        source: winget
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      directives:
         description: "Install Microsoft Edit"
         allowPrerelease: false
       settings:

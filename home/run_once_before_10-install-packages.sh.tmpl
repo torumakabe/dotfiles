@@ -94,4 +94,11 @@ brew install \
 brew install --cask libreoffice
 
 {{ end -}}
+
+# Rust — rust-toolchain.toml を持つプロジェクトでの version pinning を機能させるため、
+# mise ではなく公式インストーラー (rustup) で管理する。詳細: docs/adr/016-rust-external-rustup.md
+if ! command -v rustup >/dev/null 2>&1; then
+  echo "Installing Rust via rustup (official installer)..."
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+fi
 {{ end -}}

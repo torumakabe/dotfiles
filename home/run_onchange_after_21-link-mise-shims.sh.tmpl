@@ -38,15 +38,14 @@ STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-lin
 
 # 言語ランタイム本体。VS Code 等が ~/.local/bin を優先して拾うと予期せぬバージョンで
 # 起動する恐れがあるため、Copilot 経由での利用価値より副作用リスクを優先して除外。
+# rust は mise 管理外 (docs/adr/016-rust-external-rustup.md) のため shim 自体が存在せず対象外。
 EXCLUDE_EXACT=(
   node npm npx corepack
   dotnet dnx
-  cargo rustc rustup rustfmt rustdoc clippy-driver rls
 )
 
-# glob パターン。cargo-*/rust-* は cargo/rustc 本体とセットで無効化。
-# *.bat/*.ps1/*.sh/*.zst/*.txt/*-darwin-* は shim ではない付随ファイル。
-EXCLUDE_PATTERN=('cargo-*' 'rust-*' '*.bat' '*.ps1' '*.sh' '*.zst' '*.txt' '*-darwin-*')
+# glob パターン。*.bat/*.ps1/*.sh/*.zst/*.txt/*-darwin-* は shim ではない付随ファイル。
+EXCLUDE_PATTERN=('*.bat' '*.ps1' '*.sh' '*.zst' '*.txt' '*-darwin-*')
 
 is_excluded() {
   local name="$1" e p
