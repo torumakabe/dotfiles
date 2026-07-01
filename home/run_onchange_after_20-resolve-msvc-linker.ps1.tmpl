@@ -1,0 +1,57 @@
+{{ if eq .chezmoi.os "windows" -}}
+# MSVC リンカー (link.exe) を CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER で明示指定する。
+#
+# 背景:
+#   winget で導入した Coreutils for Windows (Microsoft.Coreutils) は GNU coreutils 版の
+#   link.exe (ハードリンク作成コマンド) を提供し、Machine PATH に登録される
+#   (MSI インストーラーによる登録のため、管理者権限なしでは書き換え/削除不可)。
+#   rustc は windows-msvc ターゲットのリンク時、PATH 上に link.exe が見つかると
+#   vswhere によるツールチェイン自動検出を丸ごとスキップしてそれをそのまま呼び出すため、
+#   coreutils 版が誤って使われてリンクエラーになる。
+#   Machine PATH は User PATH より先に解決されるため、PATH の並び替え (User PATH 側の
+#   prepend) では解決できない。
+#
+# 対応:
+#   PATH の並び順に依存しない CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER 環境変数
+#   (ユーザースコープ) で MSVC の link.exe を直接指定する。vswhere で毎回解決し直す
+#   ため、Visual Studio Build Tools の更新でツールセットのバージョンフォルダが
+#   変わっても追従する (ハードコードされた絶対パスを chezmoi ソースに持たない)。
+#
+# 関連: docs/adr/017-msvc-linker-env-var-override-windows.md
+#
+# 実行契機:
+#   VS Build Tools の更新を検知できる安定したハッシュ元がないため、{{ "{{ now }}" }} を
+#   埋め込み `chezmoi apply` の度に再評価する。vswhere 実行のみで数十 ms 程度であり、
+#   解決結果が変わらない限り環境変数への書き込みは行わない。
+#
+# generated: {{ now.Format "2006-01-02T15:04:05Z07:00" }}
+
+$ErrorActionPreference = 'Continue'
+
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (-not (Test-Path -LiteralPath $vswhere)) {
+    Write-Host 'vswhere.exe not found; skipping MSVC linker resolution (Visual Studio Build Tools not installed yet?).'
+    exit 0
+}
+
+$linkerPaths = & $vswhere -latest -prerelease -products * `
+    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+    -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\link.exe' 2>$null
+
+if (-not $linkerPaths) {
+    Write-Host 'MSVC link.exe not found via vswhere; skipping (Desktop development with C++ ワークロードを導入してください).'
+    exit 0
+}
+
+$linkerPath = $linkerPaths | Sort-Object | Select-Object -Last 1
+$varName = 'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER'
+$current = [Environment]::GetEnvironmentVariable($varName, 'User')
+
+if ($current -eq $linkerPath) {
+    Write-Host "MSVC linker already up to date: $linkerPath"
+} else {
+    Write-Host "Setting $varName = $linkerPath"
+    [Environment]::SetEnvironmentVariable($varName, $linkerPath, 'User')
+    Set-Item -Path "Env:$varName" -Value $linkerPath
+}
+{{ end -}}

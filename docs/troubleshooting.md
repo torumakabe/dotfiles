@@ -82,6 +82,22 @@ command -v copilot uv
 [Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-String 'mise\\shims'
 ```
 
+## Windows で `cargo build` / `cargo check` がリンクエラーになる (`link.exe` が見つからない/引数エラー)
+
+症状: `error: linking with \`link.exe\` failed` や、coreutils の `link` コマンドのヘルプ/エラーメッセージがそのまま出力される。
+
+原因: winget で導入した Coreutils for Windows の `link.exe`（ハードリンク作成コマンド）が Machine PATH に登録されており、MSVC の `link.exe` と名前が衝突する。詳細は [`docs/architecture.md`](architecture.md#msvc-リンカー解決-windows) と [ADR-017](adr/017-msvc-linker-env-var-override-windows.md)。
+
+復旧:
+
+1. Visual Studio 2022 Build Tools（C++ によるデスクトップ開発ワークロード）が未導入なら、管理者権限の PowerShell で `winget configure -f reference\windows\configuration.dsc.yaml` を実行する
+2. `chezmoi apply` を実行する（`run_onchange_after_20-resolve-msvc-linker.ps1` は毎回再評価されるため、追加の手動操作は不要）
+3. 環境変数が設定されているか確認する（新しいシェルで反映される）
+
+    ```powershell
+    [Environment]::GetEnvironmentVariable('CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER', 'User')
+    ```
+
 ## Git pre-commit が `C:/Users/.../.config/git/hooks/pre-commit: No such file or directory` で失敗する
 
 グローバル hook は chezmoi で `~/.config/git/hooks/pre-commit` に配置し、`core.hooksPath` から参照する。未配置なら次で復旧する。
