@@ -8,6 +8,7 @@
   - REPL: `uv run python`
 - Windows: ファイルをエディタで開く → `Start-Process edit <path>`、Markdown 閲覧 → `Show-Markdown -Path <path> -UseBrowser`
 - Windows: Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
+- Windows: bash スクリプト（skill 付属の `.sh` 等）は素の `bash` だと WSL 解決され `gh` 等が見えず失敗する。`& "C:\Program Files\Git\bin\bash.exe"` を明示し `MSYS_NO_PATHCONV=1` を設定する
 - macOS / Linux: コマンド存在チェック → `command -v`（`which` は使わない）
 - コード/テキスト検索は組み込み `grep` / `glob` を使う。`rg` / `Select-String` / `findstr` をシェル経由で叩かない（ヒット全文がコンテキストに残り再送され続けるため）
 
