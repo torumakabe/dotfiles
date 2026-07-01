@@ -21,13 +21,14 @@
 | [006](006-pretooluse-hook-no-allow.md) | Copilot CLI preToolUse フックは allow を出力しない | Accepted |
 | [007](007-python-with-uv-and-pep723.md) | Python スクリプトは uv run + PEP 723 で実行する | Accepted |
 | [008](008-zshenv-sources-profile.md) | ~/.zshenv は ~/.profile を source する | Accepted |
-| [009](009-mise-rust-windows-isolate-home.md) | Windows では mise の rust home を外部 rustup から分離する | Accepted |
+| [009](009-mise-rust-windows-isolate-home.md) | Windows では mise の rust home を外部 rustup から分離する | Superseded by ADR-016 |
 | [010](010-url-allowlist-via-pretooluse-hook.md) | Copilot CLI の URL 包括制御は preToolUse Hook で行う | Superseded by ADR-015 |
 | [011](011-edit-windows-via-winget-dsc.md) | Microsoft Edit は Windows のみ winget/DSC で管理する | Accepted |
 | [012](012-wsl-op-ssh-sign-crlf-wrapper.md) | WSL では op-ssh-sign-wsl.exe を CR 除去ラッパー経由で呼ぶ | Accepted |
 | [013](013-mise-lockfile-sync-hook.md) | mise lockfile 変更時に install / reshim を自動同期する | Accepted |
 | [014](014-github-multi-account-https-auth-per-owner.md) | GitHub 多アカウント HTTPS 認証は credential の URL パス方式 + gh auth token --user で解決する | Accepted |
 | [015](015-copilot-cli-shell-network-via-local-sandbox.md) | Copilot CLI shell のネットワーク制御は local sandbox で行う | Accepted |
+| [016](016-rust-external-rustup.md) | Rust は全 OS で外部 rustup 管理とする (mise 管理から除外) | Accepted |
 
 ## テンプレート
 

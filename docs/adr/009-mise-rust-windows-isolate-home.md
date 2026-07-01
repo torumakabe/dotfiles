@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by ADR-016
 
 ## Context
 
@@ -23,3 +23,5 @@ PATH 追加は行わない。Windows では `run_once_after_05-setup-mise-shims-
 - Windows で mise install の symlink 衝突が消え、pre-commit / `uv run` の安定化につながる
 - Windows 上で「mise が管理する rust」と「外部 rustup が管理する rust」が別 toolchain になる。`cargo install` の成果物も別パスになるため、直接 `%USERPROFILE%\.cargo\bin` を叩いていた利用者は移行が必要
 - Linux/macOS は変更なし。全 OS 一律の分離方針を取らないのは、shim exclude (ADR-003) のレイヤでは救えない Windows 固有問題であり、他 OS の既存 UX を壊す必要がないため
+
+本 ADR は ADR-016 により置換された。rust を全 OS で mise 管理から除外し外部 rustup に一本化したため、本 ADR が対処していた mise/rustup home 分離は不要になった。
