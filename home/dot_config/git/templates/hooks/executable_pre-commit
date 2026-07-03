@@ -1,14 +1,25 @@
 #!/bin/sh
 set -eu
 
-# Global pre-commit hook: gitleaks secret detection + local hook delegation
+# Default pre-commit hook: gitleaks secret detection.
 #
-# Deployed by chezmoi to ~/.config/git/hooks/pre-commit
-# Activated via core.hooksPath in ~/.gitconfig
+# Deployed by chezmoi to ~/.config/git/templates/hooks/pre-commit and wired up
+# via `git config --global init.templateDir ~/.config/git/templates`. Git
+# copies this file into <repo>/.git/hooks/pre-commit at `git init`/`git clone`
+# time only, and only if that file does not already exist there (git will
+# print "templates not copied: file already exists" and skip it otherwise).
+# From that point on it is an ordinary local hook file for that repository:
+# any repo-local hook manager (lefthook, husky, pre-commit framework, ...)
+# that later installs its own <repo>/.git/hooks/pre-commit will simply replace it
+# using its own normal detect/backup/overwrite logic, with no effect on any
+# other repository. See docs/adr/018-git-hooks-via-init-templatedir.md.
+#
+# Existing repos are not retroactively covered: re-run `git init` inside them
+# once (safe/idempotent, never overwrites an existing hook) to backfill this
+# hook, or run the git-hooks-audit helper to find repos missing it.
+#
 # Keep this POSIX sh compatible so Windows Git does not pick up WSL bash
 # through /usr/bin/env bash and pass it an unopenable C:/... hook path.
-
-# --- gitleaks secret scan ---
 
 find_gitleaks() {
   # Windows (Git Bash): prefer the .exe shim. The extensionless mise shim is a
@@ -59,13 +70,4 @@ GITLEAKS=$(find_gitleaks) || {
 
 if [ -n "${GITLEAKS}" ]; then
   "${GITLEAKS}" git --pre-commit --staged --redact --verbose --no-banner
-fi
-
-# --- Delegate to repository-local pre-commit hook ---
-# core.hooksPath overrides .git/hooks/, so we explicitly run the local hook
-# if it exists to preserve project-specific hooks.
-
-LOCAL_HOOK="$(git rev-parse --git-dir 2>/dev/null)/hooks/pre-commit"
-if [ -x "${LOCAL_HOOK}" ]; then
-  exec "${LOCAL_HOOK}" "$@"
 fi

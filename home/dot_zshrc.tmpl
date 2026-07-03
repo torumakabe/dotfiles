@@ -198,6 +198,57 @@ function ghcd() {
   fi
 }
 
+# git-hooks-audit: ghq 管理下の全リポジトリを走査し、init.templateDir 経由の
+# pre-commit hook (gitleaks) が効いているか報告する (ADR-018)。
+# init.templateDir は git init/clone 時に一度だけ hook をコピーする方式のため、
+# 既存リポジトリや、独自 hooksPath を持つリポジトリ (lefthook/husky 等) では
+# 自動的には保護されない。ここでは削除・変更は一切行わず、状態を可視化するのみ。
+git-hooks-audit() {
+  if ! command -v ghq >/dev/null 2>&1; then
+    echo "❌ ghq が見つかりません" >&2
+    return 1
+  fi
+
+  local repo hooks_path_effective hook_path is_bare
+  ghq list -p | while IFS= read -r repo; do
+    [ -d "$repo" ] || continue
+    # --local ではなく実効値を見る（global/system/includeIf 由来の override も検知するため）
+    hooks_path_effective=$(git -C "$repo" config --get core.hooksPath 2>/dev/null || true)
+    if [ -n "${hooks_path_effective}" ]; then
+      if [ "${hooks_path_effective}" = "${HOME}/.config/git/hooks" ] || [ "${hooks_path_effective}" = "~/.config/git/hooks" ]; then
+        echo "⚠️  ${repo}: core.hooksPath=${hooks_path_effective} (旧グローバル設定。chezmoi apply 後に再確認)"
+      else
+        echo "⚠️  ${repo}: core.hooksPath=${hooks_path_effective} (init.templateDir hook は使われません)"
+      fi
+      continue
+    fi
+    is_bare=$(git -C "$repo" rev-parse --is-bare-repository 2>/dev/null || true)
+    if [ -z "${is_bare}" ]; then
+      echo "❓ ${repo}: git repo として認識できません"
+      continue
+    fi
+    if [ "${is_bare}" = "true" ]; then
+      echo "ℹ️  ${repo}: bare repo のため対象外"
+      continue
+    fi
+    # 手動で相対パスを組み立てない（worktree 等で $repo 相対とは限らないため）
+    hook_path=$(git -C "$repo" rev-parse --path-format=absolute --git-path hooks/pre-commit 2>/dev/null || true)
+    if [ -z "${hook_path}" ]; then
+      echo "❓ ${repo}: hook path を解決できません"
+      continue
+    fi
+    if [ ! -f "${hook_path}" ]; then
+      echo "❌ ${repo}: pre-commit hook が無い（backfill: git -C '${repo}' init）"
+      continue
+    fi
+    if grep -q "gitleaks.*git.*--pre-commit.*--staged" "${hook_path}" 2>/dev/null; then
+      echo "✅ ${repo}: gitleaks hook 有効"
+    else
+      echo "ℹ️  ${repo}: pre-commit hook はあるが gitleaks 製ではない（他ツールが管理中と思われる）"
+    fi
+  done
+}
+
 # Azure CLI の SyntaxWarning を抑制（azure-sdk-for-python#38618 の回避策）
 az() {
   PYTHONWARNINGS="ignore::SyntaxWarning" command az "$@"

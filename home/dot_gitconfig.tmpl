@@ -1,7 +1,6 @@
 [core]
 	autocrlf = input
 	fileMode = false
-	hooksPath = ~/.config/git/hooks
 [pull]
 	ff = only
 [rerere]
@@ -12,6 +11,12 @@
 	signoff = true
 [init]
 	defaultBranch = main
+	# Seeds new repos' .git/hooks/ at `git init`/`git clone` time only (see
+	# ADR-018). Unlike core.hooksPath, this never redirects an existing repo's
+	# hook lookup, so repo-local hook managers (lefthook, husky, ...) can't be
+	# clobbered across repositories. Existing repos need a one-time backfill;
+	# run the git-hooks-audit helper to find repos missing the seeded hook.
+	templateDir = ~/.config/git/templates
 [help]
 	autocorrect = 20
 [alias]
