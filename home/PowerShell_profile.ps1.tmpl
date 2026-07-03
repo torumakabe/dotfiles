@@ -174,11 +174,71 @@ function Invoke-MiseUpgrade {
     }
 }
 
+# git-hooks-audit: ghq 管理下の全リポジトリを走査し、init.templateDir 経由の
+# pre-commit hook (gitleaks) が効いているか報告する (ADR-018)。
+# init.templateDir は git init/clone 時に一度だけ hook をコピーする方式のため、
+# 既存リポジトリや、独自 hooksPath を持つリポジトリ (lefthook/husky 等) では
+# 自動的には保護されない。ここでは削除・変更は一切行わず、状態を可視化するのみ。
+function Invoke-GitHooksAudit {
+    if (-not (Get-Command ghq -ErrorAction SilentlyContinue)) {
+        Write-Error "❌ ghq が見つかりません"
+        return
+    }
+
+    ghq list -p | ForEach-Object {
+        $repo = $_
+        if (-not (Test-Path $repo -PathType Container)) { return }
+
+        # --local ではなく実効値を見る（global/system/includeIf 由来の override も検知するため）
+        $hooksPathEffective = git -C $repo config --get core.hooksPath 2>$null
+        if ($LASTEXITCODE -eq 0 -and $hooksPathEffective) {
+            if ($hooksPathEffective -eq "$HOME/.config/git/hooks" -or $hooksPathEffective -eq "~/.config/git/hooks") {
+                Write-Host "⚠️  ${repo}: core.hooksPath=$hooksPathEffective (旧グローバル設定。chezmoi apply 後に再確認)"
+            }
+            else {
+                Write-Host "⚠️  ${repo}: core.hooksPath=$hooksPathEffective (init.templateDir hook は使われません)"
+            }
+            return
+        }
+
+        $isBare = git -C $repo rev-parse --is-bare-repository 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $isBare) {
+            Write-Host "❓ ${repo}: git repo として認識できません"
+            return
+        }
+        if ($isBare -eq 'true') {
+            Write-Host "ℹ️  ${repo}: bare repo のため対象外"
+            return
+        }
+
+        # 手動で相対パスを組み立てない（worktree 等で $repo 相対とは限らないため）
+        $hookPath = git -C $repo rev-parse --path-format=absolute --git-path hooks/pre-commit 2>$null
+        $gitOk = $LASTEXITCODE -eq 0
+        if (-not $gitOk -or -not $hookPath) {
+            Write-Host "❓ ${repo}: hook path を解決できません"
+            return
+        }
+
+        if (-not (Test-Path $hookPath -PathType Leaf)) {
+            Write-Host "❌ ${repo}: pre-commit hook が無い（backfill: git -C '$repo' init）"
+            return
+        }
+
+        if (Select-String -Path $hookPath -Pattern 'gitleaks.*git.*--pre-commit.*--staged' -Quiet) {
+            Write-Host "✅ ${repo}: gitleaks hook 有効"
+        }
+        else {
+            Write-Host "ℹ️  ${repo}: pre-commit hook はあるが gitleaks 製ではない（他ツールが管理中と思われる）"
+        }
+    }
+}
+
 # === Aliases ===
 Set-Alias -Name e -Value Open-EditInNewConsole
 Set-Alias -Name k -Value kubectl
 Set-Alias -Name mise-self-upgrade -Value Invoke-MiseSelfUpgrade
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
+Set-Alias -Name git-hooks-audit -Value Invoke-GitHooksAudit
 
 # Copilot CLI: local sandbox is enabled. preToolUse hooks still protect
 # sensitive files and shell-level secret reads.

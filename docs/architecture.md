@@ -13,7 +13,7 @@ home/                           ← chezmoi source
 ├── dot_zshrc.tmpl              ← 対話 zsh
 ├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
 ├── dot_{zprofile,zshenv,bash_profile,bashrc}.tmpl ← 全て ~/.profile を source
-├── dot_config/git/hooks/pre-commit  ← gitleaks + ローカルフック委譲
+├── dot_config/git/templates/hooks/pre-commit  ← gitleaks (init.templateDir 経由)
 ├── dot_config/mise/{config.toml.tmpl,mise.lock}
 ├── PowerShell_profile.ps1.tmpl
 ├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp, skills）
@@ -28,7 +28,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 - `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` でネットワーク以外の危険操作を抑止、`postToolUse` で監査ログ
 - Copilot CLI local sandbox を有効化
 - `copilot-guardrails` で利便性と秘匿環境変数の扱いを固定
-- `gitleaks` 付き pre-commit を配布
+- `gitleaks` 付き pre-commit を `init.templateDir` 経由で配布（ADR-018）
 
 ## Copilot Guard の設計
 
@@ -45,7 +45,9 @@ shell command の外部ネットワーク通信は、`~/.copilot/settings.json` 
 
 ## git pre-commit フック
 
-グローバル `pre-commit` を `~/.config/git/hooks/pre-commit` に配置し `core.hooksPath` で有効化。`gitleaks git --pre-commit --staged --redact` の後、リポジトリローカルの `.git/hooks/pre-commit` があれば追加実行する。
+`~/.config/git/templates/hooks/pre-commit` を配置し、`git config --global init.templateDir` で有効化（ADR-018）。`git init`/`git clone` の瞬間に各リポジトリの `.git/hooks/pre-commit` へコピーされ、以降は通常のローカル hook として扱われる。`core.hooksPath` のようにグローバルに強制するのではなく「新規リポジトリの既定値」として配る方式のため、lefthook/husky 等の repo-local hook manager を導入した他リポジトリを巻き込まない。
+
+トレードオフとして、既存リポジトリには自動適用されない（`git init` を一度再実行して backfill するか、独自 hook manager を使うリポジトリはそのままにする）。`git-hooks-audit`（zsh 関数 / PowerShell `Invoke-GitHooksAudit`）で ghq 管理下の全リポジトリの状態（hook 未配置・local hooksPath 上書き・gitleaks 以外の hook に置き換え済み）を確認できる。
 
 ## プラットフォーム検出
 

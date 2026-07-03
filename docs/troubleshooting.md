@@ -98,14 +98,16 @@ command -v copilot uv
     [Environment]::GetEnvironmentVariable('CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER', 'User')
     ```
 
-## Git pre-commit が `C:/Users/.../.config/git/hooks/pre-commit: No such file or directory` で失敗する
+## 新規リポジトリに gitleaks pre-commit hook が入らない
 
-グローバル hook は chezmoi で `~/.config/git/hooks/pre-commit` に配置し、`core.hooksPath` から参照する。未配置なら次で復旧する。
+新規/backfill 済みリポジトリの hook は、`git init`/`git clone` 時に `~/.config/git/templates/hooks/pre-commit` から `.git/hooks/pre-commit` へコピーされる（ADR-018）。テンプレートが未配置なら次で復旧する。
 
 ```bash
-git config --global core.hooksPath   # 期待値: ~/.config/git/hooks
-chezmoi apply ~/.config/git/hooks/pre-commit
+git config --global init.templateDir   # 期待値: ~/.config/git/templates
+chezmoi apply ~/.config/git/templates/hooks/pre-commit
 ```
+
+`init.templateDir` は `git init`/`git clone` した瞬間にしか `.git/hooks/` へコピーされない。既存リポジトリに hook が無い場合は `git -C <repo> init` を再実行して backfill する（既存ファイルは上書きされないため安全）。`git-hooks-audit` / `Invoke-GitHooksAudit` で ghq 管理下の全リポジトリの hook 有無をまとめて確認できる。
 
 Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin/env bash` が WSL の `bash.exe` を拾い、Windows 形式の `C:/...` パスを開けていない可能性がある。この pre-commit hook はその経路を避けるため POSIX `sh` 互換で管理する。mise の Windows shim も extensionless 版は `/bin/bash` スクリプトなので、hook 内では `gitleaks.exe` を優先する。
 

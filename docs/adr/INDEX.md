@@ -30,6 +30,7 @@
 | [015](015-copilot-cli-shell-network-via-local-sandbox.md) | Copilot CLI shell のネットワーク制御は local sandbox で行う | Accepted |
 | [016](016-rust-external-rustup.md) | Rust は全 OS で外部 rustup 管理とする (mise 管理から除外) | Accepted |
 | [017](017-msvc-linker-env-var-override-windows.md) | Windows の MSVC リンカーは CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER で明示指定する | Accepted |
+| [018](018-git-hooks-via-init-templatedir.md) | 機械全体への Git hook 配布は init.templateDir で行う | Accepted |
 
 ## テンプレート
 

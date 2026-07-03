@@ -118,12 +118,20 @@ sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
 
 ## git pre-commit フック
 
-グローバル pre-commit を `~/.config/git/hooks/pre-commit` に配置し、`gitleaks` で staged 変更を検査する。必要ならリポジトリローカルの `.git/hooks/pre-commit` に委譲する。
+`~/.config/git/templates/hooks/pre-commit` を `gitleaks` の scan スクリプトとして配置し、`init.templateDir` 経由で新規リポジトリ（`git init`/`git clone`）にのみ既定配布する（ADR-018、旧 `core.hooksPath` グローバル方式からの移行）。
 
 ```bash
-git config --global core.hooksPath   # 期待値: ~/.config/git/hooks
-chezmoi edit ~/.config/git/hooks/pre-commit && chezmoi apply
+git config --global init.templateDir   # 期待値: ~/.config/git/templates
+chezmoi edit ~/.config/git/templates/hooks/pre-commit && chezmoi apply
 ```
+
+既存リポジトリへの backfill（`git init` の再実行は既存 hook を上書きしないため安全・冪等）:
+
+```bash
+git -C <repo-path> init
+```
+
+状態の確認は `git-hooks-audit`（zsh）/ `Invoke-GitHooksAudit`（PowerShell）で ghq 管理下の全リポジトリを一括チェックできる。
 
 ## `run_once_*` の再実行
 
