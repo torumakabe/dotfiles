@@ -16,7 +16,8 @@ Accepted
 
 - 番号 15 は `run_onchange_after_21-link-mise-shims.sh.tmpl`（macOS の shim symlink, ADR-002）より前で `run_once_after_20-mise-install.sh.tmpl` の後に走らせるための位置取り。
 - mise が PATH に無い環境（CI 等）は skip して exit 0、apply 全体を止めない。
-- 失敗しても exit 0 で警告のみ。次回 apply で hash 再評価により再試行される。
+- mise 用の GitHub token が未設定で `gh` が認証済みの場合は、`gh auth token` から取得した token を `MISE_GITHUB_TOKEN` としてフックのプロセス内だけで `mise install` へ渡す。`gh` が未認証の環境では従来の動作を変更しない。
+- `mise install` / `mise reshim` が失敗しても exit 0 で警告のみ。次回 apply で hash 再評価により再試行される。
 
 ## Consequences
 

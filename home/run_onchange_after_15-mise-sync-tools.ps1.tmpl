@@ -31,6 +31,22 @@ if (-not $miseExe -or -not (Test-Path -LiteralPath $miseExe)) {
   exit 0
 }
 
+if (-not $env:MISE_GITHUB_TOKEN -and -not $env:GITHUB_API_TOKEN -and -not $env:GITHUB_TOKEN) {
+  if ($env:GH_TOKEN) {
+      $env:MISE_GITHUB_TOKEN = $env:GH_TOKEN
+  }
+  else {
+      $ghCommand = Get-Command -CommandType Application -Name 'gh.exe' -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+      if ($ghCommand) {
+          $token = & $ghCommand.Source auth token 2>$null
+          if ($LASTEXITCODE -eq 0 -and $token) {
+              $env:MISE_GITHUB_TOKEN = $token
+          }
+      }
+  }
+}
+
 Write-Host "Syncing mise tools with lockfile via $miseExe ..."
 & $miseExe install
 $installExit = $LASTEXITCODE
