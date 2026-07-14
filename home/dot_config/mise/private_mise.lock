@@ -231,7 +231,7 @@ url = "https://github.com/cue-lang/cue/releases/download/v0.17.0/cue_v0.17.0_win
 url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/461081557"
 
 [[tools.dotnet]]
-version = "10.0.301"
+version = "10.0.302"
 backend = "vfox:dotnet"
 
 [tools.dotnet."platforms.linux-arm64"]
@@ -634,29 +634,19 @@ version = "1.31.1"
 backend = "aqua:sqlc-dev/sqlc"
 
 [tools.sqlc."platforms.linux-arm64"]
-checksum = "sha256:b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402611988"
+url = "https://downloads.sqlc.dev/sqlc_1.31.1_linux_arm64.tar.gz"
 
 [tools.sqlc."platforms.linux-x64"]
-checksum = "sha256:497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402611992"
+url = "https://downloads.sqlc.dev/sqlc_1.31.1_linux_amd64.tar.gz"
 
 [tools.sqlc."platforms.macos-arm64"]
-checksum = "sha256:21602158c99eb1f2bae197a66abfb1941d1e9e50b23125bb193349c6b1acc71e"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402611984"
+url = "https://downloads.sqlc.dev/sqlc_1.31.1_darwin_arm64.tar.gz"
 
 [tools.sqlc."platforms.windows-arm64"]
-checksum = "sha256:b3d7a016c177923cb426f0d544d3ffbe2ff97306137bb77f668af709b5613692"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_windows_arm64.zip"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402612176"
+url = "https://downloads.sqlc.dev/sqlc_1.31.1_windows_amd64.tar.gz"
 
 [tools.sqlc."platforms.windows-x64"]
-checksum = "sha256:352711fa7dcb05dcdfefca0ad71b2c9a74fd090f8d7fc609419de4cbc725429f"
-url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_windows_amd64.zip"
-url_api = "https://api.github.com/repos/sqlc-dev/sqlc/releases/assets/402612157"
+url = "https://downloads.sqlc.dev/sqlc_1.31.1_windows_amd64.tar.gz"
 
 [[tools.terraform]]
 version = "1.15.8"
