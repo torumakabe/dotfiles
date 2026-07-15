@@ -232,22 +232,7 @@ url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/461081557"
 
 [[tools.dotnet]]
 version = "10.0.302"
-backend = "vfox:dotnet"
-
-[tools.dotnet."platforms.linux-arm64"]
-url = "https://dot.net/v1/dotnet-install.sh"
-
-[tools.dotnet."platforms.linux-x64"]
-url = "https://dot.net/v1/dotnet-install.sh"
-
-[tools.dotnet."platforms.macos-arm64"]
-url = "https://dot.net/v1/dotnet-install.sh"
-
-[tools.dotnet."platforms.windows-arm64"]
-url = "https://dot.net/v1/dotnet-install.ps1"
-
-[tools.dotnet."platforms.windows-x64"]
-url = "https://dot.net/v1/dotnet-install.ps1"
+backend = "core:dotnet"
 
 [[tools.fzf]]
 version = "0.74.0"
