@@ -114,33 +114,33 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url_api = "https://api.github.com/repos/sagiegurari/cargo-make/releases/assets/221410756"
 
 [[tools.codex]]
-version = "0.144.4"
+version = "0.144.5"
 backend = "aqua:openai/codex"
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:b1bc561a5bf74f9c5767c698275ae8043cee2ce45341098048b0b0b8b4e2cfc5"
-url = "https://github.com/openai/codex/releases/download/rust-v0.144.4/codex-package-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/476297038"
+checksum = "sha256:7703bbb6cbd4ba3df60c32d200bca2987691047353d3a6c825af2b8bc99f1808"
+url = "https://github.com/openai/codex/releases/download/rust-v0.144.5/codex-package-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/478682029"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:d0a7bdb2ca821c9bb5f4cc2fb11a4ed96025db63b20d1bddf1e632361a108220"
-url = "https://github.com/openai/codex/releases/download/rust-v0.144.4/codex-package-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/476297014"
+checksum = "sha256:23a7022a493c5404c50c62a4ad5655836adbee019d93c73114954d8daff20053"
+url = "https://github.com/openai/codex/releases/download/rust-v0.144.5/codex-package-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/478681936"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:312e6fa2826596fb23cc1193c30d51902b6522c36ccc43b36417590e0ebd533d"
-url = "https://github.com/openai/codex/releases/download/rust-v0.144.4/codex-package-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/476297059"
+checksum = "sha256:8d1cd2d53b2070919d12c054b57485b6e08347e2666cb20932e9e95eb2aa2901"
+url = "https://github.com/openai/codex/releases/download/rust-v0.144.5/codex-package-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/478682088"
 
 [tools.codex."platforms.windows-arm64"]
-checksum = "sha256:7f41b38da27e41f0fd3509e0e247bf05b7a9b6105565d70ac2be4cc79b64f1fe"
-url = "https://github.com/openai/codex/releases/download/rust-v0.144.4/codex-package-x86_64-pc-windows-msvc.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/476296970"
+checksum = "sha256:4f69430b9a4496214975aecc304adf9b895a27b055b7c64fd274c4fa63a4ef9a"
+url = "https://github.com/openai/codex/releases/download/rust-v0.144.5/codex-package-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/478681968"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:7f41b38da27e41f0fd3509e0e247bf05b7a9b6105565d70ac2be4cc79b64f1fe"
-url = "https://github.com/openai/codex/releases/download/rust-v0.144.4/codex-package-x86_64-pc-windows-msvc.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/476296970"
+checksum = "sha256:4f69430b9a4496214975aecc304adf9b895a27b055b7c64fd274c4fa63a4ef9a"
+url = "https://github.com/openai/codex/releases/download/rust-v0.144.5/codex-package-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/478681968"
 
 [[tools.cosign]]
 version = "3.1.1"
@@ -177,33 +177,33 @@ url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/44289904
 provenance = "cosign"
 
 [[tools.cue]]
-version = "0.17.0"
+version = "0.17.1"
 backend = "aqua:cue-lang/cue"
 
 [tools.cue."platforms.linux-arm64"]
-checksum = "sha256:f4218d82d2903700ee44615172642146f49c8ddcc3809a46fce6cbd0e5baefa6"
-url = "https://github.com/cue-lang/cue/releases/download/v0.17.0/cue_v0.17.0_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/461081560"
+checksum = "sha256:0d729be30d52c952ca38fc9dcb692caa09d8463fa0b64df5781312779183fbcd"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014345"
 
 [tools.cue."platforms.linux-x64"]
-checksum = "sha256:e22219a1cb520ab3d660a486ed2222bb7b8e9cb9502a951ce6b8ac668695713f"
-url = "https://github.com/cue-lang/cue/releases/download/v0.17.0/cue_v0.17.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/461081559"
+checksum = "sha256:a39b0c97695069d95d276d99be0f5dbabb081d801bfdc9ba49b76efaf94e2369"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014346"
 
 [tools.cue."platforms.macos-arm64"]
-checksum = "sha256:d49d4f97ec1db68f1b3e527a78be06a28f3f1b1ca7b5e6902a605450162e5314"
-url = "https://github.com/cue-lang/cue/releases/download/v0.17.0/cue_v0.17.0_darwin_arm64.tar.gz"
-url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/461081556"
+checksum = "sha256:64921403f012a97f89494c03605db2fbf7d9daa77dc2631819ac4406cb2e8074"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014347"
 
 [tools.cue."platforms.windows-arm64"]
-checksum = "sha256:cefcfc8aad2cd6374512f45975fb8cd0dc69dcb6e3c2ca2022e2e1761f5fb858"
-url = "https://github.com/cue-lang/cue/releases/download/v0.17.0/cue_v0.17.0_windows_arm64.zip"
-url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/461081558"
+checksum = "sha256:db88b2c302be1829e653e20ea87e3f1adc10ae2052d58fe87d21d0ed97102e51"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_windows_arm64.zip"
+url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014343"
 
 [tools.cue."platforms.windows-x64"]
-checksum = "sha256:5ee7c2a1ad13b8ed7521b164532e48c8bc1618b500ac3c5808cbbd47d4c9ccb8"
-url = "https://github.com/cue-lang/cue/releases/download/v0.17.0/cue_v0.17.0_windows_amd64.zip"
-url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/461081557"
+checksum = "sha256:9f15378dc52b9a1bb6fa1755adc0410c9f17f330a621b784a5b31fdbc91c6d7a"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_windows_amd64.zip"
+url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014351"
 
 [[tools.dotnet]]
 version = "10.0.302"
