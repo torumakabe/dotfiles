@@ -37,14 +37,6 @@ cargo-make = "latest"
 experimental = true
 lockfile = true
 fetch_remote_versions_timeout = "60s"
-# mise の versions-host (mise-versions.jdx.dev) は GitHub リリースのアセット URL を
-# `releases/download/{tag}/{asset}` のセグメント数で検証するが、kustomize はモノレポで
-# タグがスラッシュを含む（例: kustomize/v5.8.1）ため検証に失敗し、毎回 mise-upgrade で
-# `invalid_asset_urls fallback=true` の WARN が出る（フォールバックは正常動作、実害なし）。
-# ツール単位で versions-host を無効化する設定は mise に存在しないため、グローバルで無効化する。
-# upgrade/outdated 時は GitHub へ直接問い合わせる（GITHUB_TOKEN ありなので実質影響なし）。
-# 定期チェック対象: mise がスラッシュ入りタグの検証に対応したら本設定を撤去する。
-use_versions_host = false
 
 [tool_alias]
 dotnet = "core:dotnet"
