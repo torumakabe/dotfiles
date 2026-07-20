@@ -26,4 +26,3 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 - **Azure CLI SyntaxWarning**: `dot_zshrc.tmpl` の `az()` ラッパー。[Azure/azure-sdk-for-python#38618](https://github.com/Azure/azure-sdk-for-python/issues/38618) が Close されたら削除する
 - **op-ssh-sign-wsl.exe CRLF (ADR-012)**: `home/dot_local/bin/executable_op-ssh-sign-wrapper.sh.tmpl` で stdout/stderr の CR を剥がして `git verify-commit` を成立させている。1Password が WSL バイナリの改行を LF に揃えた、または git 本体が find-principals 結果の `\r` を剥がすようになったら wrapper と `.gitconfig-linux` の `program` 切替を撤去する
-- **mise versions-host kustomize WARN**: `mise/config.toml.tmpl` で `use_versions_host = false` を設定。kustomize のスラッシュ入りタグ（`kustomize/v5.8.1`）を mise の versions-host が `invalid_asset_urls` と誤判定し WARN を出すため。ツール単位設定が無いのでグローバル無効化。mise がスラッシュ入りタグ検証に対応したら撤去する

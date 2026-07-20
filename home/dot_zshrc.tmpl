@@ -277,18 +277,62 @@ mise-upgrade() {
     return 1
   }
 
-  echo "==> mise upgrade: ツールを最新版に更新..."
-  GITHUB_TOKEN="$token" mise upgrade || {
-    echo "❌ mise upgrade に失敗しました" >&2
+  local mise_log
+  mise_log=$(mktemp "${TMPDIR:-/tmp}/mise-upgrade.XXXXXX") || {
+    echo "❌ mise の実行ログ用一時ファイルを作成できません" >&2
     return 1
   }
 
+  echo "==> mise upgrade: ツールを最新版に更新..."
+  GITHUB_TOKEN="$token" mise upgrade 2>&1 | tee "$mise_log"
+  if (( pipestatus[1] != 0 )); then
+    rm -f "$mise_log"
+    echo "❌ mise upgrade に失敗しました" >&2
+    return 1
+  fi
+  if command grep -q 'mise WARN' "$mise_log"; then
+    rm -f "$mise_log"
+    echo "❌ mise upgrade で警告を検出したため、lockfile の更新を中止します" >&2
+    return 1
+  fi
+
+  local lockfile="$HOME/.config/mise/mise.lock"
+  local lock_backup="${mise_log}.lock"
+  local had_lockfile=0
+  if [[ -f "$lockfile" ]]; then
+    command cp -p "$lockfile" "$lock_backup" || {
+      rm -f "$mise_log"
+      echo "❌ 既存 lockfile を退避できません" >&2
+      return 1
+    }
+    had_lockfile=1
+  fi
+
   echo "==> mise lock: lockfile を再生成..."
-  rm -f ~/.config/mise/mise.lock
-  GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 || {
+  rm -f "$lockfile"
+  : > "$mise_log"
+  GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 2>&1 | tee "$mise_log"
+  if (( pipestatus[1] != 0 )); then
+    if (( had_lockfile )); then
+      command mv -f "$lock_backup" "$lockfile"
+    else
+      rm -f "$lockfile"
+    fi
+    rm -f "$mise_log"
     echo "❌ lockfile の再生成に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください" >&2
     return 1
-  }
+  fi
+  if command grep -q 'mise WARN' "$mise_log"; then
+    if (( had_lockfile )); then
+      command mv -f "$lock_backup" "$lockfile"
+    else
+      rm -f "$lockfile"
+    fi
+    rm -f "$mise_log"
+    echo "❌ mise lock で警告を検出したため、commit と push を中止します" >&2
+    return 1
+  fi
+  rm -f "$mise_log" "$lock_backup"
 
   echo "==> chezmoi re-add: lockfile をソースに反映..."
   chezmoi re-add ~/.config/mise/mise.lock || {
