@@ -20,6 +20,31 @@ url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.35.0/op_windows_amd64_v2.3
 version = "0.2.19"
 backend = "aqua:Azure/kubelogin"
 
+[tools.azure-kubelogin."platforms.linux-arm64"]
+checksum = "sha256:aad7e7ca2a8e67db15b110e535123c1bc0f31ef488f5d3ab5b9ae7c9de6f48d3"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-linux-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/455849065"
+
+[tools.azure-kubelogin."platforms.linux-x64"]
+checksum = "sha256:ebaeff02aa899c5cae6a2b954b64fc02738185319df2570f7dc053451efa4b2f"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-linux-amd64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/455849038"
+
+[tools.azure-kubelogin."platforms.macos-arm64"]
+checksum = "sha256:dd46ad1d9bd9f7c55e4d7a353e648a194dced7fced85ca463b79dbede96af945"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-darwin-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/455849010"
+
+[tools.azure-kubelogin."platforms.windows-arm64"]
+checksum = "sha256:55d862722bd755ede21e3f0ed7b3c863af3620b0fb417d17ef14299cbb7f21e9"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-win-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/455848951"
+
+[tools.azure-kubelogin."platforms.windows-x64"]
+checksum = "sha256:0353ff15fa534e610d10b7a7c55d3f10d693bc2fab4d3ec7f7564db6efd22ae4"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-win-amd64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/455848941"
+
 [[tools.bat]]
 version = "0.26.1"
 backend = "aqua:sharkdp/bat"
