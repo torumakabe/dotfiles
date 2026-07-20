@@ -58,15 +58,25 @@ git ls-files --cached | grep -E '\.(whl|pyc|pyo)$|__pycache__|\.ruff_cache|\.DS_
 - テンプレート処理が必要なファイル → `.tmpl` 拡張子
 - `run_once_before_` / `run_onchange_after_` の順序番号が衝突していないか
 
-### 4. mise 設定と install-packages の整合
+### 4. run_once のライフサイクル
 
-#### 4a. ソース照合（静的）
+1. `home/run_once*` を列挙し、各スクリプトを次のいずれかに分類する:
+   - **bootstrap**: 新規端末の初期設定に必要。既存端末で実行済みという理由では削除しない
+   - **migration**: 過去の状態を新しい状態へ一度だけ移行する
+2. migration について、追加時の commit、関連 ADR、スクリプト内コメントから、対象となる旧状態と削除条件を確認する
+3. 削除条件が成立したことを設定、lockfile、対象ツールの現行仕様で確認する。判断根拠を示せない migration は削除せず、⚠️ として報告する
+4. 不要と判断した migration は、参照するテストと文書を含めた削除案を提示する。chezmoi の scriptState は、再実行が必要な場合を除いて変更しない
+5. 新しい migration に対象となる旧状態と機械的に確認できる削除条件が記載されていなければ、追加前に補足を求める
+
+### 5. mise 設定と install-packages の整合
+
+#### 5a. ソース照合（静的）
 
 - `home/dot_config/mise/config.toml.tmpl` に列挙されているツールと、`home/run_once_before_10-install-packages.sh.tmpl` で OS 別に入れているツールに重複や欠落がないか
 - ADR-004 対象（`azd`, `copilot-cli`）は **mise 外** で定義されていることを確認
 - `mise lock` 実行時は `--global --platform` が指定される運用になっているか（`dot_zshrc.tmpl` / `PowerShell_profile.ps1.tmpl` の関数）
 
-#### 4b. 実機 mise ドリフト検査（ランタイム／任意）
+#### 5b. 実機 mise ドリフト検査（ランタイム／任意）
 
 ソース照合ではなく、**このコマンドを実行した実機**の mise 状態を点検する。
 結果は環境依存で、修正は実機のみを変更し git diff は出ない点に留意する。
@@ -76,23 +86,23 @@ git ls-files --cached | grep -E '\.(whl|pyc|pyo)$|__pycache__|\.ruff_cache|\.DS_
   - **宣言ツールの余剰バージョン**（現行版以外）→ `mise prune --tools` を提案
 - 修正提案は他項目と同じくユーザー承認後に実施する
 
-### 5. Python スクリプトの uv 統一（ADR-007）
+### 6. Python スクリプトの uv 統一（ADR-007）
 
 - `hooks/`・`home/private_dot_copilot/hooks/scripts/`・`tests/` の Python スクリプトに PEP 723 インラインメタデータ（`# /// script`）があるか
 - 同領域に `.sh` / `.ps1` / `.bat` がないか（あれば Python への統一を提案）
 
-### 6. ADR 健全性サマリ
+### 7. ADR 健全性サマリ
 
 - `docs/adr/INDEX.md` を読み、`Accepted` な ADR の数と最新番号を確認
 - 詳細な照合が必要な場合は `manage-adr` のパス E を提案
 
-### 7. stored memories のドリフト検出
+### 8. stored memories のドリフト検出
 
 - 関連する stored memories を citations 付きで確認
 - citations にあるパス（`home/...`, `docs/...`, `tests/...`）が実在するか
 - ADR 化済みの内容を重複して保持している memory があれば「ADR-NNN 参照」形式への更新を提案（`manage-adr` パス B' に誘導）
 
-### 8. スキル整合性
+### 9. スキル整合性
 
 - `home/private_dot_copilot/skills/` 内の各ディレクトリに `SKILL.md` が存在するか
 - `copilot-instructions.md` で参照しているスキルが実在するか
