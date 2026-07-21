@@ -256,7 +256,64 @@ az() {
 
 # mise 管理ツールの一括更新（日常操作）
 # upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
+_mise_normalize_log_line() {
+  emulate -L zsh
+
+  command sed $'s/\033\\[[0-9;]*[[:alpha:]]//g' <<< "$1"
+}
+
+_mise_is_allowed_warning() {
+  emulate -L zsh
+
+  local warning="$1"
+  local minimum_release_age_pattern='^mise WARN[[:space:]]+newer [^[:space:]]+ release [^[:space:]]+ ignored by minimum_release_age \([^)]+\); latest eligible release is [^[:space:]]+$'
+  [[ "$warning" =~ $minimum_release_age_pattern ]]
+}
+
+_mise_check_warnings() {
+  emulate -L zsh
+
+  local log_file="$1"
+  local phase="$2"
+  local line warning
+  local blocking_warning=0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    warning=$(_mise_normalize_log_line "$line")
+    [[ "$warning" == *"mise WARN"* ]] || continue
+
+    if _mise_is_allowed_warning "$warning"; then
+      echo "⚠️ ${phase}: リリース待機期間による保留を検出しました。処理を継続します:" >&2
+      echo "  $warning" >&2
+    else
+      if (( ! blocking_warning )); then
+        echo "❌ ${phase}: 処理を中止する警告を検出しました:" >&2
+      fi
+      echo "  $warning" >&2
+      blocking_warning=1
+    fi
+  done < "$log_file"
+
+  (( blocking_warning == 0 ))
+}
+
+_mise_restore_lockfile() {
+  emulate -L zsh
+
+  local lockfile="$1"
+  local lock_backup="$2"
+  local had_lockfile="$3"
+
+  if (( had_lockfile )); then
+    command mv -f "$lock_backup" "$lockfile"
+  else
+    rm -f "$lockfile"
+  fi
+}
+
 mise-upgrade() {
+  emulate -L zsh
+
   # 前提条件チェック
   if ! command -v gh >/dev/null 2>&1; then
     echo "❌ gh CLI が見つかりません。https://cli.github.com/ からインストールしてください" >&2
@@ -283,19 +340,6 @@ mise-upgrade() {
     return 1
   }
 
-  echo "==> mise upgrade: ツールを最新版に更新..."
-  GITHUB_TOKEN="$token" mise upgrade 2>&1 | tee "$mise_log"
-  if (( pipestatus[1] != 0 )); then
-    rm -f "$mise_log"
-    echo "❌ mise upgrade に失敗しました" >&2
-    return 1
-  fi
-  if command grep -q 'mise WARN' "$mise_log"; then
-    rm -f "$mise_log"
-    echo "❌ mise upgrade で警告を検出したため、lockfile の更新を中止します" >&2
-    return 1
-  fi
-
   local lockfile="$HOME/.config/mise/mise.lock"
   local lock_backup="${mise_log}.lock"
   local had_lockfile=0
@@ -308,28 +352,51 @@ mise-upgrade() {
     had_lockfile=1
   fi
 
+  echo "==> mise upgrade: ツールを最新版に更新..."
+  NO_COLOR=1 GITHUB_TOKEN="$token" mise upgrade 2>&1 | tee "$mise_log"
+  if (( pipestatus[1] != 0 )); then
+    if _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"; then
+      echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
+    else
+      echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
+    fi
+    echo "❌ mise upgrade に失敗しました" >&2
+    echo "実行ログ: $mise_log" >&2
+    return 1
+  fi
+  if ! _mise_check_warnings "$mise_log" "mise upgrade"; then
+    if _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"; then
+      echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
+    else
+      echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
+    fi
+    echo "lockfile の再生成、commit、push は実行していません" >&2
+    echo "実行ログ: $mise_log" >&2
+    return 1
+  fi
+
   echo "==> mise lock: lockfile を再生成..."
   rm -f "$lockfile"
   : > "$mise_log"
-  GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 2>&1 | tee "$mise_log"
+  NO_COLOR=1 GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 2>&1 | tee "$mise_log"
   if (( pipestatus[1] != 0 )); then
-    if (( had_lockfile )); then
-      command mv -f "$lock_backup" "$lockfile"
+    if _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"; then
+      echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
     else
-      rm -f "$lockfile"
+      echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
     fi
-    rm -f "$mise_log"
     echo "❌ lockfile の再生成に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください" >&2
+    echo "実行ログ: $mise_log" >&2
     return 1
   fi
-  if command grep -q 'mise WARN' "$mise_log"; then
-    if (( had_lockfile )); then
-      command mv -f "$lock_backup" "$lockfile"
+  if ! _mise_check_warnings "$mise_log" "mise lock"; then
+    if _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"; then
+      echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
     else
-      rm -f "$lockfile"
+      echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
     fi
-    rm -f "$mise_log"
-    echo "❌ mise lock で警告を検出したため、commit と push を中止します" >&2
+    echo "chezmoi re-add、commit、push は実行していません" >&2
+    echo "実行ログ: $mise_log" >&2
     return 1
   fi
   rm -f "$mise_log" "$lock_backup"
