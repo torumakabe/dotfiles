@@ -88,7 +88,8 @@ git ls-files --cached | grep -E '\.(whl|pyc|pyo)$|__pycache__|\.ruff_cache|\.DS_
 
 ### 6. Python スクリプトの uv 統一（ADR-007）
 
-- `hooks/`・`home/private_dot_copilot/hooks/scripts/`・`tests/` の Python スクリプトに PEP 723 インラインメタデータ（`# /// script`）があるか
+- `hooks/`・`home/private_dot_copilot/hooks/scripts/` の配布 Python スクリプトに PEP 723 インラインメタデータ（`# /// script`）があるか
+- `tests/` は `uv run -m unittest ...` で実行されるか。単独配布するスクリプトでない限り PEP 723 は要求しない
 - 同領域に `.sh` / `.ps1` / `.bat` がないか（あれば Python への統一を提案）
 
 ### 7. ADR 健全性サマリ
@@ -114,4 +115,4 @@ git ls-files --cached | grep -E '\.(whl|pyc|pyo)$|__pycache__|\.ruff_cache|\.DS_
 3. ユーザー承認を得てから編集を適用
 
 <!-- TODO: Copilot CLI にメモリの list/get/delete 機能が実装されたら（github/copilot-cli#2278）、
-     チェック項目 7 を拡張してメモリの一覧・削除まで自動化する。 -->
+     チェック項目 8 を拡張してメモリの一覧・削除まで自動化する。 -->
