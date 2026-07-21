@@ -3,12 +3,18 @@ on:
   pull_request:
     paths:
       - 'home/private_dot_copilot/hooks/**'
+      - 'home/dot_config/mise/config.toml.tmpl'
+      - 'home/dot_config/mise/private_mise.lock'
+      - '.github/copilot-instructions.md'
       - 'tests/**'
       - '.github/workflows/test-copilot-hooks.yml'
   push:
     branches: [main]
     paths:
       - 'home/private_dot_copilot/hooks/**'
+      - 'home/dot_config/mise/config.toml.tmpl'
+      - 'home/dot_config/mise/private_mise.lock'
+      - '.github/copilot-instructions.md'
       - 'tests/**'
       - '.github/workflows/test-copilot-hooks.yml'
   schedule:

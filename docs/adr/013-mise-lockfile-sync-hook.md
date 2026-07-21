@@ -17,11 +17,12 @@ Accepted
 - 番号 15 は `run_onchange_after_21-link-mise-shims.sh.tmpl`（macOS の shim symlink, ADR-002）より前で `run_once_after_20-mise-install.sh.tmpl` の後に走らせるための位置取り。
 - mise が PATH に無い環境（CI 等）は skip して exit 0、apply 全体を止めない。
 - mise 用の GitHub token が未設定で `gh` が認証済みの場合は、`gh auth token` から取得した token を `MISE_GITHUB_TOKEN` としてフックのプロセス内だけで `mise install` へ渡す。`gh` が未認証の環境では従来の動作を変更しない。
-- `mise install` / `mise reshim` が失敗しても exit 0 で警告のみ。次回 apply で hash 再評価により再試行される。
+- `mise install` / `mise reshim` は一括処理し、いずれかが失敗した場合は原因と `chezmoi apply` による再実行方法を表示して非ゼロ終了する。失敗した `run_onchange` の状態は成功として保存されないため、原因解消後の apply で再実行される。
 
 ## Consequences
 
 - 起動時の `mise WARN missing:` と rustup の `info: syncing channel updates ...` が解消する。
 - lockfile が変わった `chezmoi apply` の所要時間が数秒〜数十秒延びる（unchanged 時の install は短時間で完了）。
+- install / reshim の失敗時は apply が失敗し、lockfile と実体の不整合が残ったことを利用者が認識して明示的に再実行できる。
 - lockfile 以外の理由（手動 `mise uninstall` 等）で shim が欠落したケースは本フックでは復元されないため、その場合は手動で `mise install && mise reshim` を実行する（`docs/troubleshooting.md` 参照）。
 - ADR-009（Windows での mise rust home 分離）の症状（junction marker と install 判定の揺れ）を直接修正するわけではないが、結果として顕在化を抑止する。

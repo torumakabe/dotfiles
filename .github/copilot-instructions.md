@@ -16,6 +16,7 @@
 
 - `mise lock` はデフォルトでプロジェクトレベルの設定のみ対象にするため、グローバル設定には **`--global`** が必須。また引数なしだと既定の 8 プラットフォーム（musl 含む）を対象にするため、**`--platform` も常に指定する**
 - 同じツールとバージョンを維持したまま backend を変更すると、mise は既存の install path をインストール済みと判定し、新しい backend で再インストールしない場合がある。backend を変更した端末では、`mise install --force <tool>` または `mise uninstall <tool>@<version>` と `mise install <tool>` を一度実行する。バージョンも同時に変更し、新しい install path へ通常の `mise install` が実行される場合、この操作は不要
+- backend 移行はコマンドの終了だけで完了と判断しない。`mise ls <tool>` が `missing` を表示しないこと、`mise which <tool>` が新 backend の実体を返すこと、`<tool> --version` 等の実行確認が成功することを確認する。force install が失敗した場合は `reshim` や auto-install の無効化で回避せず、backend 固有の install path と検証コマンドを調査する
 
 ## プラットフォーム制約（定期チェック対象）
 

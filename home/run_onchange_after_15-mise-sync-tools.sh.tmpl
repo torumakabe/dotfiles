@@ -39,8 +39,14 @@ mise reshim
 reshim_exit=$?
 
 if [ "$install_exit" -ne 0 ] || [ "$reshim_exit" -ne 0 ]; then
-  echo "WARN: mise sync finished with non-zero exit codes (install=${install_exit}, reshim=${reshim_exit})." >&2
-  echo '     次回 chezmoi apply 時に再試行されます。原因を確認してください。' >&2
+  echo "ERROR: mise sync failed (install=${install_exit}, reshim=${reshim_exit})." >&2
+  echo '       原因を解消してから `chezmoi apply` を実行してください。' >&2
+  sync_exit="$install_exit"
+  if [ "$sync_exit" -eq 0 ]; then
+    sync_exit="$reshim_exit"
+  fi
+else
+  sync_exit=0
 fi
 
 # corepack (pnpm/yarn 提供) を有効化する。mise 管理 node に同梱されており、
@@ -49,5 +55,5 @@ if command -v corepack >/dev/null 2>&1; then
   corepack enable || echo 'WARN: corepack enable failed.' >&2
 fi
 
-exit 0
+exit "$sync_exit"
 {{- end -}}
