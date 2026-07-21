@@ -44,7 +44,11 @@
 	helper = "!f() { test \"$1\" = get && echo username={{ .corpUser }} && echo password=$(gh auth token --user {{ .corpUser }}); }; f"
 {{- end }}
 [ghq]
+{{- if .isWindows }}
+	root = D:/workspace
+{{- else }}
 	root = ~/workspace
+{{- end }}
 	user = torumakabe
 [user]
 	name = Toru Makabe
@@ -66,7 +70,7 @@
 # gitdir matches the repository path prefix, so keep shared defaults here and load
 # platform-specific overrides from separate files without duplicating the base config.
 # Windows uses explicit drive letters because Git has no drive-agnostic gitdir pattern;
-# this setup assumes local clones live on C:/ or D:/ and needs another rule otherwise.
+# ghq stores local clones under D:/workspace, while C:/ remains supported separately.
 [includeIf "gitdir:~/workspace_corp/"]
 	path = ~/.gitconfig-corp
 [includeIf "gitdir:/home/"]
