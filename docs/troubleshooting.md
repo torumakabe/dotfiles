@@ -36,6 +36,40 @@ mise install
 mise reshim
 ```
 
+## Windows で `core:dotnet` が毎回 install される
+
+症状: `mise ls dotnet` が `missing` を表示し、mise shim を通るコマンドの実行時に .NET SDK の install が繰り返される。Copilot CLI の command Hook が mise shim の影響を受ける環境では、無関係なツール呼び出しも `hook errored` で拒否される場合がある。
+
+まず、system dotnet と mise 管理 dotnet を分けて確認する。
+
+```powershell
+mise ls dotnet
+mise which dotnet
+dotnet --list-sdks
+
+$miseDotnetRoot = Join-Path $env:LOCALAPPDATA 'mise\dotnet-root'
+& (Join-Path $miseDotnetRoot 'dotnet.exe') --list-sdks
+```
+
+mise 管理側に対象 SDK が存在する一方、通常の `dotnet --list-sdks` に対象 SDK が出ない場合、`core:dotnet` のインストール後検証が system dotnet を起動している可能性がある。通常の `mise install --force dotnet` が同じ検証エラーで失敗する場合は、新しい一時 PowerShell で mise 管理 dotnet を検証対象にして再実行する。
+
+```powershell
+$miseDotnetRoot = Join-Path $env:LOCALAPPDATA 'mise\dotnet-root'
+$env:DOTNET_ROOT = $miseDotnetRoot
+$env:PATH = "$miseDotnetRoot;$env:PATH"
+mise install --force dotnet
+```
+
+一時 PowerShell を終了し、新しいシェルで復旧を確認する。
+
+```powershell
+mise ls dotnet       # missing を表示しない
+mise which dotnet    # mise\dotnet-root\dotnet.exe
+dotnet --version
+```
+
+この手順は、jdx/mise の [PR #10691](https://github.com/jdx/mise/pull/10691) で `dotnet --list-sdks` を使う方式へ変更された .NET SDK 検証が、Windows で system dotnet を起動する場合の暫定回避である。mise が管理対象の `dotnet.exe` を直接検証し、一時的な `DOTNET_ROOT` と PATH 設定なしで force install が成功するようになったら削除する。
+
 ## `run_once_*` スクリプトの warning / error
 
 実行順と役割は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順) を参照。
@@ -129,3 +163,22 @@ Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin
 
 - 高並列が予想される作業（一括コマンド送信など）では、1 応答内のツール呼び出し数を抑える
 - deny すべき操作が通ってしまった場合は `~/.copilot/audit.jsonl`（成功ログ）/ `audit-denies.jsonl`（preToolUse deny）/ `audit-failures.jsonl`（tool handler error）で事後検出し、手動で巻き戻す
+
+## Copilot CLI: `hook errored` の詳細を確認する
+
+`preToolUse` command Hook が非ゼロで終了すると、Copilot CLI はツール呼び出しを拒否する。ツール結果には `hook errored` だけが表示される場合でも、セッションの `events.jsonl` に Hook の標準エラーが記録されている。
+
+```powershell
+Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
+  ForEach-Object { $_ | ConvertFrom-Json } |
+  Where-Object {
+    $_.type -eq 'hook.end' -and
+    $_.data.hookType -eq 'preToolUse' -and
+    $_.data.success -eq $false
+  } |
+  ForEach-Object { $_.data.error.message }
+```
+
+`hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
+
+上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

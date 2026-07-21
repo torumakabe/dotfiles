@@ -54,8 +54,12 @@ $installExit = $LASTEXITCODE
 $reshimExit = $LASTEXITCODE
 
 if ($installExit -ne 0 -or $reshimExit -ne 0) {
-  Write-Warning ("mise sync finished with non-zero exit codes (install={0}, reshim={1}). " +
-    "次回 chezmoi apply 時に再試行されるため、原因を確認してください。" -f $installExit, $reshimExit)
+  Write-Error ("mise sync failed (install={0}, reshim={1}). " +
+    "原因を解消してから ``chezmoi apply`` を実行してください。" -f $installExit, $reshimExit)
+  $syncExit = if ($installExit -ne 0) { $installExit } else { $reshimExit }
+}
+else {
+  $syncExit = 0
 }
 
 # corepack (pnpm/yarn 提供) を有効化する。mise 管理 node に同梱されており、
@@ -68,5 +72,5 @@ if ($corepackCmd) {
   }
 }
 
-exit 0
+exit $syncExit
 {{- end -}}
