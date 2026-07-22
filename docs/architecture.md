@@ -59,6 +59,22 @@ shell command の外部ネットワーク通信は、`~/.copilot/settings.json` 
 | `.codespaces` / `.devcontainer` | 各環境判定 |
 | `.windowsUser` / `.corpUser` | 初回セットアップで入力 |
 
+## プラットフォーム機能契約
+
+プラットフォーム機能契約は、利用者向けの公開関数、alias、補完、ツール導入について、Windows/PowerShell、macOS/zsh、Linux/zsh、WSL/zsh の利用目的を等価に保つための分類である（ADR-019）。開発者は公開機能を変更するときに4環境の実装を更新するか、実装しない理由と適用範囲を契約と文書へ記録する。
+
+`tests/test_platform_parity.py` は、公開シンボルが契約へ分類されていること、契約上の実装を示す設定断片が存在すること、共通ツールが両系統の install script に存在することを静的に検査する。この検査は各OS上でのコマンド実行結果や上流配布物の可用性までは保証しない。開発者は実機固有の動作を各環境で確認し、`review-repo` は契約、実装、CIの一致を点検する。
+
+理由付き例外は次のとおりである。
+
+- Windows の `e` は、Microsoft Edit を winget/DSC で管理する Windows 固有機能である（ADR-011）。`mise-self-upgrade` も winget 管理の mise を更新するため Windows 固有である
+- Terraform は公式の PowerShell completion を提供していないため、補完はzshだけで提供する
+- RadicleはWindows向け公式配布を確認できないため、`rad` の補完はzshだけで提供する
+
+helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両方で提供する。`fieldalignment` と `fast` は、Unix系とWindowsの両 install scriptで導入する。
+
+`ghcd` の fzf preview は、zshでは `ls -la`、Windowsでは `cmd.exe` の `dir /a` を使う。コマンドは異なるが、選択候補のリポジトリにある隠し項目を含む一覧を表示する目的は等価である。
+
 ## Git `includeIf`
 
 `home/dot_gitconfig.tmpl` はベース設定のみを置き、`includeIf` でプラットフォーム差分を切り替える: `gitdir:/home/` → Linux/WSL、`gitdir:/Users/` → macOS、`gitdir/i:C:/` 等 → Windows。WSL は Linux 側を読みつつ `.isWSL` で 1Password 連携パスを切り替える。

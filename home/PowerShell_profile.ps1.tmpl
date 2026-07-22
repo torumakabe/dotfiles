@@ -36,9 +36,11 @@ function zi { cdi @args }
 
 # ghq + fzf: fuzzy-search git repositories and cd into selection
 function ghcd {
-    $dir = ghq list -p | fzf
+    $dir = ghq list -p | fzf --preview 'dir /a {}'
     if ($dir) { Set-Location $dir }
 }
+
+function ll { Get-ChildItem -Force @args }
 
 # mise 本体を winget で更新する（winget portable の誤検知回避）
 function Invoke-MiseSelfUpgrade {
@@ -102,6 +104,11 @@ function Invoke-MiseSelfUpgrade {
 function Invoke-MiseUpgrade {
     $prevErrorAction = $ErrorActionPreference
     $ErrorActionPreference = 'Stop'
+    $miseLog = $null
+    $lockfile = Join-Path $HOME ".config\mise\mise.lock"
+    $lockBackup = $null
+    $hadLockfile = $false
+    $restoreLockfileOnFailure = $false
     try {
         # 前提条件チェック
         if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -120,8 +127,19 @@ function Invoke-MiseUpgrade {
         }
         $env:GITHUB_TOKEN = $token
 
+        function Restore-MiseLockfile {
+            if ($hadLockfile) {
+                Move-Item -Path $lockBackup -Destination $lockfile -Force
+            }
+            else {
+                Remove-Item -Path $lockfile -Force -ErrorAction SilentlyContinue
+            }
+        }
+
         function Invoke-MiseChecked {
             param(
+                [Parameter(Mandatory)]
+                [string]$Phase,
                 [Parameter(Mandatory)]
                 [string]$FailureMessage,
                 [Parameter(Mandatory)]
@@ -131,10 +149,14 @@ function Invoke-MiseUpgrade {
             $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
             try {
                 $PSNativeCommandUseErrorActionPreference = $false
-                $capturedOutput = $null
-                & mise @Arguments 2>&1 |
-                    Tee-Object -Variable capturedOutput |
-                    ForEach-Object { Write-Host "$_" }
+                $capturedOutput = @(
+                    & mise @Arguments 2>&1 |
+                        Tee-Object -FilePath $miseLog -Append |
+                        ForEach-Object {
+                            Write-Host "$_"
+                            $_
+                        }
+                )
                 $miseExitCode = $LASTEXITCODE
             }
             finally {
@@ -153,37 +175,37 @@ function Invoke-MiseUpgrade {
             if ($blockingWarnings) {
                 throw "$FailureMessage mise の警告を検出したため、commit と push を中止します"
             }
+            $allowedWarnings = $capturedOutput |
+                ForEach-Object { "$_" -replace "`e\[[0-9;]*[A-Za-z]", "" } |
+                Where-Object { $_ -match $minimumReleaseAgePattern }
+            foreach ($warning in $allowedWarnings) {
+                Write-Warning "${Phase}: リリース待機期間による保留を検出しました。処理を継続します: $warning"
+            }
         }
 
-        Write-Host "==> mise upgrade: ツールを最新版に更新..."
-        Invoke-MiseChecked -FailureMessage "mise upgrade に失敗しました。" -Arguments @("upgrade")
-
-        $lockfile = Join-Path $HOME ".config\mise\mise.lock"
-        $lockBackup = [System.IO.Path]::GetTempFileName()
+        $miseLog = [System.IO.Path]::GetTempFileName()
+        $lockBackup = "$miseLog.lock"
         $hadLockfile = Test-Path $lockfile
         if ($hadLockfile) {
-            Copy-Item $lockfile $lockBackup -Force
+            Copy-Item -Path $lockfile -Destination $lockBackup -Force
         }
+        $restoreLockfileOnFailure = $true
+
+        Write-Host "==> mise upgrade: ツールを最新版に更新..."
+        Invoke-MiseChecked `
+            -Phase "mise upgrade" `
+            -FailureMessage "mise upgrade に失敗しました。" `
+            -Arguments @("upgrade")
 
         Write-Host "==> mise lock: lockfile を再生成..."
-        Remove-Item $lockfile -ErrorAction SilentlyContinue
-        try {
-            Invoke-MiseChecked `
-                -FailureMessage "lockfile の再生成に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください。" `
-                -Arguments @("lock", "--global", "--platform", "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64")
-        }
-        catch {
-            if ($hadLockfile) {
-                Copy-Item $lockBackup $lockfile -Force
-            }
-            else {
-                Remove-Item $lockfile -ErrorAction SilentlyContinue
-            }
-            throw
-        }
-        finally {
-            Remove-Item $lockBackup -ErrorAction SilentlyContinue
-        }
+        Remove-Item -Path $lockfile -Force -ErrorAction SilentlyContinue
+        Invoke-MiseChecked `
+            -Phase "mise lock" `
+            -FailureMessage "lockfile の再生成に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください。" `
+            -Arguments @("lock", "--global", "--platform", "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64")
+
+        $restoreLockfileOnFailure = $false
+        Remove-Item -Path $miseLog, $lockBackup -Force -ErrorAction SilentlyContinue
 
         Write-Host "==> chezmoi re-add: lockfile をソースに反映..."
         chezmoi re-add ~\.config\mise\mise.lock
@@ -222,7 +244,23 @@ function Invoke-MiseUpgrade {
         Write-Host "✅ mise ツールの更新が完了しました"
     }
     catch {
-        Write-Error "❌ $($_.Exception.Message)"
+        $failure = $_
+        if ($restoreLockfileOnFailure) {
+            try {
+                Restore-MiseLockfile
+                Write-Warning "mise upgrade 実行前の lockfile を復元しました"
+            }
+            catch {
+                Write-Error "❌ mise upgrade 実行前の lockfile を復元できませんでした: $($_.Exception.Message)" -ErrorAction Continue
+            }
+        }
+        if ($miseLog -and (Test-Path $miseLog)) {
+            Write-Error "❌ $($failure.Exception.Message) 実行ログ: $miseLog" -ErrorAction Continue
+        }
+        else {
+            Write-Error "❌ $($failure.Exception.Message)" -ErrorAction Continue
+        }
+        throw $failure
     }
     finally {
         $env:GITHUB_TOKEN = $null
@@ -327,9 +365,9 @@ Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
     Remove-Item $completion_file, Env:\_ARGCOMPLETE_STDOUT_FILENAME, Env:\ARGCOMPLETE_USE_TEMPFILES, Env:\COMP_LINE, Env:\COMP_POINT, Env:\_ARGCOMPLETE, Env:\_ARGCOMPLETE_SUPPRESS_SPACE, Env:\_ARGCOMPLETE_IFS, Env:\_ARGCOMPLETE_SHELL
 }
 
-# Completion cache: generate once, dot-source from file on subsequent loads.
+# Completion cache: generate once and return the source file path.
 # Cache is invalidated when the tool binary is updated (mtime comparison).
-function Invoke-CachedSource {
+function Get-CachedSourcePath {
     param(
         [string]$Name,
         [string]$Command,
@@ -345,14 +383,13 @@ function Invoke-CachedSource {
 
     $cmdMtime = (Get-Item $cmdPath).LastWriteTime
     if ((Test-Path $cacheFile) -and (Get-Item $cacheFile).LastWriteTime -gt $cmdMtime) {
-        . $cacheFile
-        return
+        return $cacheFile
     }
 
     $output = & $Generator 2>$null | Out-String
     if ($output) {
         Set-Content -Path $cacheFile -Value $output -Encoding utf8
-        . $cacheFile
+        return $cacheFile
     }
 }
 
@@ -362,12 +399,26 @@ function Clear-CompletionCache {
     Write-Host "Completion cache cleared. Restart shell to regenerate."
 }
 
-Invoke-CachedSource -Name kubectl -Command kubectl -Generator { kubectl completion powershell }
-if ($__kubectlCompleterBlock) {
-    Register-ArgumentCompleter -CommandName k -ScriptBlock $__kubectlCompleterBlock
+$kubectlCompletionPath = Get-CachedSourcePath -Name kubectl -Command kubectl -Generator { kubectl completion powershell }
+if ($kubectlCompletionPath) {
+    . $kubectlCompletionPath
+    $kubectlCompleter = Get-Variable -Name __kubectlCompleterBlock -ValueOnly -ErrorAction SilentlyContinue
+    if ($kubectlCompleter) {
+        Register-ArgumentCompleter -CommandName k -ScriptBlock $kubectlCompleter
+    }
 }
 
+$helmCompletionPath = Get-CachedSourcePath -Name helm -Command helm -Generator { helm completion powershell }
+if ($helmCompletionPath) { . $helmCompletionPath }
+$ghCompletionPath = Get-CachedSourcePath -Name gh -Command gh -Generator { gh completion -s powershell }
+if ($ghCompletionPath) { . $ghCompletionPath }
+$azdCompletionPath = Get-CachedSourcePath -Name azd -Command azd -Generator { azd completion powershell }
+if ($azdCompletionPath) { . $azdCompletionPath }
+$trivyCompletionPath = Get-CachedSourcePath -Name trivy -Command trivy -Generator { trivy completion powershell }
+if ($trivyCompletionPath) { . $trivyCompletionPath }
+
 # zoxide (smarter cd)
-Invoke-CachedSource -Name zoxide -Command zoxide -Generator { zoxide init powershell --cmd cd }
+$zoxideCompletionPath = Get-CachedSourcePath -Name zoxide -Command zoxide -Generator { zoxide init powershell --cmd cd }
+if ($zoxideCompletionPath) { . $zoxideCompletionPath }
 Set-Alias -Name z -Value cd
 {{ end -}}
