@@ -143,7 +143,14 @@ function Invoke-MiseUpgrade {
             if ($miseExitCode -ne 0) {
                 throw $FailureMessage
             }
-            if ($capturedOutput | Where-Object { "$_" -match 'mise WARN' }) {
+            $minimumReleaseAgePattern = '^mise WARN\s+newer \S+ release \S+(?:\s+\(released [^)]+\))?\s+ignored by minimum_release_age \([^)]+\); latest eligible release is \S+\s*$'
+            $blockingWarnings = $capturedOutput |
+                ForEach-Object { "$_" -replace "`e\[[0-9;]*[A-Za-z]", "" } |
+                Where-Object {
+                    $_ -match 'mise WARN' -and
+                    $_ -notmatch $minimumReleaseAgePattern
+                }
+            if ($blockingWarnings) {
                 throw "$FailureMessage mise の警告を検出したため、commit と push を中止します"
             }
         }

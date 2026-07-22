@@ -266,7 +266,7 @@ _mise_is_allowed_warning() {
   emulate -L zsh
 
   local warning="$1"
-  local minimum_release_age_pattern='^mise WARN[[:space:]]+newer [^[:space:]]+ release [^[:space:]]+ ignored by minimum_release_age \([^)]+\); latest eligible release is [^[:space:]]+$'
+  local minimum_release_age_pattern='^mise WARN[[:space:]]+newer [^[:space:]]+ release [^[:space:]]+([[:space:]]+\(released [^)]+\))?[[:space:]]+ignored by minimum_release_age \([^)]+\); latest eligible release is [^[:space:]]+$'
   [[ "$warning" =~ $minimum_release_age_pattern ]]
 }
 
