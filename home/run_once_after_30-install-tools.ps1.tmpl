@@ -9,6 +9,23 @@ if (($env:Path -split ';') -notcontains $shimsDir) {
     $env:Path = "$shimsDir;$env:Path"
 }
 
+# --- Go tools ---
+if (Get-Command go -ErrorAction SilentlyContinue) {
+    Write-Host "Installing Go tools..."
+    try {
+        go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest
+        if ($LASTEXITCODE -ne 0) { throw "go install failed" }
+    } catch {
+        Write-Warning "Failed to install fieldalignment. Retry manually with 'go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest'."
+    }
+    try {
+        go install github.com/ddo/fast@latest
+        if ($LASTEXITCODE -ne 0) { throw "go install failed" }
+    } catch {
+        Write-Warning "Failed to install fast. Retry manually with 'go install github.com/ddo/fast@latest'."
+    }
+}
+
 # --- uv tools ---
 # ty: Python LSP サーバー (Astral)。mise に ty 用バックエンドがないため uv tool で管理
 if (Get-Command uv -ErrorAction SilentlyContinue) {

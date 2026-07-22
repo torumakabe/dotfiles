@@ -2,22 +2,24 @@ name: Test Copilot Hooks
 on:
   pull_request:
     paths:
-      - 'home/private_dot_copilot/hooks/**'
-      - 'home/dot_config/mise/config.toml.tmpl'
-      - 'home/dot_config/mise/private_mise.lock'
-      - 'home/dot_zshrc.tmpl'
+      - 'home/**'
       - '.github/copilot-instructions.md'
+      - '.github/agents/**'
       - 'tests/**'
+      - 'docs/adr/**'
+      - 'docs/architecture.md'
+      - 'docs/operations.md'
       - '.github/workflows/test-copilot-hooks.yml'
   push:
     branches: [main]
     paths:
-      - 'home/private_dot_copilot/hooks/**'
-      - 'home/dot_config/mise/config.toml.tmpl'
-      - 'home/dot_config/mise/private_mise.lock'
-      - 'home/dot_zshrc.tmpl'
+      - 'home/**'
       - '.github/copilot-instructions.md'
+      - '.github/agents/**'
       - 'tests/**'
+      - 'docs/adr/**'
+      - 'docs/architecture.md'
+      - 'docs/operations.md'
       - '.github/workflows/test-copilot-hooks.yml'
   schedule:
     # Weekly Monday 00:00 UTC — detect fail-open regressions
@@ -35,6 +37,13 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
+
+      - name: Install and verify test shells
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes zsh
+          command -v zsh
+          command -v pwsh
 
       # ── Unit tests (auto-discover all test_*.py) ──────────────────────
       - name: Run all unit tests

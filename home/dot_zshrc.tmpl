@@ -249,11 +249,6 @@ git-hooks-audit() {
   done
 }
 
-# Azure CLI の SyntaxWarning を抑制（azure-sdk-for-python#38618 の回避策）
-az() {
-  PYTHONWARNINGS="ignore::SyntaxWarning" command az "$@"
-}
-
 # mise 管理ツールの一括更新（日常操作）
 # upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
 _mise_normalize_log_line() {

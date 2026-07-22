@@ -86,24 +86,31 @@ git ls-files --cached | grep -E '\.(whl|pyc|pyo)$|__pycache__|\.ruff_cache|\.DS_
   - **宣言ツールの余剰バージョン**（現行版以外）→ `mise prune --tools` を提案
 - 修正提案は他項目と同じくユーザー承認後に実施する
 
-### 6. Python スクリプトの uv 統一（ADR-007）
+### 6. プラットフォーム機能等価性
+
+- 公開関数、alias、補完、ツール導入を Windows/PowerShell、macOS/zsh、Linux/zsh、WSL/zsh の4環境について確認する
+- 未分類の公開機能、理由と適用範囲を文書化していない例外、片方のシェルだけで振る舞いを検査するテストを問題として報告する
+- `tests/test_platform_parity.py` の契約が shell 設定と install script の実装に一致するか確認する
+- `.github/workflows/test-copilot-hooks.yml` が zsh と pwsh の存在を必須条件として確認し、両方が使える状態で共有テストを実行するか確認する
+
+### 7. Python スクリプトの uv 統一（ADR-007）
 
 - `hooks/`・`home/private_dot_copilot/hooks/scripts/` の配布 Python スクリプトに PEP 723 インラインメタデータ（`# /// script`）があるか
 - `tests/` は `uv run -m unittest ...` で実行されるか。単独配布するスクリプトでない限り PEP 723 は要求しない
 - 同領域に `.sh` / `.ps1` / `.bat` がないか（あれば Python への統一を提案）
 
-### 7. ADR 健全性サマリ
+### 8. ADR 健全性サマリ
 
 - `docs/adr/INDEX.md` を読み、`Accepted` な ADR の数と最新番号を確認
 - 詳細な照合が必要な場合は `manage-adr` のパス E を提案
 
-### 8. stored memories のドリフト検出
+### 9. stored memories のドリフト検出
 
 - 関連する stored memories を citations 付きで確認
 - citations にあるパス（`home/...`, `docs/...`, `tests/...`）が実在するか
 - ADR 化済みの内容を重複して保持している memory があれば「ADR-NNN 参照」形式への更新を提案（`manage-adr` パス B' に誘導）
 
-### 9. スキル整合性
+### 10. スキル整合性
 
 - `home/private_dot_copilot/skills/` 内の各ディレクトリに `SKILL.md` が存在するか
 - `copilot-instructions.md` で参照しているスキルが実在するか
