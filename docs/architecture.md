@@ -13,8 +13,8 @@ home/                           ← chezmoi source
 ├── dot_zshrc.tmpl              ← 対話 zsh
 ├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
 ├── dot_{zprofile,zshenv,bash_profile,bashrc}.tmpl ← 全て ~/.profile を source
-├── dot_config/git/templates/hooks/pre-commit  ← gitleaks (init.templateDir 経由)
-├── dot_config/mise/{config.toml.tmpl,mise.lock}
+├── dot_config/git/templates/hooks/executable_pre-commit  ← gitleaks (init.templateDir 経由)
+├── dot_config/mise/{config.toml.tmpl,private_mise.lock}
 ├── PowerShell_profile.ps1.tmpl
 ├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp, skills）
 └── run_once_{before,after}_*   ← bootstrap スクリプト
@@ -32,7 +32,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 ## Copilot Guard の設計
 
-`copilot-guard.py` は `preToolUse` フックで以下を検査する。優先度は **deny > ask > allow**。
+`copilot-guard.py` は `preToolUse` フックで以下を検査する。優先度は **deny > ask > no opinion（空出力）**（[ADR-006](adr/006-pretooluse-hook-no-allow.md)）。
 
 1. 秘匿ファイル拒否 (`blocked-files.txt`)
 2. 確認付きアクセス (`ask-files.txt`)

@@ -658,7 +658,7 @@ def main() -> None:
             results.append(result)
     if not results:
         return  # No opinion — let the CLI's default approval flow decide
-    # Priority: deny > ask > allow
+    # Priority: deny > ask > no opinion (empty stdout)
     denies = [r for r in results if r.decision == "deny"]
     if denies:
         _log_deny(ctx, denies[0].reason)
