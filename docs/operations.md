@@ -72,8 +72,6 @@ mise-upgrade
 - 処理を停止した関数は、原因となった警告、lockfile の復元結果、実行ログの保存先を標準エラー出力へ表示する。運用者は表示されたログを確認して原因を特定する
 - PowerShell では `$env:GITHUB_TOKEN = (gh auth token); <cmd>; $env:GITHUB_TOKEN = $null` でトークンを渡し、`--platform` の値はクォートする
 
-対象プラットフォーム: `linux-x64`, `linux-arm64`, `macos-arm64`, `windows-x64`, `windows-arm64`
-
 ### 典型コマンド
 
 ```bash

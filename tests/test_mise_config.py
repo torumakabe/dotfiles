@@ -19,6 +19,19 @@ SYNC_SH_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.sh.tmpl"
 SYNC_PS1_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.ps1.tmpl"
 ZSHRC_PATH = REPO_ROOT / "home/dot_zshrc.tmpl"
 POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
+OPERATIONS_PATH = REPO_ROOT / "docs/operations.md"
+TROUBLESHOOTING_PATH = REPO_ROOT / "docs/troubleshooting.md"
+
+MISE_LOCK_PLATFORMS = (
+    "linux-x64",
+    "linux-arm64",
+    "macos-arm64",
+    "windows-x64",
+    "windows-arm64",
+)
+MISE_LOCK_PLATFORM_CSV = ",".join(MISE_LOCK_PLATFORMS)
+CARGO_MAKE_EXCLUDED_PLATFORM = ("linux", "arm64")
+CARGO_MAKE_UPSTREAM_ISSUE = "https://github.com/sagiegurari/cargo-make/issues/541"
 
 ALLOWED_WARNING = (
     "mise WARN  newer codex release 0.145.0 ignored by "
@@ -344,22 +357,69 @@ $result = @{{
             [
                 "gh auth token",
                 "mise upgrade",
-                (
-                    "mise lock --global --platform "
-                    "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64"
-                ),
+                f"mise lock --global --platform {MISE_LOCK_PLATFORM_CSV}",
             ],
         )
         self.assertTrue(state["log_exists"])
 
-    def test_powershell_mise_lock_targets_all_platforms(self) -> None:
+    def test_mise_lock_platform_contract_stays_aligned(self) -> None:
+        zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
         profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
+        operations = OPERATIONS_PATH.read_text(encoding="utf-8")
+        troubleshooting = TROUBLESHOOTING_PATH.read_text(encoding="utf-8")
 
         self.assertIn(
-            '-Arguments @("lock", "--global", "--platform", '
-            '"linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64")',
+            f"mise lock --global --platform {MISE_LOCK_PLATFORM_CSV}",
+            zshrc,
+        )
+        self.assertIn(
+            f'-Arguments @("lock", "--global", "--platform", "{MISE_LOCK_PLATFORM_CSV}")',
             profile,
         )
+        for path, document in (
+            (OPERATIONS_PATH, operations),
+            (TROUBLESHOOTING_PATH, troubleshooting),
+        ):
+            with self.subTest(path=path):
+                platform_values = re.findall(
+                    r"mise lock --global --platform ([a-z0-9,-]+)",
+                    document,
+                )
+                self.assertEqual(
+                    set(platform_values),
+                    {MISE_LOCK_PLATFORM_CSV},
+                )
+
+    def test_cargo_make_linux_arm64_constraint_stays_aligned(self) -> None:
+        config = CONFIG_PATH.read_text(encoding="utf-8")
+        instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
+        operations = OPERATIONS_PATH.read_text(encoding="utf-8")
+        os_name, arch = CARGO_MAKE_EXCLUDED_PLATFORM
+        platform = f"{os_name}/{arch}"
+
+        cargo_make_block = re.search(
+            r'{{ if not \(and \(eq \.chezmoi\.os "([^"]+)"\) '
+            r'\(eq \.chezmoi\.arch "([^"]+)"\)\) -}}\s*'
+            r"# [^\n]*\s*cargo-make = \"latest\"\s*{{ end -}}",
+            config,
+        )
+        self.assertIsNotNone(cargo_make_block)
+        self.assertEqual(cargo_make_block.groups(), CARGO_MAKE_EXCLUDED_PLATFORM)
+
+        for path, document in (
+            (INSTRUCTIONS_PATH, instructions),
+            (OPERATIONS_PATH, operations),
+        ):
+            with self.subTest(path=path):
+                cargo_make_lines = [
+                    line for line in document.splitlines() if "cargo-make" in line
+                ]
+                self.assertTrue(cargo_make_lines)
+                self.assertTrue(
+                    all(platform in line for line in cargo_make_lines)
+                )
+
+        self.assertIn(CARGO_MAKE_UPSTREAM_ISSUE, instructions)
 
     def test_powershell_registers_kubectl_completer_for_k_alias(self) -> None:
         profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
