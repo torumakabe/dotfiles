@@ -17,6 +17,19 @@
 	# clobbered across repositories. Existing repos need a one-time backfill;
 	# run the git-hooks-audit helper to find repos missing the seeded hook.
 	templateDir = ~/.config/git/templates
+# Config-based hook (git >= 2.54): runs for every repository, additively with
+# whatever lives in $GIT_DIR/hooks, so `lefthook install` can no longer displace
+# the secret scan. git < 2.54 ignores this section entirely, which is why
+# init.templateDir above stays. See ADR-020.
+# Opt out per repository: git config --local hook.dotfiles-gitleaks.enabled false
+[hook "dotfiles-gitleaks"]
+	event = pre-commit
+	# Quote the value: an unquoted gitconfig value is truncated at ';' or '#'.
+	# Invoke through sh so the hook does not depend on how the platform reports
+	# the file's executable bit. A config-based hook is not existence-checked by
+	# git, so a hook that cannot be executed blocks the commit instead of being
+	# skipped; going through sh removes one way to reach that state.
+	command = "sh ~/.local/bin/gitleaks-pre-commit"
 [help]
 	autocorrect = 20
 [alias]

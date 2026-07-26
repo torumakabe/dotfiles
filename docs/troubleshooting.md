@@ -111,6 +111,16 @@ chezmoi apply ~/.config/git/templates/hooks/pre-commit
 
 Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin/env bash` が WSL の `bash.exe` を拾い、Windows 形式の `C:/...` パスを開けていない可能性がある。この pre-commit hook はその経路を避けるため POSIX `sh` 互換で管理する。mise の Windows shim も extensionless 版は `/bin/bash` スクリプトなので、hook 内では `gitleaks.exe` を優先する。
 
+Git 2.54 以降なら、`.git/hooks/pre-commit` の有無に関わらず設定ベースフックが走る（ADR-020）。`git hook list --show-scope pre-commit` が `global<TAB>dotfiles-gitleaks` を返すか確認する。返さない場合は `git --version` を確認し、2.54 より前ならこの経路は使えない。
+
+## commit が gitleaks-pre-commit not found で拒否される
+
+設定ベースフックには `$GIT_DIR/hooks` のような存在確認が無く、`command` が実行できないと commit が失敗する（ADR-020）。`chezmoi apply` の中断などで `~/.local/bin/gitleaks-pre-commit` が未配置になった場合に起きる。
+
+```bash
+chezmoi apply ~/.local/bin/gitleaks-pre-commit
+```
+
 ## Copilot CLI: preToolUse フックが並列実行時にすり抜ける
 
 症状: 短時間に複数のツール呼び出しが走った際、`copilot-guard.py` / `uv-enforcer.py` の deny が適用されず、ブロックすべき操作が実行される。

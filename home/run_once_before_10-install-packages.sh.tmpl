@@ -11,6 +11,18 @@ export DEBIAN_FRONTEND=noninteractive
 
 {{ if eq .chezmoi.os "linux" -}}
 echo "Installing system packages via apt..."
+# git: ディストロ標準の git は設定ベースフック (git >= 2.54) に届かない
+# （Ubuntu 24.04 = 2.43、26.04 = 2.53、devcontainer ベース = 2.52 を確認）。
+# ADR-020 の gitleaks フックはこの機能に依存するため、git-core PPA を使う。
+# PPA が使えない環境ではディストロ版のまま続行し、設定フックは無効になる
+# （chezmoi apply 時の run_after_40-check-git-hooks が警告する）。
+if ! command -v add-apt-repository >/dev/null 2>&1; then
+  sudo apt-get update -qq || echo "Warning: apt-get update had errors, continuing..." >&2
+  sudo apt-get install -y -qq software-properties-common
+fi
+if ! sudo add-apt-repository -y ppa:git-core/ppa 2>/dev/null; then
+  echo "Warning: could not add ppa:git-core/ppa; falling back to distro git (config-based hooks will be inactive)." >&2
+fi
 # サードパーティリポジトリのGPGキー期限切れ等でupdate全体が失敗することがあるため、警告に留める
 if ! sudo apt-get update -qq; then
   echo "Warning: apt-get update had errors (possibly from third-party repos), continuing..." >&2
@@ -83,11 +95,16 @@ brew trust --formula azure/azd/azd \
 # gh: mise install 前にトークン取得手段を確保する（mise 版 gh が shim で shadow する）
 # azure-cli / azd / copilot-cli: GUI アプリや github: バックエンド都合を避けるため
 # macOS では brew で管理
+# git: Apple Git は 2.50 系で停滞しており、設定ベースフック (git >= 2.54) を
+# 使えない。ADR-020 の gitleaks フックはこの機能に依存するため、brew 版を入れる。
+# PATH で Apple Git より優先させる処理は ~/.zprofile 側にある（後述の理由により
+# /etc/zprofile の path_helper より後で prepend する必要がある）。
 brew install \
   azure-cli \
   azure/azd/azd \
   copilot-cli \
   gh \
+  git \
   poppler \
   watch \
   zsh-completions

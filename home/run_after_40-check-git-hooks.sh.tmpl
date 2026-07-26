@@ -1,0 +1,48 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# gitleaks の pre-commit フックが実際に届いているかを apply のたびに報告する。
+#
+# 背景:
+#   ADR-020 の設定ベースフックは git >= 2.54 でしか解釈されない。それより古い
+#   git は [hook] セクションを警告なく無視するため、設定を配っただけでは保護が
+#   効いているか分からない。ADR-018 では既存リポジトリへの backfill が実行されず、
+#   3 週間にわたり gitleaks が動かない状態が続いた。同じ形の沈黙を避けるため、
+#   ここで状態を明示する。
+#
+# 判定方法:
+#   git のバージョン番号ではなく `git hook list` の出力で判定する。バージョンが
+#   条件を満たしていても設定が届いていなければ保護は効かないため、両方をまとめて
+#   確認できるこちらを使う。終了コードは「未対応の git」と「対応しているが hook 0 件」
+#   を区別できないので使わない。
+#
+# 関連:
+#   - docs/adr/020-git-hooks-via-config.md
+#
+# このスクリプトは apply を失敗させない。保護の有無を伝えるだけである。
+
+set -uo pipefail
+
+if git hook list pre-commit --show-scope 2>/dev/null \
+  | awk -F'\t' '$NF == "dotfiles-gitleaks" && $0 !~ /\tdisabled\t/ { found = 1 }
+                END { exit !found }'; then
+  exit 0
+fi
+
+git_version="$(git --version 2>/dev/null || echo 'git not found')"
+
+cat >&2 <<EOF
+
+Warning: the gitleaks config-based hook is not active (${git_version}).
+  Only repositories seeded from init.templateDir are scanned. Repositories that
+  installed lefthook or husky, and repositories created before the templateDir
+  hook was seeded, commit without a secret scan.
+  Enabling it requires git 2.54 or later:
+{{ if eq .chezmoi.os "darwin" }}    brew install git
+  Then open a new login shell and confirm 'git --version' reports 2.54 or later.
+  (~/.zprofile puts /opt/homebrew/opt/git/bin back at the front of PATH.)
+{{ else }}    sudo add-apt-repository -y ppa:git-core/ppa \\
+      && sudo apt-get update && sudo apt-get install -y git
+{{ end }}  See docs/adr/020-git-hooks-via-config.md
+
+EOF
+{{- end -}}

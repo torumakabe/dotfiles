@@ -144,6 +144,27 @@ git -C <repo-path> init
 
 状態の確認は `git-hooks-audit`（zsh）/ `Invoke-GitHooksAudit`（PowerShell）で ghq 管理下の全リポジトリを一括チェックできる。
 
+Git 2.54 以降では、設定ベースフック（ADR-020）が全リポジトリで加算的に走る。
+
+```bash
+git hook list --show-scope pre-commit   # 期待値: global<TAB>dotfiles-gitleaks
+chezmoi edit ~/.local/bin/gitleaks-pre-commit && chezmoi apply
+git config --local hook.dotfiles-gitleaks.enabled false   # リポジトリ単位で無効化
+```
+
+`git hook list` が `unknown subcommand` で失敗する場合、その git は 2.54 より前であり `init.templateDir` だけが効いている。設定ベースフックには存在確認が無いため、`~/.local/bin/gitleaks-pre-commit` が未配置だと commit が拒否される。その場合は `chezmoi apply` で再配置する。
+
+設定ベースフックが有効かどうかは `chezmoi apply` のたびに確認され、無効なら警告が出る。警告が出た場合は git を更新する。
+
+```bash
+brew install git                                    # macOS
+sudo add-apt-repository -y ppa:git-core/ppa \
+  && sudo apt-get update && sudo apt-get install -y git   # Linux / WSL
+winget upgrade --id Git.Git                         # Windows
+```
+
+macOS では `brew install git` の後、新しい login shell で `git --version` が 2.54 以降になることを確認する。`/etc/zprofile` の `path_helper` が PATH を並べ替えるため、`~/.zprofile` が `/opt/homebrew/opt/git/bin` を先頭へ戻している。
+
 ## `run_once_*` の再実行
 
 ```bash

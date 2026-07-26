@@ -1,0 +1,55 @@
+{{- if eq .chezmoi.os "windows" -}}
+# gitleaks の pre-commit フックが実際に届いているかを apply のたびに報告する (Windows)
+#
+# 背景:
+#   ADR-020 の設定ベースフックは git >= 2.54 でしか解釈されない。それより古い
+#   git は [hook] セクションを警告なく無視するため、設定を配っただけでは保護が
+#   効いているか分からない。ADR-018 では既存リポジトリへの backfill が実行されず、
+#   3 週間にわたり gitleaks が動かない状態が続いた。同じ形の沈黙を避けるため、
+#   ここで状態を明示する。
+#
+# 判定方法:
+#   git のバージョン番号ではなく `git hook list` の出力で判定する。バージョンが
+#   条件を満たしていても設定が届いていなければ保護は効かないため、両方をまとめて
+#   確認できるこちらを使う。終了コードは「未対応の git」と「対応しているが hook 0 件」
+#   を区別できないので使わない。
+#
+# 出力を英語にしている理由:
+#   chezmoi は Windows で powershell.exe (5.1) を既定の実行系に使う。5.1 は BOM の
+#   無いファイルを ANSI として読むため、日本語の出力は文字化けし得る。他の .ps1
+#   スクリプトと同じく、コメントは日本語、出力は英語で書く。
+#
+# 関連:
+#   - docs/adr/020-git-hooks-via-config.md
+#
+# このスクリプトは apply を失敗させない。保護の有無を伝えるだけである。
+
+$ErrorActionPreference = 'Continue'
+
+$listed = & git hook list pre-commit --show-scope 2>$null
+$active = $false
+foreach ($line in @($listed)) {
+  if ([string]::IsNullOrWhiteSpace($line)) { continue }
+  $fields = [string]$line -split "`t"
+  if ($fields[-1] -eq 'dotfiles-gitleaks' -and $fields -notcontains 'disabled') {
+    $active = $true
+  }
+}
+
+if ($active) {
+  exit 0
+}
+
+$gitVersion = & git --version 2>$null
+if (-not $gitVersion) { $gitVersion = 'git not found' }
+
+Write-Warning @"
+The gitleaks config-based hook is not active ($gitVersion).
+  Only repositories seeded from init.templateDir are scanned. Repositories that
+  installed lefthook or husky, and repositories created before the templateDir
+  hook was seeded, commit without a secret scan.
+  Enabling it requires git 2.54 or later:
+    winget upgrade --id Git.Git
+  See docs/adr/020-git-hooks-via-config.md
+"@
+{{- end -}}

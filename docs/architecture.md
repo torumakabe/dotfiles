@@ -14,6 +14,7 @@ home/                           ← chezmoi source
 ├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
 ├── dot_{zprofile,zshenv,bash_profile,bashrc}.tmpl ← 全て ~/.profile を source
 ├── dot_config/git/templates/hooks/executable_pre-commit  ← gitleaks (init.templateDir 経由)
+├── dot_local/bin/executable_gitleaks-pre-commit          ← gitleaks (設定ベースフック経由)
 ├── dot_config/mise/{config.toml.tmpl,private_mise.lock}
 ├── PowerShell_profile.ps1.tmpl
 ├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp, skills）
@@ -28,7 +29,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 - `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` でネットワーク以外の危険操作を抑止、`postToolUse` で監査ログ
 - Copilot CLI local sandbox を有効化
 - `copilot-guardrails` で利便性と秘匿環境変数の扱いを固定
-- `gitleaks` 付き pre-commit を `init.templateDir` 経由で配布（ADR-018）
+- `gitleaks` 付き pre-commit を `init.templateDir`（ADR-018）と設定ベースフック（ADR-020）の 2 レイヤで配布
 
 ## Copilot Guard の設計
 
@@ -48,6 +49,8 @@ shell command の外部ネットワーク通信は、`~/.copilot/settings.json` 
 `~/.config/git/templates/hooks/pre-commit` を配置し、`git config --global init.templateDir` で有効化（ADR-018）。`git init`/`git clone` の瞬間に各リポジトリの `.git/hooks/pre-commit` へコピーされ、以降は通常のローカル hook として扱われる。`core.hooksPath` のようにグローバルに強制するのではなく「新規リポジトリの既定値」として配る方式のため、lefthook/husky 等の repo-local hook manager を導入した他リポジトリを巻き込まない。
 
 トレードオフとして、既存リポジトリには自動適用されない（`git init` を一度再実行して backfill するか、独自 hook manager を使うリポジトリはそのままにする）。`git-hooks-audit`（zsh 関数 / PowerShell `Invoke-GitHooksAudit`）で ghq 管理下の全リポジトリの状態（hook 未配置・local hooksPath 上書き・gitleaks 以外の hook に置き換え済み）を確認できる。
+
+Git 2.54 以降では、これに加えて `~/.gitconfig` の `[hook "dotfiles-gitleaks"]` が `~/.local/bin/gitleaks-pre-commit` を実行する（ADR-020）。設定ベースフックは `.git/hooks` とは別レイヤで加算的に走るため、`lefthook install` が `.git/hooks/pre-commit` を置き換えても gitleaks は実行され続け、backfill していない既存リポジトリも対象になる。Git 2.54 より前のバージョンは `[hook]` セクションを無視するため、そこでは `init.templateDir` だけが効く。リポジトリ単位の無効化は `git config --local hook.dotfiles-gitleaks.enabled false`。
 
 ## プラットフォーム検出
 
@@ -97,6 +100,10 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 ### 各シェルの読み込み経路
 
 `sh` / `bash(login)` は `.profile` を直接、`zsh(login)` は `.zprofile`、`zsh(非login)` は `.zshenv`、`bash(interactive non-login)` は `.bashrc` のみ読む。いずれからも `~/.profile` に誘導することで PATH が揃う。`bash -c` 等の非対話は親から env 継承する。
+
+ただし macOS の login zsh では、並び順までは揃わない。`~/.zshenv` が `~/.profile` を読んだ後に `/etc/zprofile` が `path_helper` を実行し、`/etc/paths` に載るシステムディレクトリを先頭へ、それ以外を末尾へ移す。`~/.profile` は `__DOTFILES_PROFILE_LOADED` により再実行されないため、`~/.local/bin` や mise shims は `/usr/bin` より後ろに置かれたままになる。
+
+`~/.zprofile` はこのうち `/opt/homebrew/opt/git/bin` だけを先頭へ戻す。gitleaks の設定ベースフックが git 2.54 以降を必要とするためである（ADR-020）。他のディレクトリを戻さないのは、システムツール全般を shadow したときの影響範囲を限定するためである。
 
 ### macOS GUI アプリ経由の PATH 注入
 
