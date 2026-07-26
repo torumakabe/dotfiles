@@ -146,6 +146,8 @@ NOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEY
 
 改行コードと末尾改行の有無は検出に影響しない（CRLF かつ末尾改行なしでも検出することを macOS で確認済み）。
 
+本文を短くしてはならない。gitleaks の private-key ルールは本文の長さも見ており、33 文字では検出しなかった（macOS で実測）。上記の 55 文字は検出を確認した値である。
+
 ### apply が途中で止まった場合
 
 設定ベースフックは fail-closed である。`~/.gitconfig` が配られた後、`~/.local/bin/gitleaks-pre-commit` が配られる前に `chezmoi apply` が中断すると、**その機械のすべての commit が拒否される**。復旧は次の 1 コマンドで済む。
@@ -199,7 +201,8 @@ WSL 側の git はディストリビューションの apt から入る。`appen
    mkdir -p /tmp/gl1 && cd /tmp/gl1 && git init
    git config commit.gpgsign false
    rm -f "$(git rev-parse --git-path hooks)/pre-commit"     # 手順 4 のみ
-   printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\nNOTAREALKEY\n-----END OPENSSH PRIVATE KEY-----\n' > fake_key
+   printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\n%s\n-----END OPENSSH PRIVATE KEY-----\n' \
+     'NOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEY' > fake_key
    git add fake_key && git commit -m t
    ```
 
