@@ -61,10 +61,26 @@ zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、処理を�
 mise-upgrade
 ```
 
+### 対象プラットフォームの定義元
+
+対象プラットフォームは `~/.config/mise/config.toml` の `[settings] lockfile_platforms` が正本である。この設定は、auto-lock（`mise install` が実インストール後に走らせる書き戻し）と `--platform` を省略した `mise lock` が使う基準集合を決める。
+
+```toml
+[settings]
+lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", "windows-arm64"]
+```
+
+この設定には、運用上で把握しておくべき性質が四つある。
+
+- **厳密な許可リストではない。実行中のプラットフォームは設定値に無くても必ず加わる。** 上記に無い環境（musl 系の `linux-x64-musl` など）で `mise install` を実行すると、その環境の分だけエントリが増える。この dotfiles は macOS を Apple Silicon に限定しているため、`macos-x64` は集合に含めていない。
+- **明示した `--platform` が設定より優先される。** 別の集合を書きたいときは CLI で指定する。
+- **既存エントリは削除されない。** 設定を絞っても、すでに lockfile にあるプラットフォームはそのまま残る。不要なエントリを消すには lockfile を削除して再生成する。
+- **グローバル設定なので、他のリポジトリでの lockfile 操作にも及ぶ。** auto-lock が影響を受けるのは、そのリポジトリ自身が `lockfile = true` を有効にしている場合に限る（`lockfile = true` はグローバルからリポジトリへ波及しない）。一方、そのリポジトリで `mise lock` を明示実行した場合は、`lockfile = true` の有無に関わらずこの基準集合が使われる。
+
 ### 手動操作の重要ルール
 
 - `mise lock` は **`--global` が必須**（省略するとプロジェクト設定のみ対象になる）
-- lockfile 再生成時は **`--platform` を常に指定**
+- lockfile 再生成時は **`--platform` を常に指定**する。`lockfile_platforms` があっても省略しない。lockfile を削除してから再生成する破壊的操作であり、設定が読まれない状況（古い mise、設定ファイルの欠落）でも意図した集合になることを保証するため
 - `mise upgrade` 後は lockfile を一度削除してから再生成する（既存エントリが残り新版が反映されないため）
 - 両シェルとも、`minimum_release_age` の正規形に一致するリリース保留警告だけを許可し、警告内容を表示して処理を継続する
 - 両シェルとも、正規形以外の `mise WARN` が出力された場合は、終了コードが `0` でも lockfile を復元し、commit と push を行わない
