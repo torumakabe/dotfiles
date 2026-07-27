@@ -25,6 +25,8 @@
 
 更新は全 OS で `copilot update`。macOS では Copilot Desktop から参照できるよう、`.zshrc` で `COPILOT_CLI_PATH` を公開する。
 
+Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilot` が同梱されていることがあり、`copilot update` の対象外のまま古くなる。このため導入判定は `command -v copilot` ではなく `~/.local/bin/copilot` の実体で行う（[`docs/troubleshooting.md`](troubleshooting.md#codespaces--dev-container-で-copilot-のバージョンが古い)）。
+
 ## LSP サーバー
 
 `~/.copilot/lsp-config.json` (chezmoi 管理) で設定する。Python 向け `ty` (Astral) は mise バックエンドがないため `uv tool install ty`（`run_once` で自動化）、TypeScript 等の npm パッケージは mise の `npm:` バックエンドで管理する。

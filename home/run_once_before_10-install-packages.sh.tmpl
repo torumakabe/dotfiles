@@ -42,9 +42,18 @@ sudo apt-get install -y -qq \
 
 # Copilot CLI — mise の github: バックエンドでは更新が遅れるため、
 # 公式インストールスクリプトで導入し、更新は copilot update で行う
-if ! command -v copilot >/dev/null 2>&1; then
+# 判定に command -v を使わない: Codespaces / Dev Container のベースイメージには
+# /usr/local/bin/copilot が同梱されていることがあり、これを検出すると自前の導入が
+# スキップされ、copilot update の対象外の古いバイナリが使われ続ける。
+# 公式スクリプトは非 root で ~/.local/bin へ入れるため、その実体で判定する。
+if [ ! -x "${HOME}/.local/bin/copilot" ]; then
   echo "Installing GitHub Copilot CLI via official script..."
-  curl -fsSL https://gh.io/copilot-install | bash
+  # GITHUB_TOKEN を外して実行する: Codespaces が注入するトークンでは、public repo の
+  # release asset でも SAML SSO により 403 になることがある (mise 側の回避と同じ理由)。
+  # 導入失敗で chezmoi apply 全体を止めないよう、警告に留める。
+  if ! (unset GITHUB_TOKEN GH_TOKEN; curl -fsSL https://gh.io/copilot-install | bash); then
+    echo "Warning: Copilot CLI installation failed. Run 'curl -fsSL https://gh.io/copilot-install | bash' manually." >&2
+  fi
 fi
 
 {{ if not .codespaces -}}
