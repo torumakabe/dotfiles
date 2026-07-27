@@ -25,6 +25,40 @@ GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm6
 mise install
 ```
 
+## `mise.lock has changed since chezmoi last wrote it?` と聞かれる
+
+`chezmoi status` が `MM .config/mise/mise.lock` を示し、`chezmoi apply` が上のプロンプトを出す。Codespaces のような TTY の無い環境では `could not open a new TTY` で停止する。
+
+デプロイ済みの lockfile に、意図しないプラットフォームのエントリが加わった状態である。`chezmoi diff ~/.config/mise/mise.lock` で追加された行を確認する。`linux-x64-musl` や `windows-x64-baseline` のようなエントリが増えていれば、`lockfile_platforms` が効かないまま auto-lock が走ったことを意味する（[ADR-021](adr/021-mise-lockfile-platforms.md)）。
+
+原因は二つある。まず mise のバージョンを確認する。
+
+```bash
+mise --version
+```
+
+`lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。既存の mise がある端末では `run_once_before_20-install-mise.sh` がバージョンを問わず何もしないため、自分で更新する。
+
+```bash
+mise self-update        # macOS/Homebrew は brew upgrade mise、Windows は mise-self-upgrade
+```
+
+mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。
+
+```bash
+mise settings get lockfile_platforms
+chezmoi apply --force ~/.config/mise/config.toml
+```
+
+どちらの場合も、最後にデプロイ済み lockfile を source の内容へ戻す。`--force` を付けるのは、対象を lockfile 一つに限ってプロンプトを飛ばすためである。他のファイルのローカル変更には影響しない。
+
+```bash
+chezmoi apply --force ~/.config/mise/mise.lock
+chezmoi status
+```
+
+`chezmoi status` から `.config/mise/mise.lock` が消えれば復旧している。
+
 ## shell 起動時に `mise WARN missing:` が出る
 
 `mise upgrade` 等で `private_mise.lock` が更新された後、対応する `mise install` / `mise reshim` が走っていないと shim と install marker が古いまま残り、`mise hook-env` で `WARN missing:` が出る。

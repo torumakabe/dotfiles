@@ -33,6 +33,7 @@
 | [018](018-git-hooks-via-init-templatedir.md) | 機械全体への Git hook 配布は init.templateDir で行う | Accepted |
 | [019](019-cross-platform-parity-contract.md) | クロスプラットフォーム機能等価性はプラットフォーム契約と静的検査で担保する | Accepted |
 | [020](020-git-hooks-via-config.md) | gitleaks の pre-commit は Git の設定ベースフックで配る | Proposed |
+| [021](021-mise-lockfile-platforms.md) | lockfile の対象プラットフォームは lockfile_platforms で固定する | Accepted |
 
 ## テンプレート
 
