@@ -24,3 +24,5 @@ Python の `pre-commit` フレームワークには `pre-commit init-templatedir
 - テンプレートディレクトリは `hooks/pre-commit` のみを持ち、Git 既定の `*.sample` 等は引き継がない（この用途では無害・許容）。
 - 「chezmoi apply のたびに旧共有ディレクトリの不明ファイルを自動削除する」案は、他プロジェクトの正規 hook を無警告で無効化しうる（hook ファイル欠落は git が黙って無視する）ため設計段階で明示的に却下した。可視性を保ちつつ自動破壊的操作を避けるため、読み取り専用の `git-hooks-audit` を採用した。
 - Windows: hook 本体の POSIX `sh` 互換要件（Git for Windows が `/usr/bin/env bash` を WSL の bash.exe に解決し `C:/...` パスを開けない問題への対応）は変わらず適用される。
+- Git 2.54 以降では、ADR-020 の設定ベースフックが別レイヤとして加算的に走る。本 ADR の `init.templateDir` は撤去せず、Git 2.54 より前のバージョンでの唯一の配布経路として残す。
+- 上記のバックフィルは実際には実行されず、既存リポジトリで gitleaks が約 3 週間にわたり一度も走らない状態が続いた。本 ADR は、この状態を検知する仕組みを持たない。経緯と対処は ADR-020 に記す。

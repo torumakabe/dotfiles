@@ -21,6 +21,27 @@ set -eu
 # Keep this POSIX sh compatible so Windows Git does not pick up WSL bash
 # through /usr/bin/env bash and pass it an unopenable C:/... hook path.
 
+# Skip when the config-based hook (ADR-020) already scanned this commit.
+#
+# On git >= 2.54 the config-based hook runs first and this hookdir hook runs
+# afterwards, so gitleaks would scan the same staged tree twice. The check
+# below asks git which pre-commit hooks it sees and skips only when it names
+# dotfiles-gitleaks without the "disabled" marker.
+#
+# Two properties make this safe:
+#   - git prepends its own GIT_EXEC_PATH to PATH before running a hook, so the
+#     `git` resolved here is the same binary that invoked this hook. A git that
+#     does not know `hook list` prints nothing to stdout and the check fails.
+#   - config-based hooks are fail-closed: git aborts the commit when it cannot
+#     run one. Being listed therefore means the scan already happened.
+# Any other outcome leaves the scan below in place, so the failure mode is a
+# duplicate scan rather than a skipped one.
+if git hook list pre-commit --show-scope 2>/dev/null \
+  | awk -F'\t' '$NF == "dotfiles-gitleaks" && $0 !~ /\tdisabled\t/ { found = 1 }
+                END { exit !found }'; then
+  exit 0
+fi
+
 find_gitleaks() {
   # Windows (Git Bash): prefer the .exe shim. The extensionless mise shim is a
   # /bin/bash script and can still route to WSL bash in this environment.

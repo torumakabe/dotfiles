@@ -1,0 +1,76 @@
+#!/bin/sh
+set -eu
+
+# gitleaks secret detection, run as a config-based pre-commit hook.
+#
+# Deployed by chezmoi to ~/.local/bin/gitleaks-pre-commit and wired up via
+# `[hook "dotfiles-gitleaks"]` in ~/.gitconfig (see
+# docs/adr/020-git-hooks-via-config.md). Git >= 2.54 runs config-based hooks
+# for every repository, additively with any hook in $GIT_DIR/hooks, so a
+# repo-local hook manager (lefthook, husky, ...) that owns
+# <repo>/.git/hooks/pre-commit cannot displace this one. Git < 2.54 ignores
+# the [hook] section entirely, so this file is simply never invoked there and
+# ~/.config/git/templates/hooks/pre-commit (ADR-018) remains the only path.
+#
+# Opt out for a single repository with:
+#   git config --local hook.dotfiles-gitleaks.enabled false
+#
+# Unlike hooks in $GIT_DIR/hooks, a config-based hook is not existence-checked
+# by git: if this file is missing or unreadable the shell fails and the commit
+# is blocked. That is intentional — a secret scanner must not disappear
+# quietly — but it means this file must stay deployed alongside the gitconfig
+# entry.
+#
+# Keep this POSIX sh compatible so Windows Git does not pick up WSL bash
+# through /usr/bin/env bash and pass it an unopenable C:/... hook path.
+
+find_gitleaks() {
+  # Windows (Git Bash): prefer the .exe shim. The extensionless mise shim is a
+  # /bin/bash script and can still route to WSL bash in this environment.
+  if [ -n "${LOCALAPPDATA:-}" ]; then
+    localappdata_unix="$(cygpath -u "${LOCALAPPDATA}" 2>/dev/null || echo "${LOCALAPPDATA}")"
+    if [ -x "${localappdata_unix}/mise/shims/gitleaks.exe" ]; then
+      echo "${localappdata_unix}/mise/shims/gitleaks.exe"
+      return 0
+    fi
+  fi
+  if [ -x "${HOME}/.local/share/mise/shims/gitleaks.exe" ]; then
+    echo "${HOME}/.local/share/mise/shims/gitleaks.exe"
+    return 0
+  fi
+  if command -v gitleaks.exe >/dev/null 2>&1; then
+    command -v gitleaks.exe
+    return 0
+  fi
+
+  if command -v gitleaks >/dev/null 2>&1; then
+    command -v gitleaks
+    return 0
+  fi
+
+  # Try mise shim locations when not in PATH (git hooks don't source shell rc).
+  if [ -x "${HOME}/.local/share/mise/shims/gitleaks" ]; then
+    echo "${HOME}/.local/share/mise/shims/gitleaks"
+    return 0
+  fi
+
+  if [ -n "${LOCALAPPDATA:-}" ]; then
+    if [ -x "${localappdata_unix}/mise/shims/gitleaks" ]; then
+      echo "${localappdata_unix}/mise/shims/gitleaks"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+GITLEAKS=$(find_gitleaks) || {
+  echo "⚠️  gitleaks not found — skipping secret scan."
+  echo "   Install with: mise install gitleaks"
+  # fail-open: allow commit when gitleaks is not installed
+  GITLEAKS=""
+}
+
+if [ -n "${GITLEAKS}" ]; then
+  "${GITLEAKS}" git --pre-commit --staged --redact --verbose --no-banner
+fi

@@ -2,4 +2,23 @@
 # zsh は ~/.profile を読まないため、login 時に明示的に source する。
 # PATH/shims など共通 env は ~/.profile に集約する（bash/sh との共有のため）。
 [ -r "$HOME/.profile" ] && . "$HOME/.profile"
+{{ if eq .chezmoi.os "darwin" }}
+# macOS: /etc/zprofile の path_helper は PATH を再構築し、/etc/paths に載る
+# システムディレクトリを先頭へ、それ以外を末尾へ移す。~/.zshenv 経由で
+# ~/.profile が先頭に置いたディレクトリも、login zsh ではここで後ろへ回る。
+# ~/.profile は __DOTFILES_PROFILE_LOADED ガードで再実行されないため、
+# 並びは自力で戻す必要がある。
+#
+# ここで戻すのは git だけに絞る。~/.local/bin や mise shims をまとめて
+# /usr/bin より前に出すと、システムツール全般を shadow して影響が読めない。
+# /opt/homebrew/opt/git/bin は git 関連の実行ファイルしか持たないため、
+# 影響範囲が git に閉じる。
+#
+# 目的は ADR-020 の設定ベースフック (git >= 2.54) を login shell 由来の
+# git でも有効にすること。Apple Git 2.50 では [hook] が警告なく無視される。
+if [ -d /opt/homebrew/opt/git/bin ]; then
+  PATH="/opt/homebrew/opt/git/bin:$(printf '%s' "$PATH" | sed -e 's|/opt/homebrew/opt/git/bin:||g' -e 's|:/opt/homebrew/opt/git/bin||g')"
+  export PATH
+fi
+{{ end }}
 {{ end -}}
