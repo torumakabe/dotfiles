@@ -111,6 +111,25 @@ chezmoi apply ~/.config/git/templates/hooks/pre-commit
 
 Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin/env bash` が WSL の `bash.exe` を拾い、Windows 形式の `C:/...` パスを開けていない可能性がある。この pre-commit hook はその経路を避けるため POSIX `sh` 互換で管理する。mise の Windows shim も extensionless 版は `/bin/bash` スクリプトなので、hook 内では `gitleaks.exe` を優先する。
 
+## Codespaces / Dev Container で `copilot` のバージョンが古い
+
+症状: `copilot --version` が極端に古い（例: 1.0.3）。
+
+原因: ベースイメージ（Codespaces universal 等）に `/usr/local/bin/copilot` が同梱されており、`run_once_before_10-install-packages.sh` の導入判定が `command -v copilot` だと、これを検出して公式スクリプトによる導入をスキップしていた。同梱バイナリはイメージのビルド時点で固定されるため、`copilot update` の対象にもならない。
+
+対策は導入済み。判定は `~/.local/bin/copilot` の実体で行う。既存のコンテナでは次で復旧する。
+
+```bash
+curl -fsSL https://gh.io/copilot-install | bash   # ~/.local/bin/copilot へ導入
+exec zsh -l
+type -a copilot                                   # 先頭が ~/.local/bin/copilot であること
+~/.local/bin/copilot --version
+```
+
+同梱バイナリは削除しない。`~/.local/bin` が PATH で `/usr/local/bin` より前にあれば shadow されるため、特権操作なしで解決する（Codespaces universal イメージではこの順序を確認済み。逆順のイメージでは PATH 側の調整が必要）。`copilot update` が更新するのは実行された側の実体だけで、同梱バイナリは対象外である。
+
+VS Code 拡張 (`github.copilot-chat`) が PATH へ注入する `.../globalStorage/github.copilot-chat/copilotCli/copilot` は shim であり、自分のディレクトリを除いた PATH から実体を探して委譲するだけなので、バージョン固定の原因にはならない。ただし `command -v copilot` はこの shim を返すため、確認には `type -a copilot` を使う。
+
 ## Copilot CLI: preToolUse フックが並列実行時にすり抜ける
 
 症状: 短時間に複数のツール呼び出しが走った際、`copilot-guard.py` / `uv-enforcer.py` の deny が適用されず、ブロックすべき操作が実行される。
