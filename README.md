@@ -17,7 +17,7 @@ Linux / macOS / WSL / Windows / Codespaces / Dev Container で、できるだけ
 
 | 環境 | セットアップ | 補足 |
 |------|------------|------|
-| Linux / macOS / WSL | [Linux / macOS / WSL](#linux--macos--wsl) | WSL は初回 `windowsUser` 入力が必要 |
+| Linux / macOS / WSL | [Linux / macOS / WSL](#linux--macos--wsl) | macOS は Apple Silicon のみ。WSL は初回 `windowsUser` 入力が必要 |
 | GitHub Codespaces | [GitHub Codespaces](#github-codespaces) | 非対話セットアップのため一部設定を省略 |
 | Dev Container (ローカル) | [Dev Container](#dev-container-ローカル) | `mise install --yes` は起動後に手動実行 |
 | Windows | [Windows](#windows) | `copilot` は DSC + winget で導入 |

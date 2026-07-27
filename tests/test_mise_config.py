@@ -64,6 +64,19 @@ def _tool_alias(config: str, tool: str) -> str:
     return match.group(1)
 
 
+def _config_toml(config: str) -> dict:
+    """chezmoi のテンプレート行を除いた config.toml.tmpl を TOML として読む。"""
+    stripped = re.sub(r"(?m)^\{\{.*\}\}[ \t]*$\n?", "", config)
+    return tomllib.loads(stripped)
+
+
+def _lockfile_platforms(config: str) -> list[str]:
+    settings = _config_toml(config).get("settings", {})
+    if "lockfile_platforms" not in settings:
+        raise AssertionError("[settings] に lockfile_platforms がありません")
+    return settings["lockfile_platforms"]
+
+
 def _mise_warning_helpers() -> str:
     zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
     start = zshrc.index("_mise_normalize_log_line() {")
@@ -363,17 +376,26 @@ $result = @{{
         self.assertTrue(state["log_exists"])
 
     def test_mise_lock_platform_contract_stays_aligned(self) -> None:
+        config = CONFIG_PATH.read_text(encoding="utf-8")
         zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
         profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
         operations = OPERATIONS_PATH.read_text(encoding="utf-8")
         troubleshooting = TROUBLESHOOTING_PATH.read_text(encoding="utf-8")
 
+        # config.toml が正本。CLI と文書はここから導出した値と突き合わせる。
+        platforms = _lockfile_platforms(config)
+        platform_csv = ",".join(platforms)
+        self.assertEqual(platforms, list(MISE_LOCK_PLATFORMS))
         self.assertIn(
-            f"mise lock --global --platform {MISE_LOCK_PLATFORM_CSV}",
+            f"lockfile_platforms = {json.dumps(platforms)}",
+            operations,
+        )
+        self.assertIn(
+            f"mise lock --global --platform {platform_csv}",
             zshrc,
         )
         self.assertIn(
-            f'-Arguments @("lock", "--global", "--platform", "{MISE_LOCK_PLATFORM_CSV}")',
+            f'-Arguments @("lock", "--global", "--platform", "{platform_csv}")',
             profile,
         )
         for path, document in (
@@ -387,7 +409,7 @@ $result = @{{
                 )
                 self.assertEqual(
                     set(platform_values),
-                    {MISE_LOCK_PLATFORM_CSV},
+                    {platform_csv},
                 )
 
     def test_cargo_make_linux_arm64_constraint_stays_aligned(self) -> None:
