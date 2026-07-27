@@ -4,7 +4,7 @@
 
 Proposed
 
-Windows と WSL での検証が完了していない。macOS と Linux コンテナでの検証結果は「検証記録」に、残る検証項目は「引き継ぐ検証」に記す。
+macOS、Linux コンテナ、Windows、WSL で検証した。結果は「検証記録」に記す。Dev Container と Codespaces は未検証であり、残る検証項目は「引き継ぐ検証」に記す。
 
 ## Context
 
@@ -106,112 +106,70 @@ git config --local hook.dotfiles-gitleaks.enabled false
 - 設定ベースフックは `.git/hooks` を参照しないため、`lefthook install` が `.git/hooks/pre-commit` を置き換えても gitleaks は実行され続ける。lefthook 自身の job も従来どおり実行される。
 - 既存リポジトリにも適用される。backfill を実行していないリポジトリでも gitleaks が走る。
 - 保護の有無は、実行された git バイナリのバージョンで決まる。PATH の解決が経路ごとに異なる環境では、保護される経路とされない経路が混在し得る。macOS の login shell については `~/.zprofile` で対処したが、Finder から起動した GUI アプリのように shell の設定を読まない経路は対象外である。
-- `$GIT_DIR/hooks` の hook は git が実行可能性を確認して欠落時は無視するのに対し、設定ベースフックには存在確認がない。`~/.local/bin/gitleaks-pre-commit` が読めなければ commit が拒否される。`chezmoi apply` が中断した場合などにこの状態が起こり得る。秘密情報の走査が無言で消えるよりも、commit が止まって原因が表示される方を選ぶ。
+- `$GIT_DIR/hooks` の hook は git が実行可能性を確認して欠落時は無視するのに対し、設定ベースフックには存在確認がない。`~/.local/bin/gitleaks-pre-commit` が読めなければ commit が拒否される。`chezmoi apply` が中断した場合などにこの状態が起こり得る。秘密情報の走査が無言で消えるよりも、commit が止まって原因が表示される方を選ぶ。この状態からの復旧は `chezmoi apply ~/.local/bin/gitleaks-pre-commit` で済む。
 - 走査スクリプトは設定ベースフック用とテンプレート用の二つに分かれる。探索ロジックを変更するときは両方を更新する。共有すると、片方を撤去する際にもう片方が壊れる結合が生まれるため、重複を選んだ。
 - `--no-verify` で回避できる点は `init.templateDir` 方式と変わらない。誤って秘密情報を commit する事故を早期に止めることが目的であり、意図的な持ち出しを防ぐ境界は GitHub 側の secret scanning と push protection が担う。
 
 ## 検証記録
 
-macOS 実機（Homebrew git）と Linux コンテナで確認した。使用した git のバージョンは macOS が 2.55.0、Linux が `ppa:git-core/ppa` の 2.54.0、比較対象の Apple Git が 2.50.1 である。
+macOS 実機、Linux コンテナ、Windows 実機、WSL (Ubuntu 22.04) で確認した。使用した git は、macOS が Homebrew の 2.55.0、Linux コンテナが `ppa:git-core/ppa` の 2.54.0、Windows が Git for Windows 2.55.0、WSL が同じ PPA の 2.54.0 である。WSL の git は apply 前が 2.34.1 であり、`run_once_before_10-install-packages.sh` の PPA 追加によって 2.54.0 へ更新された。
 
-| 確認項目 | 結果 |
-| --- | --- |
-| 要件 1: `.git/hooks` に hook を持たないリポジトリで秘密鍵の commit を拒否する | 拒否した（`leaks found: 1`、exit 1、commit 数 0） |
-| 要件 2: lefthook 生成の hook で上書きした状態で秘密鍵の commit を拒否する | 拒否した。lefthook 側の hook も実行された |
-| 設定ベースフック有効時の走査回数 | 1 回 |
-| リポジトリ単位で無効化した場合の走査回数 | 1 回（テンプレート由来の hook が実行される） |
-| Apple Git 2.50.1 での走査回数 | 1 回。`[hook]` セクションによるエラーは出ない |
-| gitleaks が PATH にも mise shims にも無い場合 | 警告のみで commit は成功する（fail-open） |
-| hook の中で解決される `git` | hook を起動した git と同一のバイナリ |
-| login zsh での `git` の解決先 | `/opt/homebrew/opt/git/bin/git`。PATH に重複は無い |
-| `chezmoi apply` 時の報告 | 設定ベースフックが有効なら無出力、無効なら警告を出力する |
+commit を拒否したことの判定には、出力に `leaks found: 1` が現れること、git の終了コードが 1 であること、commit が作られないことの三つを使った。
+
+| 確認項目 | macOS / Linux | Windows | WSL |
+| --- | --- | --- | --- |
+| 要件 1: `.git/hooks` に hook を持たないリポジトリで秘密鍵の commit を拒否する | 拒否した | 拒否した | 拒否した |
+| 要件 2: lefthook 生成の hook で上書きした状態で秘密鍵の commit を拒否する | 拒否した | 拒否した | 拒否した |
+| 要件 2: 同じ状態で lefthook 自身の job も実行される | 実行した | 実行した | 実行した |
+| 設定ベースフック有効時の走査回数 | 1 回 | 1 回 | 1 回 |
+| リポジトリ単位で無効化した場合の走査回数 | 1 回 | 1 回 | 1 回 |
+| hook の中で解決される `git` が hook を起動した git と同一である | 同一 | 同一 | 同一 |
+| `chezmoi apply` 時の報告が、有効なら無出力、無効なら警告になる | 一致した | 一致した | 一致した |
+
+プラットフォームごとに個別に確認した事項を記す。
+
+- macOS: Apple Git 2.50.1 でも走査回数は 1 回であり、`[hook]` セクションによるエラーは出ない。login zsh での `git` は `/opt/homebrew/opt/git/bin/git` に解決され、PATH に重複は無い。
+- macOS と Linux コンテナ: gitleaks が PATH にも mise shims にも無い場合、警告のみで commit は成功する (fail-open)。
+- Windows: hook の中で `sh` は `/usr/bin/sh` に解決される。これは Git for Windows が同梱する MSYS の sh であり、WSL の bash ではない。`command` に書いた `~` は Windows のユーザプロファイルを指す。
+- WSL: hook の中で `sh` は `/usr/bin/sh`、`git` は `/usr/lib/git-core/git` に解決される。`appendWindowsPath` を無効にしているため、Windows 側の実行ファイルは経路に入らない。
 
 判定方法について確認した事項を記す。`git hook list` は該当する hook が無い場合に exit 1 を返し、サブコマンド自体を知らない git は exit 129 を返す。終了コードだけでは両者と「対応しているが未設定」を区別できないため、判定には標準出力の内容を使う。`--show-scope` を付けない場合、スコープと `disabled` の表示は出ない。
 
+`run_after_40-check-git-hooks` の警告経路は、`GIT_CONFIG_GLOBAL` を空のファイルへ向けて設定ベースフックが見えない状態を作り、Windows と WSL の双方で確認した。どちらも警告を出したうえで終了コード 0 を返し、apply を失敗させない。Windows 版は powershell.exe 5.1 で実行し、構文が通ることもあわせて確認した。
+
 ## 引き継ぐ検証
 
-Windows と WSL では未検証である。Windows と WSL は `~` の指す先も chezmoi の状態も別なので、**それぞれで branch を pull して `chezmoi apply` を実行する**。片方だけでは他方へ反映されない。
+Dev Container と Codespaces では未検証である。ベースイメージが配る git は現時点で 2.54 に満たないため、設定ベースフックが有効になるかは `run_once_before_10-install-packages.sh.tmpl` の PPA 追加が効くかで決まる。コンテナを作成して `chezmoi apply` を実行したうえで、次を確認する。
 
-### 検証用の秘密情報
-
-`ssh-keygen` は使わない。PowerShell 5.1 は空文字列の引数を外部コマンドへ渡す際の挙動が一定でなく、`-N ''` が意図どおり渡らないことがある。実鍵を作らずに済む点でも次の方が扱いやすい。gitleaks は鍵の中身ではなく PEM のヘッダ形式で検出するため、合成したブロックでブロックされることを macOS で確認済みである。
-
-```powershell
-@'
------BEGIN OPENSSH PRIVATE KEY-----
-NOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEY
------END OPENSSH PRIVATE KEY-----
-'@ | Set-Content -Path fake_key -NoNewline
-```
-
-改行コードと末尾改行の有無は検出に影響しない（CRLF かつ末尾改行なしでも検出することを macOS で確認済み）。
-
-本文を短くしてはならない。gitleaks の private-key ルールは本文の長さも見ており、33 文字では検出しなかった（macOS で実測）。上記の 55 文字は検出を確認した値である。
-
-### apply が途中で止まった場合
-
-設定ベースフックは fail-closed である。`~/.gitconfig` が配られた後、`~/.local/bin/gitleaks-pre-commit` が配られる前に `chezmoi apply` が中断すると、**その機械のすべての commit が拒否される**。復旧は次の 1 コマンドで済む。
-
-```powershell
-chezmoi apply ~/.local/bin/gitleaks-pre-commit
-```
-
-### Windows（Git for Windows）
-
-1. `git --version` が 2.54 以降であること。満たさない場合は `winget upgrade --id Git.Git` で更新し、新しいシェルで再確認する。dotfiles 側に Windows 用の git 導入処理は無いため、この更新は手動になる。
-2. `chezmoi apply` が `run_after_40-check-git-hooks.ps1` の警告を出さないこと。このスクリプトは PowerShell の実行環境が無い機械で書いたため、構文が通ることの確認も兼ねる。git を更新する前に一度 apply すれば、警告を出す経路の表示も確認できる。
-3. `git hook list pre-commit --show-scope` が `dotfiles-gitleaks` を含む行を返すこと。
-4. 要件 1（作成時期を問わず走る）。`init.templateDir` 由来の hook を持たない状態を作って確認する。`git init` しただけでは hook が入るため、明示的に削除する。
-
-   ```powershell
-   mkdir $env:TEMP\gl1; cd $env:TEMP\gl1
-   git init
-   git config commit.gpgsign false   # 署名の失敗を gitleaks の結果と取り違えないため
-   Remove-Item (Join-Path (git rev-parse --git-path hooks) 'pre-commit') -ErrorAction SilentlyContinue
-   # 上記の fake_key を作成
-   git add fake_key
-   git commit -m t
-   ```
-
-   期待する結果は、出力に `leaks found: 1` が現れ、`git rev-list --count HEAD` が commit を数えないことである。
-
-5. 要件 2（lefthook と併用できる）。lefthook を使うリポジトリで `lefthook install` を実行した後、同じ commit がブロックされ、かつ lefthook 自身の job も実行されること。
-6. 走査が 1 回だけであること。`init.templateDir` 由来の hook を持つリポジトリ（手順 4 の削除をしない状態）で commit し、出力に含まれる gitleaks の要約行を数える。
-
-   ```powershell
-   mkdir $env:TEMP\gl2; cd $env:TEMP\gl2
-   git init
-   git config commit.gpgsign false
-   'ok' | Set-Content -Path f; git add f
-   (git commit -m t 2>&1 | Select-String 'no leaks found').Count   # 期待値: 1
-   ```
-
-7. `command` に書いた `sh ~/.local/bin/gitleaks-pre-commit` の解決先。手順 4 が成功すれば `sh` と `~` の解決は両方とも成立している。失敗した場合に切り分けるため、`sh` が Git for Windows のものか（WSL の bash ではないか）、`~` が Windows のユーザプロファイルを指すかを個別に確認する。
-
-### WSL
-
-WSL 側の git はディストリビューションの apt から入る。`appendWindowsPath` を無効にしているため、WSL から Windows 側の実行ファイルを PATH 経由で呼べない。WSL 側は Linux ネイティブの git と gitleaks で完結させる。
-
-1. WSL 内でこの branch を pull し、`chezmoi apply` を実行する。Windows 側の apply は WSL の `~` に反映されない。
-2. `git --version` が 2.54 以降であること。`run_once_before_10-install-packages.sh` は内容を変更したため、`chezmoi apply` で再実行され `ppa:git-core/ppa` が追加される。PPA を追加できない環境では警告を出して処理を続けるので、その場合は git がディストリビューション版のままになる。
-3. `~/.gitconfig` に `[hook "dotfiles-gitleaks"]` が届いていること。
-4. 上記 Windows の手順 4、5、6 を、次のように読み替えて WSL 側で実行する。
+1. `git --version` が 2.54 以降であること。満たさない場合は PPA の追加が失敗した理由を確認する。ベースイメージの sudo の扱い、apt のプロキシ設定、`software-properties-common` の有無が候補になる。
+2. `git hook list pre-commit --show-scope` が `dotfiles-gitleaks` を含む行を返すこと。
+3. 要件 1（作成時期を問わず走る）。`init.templateDir` 由来の hook を持たない状態を作って確認する。
 
    ```sh
    mkdir -p /tmp/gl1 && cd /tmp/gl1 && git init
    git config commit.gpgsign false
-   rm -f "$(git rev-parse --git-path hooks)/pre-commit"     # 手順 4 のみ
+   rm -f "$(git rev-parse --git-path hooks)/pre-commit"
    printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\n%s\n-----END OPENSSH PRIVATE KEY-----\n' \
      'NOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEY' > fake_key
    git add fake_key && git commit -m t
    ```
 
-   走査回数は `git commit -m t 2>&1 | grep -c 'no leaks found'` で数える。
+   期待する結果は、出力に `leaks found: 1` が現れ、`git rev-list --count HEAD` が commit を数えないことである。本文を短くしてはならない。gitleaks の private-key ルールは本文の長さも見ており、33 文字では検出しなかった（macOS で実測）。上記の 55 文字は検出を確認した値である。
 
-### 未検証のまま残る範囲
+4. 走査が 1 回だけであること。手順 3 の削除をしない状態で commit し、`git commit -m t 2>&1 | grep -c 'no leaks found'` が 1 を返すこと。
+5. git が 2.54 に満たないまま終わった場合、`chezmoi apply` が `run_after_40-check-git-hooks.sh` の警告を出し、かつ apply 自体は成功すること。この経路では `init.templateDir` 由来の hook だけが保護を担う。
 
-- Finder から起動した GUI アプリのように、shell の設定を読まない経路で解決される git のバージョン。
-- Dev Container と Codespaces のベースイメージが配る git。現時点では 2.54 に満たない。ベースイメージが更新されるか、`run_once_before_10-install-packages.sh.tmpl` の PPA 追加が効くかで決まる。
+### apply が途中で止まった場合
+
+設定ベースフックは fail-closed である。`~/.gitconfig` が配られた後、`~/.local/bin/gitleaks-pre-commit` が配られる前に `chezmoi apply` が中断すると、その環境のすべての commit が拒否される。復旧は次の 1 コマンドで済む。
+
+```sh
+chezmoi apply ~/.local/bin/gitleaks-pre-commit
+```
+
+### 検証の対象外
+
+Finder から起動した GUI アプリのように、shell の設定を読まない経路で解決される git のバージョンは検証しない。設定ベースフックが有効かどうかは、その経路で実行された git のバージョンに依存する。
 
 ## 関連
 
