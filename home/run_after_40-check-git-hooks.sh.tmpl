@@ -29,20 +29,77 @@ if git hook list pre-commit --show-scope 2>/dev/null \
 fi
 
 git_version="$(git --version 2>/dev/null || echo 'git not found')"
+git_version_number="$(printf '%s\n' "${git_version}" | awk '{print $3}')"
 
+# dpkg に依存せずに比較する。この判定は macOS でも通る必要がある。
+# 版を取得できなかった場合は「古い git」として扱い、案内を出す側へ倒す。
+supports_config_hooks() {
+  awk -v version="${1:-0}" 'BEGIN {
+    split(version, part, ".")
+    major = part[1] + 0
+    minor = part[2] + 0
+    exit !(major > 2 || (major == 2 && minor >= 54))
+  }'
+}
+
+if supports_config_hooks "${git_version_number}"; then
+  # git は設定ベースフックを解釈できる。したがって原因は設定側にあり、
+  # git を入れ替えても直らない。この分岐はプラットフォームを問わない。
+  remediation="  This git already supports config-based hooks, so the hook config did not
+  reach the global gitconfig. Check what git reads:
+    git config --global --get-regexp '^hook\.dotfiles-gitleaks\.'
+  If it prints nothing, re-apply the dotfiles:
+    chezmoi apply ~/.gitconfig"
+{{ if eq .chezmoi.os "darwin" -}}
+else
+  remediation="  Enabling it requires git 2.54 or later:
+    brew install git
+  Then open a new login shell and confirm 'git --version' reports 2.54 or later.
+  (~/.zprofile puts /opt/homebrew/opt/git/bin back at the front of PATH.)"
+fi
+{{ else -}}
+else
+  # 古い git が走っている原因は二つに分かれる。apt が要件を満たす git を持って
+  # いないか、持っていても PATH でより前にある別の実体に隠されているかである。
+  # 後者で apt の再実行を案内すると空振りするため、どちらであるかを判定する。
+  remediation="  Enabling it requires git 2.54 or later:
+    sudo add-apt-repository -y ppa:git-core/ppa && sudo apt-get update && sudo apt-get install -y git"
+  resolved_git="$(command -v git 2>/dev/null || true)"
+  apt_git_version="$(/usr/bin/git --version 2>/dev/null | awk '{print $3}' || true)"
+  if [ -n "${resolved_git}" ] && [ "${resolved_git}" != "/usr/bin/git" ] \
+    && supports_config_hooks "${apt_git_version}"; then
+{{- if or .codespaces .devcontainer }}
+    # ベースイメージがソースビルドした git を /usr/local へ入れた場合に限り、
+    # 張り替えるコマンドまで示す。symlink であれば利用者か過去の張り替えが
+    # 作ったものなので、出所を判定できたことにはならない。
+    if [ "${resolved_git}" = "/usr/local/bin/git" ] && [ ! -L /usr/local/bin/git ]; then
+      remediation="  Enabling it requires git 2.54 or later. /usr/bin/git is ${apt_git_version},
+  but /usr/local/bin/git shadows it, so installing git through apt will not
+  change which binary runs. This container image builds git from source there.
+  Relink it:
+    sudo ln -sfn /usr/bin/git /usr/local/bin/git"
+    else
+{{- end }}
+    # 出所を判定できないため、張り替えは案内しない。mise の shim や利用者が
+    # 置いた git を壊し得るためである。
+    remediation="  Enabling it requires git 2.54 or later. /usr/bin/git is ${apt_git_version},
+  but PATH resolves git to ${resolved_git}, so installing git through apt will
+  not change which binary runs. Check PATH and whichever tool manager provides
+  ${resolved_git}."
+{{- if or .codespaces .devcontainer }}
+    fi
+{{- end }}
+  fi
+fi
+{{ end -}}
 cat >&2 <<EOF
 
 Warning: the gitleaks config-based hook is not active (${git_version}).
   Only repositories seeded from init.templateDir are scanned. Repositories that
   installed lefthook or husky, and repositories created before the templateDir
   hook was seeded, commit without a secret scan.
-  Enabling it requires git 2.54 or later:
-{{ if eq .chezmoi.os "darwin" }}    brew install git
-  Then open a new login shell and confirm 'git --version' reports 2.54 or later.
-  (~/.zprofile puts /opt/homebrew/opt/git/bin back at the front of PATH.)
-{{ else }}    sudo add-apt-repository -y ppa:git-core/ppa \\
-      && sudo apt-get update && sudo apt-get install -y git
-{{ end }}  See docs/adr/020-git-hooks-via-config.md
+${remediation}
+  See docs/adr/020-git-hooks-via-config.md
 
 EOF
 {{- end -}}

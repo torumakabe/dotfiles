@@ -40,6 +40,55 @@ sudo apt-get install -y -qq \
   xdg-utils \
   zsh
 
+{{ if or .codespaces .devcontainer -}}
+# PPA で入れた git を実際に解決させる。
+# Codespaces と Dev Container のベースイメージは devcontainers の git feature を
+# version=latest, ppa=false で使い、git をソースからビルドして prefix=/usr/local
+# へ入れる。/usr/local/bin は PATH で /usr/bin より先に来るため、上の apt が
+# 新しい git を入れても解決されるのは古いソースビルド版のままになる。
+# イメージのビルド時点で最新だった git が 2.54 未満なら、ADR-020 の設定ベース
+# フックは無効のままになる (Codespaces universal 5.1.5 = git 2.53.0 で実測)。
+#
+# 張り替えるのは、設定ベースフックが有効か無効かを分ける場合だけに限る。
+# 隠している側が 2.54 未満で、かつ /usr/bin 側が 2.54 以上のときにしか動かない。
+# イメージが要件を満たすようになれば、この処理は何もしない。
+# 削除ではなく symlink へ置き換えるのは、/usr/local/bin/git を直接指す設定
+# (VS Code の git.path など) をそのまま生かすためである。
+# >>> git-unshadow: tests/test_git_shadow_resolution.py がこの関数を抽出して実行する
+# 対象ディレクトリは呼び出し側が引数で渡す。テストが偽のディレクトリを渡せる一方、
+# 実行時に環境変数で対象を差し替えられないようにするためである。
+git_unshadow() {
+  local unshadow_from="${1}"
+  local unshadow_to="${2}"
+  local unshadow_required="2.54"
+  local shadowing_version target_version shadowing_path shadowing_name
+
+  [ -x "${unshadow_from}/git" ] || return 0
+  ! [ -L "${unshadow_from}/git" ] || return 0
+  [ -x "${unshadow_to}/git" ] || return 0
+
+  # 実行できない git を掴んでいても apply を止めないよう、取得できなければ空にする。
+  shadowing_version="$("${unshadow_from}/git" --version 2>/dev/null | awk '{print $3}' || true)"
+  target_version="$("${unshadow_to}/git" --version 2>/dev/null | awk '{print $3}' || true)"
+  [ -n "${shadowing_version}" ] && [ -n "${target_version}" ] || return 0
+  dpkg --compare-versions "${shadowing_version}" lt "${unshadow_required}" 2>/dev/null || return 0
+  dpkg --compare-versions "${target_version}" ge "${unshadow_required}" 2>/dev/null || return 0
+
+  echo "Redirecting ${unshadow_from} git ${shadowing_version} to ${unshadow_to} git ${target_version}..."
+  for shadowing_path in "${unshadow_from}"/git "${unshadow_from}"/git-* "${unshadow_from}"/scalar; do
+    shadowing_name="$(basename "${shadowing_path}")"
+    # 移動先に対応が無いものは残す。git-lfs のように git 本体とは別に配布される
+    # ツールを巻き込まないための条件である。
+    if [ -e "${shadowing_path}" ] && [ ! -L "${shadowing_path}" ] && [ -x "${unshadow_to}/${shadowing_name}" ]; then
+      sudo ln -sfn "${unshadow_to}/${shadowing_name}" "${shadowing_path}"
+    fi
+  done
+  hash -r
+}
+# <<< git-unshadow
+git_unshadow /usr/local/bin /usr/bin
+
+{{ end -}}
 # Copilot CLI — mise の github: バックエンドでは更新が遅れるため、
 # 公式インストールスクリプトで導入し、更新は copilot update で行う
 # 判定に command -v を使わない: Codespaces / Dev Container のベースイメージには

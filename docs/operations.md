@@ -154,7 +154,7 @@ git config --local hook.dotfiles-gitleaks.enabled false   # リポジトリ単�
 
 `git hook list` が `unknown subcommand` で失敗する場合、その git は 2.54 より前であり `init.templateDir` だけが効いている。設定ベースフックには存在確認が無いため、`~/.local/bin/gitleaks-pre-commit` が未配置だと commit が拒否される。その場合は `chezmoi apply` で再配置する。
 
-設定ベースフックが有効かどうかは `chezmoi apply` のたびに確認され、無効なら警告が出る。警告が出た場合は git を更新する。
+設定ベースフックが有効かどうかは `chezmoi apply` のたびに確認され、無効なら警告が出る。警告は原因ごとに案内を変える。走っている git が 2.54 以降であれば、原因は git ではなく設定の欠落であり、`git config --global --get-regexp '^hook\.dotfiles-gitleaks\.'` が何も返さなければ `chezmoi apply ~/.gitconfig` で再配置する。git が 2.54 より前であれば更新する。
 
 ```bash
 brew install git                                    # macOS
@@ -164,6 +164,17 @@ winget upgrade --id Git.Git                         # Windows
 ```
 
 macOS では `brew install git` の後、新しい login shell で `git --version` が 2.54 以降になることを確認する。`/etc/zprofile` の `path_helper` が PATH を並べ替えるため、`~/.zprofile` が `/opt/homebrew/opt/git/bin` を先頭へ戻している。
+
+Linux で apt を実行しても `git --version` が変わらない場合は、より前の PATH にある別の実体が新しい git を隠している。Codespaces と Dev Container のベースイメージは git をソースビルドして `/usr/local/bin` へ入れるため、この状態になる。`chezmoi apply` の bootstrap がこの二つの環境でだけ張り替える。手動で直す場合は、対象が確かにベースイメージのビルドであることを先に確かめる。
+
+```bash
+command -v git                       # /usr/local/bin/git が返るか確認
+test -L /usr/local/bin/git           # symlink なら誰かが張り替えた後なので触らない
+/usr/bin/git --version               # apt 側が 2.54 以降か確認
+sudo ln -sfn /usr/bin/git /usr/local/bin/git
+```
+
+この張り替えはコンテナイメージが `/usr/local` へ入れた通常ファイルにだけ当てはまる。`command -v git` が `/usr/local/bin/git` 以外を返す場合や、すでに symlink である場合は、mise の shim や利用者自身のビルドである可能性がある。張り替える前に、その git の出所と PATH の並びを確認する。
 
 ## `run_once_*` の再実行
 

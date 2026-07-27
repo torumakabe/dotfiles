@@ -43,13 +43,38 @@ if ($active) {
 $gitVersion = & git --version 2>$null
 if (-not $gitVersion) { $gitVersion = 'git not found' }
 
+# 版番号を取り出して、原因が git の古さか設定の欠落かを分ける。
+# 取り出せない場合は「古い git」として扱い、更新を案内する側へ倒す。
+$supportsConfigHooks = $false
+if ("$gitVersion" -match '(\d+)\.(\d+)') {
+  $major = [int]$Matches[1]
+  $minor = [int]$Matches[2]
+  $supportsConfigHooks = ($major -gt 2) -or ($major -eq 2 -and $minor -ge 54)
+}
+
+if ($supportsConfigHooks) {
+  # git は設定ベースフックを解釈できる。したがって原因は設定側にあり、
+  # git を更新しても直らない。
+  $remediation = @"
+  This git already supports config-based hooks, so the hook config did not
+  reach the global gitconfig. Check what git reads:
+    git config --global --get-regexp '^hook\.dotfiles-gitleaks\.'
+  If it prints nothing, re-apply the dotfiles:
+    chezmoi apply ~/.gitconfig
+"@
+} else {
+  $remediation = @"
+  Enabling it requires git 2.54 or later:
+    winget upgrade --id Git.Git
+"@
+}
+
 Write-Warning @"
 The gitleaks config-based hook is not active ($gitVersion).
   Only repositories seeded from init.templateDir are scanned. Repositories that
   installed lefthook or husky, and repositories created before the templateDir
   hook was seeded, commit without a secret scan.
-  Enabling it requires git 2.54 or later:
-    winget upgrade --id Git.Git
+$remediation
   See docs/adr/020-git-hooks-via-config.md
 "@
 {{- end -}}

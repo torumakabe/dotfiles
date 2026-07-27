@@ -111,7 +111,7 @@ chezmoi apply ~/.config/git/templates/hooks/pre-commit
 
 Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin/env bash` が WSL の `bash.exe` を拾い、Windows 形式の `C:/...` パスを開けていない可能性がある。この pre-commit hook はその経路を避けるため POSIX `sh` 互換で管理する。mise の Windows shim も extensionless 版は `/bin/bash` スクリプトなので、hook 内では `gitleaks.exe` を優先する。
 
-Git 2.54 以降なら、`.git/hooks/pre-commit` の有無に関わらず設定ベースフックが走る（ADR-020）。`git hook list --show-scope pre-commit` が `global<TAB>dotfiles-gitleaks` を返すか確認する。返さない場合は `git --version` を確認し、2.54 より前ならこの経路は使えない。
+Git 2.54 以降なら、`.git/hooks/pre-commit` の有無に関わらず設定ベースフックが走る（ADR-020）。`git hook list --show-scope pre-commit` が `global<TAB>dotfiles-gitleaks` を返すか確認する。返さない場合は `git --version` を確認する。2.54 以降であれば原因は設定の欠落なので、`git config --global --get-regexp '^hook\.dotfiles-gitleaks\.'` を確認し、何も返さなければ `chezmoi apply ~/.gitconfig` を実行する。2.54 より前であれば git を更新する。Linux では `/usr/bin/git --version` と比べ、そちらが 2.54 以降なら、より前の PATH にある実体が隠している。それが `/usr/local/bin/git` の通常ファイル（Codespaces と Dev Container のベースイメージがソースビルドしたもの）なら `sudo ln -sfn /usr/bin/git /usr/local/bin/git` で張り替える。別のパス、またはすでに symlink であれば、その git の出所を確認してから判断する。
 
 ## commit が gitleaks-pre-commit not found で拒否される
 
