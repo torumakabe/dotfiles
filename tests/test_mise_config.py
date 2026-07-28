@@ -33,6 +33,12 @@ MISE_LOCK_PLATFORM_CSV = ",".join(MISE_LOCK_PLATFORMS)
 CARGO_MAKE_EXCLUDED_PLATFORM = ("linux", "arm64")
 CARGO_MAKE_UPSTREAM_ISSUE = "https://github.com/sagiegurari/cargo-make/issues/541"
 
+# aube の trustPolicy=no-downgrade 除外。プロキシが証跡を落とす版だけを明記し、
+# パッケージ名だけの除外へ広げない（将来版の検査を残すため）。
+TRUST_POLICY_EXCLUDES = {
+    "npm:typescript-language-server": ("typescript-language-server@5.3.0",),
+}
+
 ALLOWED_WARNING = (
     "mise WARN  newer codex release 0.145.0 ignored by "
     "minimum_release_age (24h); latest eligible release is 0.144.6"
@@ -450,6 +456,35 @@ $result = @{{
                 )
 
         self.assertIn(CARGO_MAKE_UPSTREAM_ISSUE, instructions)
+
+    def test_trust_policy_excludes_stay_version_scoped(self) -> None:
+        config = CONFIG_PATH.read_text(encoding="utf-8")
+        instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
+        operations = OPERATIONS_PATH.read_text(encoding="utf-8")
+        troubleshooting = TROUBLESHOOTING_PATH.read_text(encoding="utf-8")
+        tools = _config_toml(config)["tools"]
+
+        configured = {
+            name: tuple(spec["trust_policy_excludes"])
+            for name, spec in tools.items()
+            if isinstance(spec, dict) and "trust_policy_excludes" in spec
+        }
+        self.assertEqual(configured, TRUST_POLICY_EXCLUDES)
+
+        for name, patterns in configured.items():
+            with self.subTest(tool=name):
+                # パッケージ名だけの除外は将来版の downgrade 検査も無効化する。
+                for pattern in patterns:
+                    self.assertIn("@", pattern)
+                for path, document in (
+                    (INSTRUCTIONS_PATH, instructions),
+                    (OPERATIONS_PATH, operations),
+                    (TROUBLESHOOTING_PATH, troubleshooting),
+                ):
+                    with self.subTest(path=path):
+                        self.assertIn("trust_policy_excludes", document)
+                for pattern in patterns:
+                    self.assertIn(pattern, instructions)
 
     def test_powershell_registers_kubectl_completer_for_k_alias(self) -> None:
         profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")

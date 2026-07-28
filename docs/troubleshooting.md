@@ -81,6 +81,32 @@ chezmoi status
 
 `chezmoi status` から `.config/mise/mise.lock` が消えれば復旧している。
 
+## `mise install` が `aube install failed: failed to resolve dependencies` で止まる
+
+`npm:` バックエンドは mise 内蔵の [aube](https://aube.jdx.dev/) で install する。aube の `trustPolicy=no-downgrade` は、選んだ版より古い版が 1 つでも強い信頼証跡を持つ場合に install を止める。証跡は `approver`（staged publish） > `_npmUser.trustedPublisher` > `dist.attestations.provenance` の順にランク付けされる。
+
+mise の表示は上記の一行に丸められるため、原因の判別には packument を直接見る。npm CLI は mise の shim 経由だと未導入ツールの自動 install を誘発して出力が汚れるので、node 同梱の実体を使う。
+
+```bash
+npm=$(dirname "$(mise which node)")/npm
+for v in <古い版> <入らない版>; do
+  echo "--- $v ---"
+  "$npm" view "<pkg>@$v" _npmUser.trustedPublisher --json
+  "$npm" view "<pkg>@$v" dist.attestations --json
+done
+```
+
+古い版にだけ証跡があれば証跡後退である。まず上流の公開経路が変わったのかを確認する（リリース workflow の差分、公開者）。変わっていなければレジストリ側で剥がれている。社内 npm プロキシ (Azure DevOps Artifacts) は `dist.integrity` / `signatures` / `attestations` を全バージョンで落とし、`_npmUser.trustedPublisher` の保持もバージョンによってばらつく。
+
+対処は `trust_policy_excludes` をバージョン指定で足す。
+
+```toml
+[tools]
+"npm:some-tool" = { version = "latest", trust_policy_excludes = ["some-tool@1.2.3"] }
+```
+
+パッケージ名だけを書くと将来版も一括で除外され、本物の証跡後退に気づけなくなる。`npm.shell_out=true` は mise の信頼検証を全パッケージで外すため使わない。
+
 ## shell 起動時に `mise WARN missing:` が出る
 
 `mise upgrade` 等で `private_mise.lock` が更新された後、対応する `mise install` / `mise reshim` が走っていないと shim と install marker が古いまま残り、`mise hook-env` で `WARN missing:` が出る。
