@@ -225,6 +225,19 @@ class GitUnshadowScopeTests(unittest.TestCase):
         self.assertNotIn("sudo ln -sfn /usr/bin/git ${resolved_git}", self.check_script)
 
 
+# On Windows shutil.which("bash") resolves to the WSL interop bash, which runs
+# in a different filesystem namespace: the fake bin directory these tests put on
+# PATH lives in a Windows temporary directory that WSL's PATH does not pick up,
+# so the real git inside WSL answers instead of the fixture. The check script is
+# the POSIX variant, whose hosts are macOS, Linux, WSL and containers; Windows
+# runs the PowerShell variant. Skipping here keeps the suite from reporting a
+# result it did not measure. Running the suite inside WSL exercises these tests.
+runs_the_posix_check_script = unittest.skipIf(
+    os.name == "nt",
+    "bash on Windows resolves to WSL, where the fake git on PATH does not apply",
+)
+
+
 @unittest.skipUnless(shutil.which("bash"), "bash is required")
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi renders the check script")
 class GitHookWarningBehaviourTests(unittest.TestCase):
@@ -293,6 +306,7 @@ class GitHookWarningBehaviourTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         return result.stderr
 
+    @runs_the_posix_check_script
     def test_points_at_the_config_when_git_already_supports_hooks(self) -> None:
         # Reinstalling git cannot fix a gitconfig that never arrived, so the
         # warning has to name the config instead of the package.
@@ -305,6 +319,7 @@ class GitHookWarningBehaviourTests(unittest.TestCase):
         self.assertNotIn("add-apt-repository", warning)
         self.assertNotIn("ln -sfn", warning)
 
+    @runs_the_posix_check_script
     @unittest.skipUnless(
         pathlib.Path("/usr/bin/git").exists(), "the apt git decides the branch"
     )

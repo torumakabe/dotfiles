@@ -64,6 +64,8 @@ GITHUB_TOKEN=$(gh auth token) mise install --yes
 
 `mise install` は作成時にはスキップする。追加の注意点は [`docs/troubleshooting.md`](docs/troubleshooting.md#dev-container-で-mise-ツールが入っていない) を参照。
 
+このリポジトリ自体を Dev Container で開発する場合は `.devcontainer/devcontainer.json` を使う。構成の意図と起動後の手順は [`docs/operations.md`](docs/operations.md#このリポジトリを-dev-container-で開発する) を参照。
+
 ### Windows
 
 ```powershell

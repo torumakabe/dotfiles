@@ -19,6 +19,7 @@ home/                           ← chezmoi source
 ├── PowerShell_profile.ps1.tmpl
 ├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp, skills）
 └── run_once_{before,after}_*   ← bootstrap スクリプト
+.devcontainer/devcontainer.json  ← このリポジトリを開発する Dev Container の構成
 reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 ```
 
@@ -58,8 +59,8 @@ Git 2.54 以降では、これに加えて `~/.gitconfig` の `[hook "dotfiles-g
 |------|------|
 | `.chezmoi.os` | `linux`, `darwin`, `windows` |
 | `.isLinux` / `.isMac` / `.isWindows` | 上から導出 |
-| `.isWSL` | Linux かつ `kernel.osrelease` に `microsoft` を含む |
-| `.codespaces` / `.devcontainer` | 各環境判定 |
+| `.isWSL` | Linux かつ `kernel.osrelease` に `microsoft` を含む。Docker Desktop の WSL2 バックエンドで動くコンテナはホストの WSL カーネルを共有するため、この変数だけでは実 WSL と区別できない。区別が要る箇所では `/proc/sys/fs/binfmt_misc/WSLInterop` の存在を併せて確認する（ADR-012） |
+| `.codespaces` / `.devcontainer` | それぞれ環境変数 `CODESPACES` / `REMOTE_CONTAINERS` の有無で判定。`REMOTE_CONTAINERS` を立てるのは VS Code の Dev Containers 拡張であり、`@devcontainers/cli` は立てない |
 | `.windowsUser` / `.corpUser` | 初回セットアップで入力 |
 
 ## プラットフォーム機能契約
@@ -80,7 +81,7 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 ## Git `includeIf`
 
-`home/dot_gitconfig.tmpl` はベース設定のみを置き、`includeIf` でプラットフォーム差分を切り替える: `gitdir:/home/` → Linux/WSL、`gitdir:/Users/` → macOS、`gitdir/i:C:/` 等 → Windows。WSL は Linux 側を読みつつ `.isWSL` で 1Password 連携パスを切り替える。
+`home/dot_gitconfig.tmpl` はベース設定のみを置き、`includeIf` でプラットフォーム差分を切り替える: `gitdir:/home/` → Linux/WSL、`gitdir:/Users/` → macOS、`gitdir/i:C:/` 等 → Windows。WSL は Linux 側を読みつつ、`.isWSL` と WSL interop の有無で 1Password 連携パスを切り替える。
 
 ## コミット署名
 
