@@ -142,3 +142,5 @@ chezmoi は `run_once_before_*` → 通常ファイル適用 → `run_once_after
 | 6 | `after_30-install-tools.sh` | 追加ツール導入 |
 
 変更時は、mise 設定配置前に `mise install` しないこと、Codespaces / Dev Container の分岐を壊さないことを確認する。
+
+`.ps1` スクリプトの実行系は `.chezmoi.toml.tmpl` の `[interpreters.ps1]` で `pwsh -NoLogo -NoProfile -File` に固定している（ADR-023）。プロファイルを読まないため、スクリプトは Machine+User の PATH に載るものだけに依存できる。プロファイル経由でしか PATH に入らないツールは使えない。

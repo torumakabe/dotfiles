@@ -54,3 +54,13 @@
   isWSL = {{ $isWSL }}
   windowsUser = {{ $windowsUser | quote }}
   corpUser = {{ $corpUser | quote }}
+
+# chezmoi の既定は `pwsh -NoLogo -File` で、プロファイルを読む。すると
+# `mise activate pwsh` が登録する CommandNotFound ハンドラが有効になり、
+# ハンドラ本体が参照する PSReadLine の型は非対話 pwsh に存在しないため、
+# スクリプトが見つからないコマンドを引くたびに InvalidOperation が出る。
+# スクリプトはプロファイルの関数や PATH 追加に依存しない（mise shims は
+# run_once_after_05-setup-mise-shims-path が User PATH へ永続登録する）。
+[interpreters.ps1]
+  command = "pwsh"
+  args = ["-NoLogo", "-NoProfile", "-File"]

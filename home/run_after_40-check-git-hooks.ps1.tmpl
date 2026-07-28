@@ -15,9 +15,8 @@
 #   を区別できないので使わない。
 #
 # 出力を英語にしている理由:
-#   chezmoi は Windows で powershell.exe (5.1) を既定の実行系に使う。5.1 は BOM の
-#   無いファイルを ANSI として読むため、日本語の出力は文字化けし得る。他の .ps1
-#   スクリプトと同じく、コメントは日本語、出力は英語で書く。
+#   他の .ps1 スクリプトと揃える。コメントは日本語、出力は英語で書く。
+#   実行系は `.chezmoi.toml.tmpl` の `[interpreters.ps1]` で pwsh に固定している。
 #
 # 関連:
 #   - docs/adr/020-git-hooks-via-config.md

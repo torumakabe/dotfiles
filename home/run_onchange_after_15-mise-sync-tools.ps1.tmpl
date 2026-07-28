@@ -62,15 +62,5 @@ else {
   $syncExit = 0
 }
 
-# corepack (pnpm/yarn 提供) を有効化する。mise 管理 node に同梱されており、
-# 未実行だと `pnpm` コマンドが解決できない。冪等なため無条件に実行してよい。
-$corepackCmd = Get-Command -Name 'corepack' -ErrorAction SilentlyContinue
-if ($corepackCmd) {
-  & $corepackCmd.Source enable
-  if ($LASTEXITCODE -ne 0) {
-    Write-Warning 'corepack enable failed.'
-  }
-}
-
 exit $syncExit
 {{- end -}}
