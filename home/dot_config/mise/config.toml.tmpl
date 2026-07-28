@@ -8,7 +8,6 @@ node = "lts"
 uv = "latest"
 fzf = "latest"
 github-cli = "latest"
-dotnet = "latest"
 1password = "latest"
 cue = "latest"
 ghq = "latest"
@@ -31,6 +30,14 @@ codex = "latest"
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
 # プリビルドバイナリが linux/arm64 未提供のためスキップ
 cargo-make = "latest"
+{{ end -}}
+
+[tools.dotnet]
+version = "latest"
+{{ if eq .chezmoi.os "windows" -}}
+# core:dotnet の install-time verification が system dotnet を拾わないよう、
+# mise の共有 root を検証コマンドの PATH 先頭へ置く。
+install_env = { DOTNET_ROOT = '{{ env "LOCALAPPDATA" }}\mise\dotnet-root', PATH = '{{ env "LOCALAPPDATA" }}\mise\dotnet-root;$PATH' }
 {{ end -}}
 
 [settings]

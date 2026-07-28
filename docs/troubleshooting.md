@@ -25,6 +25,26 @@ GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm6
 mise install
 ```
 
+### Windows で `core:dotnet` の検証に失敗する
+
+症状は、インストールスクリプトが SDK を配置した後、`dotnet --list-sdks` が system 側の SDK だけを返し、次のエラーで終了することである。
+
+```text
+dotnet SDK <version> was not found in `dotnet --list-sdks` output
+```
+
+Windows 用の mise 設定は、インストール時だけ mise の共有 dotnet root を `DOTNET_ROOT` と PATH の先頭へ設定する。設定を配り直し、同じ backend とバージョンを強制的に再インストールする。
+
+```powershell
+chezmoi apply "$HOME\.config\mise\config.toml"
+mise install --force dotnet
+mise ls dotnet
+mise which dotnet
+& (mise which dotnet) --version
+```
+
+`mise ls dotnet` に `(missing)` がなく、`mise which dotnet` が `%LOCALAPPDATA%\mise\dotnet-root\dotnet.exe` を返し、最後のコマンドが設定済み SDK のバージョンを表示すれば復旧している。
+
 ## `mise.lock has changed since chezmoi last wrote it?` と聞かれる
 
 `chezmoi status` が `MM .config/mise/mise.lock` を示し、`chezmoi apply` が上のプロンプトを出す。Codespaces のような TTY の無い環境では `could not open a new TTY` で停止する。
@@ -209,5 +229,7 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 ```
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
+
+本リポジトリの command hook は `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象を `uv` に限定する。`uv` の未導入版は自動導入されるが、dotnet など他ツールの missing 状態は hook 起動時に解決しない。標準エラーに他ツールのインストールログが出る場合は、`~/.copilot/hooks/hooks.json` が最新か確認し、`chezmoi apply` で配り直す。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

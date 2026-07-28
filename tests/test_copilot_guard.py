@@ -191,6 +191,87 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
         result = copilot_guard.check_env_access("echo $AUTH_TOKEN")
         self.assertIsNotNone(result)
 
+    def test_blocks_camel_case_auth_token(self) -> None:
+        result = copilot_guard.check_env_access("echo $githubToken")
+        self.assertIsNotNone(result)
+
+    def test_blocks_camel_case_api_key(self) -> None:
+        result = copilot_guard.check_env_access("echo $apiKey")
+        self.assertIsNotNone(result)
+
+    def test_blocks_concatenated_secret(self) -> None:
+        result = copilot_guard.check_env_access("echo $mysecret")
+        self.assertIsNotNone(result)
+
+    def test_blocks_concatenated_token(self) -> None:
+        result = copilot_guard.check_env_access("echo $githubtoken")
+        self.assertIsNotNone(result)
+
+    def test_blocks_concatenated_password(self) -> None:
+        result = copilot_guard.check_env_access("echo $mypassword")
+        self.assertIsNotNone(result)
+
+    def test_blocks_concatenated_api_key(self) -> None:
+        result = copilot_guard.check_env_access("echo $XAPIKEY")
+        self.assertIsNotNone(result)
+
+    def test_blocks_concatenated_signing_key(self) -> None:
+        result = copilot_guard.check_env_access("echo $signingkey")
+        self.assertIsNotNone(result)
+
+    def test_allows_author(self) -> None:
+        result = copilot_guard.check_env_access("echo $author")
+        self.assertIsNone(result)
+
+    def test_allows_keyword(self) -> None:
+        result = copilot_guard.check_env_access("echo $keyword")
+        self.assertIsNone(result)
+
+    def test_allows_tokens(self) -> None:
+        result = copilot_guard.check_env_access("echo $tokens")
+        self.assertIsNone(result)
+
+    def test_allows_monkey(self) -> None:
+        result = copilot_guard.check_env_access("echo $monkey")
+        self.assertIsNone(result)
+
+    # --- PowerShell variable syntax ---
+
+    def test_blocks_powershell_sensitive_env_var(self) -> None:
+        result = copilot_guard.check_env_access(
+            "Write-Output $env:GITHUB_TOKEN",
+            "powershell",
+        )
+        self.assertIsNotNone(result)
+
+    def test_blocks_braced_powershell_sensitive_env_var(self) -> None:
+        result = copilot_guard.check_env_access(
+            "Write-Output ${env:GITHUB_TOKEN}",
+            "powershell",
+        )
+        self.assertIsNotNone(result)
+
+    def test_allows_powershell_local_sensitive_named_var(self) -> None:
+        result = copilot_guard.check_env_access(
+            "Write-Output $GITHUB_TOKEN",
+            "powershell",
+        )
+        self.assertIsNone(result)
+
+    def test_allows_powershell_safe_env_var(self) -> None:
+        result = copilot_guard.check_env_access(
+            "Write-Output $env:PATH",
+            "powershell",
+        )
+        self.assertIsNone(result)
+
+    def test_allows_braced_powershell_safe_env_var(self) -> None:
+        result = copilot_guard.check_env_access(
+            "Write-Output ${env:PATH}",
+            "powershell",
+        )
+        self.assertIsNone(result)
+
     # --- Safe variables ---
 
     def test_allows_path(self) -> None:
@@ -261,7 +342,8 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
 
     def test_blocks_powershell_get_childitem_env(self) -> None:
         result = copilot_guard.check_env_access(
-            "Get-ChildItem Env:"
+            "Get-ChildItem Env:",
+            "powershell",
         )
         self.assertIsNotNone(result)
 
@@ -625,6 +707,25 @@ class CopilotGuardCheckerReturnTypeTests(unittest.TestCase):
         )
         result = copilot_guard.check_env(ctx)
         self.assertIsNone(result)
+
+    def test_check_env_uses_powershell_variable_syntax(self) -> None:
+        ctx = make_ctx(
+            tool_name="powershell",
+            tool_args={"command": "Write-Output $GITHUB_TOKEN"},
+            command="Write-Output $GITHUB_TOKEN",
+        )
+        result = copilot_guard.check_env(ctx)
+        self.assertIsNone(result)
+
+    def test_check_env_blocks_powershell_sensitive_env_var(self) -> None:
+        ctx = make_ctx(
+            tool_name="powershell",
+            tool_args={"command": "Write-Output $env:GITHUB_TOKEN"},
+            command="Write-Output $env:GITHUB_TOKEN",
+        )
+        result = copilot_guard.check_env(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "deny")
 
 class GitCommitCheckerTests(unittest.TestCase):
     """Tests for the git commit approval checker."""

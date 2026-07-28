@@ -32,5 +32,6 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 ## ワークアラウンド（定期チェック対象）
 
+- **core:dotnet Windows install-time verification**: `home/dot_config/mise/config.toml.tmpl` は Windows の `dotnet.install_env` で `%LOCALAPPDATA%\mise\dotnet-root` を `DOTNET_ROOT` と PATH の先頭へ設定する。mise の `core:dotnet` が install-time verification へ管理下の dotnet を自動設定するようになったら、このオプションと関連テスト、`docs/troubleshooting.md` の復旧手順を撤去する
 - **op-ssh-sign-wsl.exe CRLF (ADR-012)**: `home/dot_local/bin/executable_op-ssh-sign-wrapper.sh.tmpl` で stdout/stderr の CR を剥がして `git verify-commit` を成立させている。1Password が WSL バイナリの改行を LF に揃えた、または git 本体が find-principals 結果の `\r` を剥がすようになったら wrapper と `.gitconfig-linux` の `program` 切替を撤去する
 - **git の張り替え (ADR-020)**: `home/run_once_before_10-install-packages.sh.tmpl` の `git_unshadow` が、Codespaces と Dev Container のベースイメージが `/usr/local/bin` へソースビルドした古い git を `/usr/bin` の PPA 版へ symlink で張り替えている。ADR-020 の設定ベースフックが git 2.54 以上を要求するためである。対象イメージの `/usr/local/bin/git` がすべて 2.54 以上になったら、関数と呼び出しを撤去する（`devcontainers/base:ubuntu` は 2.55.0 で条件を満たす。Codespaces universal 5.1.5 は 2.53.0 で満たさない）
