@@ -1,4 +1,9 @@
-{{- if .isWSL -}}
+{{- /* ADR-012 の wrapper は wsl.exe interop 経由で op-ssh-sign-wsl.exe を呼ぶため、
+       interop が無い環境では機能しない。Docker Desktop の WSL2 バックエンドで動く
+       コンテナはホストの WSL カーネルを共有し isWSL が true になるので、
+       interop の実体を確認して分岐する。windowsUser が空だと wrapper は
+       /mnt/c/Users// を組み立てて機能しないため、これも条件に含める。 */ -}}
+{{- if and .isWSL (stat "/proc/sys/fs/binfmt_misc/WSLInterop") (ne .windowsUser "") -}}
 [core]
 	editor = vim -c \"set fenc=utf-8\"
 [gpg "ssh"]

@@ -1,4 +1,8 @@
 {{- $codespaces := env "CODESPACES" | not | not -}}
+{{- /* REMOTE_CONTAINERS を立てるのは VS Code の Dev Containers 拡張である。
+       devcontainer CLI (@devcontainers/cli) は立てないため、CLI で起動した
+       コンテナでは devcontainer が false になる。CLI で検証するときは
+       --remote-env REMOTE_CONTAINERS=true を渡す。 */ -}}
 {{- $devcontainer := env "REMOTE_CONTAINERS" | not | not -}}
 {{- $isLinux := eq .chezmoi.os "linux" -}}
 {{- $isMac := eq .chezmoi.os "darwin" -}}
@@ -13,9 +17,14 @@
 {{- end -}}
 
 {{- $windowsUser := "" -}}
+{{- /* windowsUser は ADR-012 の op-ssh-sign-wsl.exe パスと Windows 用 gitconfig で
+       しか使わない。WSL 側では interop が無いと wsl.exe 経由の実行そのものが
+       成立しないため、interop の実体を確認してから尋ねる。Docker Desktop の
+       WSL2 バックエンドで動くコンテナはホストの WSL カーネルを共有するので、
+       osrelease だけでは実 WSL と区別できない。 */ -}}
 {{- if $isWindows -}}
 {{-   $windowsUser = env "USERNAME" -}}
-{{- else if and $isWSL stdinIsATTY -}}
+{{- else if and $isWSL stdinIsATTY (stat "/proc/sys/fs/binfmt_misc/WSLInterop") -}}
 {{-   $windowsUser = promptStringOnce . "windowsUser" "Windows username (for WSL 1Password paths)" -}}
 {{- end -}}
 

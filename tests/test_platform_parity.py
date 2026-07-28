@@ -479,5 +479,39 @@ $result = @{{
                 self.assertLess(self.workflow.index(prerequisite), unittest_position)
 
 
+class WrapperGateParityTests(unittest.TestCase):
+    """ADR-012 の wrapper は参照側と配布側で同じ条件を使う必要がある。
+
+    条件が食い違うと ``gpg.ssh.program`` が存在しないファイルを指し、署名が
+    失敗する。条件は ``home/.chezmoi.toml.tmpl`` の data に置けないため
+    （``chezmoi init`` 時にしか評価されず環境の変化へ追従しない）、2 つの
+    テンプレートへ重複して書いている。その重複が崩れていないことを検査する。
+    """
+
+    PREDICATE = (
+        'and .isWSL (stat "/proc/sys/fs/binfmt_misc/WSLInterop") '
+        '(ne .windowsUser "")'
+    )
+
+    def setUp(self) -> None:
+        self.gitconfig = (REPO_ROOT / "home/dot_gitconfig-linux.tmpl").read_text(
+            encoding="utf-8"
+        )
+        self.ignore = (REPO_ROOT / "home/.chezmoiignore").read_text(encoding="utf-8")
+        self.wrapper = (
+            REPO_ROOT / "home/dot_local/bin/executable_op-ssh-sign-wrapper.sh.tmpl"
+        ).read_text(encoding="utf-8")
+
+    def test_gitconfig_selects_wrapper_with_the_shared_predicate(self) -> None:
+        self.assertIn("{{- if " + self.PREDICATE + " -}}", self.gitconfig)
+
+    def test_chezmoiignore_excludes_wrapper_with_the_negated_predicate(self) -> None:
+        self.assertIn("{{ if not (" + self.PREDICATE + ") -}}", self.ignore)
+        self.assertIn(".local/bin/op-ssh-sign-wrapper.sh", self.ignore)
+
+    def test_wrapper_depends_on_windows_user(self) -> None:
+        self.assertIn("{{ .windowsUser }}", self.wrapper)
+
+
 if __name__ == "__main__":
     unittest.main()
