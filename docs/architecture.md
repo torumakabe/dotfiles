@@ -61,7 +61,7 @@ Git 2.54 以降では、これに加えて `~/.gitconfig` の `[hook "dotfiles-g
 | `.isLinux` / `.isMac` / `.isWindows` | 上から導出 |
 | `.isWSL` | Linux かつ `kernel.osrelease` に `microsoft` を含む。Docker Desktop の WSL2 バックエンドで動くコンテナはホストの WSL カーネルを共有するため、この変数だけでは実 WSL と区別できない。区別が要る箇所では `/proc/sys/fs/binfmt_misc/WSLInterop` の存在を併せて確認する（ADR-012） |
 | `.codespaces` / `.devcontainer` | それぞれ環境変数 `CODESPACES` / `REMOTE_CONTAINERS` の有無で判定。`REMOTE_CONTAINERS` を立てるのは VS Code の Dev Containers 拡張であり、`@devcontainers/cli` は立てない |
-| `.windowsUser` / `.corpUser` | 初回セットアップで入力 |
+| `.windowsUser` / `.corpUser` | 初回セットアップで入力する。入力を求めるのは stdin が TTY のときだけなので、非対話の `chezmoi init` では既存の設定値をそのまま引き継ぐ（引き継がないと空文字で上書きされ、`gitconfig-corp` の includeIf と ADR-012 の署名パスが壊れる） |
 
 ## プラットフォーム機能契約
 
