@@ -25,7 +25,12 @@ gitleaks = "latest"
 jq = "latest"
 bun = "latest"
 "npm:typescript" = "latest"
-"npm:typescript-language-server" = "latest"
+# 社内 npm プロキシ (Azure DevOps Artifacts) が 5.3.0 の
+# _npmUser.trustedPublisher を落とすため、aube の trustPolicy=no-downgrade が
+# 5.2.0 からの証跡後退と判定して install を止める。上流の release workflow は
+# v5.2.0 と v5.3.0 で同一なので、欠落はプロキシ側で起きている。
+# 将来版でも検査が働くよう、除外はバージョン指定に留める。
+"npm:typescript-language-server" = { version = "latest", trust_policy_excludes = ["typescript-language-server@5.3.0"] }
 codex = "latest"
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
 # プリビルドバイナリが linux/arm64 未提供のためスキップ
