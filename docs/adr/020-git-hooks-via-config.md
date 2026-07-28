@@ -2,9 +2,9 @@
 
 ## Status
 
-Proposed
+Accepted
 
-macOS、Linux コンテナ、Windows、WSL、Codespaces で検証した。結果は「検証記録」に記す。Dev Container は未検証であり、残る検証項目は「引き継ぐ検証」に記す。
+macOS、Linux コンテナ、Windows、WSL、Codespaces、Dev Container の 6 環境で検証した。結果は「検証記録」に記す。Dev Container では張り替え処理の発火条件が揃わなかったため、この経路の実機確認は済んでいない。張り替えは本 ADR の判断そのものではなく、古いイメージ向けの移行処理である。同じ処理は Codespaces の実機で確認済みであり、条件分岐は `tests/test_git_shadow_resolution.py` が確認する。詳細は「引き継ぐ検証」に記す。
 
 ## Context
 
@@ -131,19 +131,19 @@ git config --local hook.dotfiles-gitleaks.enabled false
 
 ## 検証記録
 
-macOS 実機、Linux コンテナ、Windows 実機、WSL (Ubuntu 22.04)、Codespaces で確認した。使用した git は、macOS が Homebrew の 2.55.0、Linux コンテナが `ppa:git-core/ppa` の 2.54.0、Windows が Git for Windows 2.55.0、WSL と Codespaces が同じ PPA の 2.54.0 である。WSL の git は apply 前が 2.34.1 であり、`run_once_before_10-install-packages.sh` の PPA 追加によって 2.54.0 へ更新された。
+macOS 実機、Linux コンテナ、Windows 実機、WSL (Ubuntu 22.04)、Codespaces、Dev Container で確認した。使用した git は、macOS が Homebrew の 2.55.0、Linux コンテナが `ppa:git-core/ppa` の 2.54.0、Windows が Git for Windows 2.55.0、WSL と Codespaces が同じ PPA の 2.54.0、Dev Container がベースイメージ同梱の 2.55.0 である。WSL の git は apply 前が 2.34.1 であり、`run_once_before_10-install-packages.sh` の PPA 追加によって 2.54.0 へ更新された。
 
-commit を拒否したことの判定には、出力に `leaks found: 1` が現れること、git の終了コードが 1 であること、commit が作られないことの三つを使った。
+commit を拒否したことの判定には、出力に `leaks found: 1` が現れること、git の終了コードが 1 であること、commit が作られないことの三つを使った。判定に使うダミー鍵の本文は 55 文字とした。gitleaks の private-key ルールは本文の長さも見ており、33 文字では検出しなかった (macOS で実測)。
 
-| 確認項目 | macOS / Linux | Windows | WSL | Codespaces |
-| --- | --- | --- | --- | --- |
-| 要件 1: `.git/hooks` に hook を持たないリポジトリで秘密鍵の commit を拒否する | 拒否した | 拒否した | 拒否した | 拒否した |
-| 要件 2: lefthook 生成の hook で上書きした状態で秘密鍵の commit を拒否する | 拒否した | 拒否した | 拒否した | 拒否した |
-| 要件 2: 同じ状態で lefthook 自身の job も実行される | 実行した | 実行した | 実行した | 実行した |
-| 設定ベースフック有効時の走査回数 | 1 回 | 1 回 | 1 回 | 1 回 |
-| リポジトリ単位で無効化した場合の走査回数 | 1 回 | 1 回 | 1 回 | 1 回 |
-| hook の中で解決される `git` が hook を起動した git と同一である | 同一 | 同一 | 同一 | 同一 |
-| `chezmoi apply` 時の報告が、有効なら無出力、無効なら警告になる | 一致した | 一致した | 一致した | 一致した |
+| 確認項目 | macOS / Linux | Windows | WSL | Codespaces | Dev Container |
+| --- | --- | --- | --- | --- | --- |
+| 要件 1: `.git/hooks` に hook を持たないリポジトリで秘密鍵の commit を拒否する | 拒否した | 拒否した | 拒否した | 拒否した | 拒否した |
+| 要件 2: lefthook 生成の hook で上書きした状態で秘密鍵の commit を拒否する | 拒否した | 拒否した | 拒否した | 拒否した | 拒否した |
+| 要件 2: 同じ状態で lefthook 自身の job も実行される | 実行した | 実行した | 実行した | 実行した | 実行した |
+| 設定ベースフック有効時の走査回数 | 1 回 | 1 回 | 1 回 | 1 回 | 1 回 |
+| リポジトリ単位で無効化した場合の走査回数 | 1 回 | 1 回 | 1 回 | 1 回 | 1 回 |
+| hook の中で解決される `git` が hook を起動した git と同一である | 同一 | 同一 | 同一 | 同一 | 同一 |
+| `chezmoi apply` 時の報告が、有効なら無出力、無効なら警告になる | 一致した | 一致した | 一致した | 一致した | 一致した |
 
 プラットフォームごとに個別に確認した事項を記す。
 
@@ -152,37 +152,21 @@ commit を拒否したことの判定には、出力に `leaks found: 1` が現�
 - Windows: hook の中で `sh` は `/usr/bin/sh` に解決される。これは Git for Windows が同梱する MSYS の sh であり、WSL の bash ではない。`command` に書いた `~` は Windows のユーザプロファイルを指す。
 - WSL: hook の中で `sh` は `/usr/bin/sh`、`git` は `/usr/lib/git-core/git` に解決される。`appendWindowsPath` を無効にしているため、Windows 側の実行ファイルは経路に入らない。
 - Codespaces: universal イメージ 5.1.5 (2026-03-11 ビルド) は git 2.53.0 を `/usr/local/bin` に持つ。PPA の追加と `apt-get install git` はどちらも成功して `/usr/bin/git` を 2.54.0 にしたが、張り替えを入れる前は `git` が 2.53.0 に解決され、要件 1 の試験で秘密鍵が commit された。張り替え後は `/usr/local/bin/git` が `/usr/bin/git` への symlink になり、`git-lfs` は元のまま残った。同じスクリプトを二度実行しても symlink は変わらない。hook の中で `git` は `/usr/lib/git-core/git` に解決される。
+- Dev Container: `mcr.microsoft.com/devcontainers/base:ubuntu` を Windows の Docker Desktop で起動した。`/usr/local/bin/git` はイメージ同梱の通常ファイルで 2.55.0 であり、`/usr/bin/git` は apply 前が 2.53.0、PPA の追加によって 2.54.0 になった。隠している側が 2.54 を満たすため張り替えは発火せず、`git` は `/usr/local/bin/git` に解決されたままである。hook の中で解決される git も同じ 2.55.0 である。gitleaks 8.30.1 の出力は `WRN leaks found: 1` の形式だが、判定に使う部分文字列を含むため判定は成立する。
 
-Codespaces のイメージが git 2.53.0 を持つのは、devcontainers の git feature がイメージのビルド時点で最新のタグを解決するためである。git 2.54.0 のリリースは 2026-04-20 であり、5.1.5 のビルド (2026-03-11) より後にあたる。したがってイメージが更新されれば張り替えは不要になるが、更新の時期は利用者側で決められない。
+Codespaces のイメージが git 2.53.0 を持つのは、devcontainers の git feature がイメージのビルド時点で最新のタグを解決するためである。git 2.54.0 のリリースは 2026-04-20 であり、5.1.5 のビルド (2026-03-11) より後にあたる。したがってイメージが更新されれば張り替えは不要になるが、更新の時期は利用者側で決められない。Dev Container で使った `base:ubuntu` は更新後のイメージにあたり、同じ git feature が 2.55.0 を入れていた。張り替えが発火するかどうかは、イメージの更新状況で決まる。
 
 張り替えの条件分岐は、偽の bin ディレクトリを使って `tests/test_git_shadow_resolution.py` で確認した。テストはブートストラップから当該の関数を抜き出し、対象ディレクトリを引数で渡して `bash -euo pipefail` で実行する。対象を引数で受け取るのは、テストのために環境変数で書き換え先を差し替えられる余地を本番のスクリプトへ残さないためである。確認した内容は、2.53 から 2.54 へは張り替えること、2.54 から 2.55 へは張り替えないこと、`/usr/bin` 側が 2.43 なら張り替えないこと、`/usr/bin` に対応の無い `git-lfs` と `gitk` を残すこと、既存の symlink を書き換えないこと、隠している git がバージョンを返せなくても apply を止めないこと、二度目の実行が何も変えないことである。
 
 判定方法について確認した事項を記す。`git hook list` は該当する hook が無い場合に exit 1 を返し、サブコマンド自体を知らない git は exit 129 を返す。終了コードだけでは両者と「対応しているが未設定」を区別できないため、判定には標準出力の内容を使う。`--show-scope` を付けない場合、スコープと `disabled` の表示は出ない。
 
-`run_after_40-check-git-hooks` の警告経路は、`GIT_CONFIG_GLOBAL` を空のファイルへ向けて設定ベースフックが見えない状態を作り、Windows と WSL の双方で確認した。どちらも警告を出したうえで終了コード 0 を返し、apply を失敗させない。Windows 版は powershell.exe 5.1 で実行し、構文が通ることもあわせて確認した。Codespaces では案内の分岐を五通り確認した。走っている git が 2.54 以上であれば設定の確認と `chezmoi apply` を案内すること、張り替え済みの状態では PPA の案内を出すこと（symlink 越しに 2.54 が走る状態を隠蔽と呼ばないこと）、`/usr/local/bin/git` が古い通常ファイルであれば張り替えコマンドを示すこと、それ以外のパスの git が隠している場合は PATH と提供元の確認だけを促して書き換えを案内しないこと、`/usr/bin/git` が 2.54 に満たない場合は PPA の案内へ戻ることである。同じテストが、偽の git を PATH の先頭へ置いてレンダリング済みの警告スクリプトを実行し、設定欠落の案内と、コンテナ以外へレンダリングした場合に張り替えを一切案内しないことを確認する。
+`run_after_40-check-git-hooks` の警告経路は、`GIT_CONFIG_GLOBAL` を空のファイルへ向けて設定ベースフックが見えない状態を作り、Windows と WSL の双方で確認した。Dev Container でも同じ方法で確認し、走っている git が 2.54 以上であることから設定の欠落を伝える分岐に入ることを確認した。どちらも警告を出したうえで終了コード 0 を返し、apply を失敗させない。Windows 版は powershell.exe 5.1 で実行し、構文が通ることもあわせて確認した。Codespaces では案内の分岐を五通り確認した。走っている git が 2.54 以上であれば設定の確認と `chezmoi apply` を案内すること、張り替え済みの状態では PPA の案内を出すこと（symlink 越しに 2.54 が走る状態を隠蔽と呼ばないこと）、`/usr/local/bin/git` が古い通常ファイルであれば張り替えコマンドを示すこと、それ以外のパスの git が隠している場合は PATH と提供元の確認だけを促して書き換えを案内しないこと、`/usr/bin/git` が 2.54 に満たない場合は PPA の案内へ戻ることである。同じテストが、偽の git を PATH の先頭へ置いてレンダリング済みの警告スクリプトを実行し、設定欠落の案内と、コンテナ以外へレンダリングした場合に張り替えを一切案内しないことを確認する。
 
 ## 引き継ぐ検証
 
-Dev Container では未検証である。Codespaces と同じ devcontainers の git feature を使うイメージであれば、`/usr/local` のソースビルドを張り替える処理がそのまま効くと考えられるが、ベースイメージによって git の入手経路は異なる。イメージを起動して `chezmoi apply` を実行したうえで、次を確認する。
+Dev Container では、`/usr/local` のソースビルドを `/usr/bin` の apt 版へ張り替える処理が発火しなかった。ベースイメージ `mcr.microsoft.com/devcontainers/base:ubuntu` の `/usr/local/bin/git` が 2.55.0 であり、発火条件である「隠している側が 2.54 に満たないこと」を満たさないためである。したがって Dev Container では、張り替え処理そのものと、`git-lfs` が張り替えの対象から外れることを実機で確認していない。
 
-1. `git --version` が 2.54 以降であること。満たさない場合は、`command -v git` が返す実体と `/usr/bin/git --version` を比べる。両者が食い違うなら PATH の問題であり、一致するなら PPA の追加が失敗している。後者ではベースイメージの sudo の扱い、apt のプロキシ設定、`software-properties-common` の有無が候補になる。
-2. `git hook list pre-commit --show-scope` が `dotfiles-gitleaks` を含む行を返すこと。
-3. 要件 1（作成時期を問わず走る）。`init.templateDir` 由来の hook を持たない状態を作って確認する。
-
-   ```sh
-   mkdir -p /tmp/gl1 && cd /tmp/gl1 && git init
-   git config commit.gpgsign false
-   rm -f "$(git rev-parse --git-path hooks)/pre-commit"
-   printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\n%s\n-----END OPENSSH PRIVATE KEY-----\n' \
-     'NOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEYNOTAREALKEY' > fake_key
-   git add fake_key && git commit -m t
-   ```
-
-   期待する結果は、出力に `leaks found: 1` が現れ、`git rev-list --count HEAD` が commit を数えないことである。本文を短くしてはならない。gitleaks の private-key ルールは本文の長さも見ており、33 文字では検出しなかった（macOS で実測）。上記の 55 文字は検出を確認した値である。
-
-4. 走査が 1 回だけであること。手順 3 の削除をしない状態で commit し、`git commit -m t 2>&1 | grep -c 'no leaks found'` が 1 を返すこと。
-5. `git-lfs` が張り替えの対象になっていないこと。`ls -l /usr/local/bin/git-lfs` が symlink ではない実体を示し、`git lfs version` が成功すること。
-6. git が 2.54 に満たないまま終わった場合、`chezmoi apply` が `run_after_40-check-git-hooks.sh` の警告を出し、かつ apply 自体は成功すること。この経路では `init.templateDir` 由来の hook だけが保護を担う。
+どちらも Codespaces では確認しており、条件分岐は `tests/test_git_shadow_resolution.py` が偽の bin ディレクトリを使って確認する。残るのは、Dev Container のベースイメージが git 2.54 に満たない構成での再確認である。そのような構成を使う場合は、`chezmoi apply` の後に `ls -l /usr/local/bin/git-lfs` が symlink ではない実体を示すこと、`git lfs version` が成功すること、`git --version` が 2.54 以降になることを確認する。
 
 ### apply が途中で止まった場合
 
