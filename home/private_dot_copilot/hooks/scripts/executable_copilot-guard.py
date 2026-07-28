@@ -338,14 +338,13 @@ _RUNTIME_ENV_DUMP_RE = re.compile(
     r"|\bENV\.to_h\b"         # Ruby    ENV.to_h
     r"|\bENV\.each\b"         # Ruby    ENV.each
     r"|\bDeno\.env\.toObject\b"  # Deno  Deno.env.toObject()
-    r"|\bGet-ChildItem\s+Env:"   # PowerShell Get-ChildItem Env:
-    r"|\\\$env:",              # PowerShell $env: variable access
+    r"|\bGet-ChildItem\s+Env:",  # PowerShell Get-ChildItem Env:
     re.IGNORECASE,
 )
 
-# Sensitive variable name fragments.  If a shell expansion ``$VAR`` or
-# ``${VAR}`` contains one of these (case-insensitive), it is blocked.
-_SENSITIVE_FRAGMENTS: frozenset[str] = frozenset({
+# Sensitive variable name terms. Terms must be separated by underscores or
+# span the complete name, so ordinary variables such as ``$author`` are safe.
+_SENSITIVE_TERMS: frozenset[str] = frozenset({
     "secret", "token", "key", "password", "credential",
     "api_key", "apikey", "access_key", "accesskey",
     "private_key", "privatekey",
@@ -354,6 +353,19 @@ _SENSITIVE_FRAGMENTS: frozenset[str] = frozenset({
     "db_password", "dbpassword",
     "auth",
 })
+
+# Concatenated names have no separator or case transition to identify word
+# boundaries. Match only high-signal forms so names such as author, tokens,
+# keyword, and monkey remain safe.
+_SENSITIVE_CONCATENATED_RE = re.compile(
+    r"secret"
+    r"|password"
+    r"|credential"
+    r"|token$"
+    r"|auth$"
+    r"|(?:api|access|private|ssh|signing|master|session|host|gpg|deploy|encryption)key"
+    r"|connectionstring"
+)
 
 # Safe variable names that are never blocked even if they match fragments
 # above (e.g. ``SSH_AUTH_SOCK`` contains ``auth``).
@@ -383,19 +395,30 @@ _SAFE_VARIABLES: frozenset[str] = frozenset({
     "_",  # last command
 })
 
-# Regex that captures ``$VAR`` or ``${VAR}`` references.
-_SHELL_VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
+# Regexes that capture environment-variable references by shell syntax.
+_POSIX_ENV_VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
+_POWERSHELL_ENV_VAR_REF_RE = re.compile(
+    r"\$(?:env:([A-Za-z_][A-Za-z0-9_]*)|\{env:([A-Za-z_][A-Za-z0-9_]*)\})",
+    re.IGNORECASE,
+)
 
 
 def _is_sensitive_var(name: str) -> bool:
     """Return True if *name* looks like a secret variable."""
-    lower = name.lower()
+    raw_lower = name.lower()
+    snake_name = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    snake_name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", snake_name)
+    lower = snake_name.lower()
     if lower in _SAFE_VARIABLES:
         return False
-    return any(frag in lower for frag in _SENSITIVE_FRAGMENTS)
+    separated_match = any(
+        re.search(rf"(?:^|_){re.escape(term)}(?:_|$)", lower)
+        for term in _SENSITIVE_TERMS
+    )
+    return separated_match or _SENSITIVE_CONCATENATED_RE.search(raw_lower) is not None
 
 
-def check_env_access(command: str) -> str | None:
+def check_env_access(command: str, shell: str = "bash") -> str | None:
     """Detect environment-variable access patterns in a shell command.
 
     Returns a deny reason string when the command appears to read
@@ -443,10 +466,19 @@ def check_env_access(command: str) -> str | None:
         return f"Blocked runtime env dump pattern: {m.group(0)}"
 
     # --- 4. Sensitive variable expansion ---
-    for var_match in _SHELL_VAR_REF_RE.finditer(stripped):
-        var_name = var_match.group(1)
+    var_ref_re = (
+        _POWERSHELL_ENV_VAR_REF_RE
+        if shell == "powershell"
+        else _POSIX_ENV_VAR_REF_RE
+    )
+    for var_match in var_ref_re.finditer(stripped):
+        if shell == "powershell":
+            var_name = var_match.group(1) or var_match.group(2)
+        else:
+            var_name = var_match.group(1)
         if _is_sensitive_var(var_name):
-            return f"Blocked sensitive variable reference: ${var_name}"
+            prefix = "$env:" if shell == "powershell" else "$"
+            return f"Blocked sensitive variable reference: {prefix}{var_name}"
 
     return None
 
@@ -455,7 +487,7 @@ def check_env(ctx: CheckContext) -> CheckResult | None:
     """Check for environment variable access in shell commands."""
     if ctx.tool_name not in ("bash", "powershell") or not ctx.command:
         return None
-    reason = check_env_access(ctx.command)
+    reason = check_env_access(ctx.command, ctx.tool_name)
     if reason:
         return CheckResult("deny", reason)
     return None

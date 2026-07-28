@@ -102,6 +102,14 @@ class MiseConfigTests(unittest.TestCase):
         self.assertEqual(len(dotnet_entries), 1)
         self.assertEqual(_tool_alias(config, "dotnet"), dotnet_entries[0]["backend"])
 
+    def test_windows_dotnet_verification_uses_mise_root(self) -> None:
+        config = CONFIG_PATH.read_text(encoding="utf-8")
+
+        self.assertIn('[tools.dotnet]\nversion = "latest"', config)
+        self.assertIn('{{ if eq .chezmoi.os "windows" -}}', config)
+        self.assertIn("install_env = { DOTNET_ROOT =", config)
+        self.assertIn(r"\mise\dotnet-root;$PATH", config)
+
     def test_backend_migration_requires_postconditions(self) -> None:
         instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
 
