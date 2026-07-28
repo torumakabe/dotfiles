@@ -20,7 +20,9 @@ run_once_after_05-setup-mise-shims-path.ps1
 .bash_profile
 .bashrc
 {{ end -}}
-{{ if not .isWSL -}}
+# ADR-012 の wrapper は WSL interop 経由でしか機能せず、windowsUser が空でも
+# パスを組み立てられない。dot_gitconfig-linux.tmpl と同じ条件で配布可否を決める。
+{{ if not (and .isWSL (stat "/proc/sys/fs/binfmt_misc/WSLInterop") (ne .windowsUser "")) -}}
 .local/bin/op-ssh-sign-wrapper.sh
 {{ end -}}
 

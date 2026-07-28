@@ -12,7 +12,7 @@ export DEBIAN_FRONTEND=noninteractive
 {{ if eq .chezmoi.os "linux" -}}
 echo "Installing system packages via apt..."
 # git: ディストロ標準の git は設定ベースフック (git >= 2.54) に届かない
-# （Ubuntu 24.04 = 2.43、26.04 = 2.53、devcontainer ベース = 2.52 を確認）。
+# （Ubuntu 24.04 = 2.43、26.04 = 2.53 を確認）。
 # ADR-020 の gitleaks フックはこの機能に依存するため、git-core PPA を使う。
 # PPA が使えない環境ではディストロ版のまま続行し、設定フックは無効になる
 # （chezmoi apply 時の run_after_40-check-git-hooks が警告する）。
@@ -126,7 +126,9 @@ fi
 
 {{ if and (not .codespaces) (not .devcontainer) -}}
 # Azure CLI — 公式インストールスクリプト (https://aka.ms/InstallAzureCLIDeb)
-# Codespaces / Dev Container では devcontainer Feature で導入するためスキップ
+# Codespaces では devcontainer Feature で導入するためスキップ。このリポジトリの
+# .devcontainer/devcontainer.json は chezmoi テンプレートと Python テストの開発だけを
+# 対象とするため az / azd の Feature を含めない
 if ! command -v az >/dev/null 2>&1; then
   echo "Installing Azure CLI via official script..."
   curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash

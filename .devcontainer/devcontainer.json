@@ -1,0 +1,27 @@
+{
+  // このリポジトリを Dev Container で開発するための構成である。
+  //
+  // dotfiles 自体はここでは適用しない。VS Code の Dotfiles ユーザ設定
+  // (Repository: torumakabe/dotfiles, Install Command: install.sh) で入れる。
+  // Codespaces がアカウント設定から dotfiles を入れる構造と揃えるためであり、
+  // 手順は README の「Dev Container (ローカル)」節に記載している。
+  // uv, mise, chezmoi, gitleaks はその適用で入る。
+  "name": "dotfiles",
+
+  // git は base イメージが焼き込んだものをそのまま使う。ここで git feature を
+  // 指定し直すと /usr/local へ新しい git を作り直すことになり、ADR-020 が対象と
+  // する「ベースイメージのソースビルドが apt 版を隠す」状態を再現できなくなる。
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+
+  "features": {
+    // ベースイメージに git-lfs が無い。ADR-020 の張り替えが git-lfs を対象から
+    // 外すことを実機で確認するには /usr/local/bin/git-lfs が要る。
+    "ghcr.io/devcontainers/features/git-lfs:1": {},
+    // dotfiles は Linux に pwsh を入れないため、tests/test_platform_parity.py と
+    // tests/test_mise_config.py の PowerShell 依存テストが skip される。CI
+    // (ubuntu-latest) は同梱の pwsh を使っている。同じ範囲を流すために入れる。
+    "ghcr.io/devcontainers/features/powershell:1": {}
+  },
+
+  "remoteUser": "vscode"
+}
