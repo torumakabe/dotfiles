@@ -152,7 +152,9 @@ GITHUB_TOKEN=$(gh auth token) mise install --yes
 - **`git-lfs` feature**：ベースイメージに `git-lfs` が含まれないため足す。ADR-020 の張り替えが `git-lfs` を対象から外すことを実機で確認するには、`/usr/local/bin/git-lfs` が存在する必要がある
 - **`powershell` feature**：dotfiles は Linux に pwsh を入れないため、これが無いと `tests/test_platform_parity.py` と `tests/test_mise_config.py` の PowerShell 依存テストが skip される。CI（ubuntu-latest）は同梱の pwsh を使うので、同じ範囲を流すために足す
 
-`@devcontainers/cli` で起動したコンテナでは `REMOTE_CONTAINERS` が立たないため、chezmoi の `.devcontainer` が false になる。CLI で検証するときは `--remote-env REMOTE_CONTAINERS=true` を渡す。
+chezmoi のコンテナ判定は、環境変数 `CODESPACES` と `REMOTE_CONTAINERS` の有無だけで決まる。`REMOTE_CONTAINERS` を立てるのは VS Code の Dev Containers 拡張であり、`@devcontainers/cli` は立てない。この判定が対象とするのは拡張と Codespaces で起動したコンテナであり、CLI で起動したコンテナは対象外である。CLI を対象へ含めるには `/.dockerenv` のような別の指標を足すことになるが、判定の軸が増えるため採らない。
+
+CLI で検証するときは `--remote-env REMOTE_CONTAINERS=true` を渡す。渡さないと `.devcontainer` が false になり、Docker Engine、draw.io、Azure CLI など、ホストへ入れる前提の導入処理がコンテナ内で走る。Docker Desktop の WSL2 バックエンドではコンテナがホストの WSL カーネルを共有して `.isWSL` が true になるため Docker Engine と draw.io は止まるが、macOS や Linux の Docker で起動したコンテナでは止まらない。
 
 Windows ホストでは、`tests/test_git_shadow_resolution.py` のうち POSIX 版のチェックスクリプトを実行するテストが skip される。`bash` が WSL の interop 版に解決され、テストが用意した偽の git を参照できないためである。全件を実行するには、このコンテナか WSL、または CI を使う。
 
