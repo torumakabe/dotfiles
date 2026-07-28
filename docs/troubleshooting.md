@@ -4,13 +4,15 @@ README に載せない復旧手順だけをまとめる。一般的な `chezmoi`
 
 ## `warning: config file template has changed`
 
-`.chezmoi.toml.tmpl` の更新後に出る。設定を再生成する。
+`.chezmoi.toml.tmpl` の更新後に出る。`chezmoi update` は設定を再生成しないため、`chezmoi init` を実行するまで毎回出続ける。
 
 ```bash
 chezmoi init torumakabe
 ```
 
 リポジトリ名を省略すると、ソースディレクトリが空になり `chezmoi update` が動かなくなる。必ず `torumakabe` を指定する。
+
+`windowsUser` / `corpUser` の入力を求めるのは stdin が TTY のときだけだが、非対話で実行しても既存の設定値は引き継ぐ。値を変更したいときは対話シェルで実行する。
 
 ## `mise install` が部分失敗する
 

@@ -16,7 +16,20 @@
 {{-   end -}}
 {{- end -}}
 
+{{- /* 入力値は stdinIsATTY のときしか尋ねられない。非対話の再 init
+       （スクリプト、Codespaces、Dev Container、エージェント経由のシェル）で
+       既存値を空へ落とさないよう、まず現在の設定データを初期値に引き継ぐ。
+       promptStringOnce は既存値があれば尋ねずに返すが、TTY ガードの外側に
+       あるため呼び出しごと飛ぶ。この引き継ぎがその穴を塞ぐ。 */ -}}
 {{- $windowsUser := "" -}}
+{{- if hasKey . "windowsUser" -}}
+{{-   $windowsUser = .windowsUser -}}
+{{- end -}}
+{{- $corpUser := "" -}}
+{{- if hasKey . "corpUser" -}}
+{{-   $corpUser = .corpUser -}}
+{{- end -}}
+
 {{- /* windowsUser は ADR-012 の op-ssh-sign-wsl.exe パスと Windows 用 gitconfig で
        しか使わない。WSL 側では interop が無いと wsl.exe 経由の実行そのものが
        成立しないため、interop の実体を確認してから尋ねる。Docker Desktop の
@@ -28,7 +41,6 @@
 {{-   $windowsUser = promptStringOnce . "windowsUser" "Windows username (for WSL 1Password paths)" -}}
 {{- end -}}
 
-{{- $corpUser := "" -}}
 {{- if stdinIsATTY -}}
 {{-   $corpUser = promptStringOnce . "corpUser" "Corp username (for gitconfig-corp, empty to skip)" -}}
 {{- end -}}
