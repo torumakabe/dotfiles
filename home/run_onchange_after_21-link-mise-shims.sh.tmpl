@@ -40,7 +40,7 @@ STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-lin
 # 起動する恐れがあるため、Copilot 経由での利用価値より副作用リスクを優先して除外。
 # rust は mise 管理外 (docs/adr/016-rust-external-rustup.md) のため shim 自体が存在せず対象外。
 EXCLUDE_EXACT=(
-  node npm npx corepack
+  node npm npx pnpm
   dotnet dnx
 )
 

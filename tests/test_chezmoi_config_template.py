@@ -10,12 +10,19 @@ ADR-012 op-ssh-sign paths, so losing them breaks commit signing silently.
 
 The fix seeds each variable from the current config data before the guard.
 These tests pin both the source shape and the observable behaviour.
+
+The template also pins the ``.ps1`` interpreter (ADR-023). chezmoi defaults to
+``pwsh -NoLogo -File``, which loads the profile, which activates mise, whose
+CommandNotFound handler dereferences a PSReadLine type that a non-interactive
+pwsh does not have. Every failed command lookup inside a script then prints an
+InvalidOperation error, so ``-NoProfile`` has to stay in the argument list.
 """
 
 import pathlib
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 
@@ -23,6 +30,8 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONFIG_TEMPLATE_PATH = REPO_ROOT / "home/.chezmoi.toml.tmpl"
 
 PROMPTED_VARIABLES = ("windowsUser", "corpUser")
+
+EXPECTED_PS1_INTERPRETER = {"command": "pwsh", "args": ["-NoLogo", "-NoProfile", "-File"]}
 
 
 class ConfigTemplateSourceTests(unittest.TestCase):
@@ -47,6 +56,13 @@ class ConfigTemplateSourceTests(unittest.TestCase):
                 self.assertNotEqual(seed, -1)
                 self.assertNotEqual(prompt, -1)
                 self.assertLess(seed, prompt)
+
+    def test_ps1_interpreter_is_pinned_without_the_profile(self) -> None:
+        """The interpreter is literal TOML, so the source has to carry it verbatim."""
+        args = ", ".join(f'"{arg}"' for arg in EXPECTED_PS1_INTERPRETER["args"])
+        self.assertIn("[interpreters.ps1]", self.template)
+        self.assertIn(f'command = "{EXPECTED_PS1_INTERPRETER["command"]}"', self.template)
+        self.assertIn(f"args = [{args}]", self.template)
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi renders the config template")
@@ -82,6 +98,12 @@ class ConfigTemplateBehaviourTests(unittest.TestCase):
     def test_fresh_init_leaves_the_corp_user_empty(self) -> None:
         rendered = self._render(None)
         self.assertIn('corpUser = ""', rendered)
+
+    def test_ps1_interpreter_skips_the_profile(self) -> None:
+        """A rendered config must run .ps1 scripts without the PowerShell profile."""
+        rendered = self._render(None)
+        config = tomllib.loads(rendered)
+        self.assertEqual(config["interpreters"]["ps1"], EXPECTED_PS1_INTERPRETER)
 
 
 if __name__ == "__main__":

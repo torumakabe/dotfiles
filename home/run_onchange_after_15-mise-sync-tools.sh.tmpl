@@ -49,11 +49,5 @@ else
   sync_exit=0
 fi
 
-# corepack (pnpm/yarn 提供) を有効化する。mise 管理 node に同梱されており、
-# 未実行だと `pnpm` コマンドが解決できない。冪等なため無条件に実行してよい。
-if command -v corepack >/dev/null 2>&1; then
-  corepack enable || echo 'WARN: corepack enable failed.' >&2
-fi
-
 exit "$sync_exit"
 {{- end -}}
