@@ -57,7 +57,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 ### 1. instructions、agents、skills
 
-- instructions の各ファイルの総行数を計測する。50行超なら、効果を維持したまま重複と低価値な説明を圧縮する案を示す。あわせて次を確認する
+- instructions の各ファイルを読み、重複、他の層と競合する記述、低価値な説明を特定する。特定できた場合だけ、効果を維持したまま圧縮する案を示す。行数は精読の優先順位を決める目安に使い（50行超を先に読む）、それだけを根拠に圧縮を提案しない。あわせて次を確認する
   - ユーザーとリポジトリのスコープ違いを移動
   - 永続的な設計判断は `manage-adr` のパス B/B' へ誘導
 - `.github/agents/*.agent.md` の frontmatter に `name` と `description` があり、`name` がファイル名と一致するか確認する
@@ -99,6 +99,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 - GitHub Security Advisories と、根拠としている上流issueの状態を確認する
 - 外部URLはリダイレクト後の到達先と記述内容を確認する
 - 記述された前提（版、対象イメージ、経路、責任範囲）が現在も成立するか確認する
+- 版やパスを根拠にするときは、実装が判定に使うパスと分岐を特定し、その実体を測る。同名のコマンドが複数あれば、どれが選ばれるかまで確認する
 - 新版の存在だけでは問題にしない。脆弱性、非互換、利用機能への修正、更新方針との不一致がある場合に報告する
 - 撤去条件が満たされた回避策は、撤去対象の実装、テスト、文書を列挙して撤去を提案する
 - 取得失敗は公式APIなど別の公式経路で再確認する
@@ -162,7 +163,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 ### 9. Python と uv
 
-- `hooks/` と `home/private_dot_copilot/hooks/scripts/` の配布スクリプトに PEP 723 メタデータがあるか確認する
+- `home/private_dot_copilot/hooks/scripts/` の配布スクリプトに PEP 723 メタデータがあるか確認する
 - `tests/` は `uv run -m unittest ...` で実行されるか確認する
 
 ### 10. Copilot hooks 構成
@@ -195,6 +196,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 4. 外部情報は問題一覧と分け、現在値、最新値、公式情報、リポジトリへの影響を示す
 5. 必須検査を完了できなかった場合だけ、試した情報源と理由を検査範囲として示す
 6. 問題がなければ候補を水増しせず「問題なし」と報告する
+7. 版、パス、環境の挙動を根拠とする指摘には `実測: <コマンド> → <結果>` を添える。指摘の撤回と「問題なし」の判断にも同じ証跡を求める
 
 <!-- TODO: Copilot CLI にメモリの list/get/delete 機能が実装されたら（github/copilot-cli#2278）、
      stored memories の一覧・削除まで自動化する。 -->

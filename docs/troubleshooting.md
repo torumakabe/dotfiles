@@ -109,7 +109,7 @@ done
 
 ## shell 起動時に `mise WARN missing:` が出る
 
-`mise upgrade` 等で `private_mise.lock` が更新された後、対応する `mise install` / `mise reshim` が走っていないと shim と install marker が古いまま残り、`mise hook-env` で `WARN missing:` が出る。
+`mise upgrade` 等で `~/.config/mise/mise.lock` が更新された後、対応する `mise install` / `mise reshim` が走っていないと shim と install marker が古いまま残り、`mise hook-env` で `WARN missing:` が出る。
 
 通常は `chezmoi apply` で `run_onchange_after_15-mise-sync-tools` フック（[ADR-013](adr/013-mise-lockfile-sync-hook.md)）が自動で同期する。手動で `mise uninstall` した等のケースで残った場合は次を実行する。
 
@@ -269,7 +269,7 @@ VS Code 拡張 (`github.copilot-chat`) が PATH へ注入する `.../globalStora
 
 対策 (本リポジトリで適用済み):
 
-- `home/private_dot_copilot/hooks/hooks.json` の `timeoutSec` を preToolUse 30 秒 / postToolUse 15 秒に設定し、キューが長くなっても fail-open に落ちにくくする
+- `home/private_dot_copilot/hooks/hooks.json` の `timeoutSec` を引き上げ、キューが長くなっても fail-open に落ちにくくする（現在値は同ファイルを参照）
 - 上流の挙動変更を追跡する (`github/copilot-cli` の issue)
 
 暫定回避:

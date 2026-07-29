@@ -18,6 +18,7 @@ pwsh does not have. Every failed command lookup inside a script then prints an
 InvalidOperation error, so ``-NoProfile`` has to stay in the argument list.
 """
 
+import os
 import pathlib
 import shutil
 import subprocess
@@ -29,6 +30,9 @@ import unittest
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONFIG_TEMPLATE_PATH = REPO_ROOT / "home/.chezmoi.toml.tmpl"
 
+# ``windowsUser`` only reaches ``promptStringOnce`` under WSL with interop, and
+# on Windows it comes from ``USERNAME``. Everywhere else the seed alone decides
+# its value, so the two variables share the seed but not the prompt condition.
 PROMPTED_VARIABLES = ("windowsUser", "corpUser")
 
 EXPECTED_PS1_INTERPRETER = {"command": "pwsh", "args": ["-NoLogo", "-NoProfile", "-File"]}
@@ -70,8 +74,10 @@ class ConfigTemplateBehaviourTests(unittest.TestCase):
     """Render the real template the way ``chezmoi init`` does.
 
     ``execute-template --init`` with ``--config`` reproduces a re-init against
-    an existing config. The test process has no TTY, which is exactly the case
-    that used to wipe the answers.
+    an existing config. ``--stdinisatty`` has to be passed explicitly: the flag
+    defaults to ``true`` regardless of the test process's real stdin, so
+    omitting it would exercise the interactive path and leave the
+    non-interactive case -- the one that used to wipe the answers -- unchecked.
     """
 
     def setUp(self) -> None:
@@ -79,29 +85,64 @@ class ConfigTemplateBehaviourTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root, True)
         self.template = CONFIG_TEMPLATE_PATH.read_text(encoding="utf-8")
 
-    def _render(self, existing: str | None) -> str:
+    def _render(self, existing: str | None, *, stdin_is_atty: bool) -> str:
         config = self.root / "config.toml"
         if existing is not None:
             config.write_text(existing, encoding="utf-8")
         return subprocess.run(
-            ["chezmoi", "--config", str(config), "execute-template", "--init"],
+            [
+                "chezmoi",
+                "--config",
+                str(config),
+                "execute-template",
+                "--init",
+                f"--stdinisatty={str(stdin_is_atty).lower()}",
+            ],
             input=self.template,
             capture_output=True,
             text=True,
             check=True,
         ).stdout
 
-    def test_reinit_keeps_the_stored_corp_user(self) -> None:
-        rendered = self._render('[data]\n  corpUser = "stored-corp"\n')
-        self.assertIn('corpUser = "stored-corp"', rendered)
+    def _seeded(self, name: str) -> str:
+        return f'[data]\n  {name} = "stored-{name}"\n'
 
-    def test_fresh_init_leaves_the_corp_user_empty(self) -> None:
-        rendered = self._render(None)
-        self.assertIn('corpUser = ""', rendered)
+    def _prompted_variables(self) -> tuple[str, ...]:
+        # On Windows the template takes windowsUser from the USERNAME
+        # environment variable instead of the seed, so the stored answer is not
+        # the value under test there.
+        if os.name == "nt":
+            return tuple(name for name in PROMPTED_VARIABLES if name != "windowsUser")
+        return PROMPTED_VARIABLES
+
+    def test_reinit_without_a_tty_keeps_the_stored_answers(self) -> None:
+        """The regression: the TTY guard must fall back to the stored answers."""
+        for name in self._prompted_variables():
+            with self.subTest(variable=name):
+                rendered = self._render(self._seeded(name), stdin_is_atty=False)
+                self.assertIn(f'{name} = "stored-{name}"', rendered)
+
+    def test_reinit_with_a_tty_keeps_the_stored_answers(self) -> None:
+        """A TTY must not overwrite the stored answers either.
+
+        ``corpUser`` reaches ``promptStringOnce``, which returns the stored
+        answer instead of prompting. ``windowsUser`` reaches it only under WSL,
+        so on other hosts this pins the seed against a TTY-only regression.
+        """
+        for name in self._prompted_variables():
+            with self.subTest(variable=name):
+                rendered = self._render(self._seeded(name), stdin_is_atty=True)
+                self.assertIn(f'{name} = "stored-{name}"', rendered)
+
+    def test_fresh_init_without_a_tty_leaves_the_answers_empty(self) -> None:
+        rendered = self._render(None, stdin_is_atty=False)
+        for name in self._prompted_variables():
+            with self.subTest(variable=name):
+                self.assertIn(f'{name} = ""', rendered)
 
     def test_ps1_interpreter_skips_the_profile(self) -> None:
         """A rendered config must run .ps1 scripts without the PowerShell profile."""
-        rendered = self._render(None)
+        rendered = self._render(None, stdin_is_atty=False)
         config = tomllib.loads(rendered)
         self.assertEqual(config["interpreters"]["ps1"], EXPECTED_PS1_INTERPRETER)
 

@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-`mise upgrade` 等で `~/.config/mise/private_mise.lock` が更新されても、ローカルの `mise install` / `mise reshim` は自動で走らない。結果として shim と install marker が古いまま残り、shell 起動時の `_mise_hook`（`mise hook-env`）で `mise WARN missing:` が出る。Windows では `installs\<tool>\<ver>` が junction として作られるため shim が一度欠落すると復元されにくく、`MISE_AUTO_INSTALL=true`（既定）により毎起動で再 install が試みられて rustup の `info: syncing channel updates ...` も繰り返し表示される。
+`mise upgrade` 等で `~/.config/mise/mise.lock` が更新されても、ローカルの `mise install` / `mise reshim` は自動で走らない。結果として shim と install marker が古いまま残り、shell 起動時の `_mise_hook`（`mise hook-env`）で `mise WARN missing:` が出る。Windows では `installs\<tool>\<ver>` が junction として作られるため shim が一度欠落すると復元されにくく、`MISE_AUTO_INSTALL=true`（既定）により毎起動で再 install が試みられて rustup の `info: syncing channel updates ...` も繰り返し表示される。
 
 `private_mise.lock` は chezmoi で管理しているため、lockfile が更新された apply の瞬間に install/reshim を流せば構造的に同期できる。
 

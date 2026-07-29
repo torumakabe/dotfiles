@@ -18,6 +18,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -237,6 +238,14 @@ runs_the_posix_check_script = unittest.skipIf(
     "bash on Windows resolves to WSL, where the fake git on PATH does not apply",
 )
 
+# The check script branches on .chezmoi.os and _render uses the host's value, so
+# only a Linux host renders the apt branch. On macOS the darwin branch (brew)
+# renders instead, which measures a platform the assertion does not describe.
+renders_the_apt_branch = unittest.skipUnless(
+    sys.platform.startswith("linux"),
+    "the apt branch only renders on a Linux host",
+)
+
 
 @unittest.skipUnless(shutil.which("bash"), "bash is required")
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi renders the check script")
@@ -320,6 +329,7 @@ class GitHookWarningBehaviourTests(unittest.TestCase):
         self.assertNotIn("ln -sfn", warning)
 
     @runs_the_posix_check_script
+    @renders_the_apt_branch
     @unittest.skipUnless(
         pathlib.Path("/usr/bin/git").exists(), "the apt git decides the branch"
     )
