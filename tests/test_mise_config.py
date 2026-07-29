@@ -183,6 +183,81 @@ class MiseConfigTests(unittest.TestCase):
 
         self.assertEqual(helpers.count("emulate -L zsh"), 4)
 
+    def test_mise_upgrade_centralizes_lockfile_restore_reporting(self) -> None:
+        zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
+        function = zshrc[zshrc.index("mise-upgrade() {") :]
+
+        self.assertEqual(
+            function.count(
+                '_mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"'
+            ),
+            4,
+        )
+        self.assertEqual(
+            zshrc.count("mise upgrade 実行前の lockfile を復元しました"),
+            1,
+        )
+        self.assertEqual(
+            zshrc.count("mise upgrade 実行前の lockfile を復元できませんでした"),
+            1,
+        )
+
+    def _run_zsh_lockfile_restore(
+        self,
+        lockfile: pathlib.Path,
+        backup: pathlib.Path,
+        had_lockfile: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise lockfile restore tests")
+
+        script = (
+            _mise_warning_helpers()
+            + '\n_mise_restore_lockfile "$1" "$2" "$3"\n'
+        )
+        return subprocess.run(
+            [
+                "zsh",
+                "-c",
+                script,
+                "mise-lockfile-restore-test",
+                str(lockfile),
+                str(backup),
+                "1" if had_lockfile else "0",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_zsh_restores_existing_lockfile_from_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            lockfile = root / "mise.lock"
+            backup = root / "mise.lock.backup"
+            lockfile.write_text("generated", encoding="utf-8")
+            backup.write_text("original", encoding="utf-8")
+
+            result = self._run_zsh_lockfile_restore(lockfile, backup, True)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(lockfile.read_text(encoding="utf-8"), "original")
+            self.assertFalse(backup.exists())
+            self.assertIn("lockfile を復元しました", result.stderr)
+
+    def test_zsh_removes_generated_lockfile_when_none_existed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            lockfile = root / "mise.lock"
+            backup = root / "mise.lock.backup"
+            lockfile.write_text("generated", encoding="utf-8")
+
+            result = self._run_zsh_lockfile_restore(lockfile, backup, False)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(lockfile.exists())
+            self.assertIn("lockfile を復元しました", result.stderr)
+
     def test_powershell_mise_upgrade_backs_up_before_upgrade(self) -> None:
         profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
         function = profile[profile.index("function Invoke-MiseUpgrade {") :]

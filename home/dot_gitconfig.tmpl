@@ -22,6 +22,8 @@
 # the secret scan. git < 2.54 ignores this section entirely, which is why
 # init.templateDir above stays. See ADR-020.
 # Opt out per repository: git config --local hook.dotfiles-gitleaks.enabled false
+# Keep the friendly name distinct from the event name; Git rejects an ambiguous
+# [hook "pre-commit"] definition.
 [hook "dotfiles-gitleaks"]
 	event = pre-commit
 	# Quote the value: an unquoted gitconfig value is truncated at ';' or '#'.

@@ -1,27 +1,15 @@
-import importlib.util
 import json
 import pathlib
-import subprocess
-import sys
 import unittest
+
+from tests._helpers import load_script, run_hook
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py"
 
 
-def load_module():
-    spec = importlib.util.spec_from_file_location("uv_enforcer", SCRIPT_PATH)
-    if spec is None:
-        raise ImportError(f"Cannot load module: no spec for {SCRIPT_PATH}")
-    if spec.loader is None:
-        raise ImportError(f"Cannot load module: no loader for {SCRIPT_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-uve = load_module()
+uve = load_script("uv_enforcer", SCRIPT_PATH)
 
 
 # ── python / python3 blocked ─────────────────────────────────────────────
@@ -191,58 +179,37 @@ class TestUnrelatedAllowed(unittest.TestCase):
 class TestMainIntegration(unittest.TestCase):
     """Exercise the full stdin → stdout JSON flow."""
 
-    def _run_hook(self, input_data: dict) -> dict:
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT_PATH)],
-            input=json.dumps(input_data),
-            capture_output=True,
-            text=True,
-        )
+    def _decision(self, payload: dict | str) -> dict:
+        result = run_hook(SCRIPT_PATH, payload)
         self.assertEqual(result.returncode, 0)
         return json.loads(result.stdout)
 
+    def _assert_allowed(self, payload: dict) -> None:
+        result = run_hook(SCRIPT_PATH, payload)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
+
     def test_deny_bare_python(self) -> None:
-        out = self._run_hook({
+        out = self._decision({
             "toolName": "bash",
             "toolArgs": {"command": "python script.py"},
         })
         self.assertEqual(out["permissionDecision"], "deny")
 
     def test_allow_uv_run(self) -> None:
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT_PATH)],
-            input=json.dumps({
-                "toolName": "bash",
-                "toolArgs": {"command": "uv run python script.py"},
-            }),
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(result.stdout.strip(), "")
+        self._assert_allowed({
+            "toolName": "bash",
+            "toolArgs": {"command": "uv run python script.py"},
+        })
 
     def test_allow_non_bash_tool(self) -> None:
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT_PATH)],
-            input=json.dumps({
-                "toolName": "edit",
-                "toolArgs": {"path": "/tmp/foo.txt"},
-            }),
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(result.stdout.strip(), "")
+        self._assert_allowed({
+            "toolName": "edit",
+            "toolArgs": {"path": "/tmp/foo.txt"},
+        })
 
     def test_invalid_json_denies(self) -> None:
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT_PATH)],
-            input="not valid json",
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0)
-        out = json.loads(result.stdout)
+        out = self._decision("not valid json")
         self.assertEqual(out["permissionDecision"], "deny")
 
 

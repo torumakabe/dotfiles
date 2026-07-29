@@ -16,6 +16,17 @@ POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 INSTALL_PS1_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.ps1.tmpl"
 WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-copilot-hooks.yml"
+POSIX_RC_TEMPLATE_PATHS = tuple(
+    REPO_ROOT / "home" / name
+    for name in (
+        "dot_profile.tmpl",
+        "dot_zprofile.tmpl",
+        "dot_zshenv.tmpl",
+        "dot_bash_profile.tmpl",
+        "dot_bashrc.tmpl",
+        "dot_zshrc.tmpl",
+    )
+)
 
 PLATFORMS = frozenset(
     {
@@ -511,6 +522,64 @@ class WrapperGateParityTests(unittest.TestCase):
 
     def test_wrapper_depends_on_windows_user(self) -> None:
         self.assertIn("{{ .windowsUser }}", self.wrapper)
+
+
+class WindowsPosixRcManagementTests(unittest.TestCase):
+    WINDOWS_IGNORED_RCS = {
+        ".profile",
+        ".zprofile",
+        ".zshenv",
+        ".bash_profile",
+        ".bashrc",
+    }
+
+    def test_windows_ignores_every_posix_rc_except_zshrc(self) -> None:
+        ignore = (REPO_ROOT / "home/.chezmoiignore").read_text(encoding="utf-8")
+        start = ignore.index('{{ if eq .chezmoi.os "windows" -}}')
+        block = ignore[start:].split("{{ end -}}", maxsplit=1)[0]
+        ignored = {
+            line
+            for line in block.splitlines()
+            if line.startswith(".") and not line.startswith("..")
+        }
+
+        self.assertEqual(ignored, self.WINDOWS_IGNORED_RCS)
+        self.assertNotIn(".zshrc", ignored)
+
+    def test_posix_rc_templates_keep_content_inside_windows_guard(self) -> None:
+        guard = '{{ if ne .chezmoi.os "windows" -}}'
+        for path in POSIX_RC_TEMPLATE_PATHS:
+            with self.subTest(path=path.name):
+                source = path.read_text(encoding="utf-8")
+                source_without_template_comments = re.sub(
+                    r"{{-?\s*/\*.*?\*/\s*-?}}",
+                    "",
+                    source,
+                    flags=re.DOTALL,
+                ).strip()
+                self.assertTrue(source_without_template_comments.startswith(guard))
+                self.assertTrue(source_without_template_comments.endswith("{{ end -}}"))
+
+    @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
+    def test_posix_rc_templates_render_empty_on_windows(self) -> None:
+        override = json.dumps({"chezmoi": {"os": "windows"}})
+        for path in POSIX_RC_TEMPLATE_PATHS:
+            with self.subTest(path=path.name):
+                result = subprocess.run(
+                    [
+                        "chezmoi",
+                        "execute-template",
+                        "--override-data",
+                        override,
+                        "--file",
+                        str(path),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":

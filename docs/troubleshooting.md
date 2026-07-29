@@ -193,7 +193,43 @@ chezmoi apply ~/.config/git/templates/hooks/pre-commit
 
 Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin/env bash` が WSL の `bash.exe` を拾い、Windows 形式の `C:/...` パスを開けていない可能性がある。この pre-commit hook はその経路を避けるため POSIX `sh` 互換で管理する。mise の Windows shim も extensionless 版は `/bin/bash` スクリプトなので、hook 内では `gitleaks.exe` を優先する。
 
-Git 2.54 以降なら、`.git/hooks/pre-commit` の有無に関わらず設定ベースフックが走る（ADR-020）。`git hook list --show-scope pre-commit` が `global<TAB>dotfiles-gitleaks` を返すか確認する。返さない場合は `git --version` を確認する。2.54 以降であれば原因は設定の欠落なので、`git config --global --get-regexp '^hook\.dotfiles-gitleaks\.'` を確認し、何も返さなければ `chezmoi apply ~/.gitconfig` を実行する。2.54 より前であれば git を更新する。Linux では `/usr/bin/git --version` と比べ、そちらが 2.54 以降なら、より前の PATH にある実体が隠している。それが `/usr/local/bin/git` の通常ファイル（Codespaces と Dev Container のベースイメージがソースビルドしたもの）なら `sudo ln -sfn /usr/bin/git /usr/local/bin/git` で張り替える。別のパス、またはすでに symlink であれば、その git の出所を確認してから判断する。
+## 設定ベースフックが全リポジトリで動いていない
+
+Git 2.54 以降なら、`.git/hooks/pre-commit` の有無に関わらず設定ベースフックが走る（ADR-020）。有効かどうかは `chezmoi apply` のたびに確認され、無効なら原因ごとに案内を変えた警告が出る。
+
+```bash
+git hook list --show-scope pre-commit   # 期待値: global<TAB>dotfiles-gitleaks
+git --version
+```
+
+git が 2.54 以降なら、原因は git ではなく設定の欠落である。
+
+```bash
+git config --global --get-regexp '^hook\.dotfiles-gitleaks\.'   # 何も返さなければ設定が届いていない
+chezmoi apply ~/.gitconfig
+```
+
+git が 2.54 より前なら更新する。
+
+```bash
+brew install git                                    # macOS
+sudo add-apt-repository -y ppa:git-core/ppa \
+  && sudo apt-get update && sudo apt-get install -y git   # Linux / WSL
+winget upgrade --id Git.Git                         # Windows
+```
+
+macOS では新しい login shell で `git --version` が 2.54 以降になることを確認する。`/etc/zprofile` の `path_helper` が PATH を並べ替えるため、`~/.zprofile` が `/opt/homebrew/opt/git/bin` を先頭へ戻している（[`architecture.md`](architecture.md#各シェルの読み込み経路)）。
+
+Linux で apt を実行しても `git --version` が変わらない場合は、より前の PATH にある別の実体が新しい git を隠している。Codespaces と Dev Container のベースイメージは git をソースビルドして `/usr/local/bin` へ入れるため、この状態になる。`chezmoi apply` の bootstrap はこの二つの環境でだけ張り替える。手動で直す場合は、対象が確かにベースイメージのビルドであることを先に確かめる。
+
+```bash
+command -v git                       # /usr/local/bin/git が返るか確認
+test -L /usr/local/bin/git           # symlink なら誰かが張り替えた後なので触らない
+/usr/bin/git --version               # apt 側が 2.54 以降か確認
+sudo ln -sfn /usr/bin/git /usr/local/bin/git
+```
+
+`command -v git` が `/usr/local/bin/git` 以外を返す場合や、すでに symlink である場合は、mise の shim や利用者自身のビルドである可能性がある。張り替える前に、その git の出所と PATH の並びを確認する。
 
 ## commit が gitleaks-pre-commit not found で拒否される
 

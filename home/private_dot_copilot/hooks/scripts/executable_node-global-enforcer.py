@@ -45,15 +45,14 @@ def read_input() -> dict:
 def parse_tool_args(raw: Any) -> dict[str, Any]:
     """Normalize toolArgs from the hook input.
 
-    toolArgs may arrive as a JSON string, a dict, or something else
-    entirely.  This function always returns a dict.
+    toolArgs may arrive as a JSON object or as a string containing one.
+    Invalid JSON and non-object values raise so main() emits a fail-safe deny.
     """
     if isinstance(raw, str):
-        try:
-            return json.loads(raw)
-        except (json.JSONDecodeError, ValueError):
-            return {}
-    return raw if isinstance(raw, dict) else {}
+        raw = json.loads(raw)
+    if not isinstance(raw, dict):
+        raise TypeError("toolArgs must be a JSON object")
+    return raw
 
 
 # ---------------------------------------------------------------------------
@@ -63,9 +62,13 @@ def parse_tool_args(raw: Any) -> dict[str, Any]:
 def split_command_chain(command: str) -> list[str]:
     """Split a command string by shell operators (&&, ||, ;).
 
+    Returns individual command segments with leading/trailing whitespace stripped.
     Pipe (|) chains are treated as a single segment led by the first command,
     because blocking only the piped-to portion would be confusing.
     """
+    # Split by && || ; but NOT by single |
+    # We want "echo foo | python" to be caught as a whole, but
+    # "cmd1 && python script.py" to be split into ["cmd1", "python script.py"]
     segments = re.split(r"\s*(?:&&|\|\||;)\s*", command)
     return [s.strip() for s in segments if s.strip()]
 
