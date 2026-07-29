@@ -8,6 +8,14 @@
 - **運用ノート**: `docs/architecture.md` / `docs/operations.md` / `docs/troubleshooting.md` / `docs/copilot-cli.md`
 - **エージェント**: `.github/agents/` — `manage-adr`（ADR ライフサイクル）、`review-repo`（リポジトリ整頓）
 
+## 記述の置き場所
+
+層ごとの規範はユーザーレベルの指示に従う。このリポジトリでの割り当ては次のとおり。
+
+- 判断の記録は `docs/adr/`
+- 手順と構造の文書は `docs/`
+- 回避策の撤去条件と対象範囲は「ワークアラウンド（定期チェック対象）」へ集約する
+
 ## Copilot Guard 変更時の注意
 
 - パス比較前に `\` → `/` へ正規化すること。パターンファイルは `/` で記述する
