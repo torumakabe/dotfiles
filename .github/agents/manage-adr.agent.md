@@ -98,6 +98,7 @@ stored memories に蓄積された判断のうち、永続的で重要なもの�
 2. `docs/adr/NNN-<kebab-case-title>.md` を作成する:
    - Status / Context / Decision / Consequences の 4 セクション
    - 30 行以下に収める
+   - 書く内容と書かない内容は「記述の置き場所」の規範に従う
    - 言語はリポジトリ README に従う（このリポジトリでは日本語）
 3. `docs/adr/INDEX.md` の一覧テーブルに追加する
 4. 一時的 / 影響の小さい判断は ADR にしない

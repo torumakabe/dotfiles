@@ -1,6 +1,6 @@
 ---
 name: review-repo
-description: リポジトリの整頓。instructions、README、docs、install.sh の鮮度と規模、ADR/memories の健全性、git 追跡、chezmoi 規約、mise 整合性を確認する。「リポジトリを点検」「整頓」「hygiene」「文書の陳腐化を確認」「文書の肥大化を確認」「priming をレビュー」「instructions を見直して」「review-repo」と言われたら使う。
+description: リポジトリの整頓。instructions、agents、README、docs、install.sh の鮮度と規模、記述の置き場所、ADR/memories の健全性、git 追跡、chezmoi 規約、mise 整合性、hooks と CI を確認する。「リポジトリを点検」「整頓」「hygiene」「文書の陳腐化を確認」「文書の肥大化を確認」「priming をレビュー」「instructions を見直して」「review-repo」と言われたら使う。
 ---
 
 リポジトリ全体を点検し、根拠のある問題と修正案を報告する。修正はユーザー承認後に行う。
@@ -17,12 +17,16 @@ description: リポジトリの整頓。instructions、README、docs、install.s
 
 - `.github/copilot-instructions.md`
 - `home/private_dot_copilot/copilot-instructions.md`
+- `.github/agents/*.agent.md`
 - `README.md`
 - `docs/**/*.md`
 - `install.sh`
-- 判定に必要な実装、設定、テスト、ADR、上流の公式情報
+- コードコメント
+- 判定に必要な実装、設定、テスト、CI、ADR、上流の公式情報
 
 対象指定がなければ全項目を点検する。特定の対象が指定された場合は、その記述を検証するために必要な関連ファイルも確認する。
+
+全対象に共通して、記載されたパス、見出しアンカー、ADR番号、エージェント、スキル、コマンドの参照先が実在するかを検証する。
 
 ## 報告する問題
 
@@ -45,27 +49,25 @@ description: リポジトリの整頓。instructions、README、docs、install.s
 
 - OS 名から、明記していない CPU やディストリビューションへの対応を推論した結果
 - 過去の検証時点、検証版、当時の観測結果
-- 固定版より新しい安定版が存在すること
 - 対象環境で使う根拠がない構成、再現していない仮説、任意説明の不足
 - ネットワークやツールの制約で検査できなかったこと
 - 役割上必要な最小要約。上記の同期漏れ条件を満たさない場合に限る
 
 ## チェック項目
 
-### 1. copilot-instructions.md
+### 1. instructions、agents、skills
 
-- 各ファイルの総行数を計測する。50行超なら、次の基準で圧縮案を示す
-  - デフォルト動作との重複を削除
-  - 冗長なルールを統合
-  - 説明を短縮
-  - 効果の薄いルールは判断を求める
+- instructions の各ファイルの総行数を計測する。50行超なら、効果を維持したまま重複と低価値な説明を圧縮する案を示す。あわせて次を確認する
   - ユーザーとリポジトリのスコープ違いを移動
   - 永続的な設計判断は `manage-adr` のパス B/B' へ誘導
-- 記載されたパス、ADR番号、エージェント、スキルが実在するか確認する
+- `.github/agents/*.agent.md` の frontmatter に `name` と `description` があり、`name` がファイル名と一致するか確認する
+- `home/private_dot_copilot/skills/` の各ディレクトリに `SKILL.md` があるか確認する
 
 ### 2. `README.md`、`docs/`、`install.sh`
 
 #### 役割
+
+層ごとの役割は項目3「記述の置き場所」で扱う。ここでは個々の対象の役割だけを示す。
 
 | 対象 | 役割 |
 |------|------|
@@ -74,28 +76,32 @@ description: リポジトリの整頓。instructions、README、docs、install.s
 | `docs/operations.md` | リポジトリ固有の保守と更新手順 |
 | `docs/troubleshooting.md` | 症状、確認方法、復旧手順 |
 | `docs/copilot-cli.md` | Copilot CLI の管理境界と運用 |
-| `docs/adr/` | 判断の背景、採用方針、状態、置換関係 |
+| `docs/adr/` | 判断の記録。状態と置換関係を含む |
 | `install.sh` | POSIX 環境で chezmoi を導入し、dotfiles を適用する処理 |
 
 表にない文書は、冒頭の目的、内容、参照元から役割を特定する。
 
 #### 陳腐化
 
-- リポジトリ相対リンク、画像、見出しアンカー、ファイル、ADRの参照先を確認する
 - コマンド、パス、環境変数、対応環境、導入元を実装と照合する
 - README の導入手順を `install.sh` の引数、分岐、実行結果と照合する
 - architecture の現在形の説明を実装と Accepted な ADR に照合する
 - operations と troubleshooting の手順が現行の配置とコマンドで実行できるか確認する
 - 文書一覧、ADR INDEX、相互参照へ追加、改名、削除が反映されているか確認する
+- `.devcontainer/`、`.vscode/`、`reference/windows/` の資材が現行の構成、ADR-011、文書の説明と一致するか確認する
 
-運用中の外部 URL、pin、checksum、上流制約、回避策は公式情報と照合する。
+#### 外部情報
+
+運用中の外部 URL、pin、checksum、上流制約、回避策を公式情報と照合する。`.github/copilot-instructions.md` の「プラットフォーム制約」と「ワークアラウンド」は全項目を対象とする。
 
 - 固定版のリリース、対象asset、公式checksumを確認する
 - 固定版から最新安定版までの compare view と changelog を確認し、セキュリティ、互換性、利用機能に関係する差分だけを詳しく調べる
 - GitHub Security Advisories と、根拠としている上流issueの状態を確認する
 - 外部URLはリダイレクト後の到達先と記述内容を確認する
+- 記述された前提（版、対象イメージ、経路、責任範囲）が現在も成立するか確認する
 - 新版の存在だけでは問題にしない。脆弱性、非互換、利用機能への修正、更新方針との不一致がある場合に報告する
-- 取得失敗は公式APIなど別の公式経路で再確認する。必要な確認を完了できなければ、問題ではなく検査範囲として示す
+- 撤去条件が満たされた回避策は、撤去対象の実装、テスト、文書を列挙して撤去を提案する
+- 取得失敗は公式APIなど別の公式経路で再確認する
 
 #### 重複と肥大化
 
@@ -110,18 +116,30 @@ description: リポジトリの整頓。instructions、README、docs、install.s
 
 行数は調査の入口に限り、それだけを根拠に分割や削除を提案しない。
 
-### 3. git 追跡
+### 3. 記述の置き場所
 
-`git ls-files --cached` から、`.whl`、`.pyc`、`.pyo`、`__pycache__`、`.ruff_cache`、`.DS_Store`、`.env`、`.venv` を抽出する。検出時は `git rm --cached` を提案する。
+コードコメント、`docs/`、`docs/adr/` の内容を「記述の置き場所」の規範と、`.github/copilot-instructions.md` の割り当てへ照合する。層をまたぐ重複は同期漏れのリスクとして扱い、正本と削除案を示す。コメントの削除案では、削除後にコードと参照先だけで意図を追えるかを確認する。
 
-### 4. chezmoi 命名規約
+### 4. git 追跡と `.gitignore`
+
+`git ls-files --cached` から、`.whl`、`.pyc`、`.pyo`、`__pycache__`、`.ruff_cache`、`.DS_Store`、`.env`、`.venv` を抽出する。検出時は `git rm --cached` を提案する。あわせて `.gitignore` が同じ対象を除外しているか、実在しない対象だけを列挙していないかを確認する。
+
+### 5. chezmoi 命名規約と配布制御
+
+命名:
 
 - 実行可能スクリプトは `executable_`
 - 機微ファイルは `private_`
 - テンプレート処理するファイルは `.tmpl`
 - `run_once_before_` と `run_onchange_after_` の順序番号に衝突がない
 
-### 5. run_once のライフサイクル
+配布制御:
+
+- `home/.chezmoiignore` の各条件が実在するファイルと対応し、OS 固有ファイルが対象外 OS で ignore されるか
+- `home/.chezmoiremove` の各エントリに、過去の配布物という根拠があるか
+- `home/.chezmoi.toml.tmpl` が定義する変数を、テンプレートと ignore 条件が同じ意味で使うか
+
+### 6. run_once のライフサイクル
 
 1. `home/run_once*` を bootstrap または migration に分類する
 2. migration は追加時のcommit、ADR、コメントから旧状態と削除条件を確認する
@@ -129,39 +147,45 @@ description: リポジトリの整頓。instructions、README、docs、install.s
 4. 不要なmigrationは関連テストと文書を含めて削除を提案する。再実行が不要なら chezmoi の scriptState は変更しない
 5. 新しいmigrationに旧状態と機械的な削除条件がなければ補足を求める
 
-### 6. mise と install-packages
+### 7. mise と install-packages
 
 - `home/dot_config/mise/config.toml.tmpl` と `home/run_once_before_10-install-packages.sh.tmpl` の重複と欠落を確認する
 - ADR-004対象の `azd` と `copilot-cli` が mise 外にあるか確認する
 - `mise lock` の運用が `--global --platform` を指定するか確認する
 - 任意の実機検査では `mise ls` の Source が空の孤児ツールと余剰版を確認し、`mise uninstall --all` または `mise prune --tools` を提案する
 
-### 7. プラットフォーム機能等価性
+### 8. プラットフォーム機能等価性
 
 - 公開関数、alias、補完、ツール導入を Windows/PowerShell、macOS/zsh、Linux/zsh、WSL/zsh で確認する
 - 未分類の公開機能、理由と範囲のない例外、片方のshellだけを検査するテストを問題として報告する
 - `tests/test_platform_parity.py` と `.github/workflows/test-copilot-hooks.yml` が実装と契約を検査するか確認する
 
-### 8. Python と uv
+### 9. Python と uv
 
 - `hooks/` と `home/private_dot_copilot/hooks/scripts/` の配布スクリプトに PEP 723 メタデータがあるか確認する
 - `tests/` は `uv run -m unittest ...` で実行されるか確認する
-- 同領域の `.sh`、`.ps1`、`.bat` は Python への統一を提案する
 
-### 9. ADR
+### 10. Copilot hooks 構成
 
-- `docs/adr/INDEX.md` の一覧表から Accepted 件数と最新番号を確認する
+- `hooks.json` が参照するスクリプトが、`executable_` を除いたパスで実在するか
+- bash と powershell の起動行が同じスクリプトと環境変数を指すか
+- `ask-files.txt` と `blocked-files.txt` のパターンが `/` 区切りで、`copilot-guard.py` の正規化と一致するか
+- `tests/test_copilot_hooks_config.py` が現在の hooks.json の構成を検査するか
+- `lsp-config.json` と `mcp-config.json` が参照するコマンドが、mise 管理下または導入手順に存在するか
+
+### 11. CI ワークフロー
+
+- `.github/workflows/` の `paths` フィルタが、検査対象の変更を取りこぼさないか
+- 追加されたテストが実行対象に含まれるか
+- ワークフロー内の smoke テストと `tests/` の unittest が同じ検査を独立に保持していないか
+- `permissions` が必要最小か。action の参照が固定方針と一致するか
+
+### 12. ADR と stored memories
+
+- `docs/adr/INDEX.md` の一覧表と `docs/adr/` の実ファイルで、番号と Status が一致するか
+- 関連memoryのcitation先が実在するか
+- ADR化済みの内容を保持するmemoryはADR参照への更新を提案し、`manage-adr` のパス B' へ誘導する
 - 詳細な整合性レビューは `manage-adr` のパス E を使う
-
-### 10. stored memories
-
-- 関連memoryのcitation先が実在するか確認する
-- ADR化済みの内容はADR参照への更新を提案し、`manage-adr` のパス B' へ誘導する
-
-### 11. skills
-
-- `home/private_dot_copilot/skills/` の各ディレクトリに `SKILL.md` があるか確認する
-- instructions が参照するスキルが実在するか確認する
 
 ## 出力
 
@@ -171,7 +195,6 @@ description: リポジトリの整頓。instructions、README、docs、install.s
 4. 外部情報は問題一覧と分け、現在値、最新値、公式情報、リポジトリへの影響を示す
 5. 必須検査を完了できなかった場合だけ、試した情報源と理由を検査範囲として示す
 6. 問題がなければ候補を水増しせず「問題なし」と報告する
-7. ユーザー承認後に修正する
 
 <!-- TODO: Copilot CLI にメモリの list/get/delete 機能が実装されたら（github/copilot-cli#2278）、
      stored memories の一覧・削除まで自動化する。 -->
