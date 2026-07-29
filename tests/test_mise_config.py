@@ -43,9 +43,40 @@ ALLOWED_WARNING = (
     "mise WARN  newer codex release 0.145.0 ignored by "
     "minimum_release_age (24h); latest eligible release is 0.144.6"
 )
+RECOVERED_FALLBACK_WARNING = (
+    "mise WARN  mise-versions endpoint=github_release repo=sigstore/cosign "
+    "tag=v3.1.2 outcome=failed status=502 fallback=true "
+    'error="HTTP status server error (502 Bad Gateway): Failed to fetch GitHub release"'
+)
 WARNING_CASES = (
-    ("allowed", f"{ALLOWED_WARNING}\n", True),
-    ("allowed-with-ansi", f"\x1b[33m{ALLOWED_WARNING}\x1b[0m\n", True),
+    ("allowed-minimum-release-age", f"{ALLOWED_WARNING}\n", True),
+    (
+        "allowed-minimum-release-age-with-ansi",
+        f"\x1b[33m{ALLOWED_WARNING}\x1b[0m\n",
+        True,
+    ),
+    (
+        "allowed-recovered-fallback",
+        f"{RECOVERED_FALLBACK_WARNING}\n",
+        True,
+    ),
+    (
+        "fallback-false",
+        f"{RECOVERED_FALLBACK_WARNING.replace('fallback=true', 'fallback=false')}\n",
+        False,
+    ),
+    (
+        "fallback-missing",
+        "mise WARN  mise-versions endpoint=github_release repo=sigstore/cosign "
+        "tag=v3.1.2 outcome=failed status=502\n",
+        False,
+    ),
+    (
+        "fallback-from-unknown-component",
+        "mise WARN  plugin-cache endpoint=github_release repo=sigstore/cosign "
+        "tag=v3.1.2 outcome=failed status=502 fallback=true\n",
+        False,
+    ),
     ("unknown", "mise WARN missing: uv@0.11.30\n", False),
     (
         "allowed-and-unknown",
@@ -161,10 +192,14 @@ class MiseConfigTests(unittest.TestCase):
                 if allowed:
                     self.assertEqual(result.returncode, 0)
                     self.assertIn("処理を継続します", result.stderr)
+                    if "recovered-fallback" in name:
+                        self.assertIn("回復済み", result.stderr)
+                    else:
+                        self.assertIn("リリース待機期間", result.stderr)
                 else:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("処理を中止する警告", result.stderr)
-                if name == "allowed-with-ansi":
+                if name == "allowed-minimum-release-age-with-ansi":
                     self.assertNotIn("\x1b", result.stderr)
 
     def test_mise_upgrade_backs_up_lockfile_before_upgrade(self) -> None:
@@ -283,6 +318,7 @@ class MiseConfigTests(unittest.TestCase):
         self,
         *,
         upgrade_output: str = "",
+        lock_output: str = "",
         upgrade_exit: int = 0,
         lock_exit: int = 0,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
@@ -328,6 +364,9 @@ function mise {{
     }}
     if ($args[0] -eq 'lock') {{
         [System.IO.File]::WriteAllText($testLockfile, 'new-lock')
+        if ($env:TEST_LOCK_OUTPUT) {{
+            $env:TEST_LOCK_OUTPUT
+        }}
         $global:LASTEXITCODE = [int]$env:TEST_LOCK_EXIT
     }}
 }}
@@ -381,6 +420,7 @@ $result = @{{
                     "TMPDIR": temp_dir,
                     "TEST_HISTORY": str(history_file),
                     "TEST_UPGRADE_OUTPUT": upgrade_output,
+                    "TEST_LOCK_OUTPUT": lock_output,
                     "TEST_UPGRADE_EXIT": str(upgrade_exit),
                     "TEST_LOCK_EXIT": str(lock_exit),
                 }
@@ -428,6 +468,12 @@ $result = @{{
                 )
                 if allowed:
                     self.assertIn("処理を継続します", result.stdout + result.stderr)
+                    if "recovered-fallback" in name:
+                        self.assertIn("回復済み", result.stdout + result.stderr)
+                    else:
+                        self.assertIn(
+                            "リリース待機期間", result.stdout + result.stderr
+                        )
                     self.assertTrue(
                         any(
                             item.startswith("mise lock --global --platform")
@@ -438,6 +484,38 @@ $result = @{{
                     self.assertEqual(state["history"], ["gh auth token", "mise upgrade"])
                     self.assertTrue(state["log_exists"])
                     self.assertIn(state["log_path"], result.stdout + result.stderr)
+
+    def test_powershell_mise_lock_allows_recovered_fallback_warning(self) -> None:
+        result, state = self._run_powershell_mise_upgrade(
+            lock_output=RECOVERED_FALLBACK_WARNING
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(state["caught"])
+        self.assertEqual(state["lock"], "new-lock")
+        self.assertIn("回復済み", result.stdout + result.stderr)
+        self.assertTrue(
+            any(item.startswith("chezmoi re-add") for item in state["history"])
+        )
+        self.assertIn("git add -A", state["history"])
+
+    def test_powershell_mise_lock_restores_on_blocking_warning(self) -> None:
+        result, state = self._run_powershell_mise_upgrade(
+            lock_output="mise WARN failed to verify tool metadata"
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(state["caught"])
+        self.assertEqual(state["lock"], "original-lock")
+        self.assertEqual(
+            state["history"],
+            [
+                "gh auth token",
+                "mise upgrade",
+                f"mise lock --global --platform {MISE_LOCK_PLATFORM_CSV}",
+            ],
+        )
+        self.assertTrue(state["log_exists"])
 
     def test_powershell_mise_upgrade_restores_on_upgrade_failure(self) -> None:
         result, state = self._run_powershell_mise_upgrade(upgrade_exit=23)
@@ -463,6 +541,11 @@ $result = @{{
             ],
         )
         self.assertTrue(state["log_exists"])
+        self.assertIn(
+            "lockfile の再生成に失敗しました。実行ログを確認してください。",
+            result.stdout + result.stderr,
+        )
+        self.assertNotIn("GITHUB_TOKEN の有効期限", result.stdout + result.stderr)
 
     def test_mise_lock_platform_contract_stays_aligned(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")

@@ -89,6 +89,28 @@ def parse_tool_args(raw: Any) -> dict[str, Any]:
     return raw
 
 
+def extract_apply_patch_paths(raw: Any) -> list[str]:
+    """Extract target paths from an apply_patch freeform argument."""
+    if not isinstance(raw, str):
+        raise TypeError("apply_patch toolArgs must be freeform text")
+
+    prefixes = (
+        "*** Add File: ",
+        "*** Delete File: ",
+        "*** Update File: ",
+        "*** Move to: ",
+    )
+    paths: list[str] = []
+    for line in raw.splitlines():
+        for prefix in prefixes:
+            if line.startswith(prefix):
+                target = line.removeprefix(prefix).strip()
+                if target:
+                    paths.append(target)
+                break
+    return paths
+
+
 # ---------------------------------------------------------------------------
 # Config file loading
 # ---------------------------------------------------------------------------
@@ -620,7 +642,11 @@ def build_context() -> CheckContext:
         deny("Failed to parse input - fail-safe deny")
 
     tool_name: str = input_data.get("toolName", "")
-    tool_args = parse_tool_args(input_data.get("toolArgs", {}))
+    raw_tool_args = input_data.get("toolArgs", {})
+    if tool_name == "apply_patch":
+        tool_args = {"paths": extract_apply_patch_paths(raw_tool_args)}
+    else:
+        tool_args = parse_tool_args(raw_tool_args)
     command: str = tool_args.get("command", "")
 
     script_dir = Path(__file__).resolve().parent

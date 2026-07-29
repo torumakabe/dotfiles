@@ -2,7 +2,7 @@ import json
 import pathlib
 import unittest
 
-from tests._helpers import load_script
+from tests._helpers import load_script, run_hook
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -28,6 +28,69 @@ def make_ctx(
         ask_patterns=ask_patterns or [],
     )
 
+
+class CopilotGuardApplyPatchTests(unittest.TestCase):
+    def test_extracts_all_apply_patch_target_paths(self) -> None:
+        patch = """*** Begin Patch
+*** Add File: docs/new.md
+*** Update File: src/app.py
+*** Move to: src/main.py
+*** Delete File: obsolete.txt
+*** End Patch
+"""
+
+        self.assertEqual(
+            copilot_guard.extract_apply_patch_paths(patch),
+            ["docs/new.md", "src/app.py", "src/main.py", "obsolete.txt"],
+        )
+
+    def test_allows_unprotected_apply_patch_target(self) -> None:
+        result = run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": "apply_patch",
+                "toolArgs": "*** Begin Patch\n*** Update File: docs/readme.md\n*** End Patch\n",
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_denies_blocked_apply_patch_target(self) -> None:
+        result = run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": "apply_patch",
+                "toolArgs": (
+                    "*** Begin Patch\n"
+                    "*** Update File: C:\\Users\\me\\.azure\\accessTokens.json\n"
+                    "*** End Patch\n"
+                ),
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decision = json.loads(result.stdout)
+        self.assertEqual(decision["permissionDecision"], "deny")
+        self.assertTrue(decision["permissionDecisionReason"].startswith("Blocked pattern:"))
+
+    def test_asks_for_protected_hook_apply_patch_target(self) -> None:
+        result = run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": "apply_patch",
+                "toolArgs": (
+                    "*** Begin Patch\n"
+                    "*** Update File: C:\\Users\\me\\.copilot\\hooks\\hooks.json\n"
+                    "*** End Patch\n"
+                ),
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decision = json.loads(result.stdout)
+        self.assertEqual(decision["permissionDecision"], "ask")
+        self.assertIn(".copilot/hooks", decision["permissionDecisionReason"])
 
 class CopilotGuardPathMatchingTests(unittest.TestCase):
     def test_does_not_match_by_substring(self) -> None:
