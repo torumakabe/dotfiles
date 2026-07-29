@@ -139,6 +139,6 @@ chezmoi は `run_once_before_*` → 通常ファイル適用 → `run_once_after
 | 3 | `after_05-setup-mise-shims-path.ps1` | Windows: mise shims を PATH 追加 |
 | 4 | `after_10-setup-shell.sh` | shell 設定 |
 | 5 | `after_20-mise-install.sh` | `config.toml` に従ってツール導入 |
-| 6 | `after_30-install-tools.sh` | 追加ツール導入 |
+| 6 | `after_30-install-tools.ps1` (Windows) / `after_30-install-tools.sh` (POSIX) | 追加ツール導入 |
 
 変更時は、mise 設定配置前に `mise install` しないこと、Codespaces / Dev Container の分岐を壊さないことを確認する。

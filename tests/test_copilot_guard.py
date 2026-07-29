@@ -1,25 +1,15 @@
-import importlib.util
 import json
 import pathlib
 import unittest
+
+from tests._helpers import load_script
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py"
 
 
-def load_module():
-    spec = importlib.util.spec_from_file_location("copilot_guard", SCRIPT_PATH)
-    if spec is None:
-        raise ImportError(f"Cannot load copilot_guard: no module spec found for {SCRIPT_PATH}")
-    if spec.loader is None:
-        raise ImportError(f"Cannot load copilot_guard: no loader available for spec from {SCRIPT_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-copilot_guard = load_module()
+copilot_guard = load_script("copilot_guard", SCRIPT_PATH)
 
 
 # Helper to build a CheckContext for testing.

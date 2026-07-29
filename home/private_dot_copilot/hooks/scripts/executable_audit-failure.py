@@ -23,38 +23,45 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Maximum audit log file size before rotation (default: 50 MB)
 MAX_LOG_BYTES = int(os.environ.get("COPILOT_AUDIT_MAX_BYTES", 50 * 1024 * 1024))
 
+# Patterns to redact from logged values
 _REDACT_PATTERNS = re.compile(
     r"(?i)"
     r"(?:"
+    # Auth headers: "Authorization: Bearer xxx" or "Authorization: Basic xxx"
     r"authorization[=:\s]+\S+(?:\s+\S+){0,2}"
+    # Key-value: "token=xxx", "secret: xxx", "password=xxx"
     r"|(?:bearer|token|basic|key|secret|password)[=:\s]+\S+"
-    r"|ghp_\S+"
-    r"|github_pat_\S+"
-    r"|ghu_\S+|ghs_\S+"
-    r"|xox[bprs]-\S+"
-    r"|sk-[A-Za-z0-9]{20,}"
-    r"|DefaultEndpointsProtocol=\S+"
-    r"|AccountKey=[A-Za-z0-9+/=]+"
-    r"|SharedAccessSignature=\S+"
+    r"|ghp_\S+"           # GitHub PAT
+    r"|github_pat_\S+"    # GitHub fine-grained PAT
+    r"|ghu_\S+|ghs_\S+"   # GitHub App tokens
+    r"|xox[bprs]-\S+"     # Slack tokens
+    r"|sk-[A-Za-z0-9]{20,}"  # OpenAI API keys
+    r"|DefaultEndpointsProtocol=\S+"  # Azure connection strings
+    r"|AccountKey=[A-Za-z0-9+/=]+"    # Azure storage keys
+    r"|SharedAccessSignature=\S+"     # Azure SAS
     r")"
 )
 
 
 def redact(value: str) -> str:
+    """Replace sensitive patterns with [REDACTED]."""
     return _REDACT_PATTERNS.sub("[REDACTED]", value)
 
 
 def rotate_if_needed(log_file: Path) -> None:
+    """Rotate the log file if it exceeds the size threshold."""
     try:
         if log_file.exists() and log_file.stat().st_size > MAX_LOG_BYTES:
             rotated = log_file.with_suffix(".jsonl.1")
+            # Simple single-file rotation: overwrite previous rotated file
             if rotated.exists():
                 rotated.unlink()
             log_file.rename(rotated)
     except Exception:
-        pass
+        pass  # Best-effort; never block agent operation
 
 
 def _parse_tool_args(raw: Any) -> dict:

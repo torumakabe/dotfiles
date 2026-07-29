@@ -6,9 +6,7 @@ on:
       - '.github/copilot-instructions.md'
       - '.github/agents/**'
       - 'tests/**'
-      - 'docs/adr/**'
-      - 'docs/architecture.md'
-      - 'docs/operations.md'
+      - 'docs/**'
       - '.github/workflows/test-copilot-hooks.yml'
   push:
     branches: [main]
@@ -17,9 +15,7 @@ on:
       - '.github/copilot-instructions.md'
       - '.github/agents/**'
       - 'tests/**'
-      - 'docs/adr/**'
-      - 'docs/architecture.md'
-      - 'docs/operations.md'
+      - 'docs/**'
       - '.github/workflows/test-copilot-hooks.yml'
   schedule:
     # Weekly Monday 00:00 UTC — detect fail-open regressions

@@ -20,6 +20,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 # Maximum audit log file size before rotation (default: 50 MB)
 MAX_LOG_BYTES = int(os.environ.get("COPILOT_AUDIT_MAX_BYTES", 50 * 1024 * 1024))
@@ -62,30 +63,45 @@ def rotate_if_needed(log_file: Path) -> None:
         pass  # Best-effort; never block agent operation
 
 
+def _parse_tool_args(raw: Any) -> dict:
+    """Normalize toolArgs to a dict (may arrive as JSON string or dict)."""
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except (json.JSONDecodeError, ValueError):
+            return {}
+    return raw if isinstance(raw, dict) else {}
+
+
 def main() -> None:
     log_dir = Path(os.environ.get("COPILOT_AUDIT_DIR", Path.home() / ".copilot"))
     log_file = log_dir / "audit.jsonl"
 
     try:
-        raw = sys.stdin.read().strip()
+        if hasattr(sys.stdin, "reconfigure"):
+            sys.stdin.reconfigure(encoding="utf-8")
+        raw = sys.stdin.read().strip().lstrip("\ufeff\ufffe")
         if not raw:
             return
         data = json.loads(raw)
     except Exception:
         return  # postToolUse output is ignored; silently skip on bad input
 
-    tool_name: str = data.get("toolName", "unknown")
-    tool_args = data.get("toolArgs", {})
+    if not isinstance(data, dict):
+        return
+
+    tool_name: str = str(data.get("toolName", "unknown"))
+    tool_args = _parse_tool_args(data.get("toolArgs", {}))
 
     # Extract a brief summary of the tool call (avoid logging full file contents)
     summary: dict[str, str] = {"tool": tool_name}
-    if isinstance(tool_args, dict):
-        for key in ("command", "path", "file", "url", "pattern", "query"):
-            val = tool_args.get(key)
-            if val and isinstance(val, str):
-                # Truncate long values to avoid bloating the log
-                truncated = val[:500] if len(val) > 500 else val
-                summary[key] = redact(truncated)
+    for key in ("command", "path", "file", "url", "pattern", "query"):
+        val = tool_args.get(key)
+        if val and isinstance(val, str):
+            # Truncate long values to avoid bloating the log
+            truncated = val[:500] if len(val) > 500 else val
+            summary[key] = redact(truncated)
 
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),

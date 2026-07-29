@@ -79,15 +79,14 @@ def read_input() -> dict:
 def parse_tool_args(raw: Any) -> dict[str, Any]:
     """Normalize toolArgs from the hook input.
 
-    toolArgs may arrive as a JSON string, a dict, or something else
-    entirely.  This function always returns a dict.
+    toolArgs may arrive as a JSON object or as a string containing one.
+    Invalid JSON and non-object values raise so main() emits a fail-safe deny.
     """
     if isinstance(raw, str):
-        try:
-            return json.loads(raw)
-        except (json.JSONDecodeError, ValueError):
-            return {}
-    return raw if isinstance(raw, dict) else {}
+        raw = json.loads(raw)
+    if not isinstance(raw, dict):
+        raise TypeError("toolArgs must be a JSON object")
+    return raw
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,5 @@
+{{ if ne .chezmoi.os "windows" -}}
 # Oh My Zsh
-#
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
 
 # Path to your oh-my-zsh installation.
 export ZSH=$HOME/.oh-my-zsh
@@ -11,61 +9,6 @@ export ZSH=$HOME/.oh-my-zsh
 # to know which specific one was loaded, run: echo $RANDOM_THEME
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
 ZSH_THEME="robbyrussell"
-
-# Set list of themes to pick from when loading at random
-# Setting this variable when ZSH_THEME=random will cause zsh to load
-# a theme from this variable instead of looking in $ZSH/themes/
-# If set to an empty array, this variable will have no effect.
-# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
-
-# Uncomment the following line to use case-sensitive completion.
-# CASE_SENSITIVE="true"
-
-# Uncomment the following line to use hyphen-insensitive completion.
-# Case-sensitive completion must be off. _ and - will be interchangeable.
-# HYPHEN_INSENSITIVE="true"
-
-# Uncomment the following line to disable bi-weekly auto-update checks.
-# DISABLE_AUTO_UPDATE="true"
-
-# Uncomment the following line to automatically update without prompting.
-# DISABLE_UPDATE_PROMPT="true"
-
-# Uncomment the following line to change how often to auto-update (in days).
-# export UPDATE_ZSH_DAYS=13
-
-# Uncomment the following line if pasting URLs and other text is messed up.
-# DISABLE_MAGIC_FUNCTIONS="true"
-
-# Uncomment the following line to disable colors in ls.
-# DISABLE_LS_COLORS="true"
-
-# Uncomment the following line to disable auto-setting terminal title.
-# DISABLE_AUTO_TITLE="true"
-
-# Uncomment the following line to enable command auto-correction.
-# ENABLE_CORRECTION="true"
-
-# Uncomment the following line to display red dots whilst waiting for completion.
-# Caution: this setting can cause issues with multiline prompts (zsh 5.7.1 and newer seem to work)
-# See https://github.com/ohmyzsh/ohmyzsh/issues/5765
-# COMPLETION_WAITING_DOTS="true"
-
-# Uncomment the following line if you want to disable marking untracked files
-# under VCS as dirty. This makes repository status check for large repositories
-# much, much faster.
-# DISABLE_UNTRACKED_FILES_DIRTY="true"
-
-# Uncomment the following line if you want to change the command execution time
-# stamp shown in the history command output.
-# You can set one of the optional three formats:
-# "mm/dd/yyyy"|"dd.mm.yyyy"|"yyyy-mm-dd"
-# or set a custom format using the strftime function format specifications,
-# see 'man strftime' for details.
-# HIST_STAMPS="mm/dd/yyyy"
-
-# Would you like to use another custom folder than $ZSH/custom?
-# ZSH_CUSTOM=/path/to/new-custom-folder
 
 # Which plugins would you like to load?
 # Standard plugins can be found in $ZSH/plugins/
@@ -80,9 +23,6 @@ plugins=(
 source $ZSH/oh-my-zsh.sh
 
 # User configuration
-
-DISABLE_AUTO_UPDATE=true
-DISABLE_UPDATE_PROMPT=true
 
 setopt autocd
 setopt autopushd
@@ -113,14 +53,10 @@ autoload -Uz +X compinit && compinit -ui
 autoload -Uz +X bashcompinit && bashcompinit
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
-
-
 
 case $(uname) in
   Darwin)
     command -v az >/dev/null && source "$(brew --prefix)/etc/bash_completion.d/az"
-    SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
   ;;
   *)
     command -v az >/dev/null && source /etc/bash_completion.d/azure-cli
@@ -165,7 +101,9 @@ _cached_source gh gh "gh completion -s zsh"
 _cached_source azd azd "azd completion zsh"
 _cached_source trivy trivy "trivy completion zsh"
 
-if [ -z "$SSH_AUTH_SOCK" ] ; then
+# macOS は ~/.ssh/config の IdentityAgent が 1Password の agent を指すため、
+# シェルからは ssh-agent を起動しない。
+if [[ "$OSTYPE" != darwin* ]] && [ -z "$SSH_AUTH_SOCK" ] ; then
   if agent_output=$(ssh-agent -s 2>/dev/null); then
     while IFS= read -r line; do
       assignment=${line%%;*}
@@ -298,12 +236,22 @@ _mise_restore_lockfile() {
   local lockfile="$1"
   local lock_backup="$2"
   local had_lockfile="$3"
+  local restore_status
 
   if (( had_lockfile )); then
     command mv -f "$lock_backup" "$lockfile"
+    restore_status=$?
   else
     rm -f "$lockfile"
+    restore_status=$?
   fi
+
+  if (( restore_status == 0 )); then
+    echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
+  else
+    echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
+  fi
+  return "$restore_status"
 }
 
 mise-upgrade() {
@@ -350,21 +298,13 @@ mise-upgrade() {
   echo "==> mise upgrade: ツールを最新版に更新..."
   NO_COLOR=1 GITHUB_TOKEN="$token" mise upgrade 2>&1 | tee "$mise_log"
   if (( pipestatus[1] != 0 )); then
-    if _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"; then
-      echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
-    else
-      echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
-    fi
+    _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
     echo "❌ mise upgrade に失敗しました" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
   fi
   if ! _mise_check_warnings "$mise_log" "mise upgrade"; then
-    if _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"; then
-      echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
-    else
-      echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
-    fi
+    _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
     echo "lockfile の再生成、commit、push は実行していません" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
@@ -375,21 +315,13 @@ mise-upgrade() {
   : > "$mise_log"
   NO_COLOR=1 GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 2>&1 | tee "$mise_log"
   if (( pipestatus[1] != 0 )); then
-    if _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"; then
-      echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
-    else
-      echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
-    fi
+    _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
     echo "❌ lockfile の再生成に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
   fi
   if ! _mise_check_warnings "$mise_log" "mise lock"; then
-    if _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile"; then
-      echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
-    else
-      echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
-    fi
+    _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
     echo "chezmoi re-add、commit、push は実行していません" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
@@ -440,4 +372,5 @@ mise-upgrade() {
 if command -v copilot >/dev/null 2>&1; then
   launchctl setenv COPILOT_CLI_PATH "$(command -v copilot)"
 fi
+{{ end -}}
 {{ end -}}
