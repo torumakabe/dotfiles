@@ -25,6 +25,11 @@
 - 利用者向け機能は Windows/PowerShell、macOS/zsh、Linux/zsh、WSL/zsh で等価にする
 - 公開関数、alias、補完、ツール導入を追加・変更するときは、全対象の実装と `tests/test_platform_parity.py` の共有テストを更新する。実装しない環境がある場合は、理由と適用範囲を同テストの契約と関連文書へ記録する
 
+## chezmoi 操作のトラップ
+
+- `private_` は属性でありターゲット名から除かれる。ソースの `private_mise.lock` はデプロイ先で `mise.lock` になる。文書ではどちらを指すかで表記を使い分ける
+- `chezmoi execute-template --init` の `--stdinisatty` は既定 true で、実際の stdin を見ない。非対話経路を検査するテストでは明示的に渡す。詳細は `tests/test_chezmoi_config_template.py` の `ConfigTemplateBehaviourTests` docstring
+
 ## mise 操作のトラップ
 
 - `mise lock` はデフォルトでプロジェクトレベルの設定のみ対象にするため、グローバル設定には **`--global`** が必須。また `--platform` を省略すると mise の既定集合（musl を含む 7 種）が対象になるため、**`--platform` も常に指定する**

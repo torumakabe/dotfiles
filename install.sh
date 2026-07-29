@@ -119,4 +119,10 @@ else
   chezmoi=chezmoi
 fi
 
+if [ "${CHEZMOI_INSTALL_ONLY:-}" = "1" ]; then
+  # dotfiles を適用せずにバイナリだけを導入する。CI がこの経路で
+  # テスト用の chezmoi を入れる。
+  exit 0
+fi
+
 exec "$chezmoi" init --apply torumakabe

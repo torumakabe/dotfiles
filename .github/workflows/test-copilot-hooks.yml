@@ -8,6 +8,7 @@ on:
       - 'tests/**'
       - 'docs/**'
       - '.github/workflows/test-copilot-hooks.yml'
+      - 'install.sh'
   push:
     branches: [main]
     paths:
@@ -17,6 +18,7 @@ on:
       - 'tests/**'
       - 'docs/**'
       - '.github/workflows/test-copilot-hooks.yml'
+      - 'install.sh'
   schedule:
     # Weekly Monday 00:00 UTC — detect fail-open regressions
     - cron: '0 0 * * 1'
@@ -40,6 +42,22 @@ jobs:
           sudo apt-get install --yes zsh
           command -v zsh
           command -v pwsh
+
+      # chezmoi renders the config template in tests/test_chezmoi_config_template.py.
+      # install.sh は版と checksum の正本なので、それを再利用すれば CI は実際の
+      # bootstrap と同じバイナリで走る。runner に chezmoi が無い間は download と
+      # checksum の経路も一緒に検査される。install.sh は PATH 上の chezmoi を
+      # 優先するため、別版が現れたら次の version 検査が知らせる。
+      - name: Install chezmoi
+        run: |
+          CHEZMOI_INSTALL_ONLY=1 ./install.sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Verify the tests get the pinned chezmoi
+        run: |
+          expected=$(sed -n 's/^CHEZMOI_VERSION="\(.*\)"$/\1/p' install.sh)
+          [ -n "$expected" ] || { echo "install.sh からピン版を取得できない"; exit 1; }
+          chezmoi --version | grep -F "v${expected}"
 
       # ── Unit tests (auto-discover all test_*.py) ──────────────────────
       - name: Run all unit tests
@@ -82,28 +100,22 @@ jobs:
             | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
           echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
 
-      # ── Smoke tests — uv-enforcer ────────────────────────────────────
+      # allow 側の smoke は tests/test_uv_enforcer.py と
+      # tests/test_node_global_enforcer.py の TestMainIntegration が同じ payload で
+      # 検査するため置かない。deny 側を 1 本ずつ残すのは、tests/_helpers.py の
+      # run_hook が sys.executable で起動するのに対し、本番の hooks.json は
+      # uv run で起動するためである。PEP 723 メタデータの破損はこの経路でしか
+      # 出ない。上の copilot-guard の smoke を全件残すのは、uv run 起動と、
+      # スクリプトが自身の隣から読む blocked-files.txt / ask-files.txt の
+      # 代表パターンを同時に検査する sentinel だからである。
       - name: Smoke — uv-enforcer denies bare python
         run: |
           RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' \
             | uv run home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py)
           echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
 
-      - name: Smoke — uv-enforcer passes through uv run (no output)
-        run: |
-          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"uv run python script.py"}}' \
-            | uv run home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py)
-          [ -z "$RESULT" ] || { echo "Expected empty output, got: $RESULT"; exit 1; }
-
-      # ── Smoke tests — node-global-enforcer ────────────────────────────
       - name: Smoke — node-global-enforcer denies npm install -g
         run: |
           RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"npm install -g typescript"}}' \
             | uv run home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py)
           echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
-
-      - name: Smoke — node-global-enforcer passes through local npm install (no output)
-        run: |
-          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"npm install typescript"}}' \
-            | uv run home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py)
-          [ -z "$RESULT" ] || { echo "Expected empty output, got: $RESULT"; exit 1; }

@@ -489,6 +489,17 @@ $result = @{{
             with self.subTest(prerequisite=prerequisite):
                 self.assertLess(self.workflow.index(prerequisite), unittest_position)
 
+    def test_ci_installs_chezmoi_before_unittest(self) -> None:
+        """Without chezmoi the tests that render templates skip instead of failing."""
+        install = "CHEZMOI_INSTALL_ONLY=1 ./install.sh"
+        check = "chezmoi --version"
+        unittest_discover = "uv run -m unittest discover -s tests -v"
+        unittest_position = self.workflow.index(unittest_discover)
+        for prerequisite in (install, check):
+            with self.subTest(prerequisite=prerequisite):
+                self.assertIn(prerequisite, self.workflow)
+                self.assertLess(self.workflow.index(prerequisite), unittest_position)
+
 
 class WrapperGateParityTests(unittest.TestCase):
     """ADR-012 の wrapper は参照側と配布側で同じ条件を使う必要がある。

@@ -3,7 +3,7 @@
 # mise lockfile 同期フック (Linux/macOS)
 #
 # 背景:
-#   `mise upgrade` 等で `~/.config/mise/private_mise.lock` が更新されても、
+#   `mise upgrade` 等で `~/.config/mise/mise.lock` が更新されても、
 #   ローカルの `mise install` / `mise reshim` は自動で走らない。結果として shim と
 #   install marker が古いまま残り、shell 起動時の hook で `mise WARN missing:` が発生する。
 #

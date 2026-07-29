@@ -81,7 +81,7 @@ stored memories に蓄積された判断のうち、永続的で重要なもの�
 2. 各 ADR について、言及されている構成が以下に実在するか確認する:
    - `home/`（chezmoi テンプレート）
    - `home/dot_config/mise/`（mise 設定）
-   - `hooks/` および `home/private_dot_copilot/hooks/`（Copilot フック）
+   - `home/private_dot_copilot/hooks/`（Copilot フック）
    - `tests/`
    - `install.sh` / `reference/`
 3. 決定内容と現在のコードが矛盾していないか検証する
