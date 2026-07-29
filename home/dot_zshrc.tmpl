@@ -200,7 +200,17 @@ _mise_is_allowed_warning() {
 
   local warning="$1"
   local minimum_release_age_pattern='^mise WARN[[:space:]]+newer [^[:space:]]+ release [^[:space:]]+([[:space:]]+\(released [^)]+\))?[[:space:]]+ignored by minimum_release_age \([^)]+\); latest eligible release is [^[:space:]]+$'
-  [[ "$warning" =~ $minimum_release_age_pattern ]]
+  local recovered_fallback_pattern='^mise WARN[[:space:]]+mise-versions[[:space:]]+endpoint=[^[:space:]]+[[:space:]]+repo=[^[:space:]]+[[:space:]]+tag=[^[:space:]]+[[:space:]]+outcome=[^[:space:]]+[[:space:]]+status=[^[:space:]]+[[:space:]]+fallback=true([[:space:]]+error=.*)?$'
+
+  if [[ "$warning" =~ $minimum_release_age_pattern ]]; then
+    print -r -- "minimum_release_age"
+    return 0
+  fi
+  if [[ "$warning" =~ $recovered_fallback_pattern ]]; then
+    print -r -- "recovered_fallback"
+    return 0
+  fi
+  return 1
 }
 
 _mise_check_warnings() {
@@ -208,15 +218,19 @@ _mise_check_warnings() {
 
   local log_file="$1"
   local phase="$2"
-  local line warning
+  local line warning warning_type
   local blocking_warning=0
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     warning=$(_mise_normalize_log_line "$line")
     [[ "$warning" == *"mise WARN"* ]] || continue
 
-    if _mise_is_allowed_warning "$warning"; then
-      echo "⚠️ ${phase}: リリース待機期間による保留を検出しました。処理を継続します:" >&2
+    if warning_type=$(_mise_is_allowed_warning "$warning"); then
+      if [[ "$warning_type" == "minimum_release_age" ]]; then
+        echo "⚠️ ${phase}: リリース待機期間による保留を検出しました。処理を継続します:" >&2
+      else
+        echo "⚠️ ${phase}: 回復済みのメタデータ取得フォールバックを検出しました。処理を継続します:" >&2
+      fi
       echo "  $warning" >&2
     else
       if (( ! blocking_warning )); then
@@ -316,7 +330,7 @@ mise-upgrade() {
   NO_COLOR=1 GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 2>&1 | tee "$mise_log"
   if (( pipestatus[1] != 0 )); then
     _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
-    echo "❌ lockfile の再生成に失敗しました。GITHUB_TOKEN の有効期限やネットワークを確認してください" >&2
+    echo "❌ lockfile の再生成に失敗しました。実行ログを確認してください" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
   fi

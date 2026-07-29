@@ -52,9 +52,9 @@ zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、処理を�
 1. `gh auth token` で一時トークンを取得
 2. 既存 lockfile を退避
 3. `mise upgrade`
-4. `minimum_release_age` の正規形警告以外の `mise WARN` が出力された場合は、既存 lockfile を復元して停止
+4. `minimum_release_age` の正規形警告と、`mise-versions ... fallback=true` の回復済み警告以外の `mise WARN` が出力された場合は、既存 lockfile を復元して停止
 5. 既存 lockfile を削除し、`mise lock --global --platform ...` で再生成
-6. `mise lock` が失敗した場合、または正規形以外の `mise WARN` が出力された場合は、既存 lockfile を復元して停止
+6. `mise lock` が失敗した場合、または許可対象以外の `mise WARN` が出力された場合は、既存 lockfile を復元して停止
 7. `chezmoi re-add`
 8. git commit + push
 
@@ -83,8 +83,9 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 - `mise lock` は **`--global` が必須**（省略するとプロジェクト設定のみ対象になる）
 - lockfile 再生成時は **`--platform` を常に指定**する。`lockfile_platforms` があっても省略しない。lockfile を削除してから再生成する破壊的操作であり、設定が読まれない状況（古い mise、設定ファイルの欠落）でも意図した集合になることを保証するため
 - `mise upgrade` 後は lockfile を一度削除してから再生成する（既存エントリが残り新版が反映されないため）
-- 両シェルとも、`minimum_release_age` の正規形に一致するリリース保留警告だけを許可し、警告内容を表示して処理を継続する
-- 両シェルとも、正規形以外の `mise WARN` が出力された場合は、終了コードが `0` でも lockfile を復元し、commit と push を行わない
+- 両シェルとも、`minimum_release_age` の正規形に一致するリリース保留警告と、`mise-versions` が `fallback=true` を明示した回復済み警告だけを許可し、警告内容と継続理由を表示する
+- `mise-versions ... fallback=true` は、GitHub Releases などの取得失敗後に代替経路で処理を継続できたことを示す。一時的な `502 Bad Gateway` でも発生するため、この警告だけから `GITHUB_TOKEN` の期限切れとは判断しない
+- 両シェルとも、許可対象以外の `mise WARN` が出力された場合は、終了コードが `0` でも lockfile を復元し、commit と push を行わない。`fallback=false`、`fallback` 欠落、形式不明の警告は停止対象とする
 - 両シェルとも、`mise upgrade` または `mise lock` の失敗時は、更新処理を始める前の lockfile を復元する
 - 処理を停止した関数は、原因となった警告、lockfile の復元結果、実行ログの保存先を標準エラー出力へ表示する。運用者は表示されたログを確認して原因を特定する
 - PowerShell では `$env:GITHUB_TOKEN = (gh auth token); <cmd>; $env:GITHUB_TOKEN = $null` でトークンを渡し、`--platform` の値はクォートする

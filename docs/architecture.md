@@ -41,8 +41,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 3. 機微な環境変数の読み取り拒否 (`printenv`, `$TOKEN`, `os.environ` 等)。通常使う変数は許可リストで除外
 4. `git commit` の明示承認
 
-パス比較前に `\` を `/` へ正規化する。パターンファイルは `/` 前提で書く。
-
+パス比較前に `\` を `/` へ正規化する。パターンファイルは `/` 前提で書く。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じ秘匿ファイル拒否と確認付きアクセスの判定へ渡す。
 各 command hook は mise shim 経由の `uv run` で起動する。起動時に `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象をフックが必要とする `uv` だけに限定する。これにより `uv` の未導入版は mise が自動導入できる一方、dotnet など無関係な missing ツールの導入失敗はフックの終了状態へ影響しない。
 
 shell command の外部ネットワーク通信は、`~/.copilot/settings.json` の `sandbox.userPolicy.network` で設定する。初期状態では sandbox を有効化するだけにとどめ、外向き通信の遮断や host rule は設定しない。
