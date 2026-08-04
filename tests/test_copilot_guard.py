@@ -1,5 +1,6 @@
 import json
 import pathlib
+import tempfile
 import unittest
 
 from tests._helpers import load_script, run_hook
@@ -17,6 +18,7 @@ def make_ctx(
     tool_name: str = "",
     tool_args: dict | None = None,
     command: str = "",
+    allowed_patterns: list[str] | None = None,
     blocked_patterns: list[str] | None = None,
     ask_patterns: list[str] | None = None,
 ) -> "copilot_guard.CheckContext":
@@ -24,6 +26,7 @@ def make_ctx(
         tool_name=tool_name,
         tool_args=tool_args or {},
         command=command,
+        allowed_patterns=allowed_patterns or [],
         blocked_patterns=blocked_patterns or [],
         ask_patterns=ask_patterns or [],
     )
@@ -73,6 +76,103 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
         decision = json.loads(result.stdout)
         self.assertEqual(decision["permissionDecision"], "deny")
         self.assertTrue(decision["permissionDecisionReason"].startswith("Blocked pattern:"))
+
+    def test_allows_azure_deploy_plan(self) -> None:
+        result = run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": "apply_patch",
+                "toolArgs": (
+                    "*** Begin Patch\n"
+                    "*** Update File: .azure/deployment-plan.md\n"
+                    "*** End Patch\n"
+                ),
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_allows_windows_separators_for_azure_deploy_plan(self) -> None:
+        result = run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": "apply_patch",
+                "toolArgs": (
+                    "*** Begin Patch\n"
+                    "*** Update File: .azure\\deployment-plan.md\n"
+                    "*** End Patch\n"
+                ),
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_denies_other_project_azure_files(self) -> None:
+        for path in (
+            ".azure/config.json",
+            ".azure/dev/.env",
+            ".azure/dev/notes.txt",
+        ):
+            with self.subTest(path=path):
+                result = run_hook(
+                    SCRIPT_PATH,
+                    {
+                        "toolName": "apply_patch",
+                        "toolArgs": (
+                            "*** Begin Patch\n"
+                            f"*** Update File: {path}\n"
+                            "*** End Patch\n"
+                        ),
+                    },
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_home_azure_deployment_plan(self) -> None:
+        for path in (
+            "/.azure/deployment-plan.md",
+            "/home/me/.azure/deployment-plan.md",
+            r"C:\Users\me\.azure\deployment-plan.md",
+            "file:///.azure/deployment-plan.md",
+        ):
+            with self.subTest(path=path):
+                result = run_hook(
+                    SCRIPT_PATH,
+                    {
+                        "toolName": "apply_patch",
+                        "toolArgs": (
+                            "*** Begin Patch\n"
+                            f"*** Update File: {path}\n"
+                            "*** End Patch\n"
+                        ),
+                    },
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_blocked_target_beside_allowed_azure_deploy_plan(self) -> None:
+        result = run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": "apply_patch",
+                "toolArgs": (
+                    "*** Begin Patch\n"
+                    "*** Update File: .azure/deployment-plan.md\n"
+                    "*** Update File: .azure/config.json\n"
+                    "*** End Patch\n"
+                ),
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decision = json.loads(result.stdout)
+        self.assertEqual(decision["permissionDecision"], "deny")
 
     def test_asks_for_protected_hook_apply_patch_target(self) -> None:
         result = run_hook(
@@ -128,6 +228,23 @@ class CopilotGuardPathMatchingTests(unittest.TestCase):
         )
         self.assertEqual(hit, "**/accessTokens.json")
 
+    def test_allowed_path_rejects_symlinked_azure_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as project_dir, tempfile.TemporaryDirectory() as target_dir:
+            project_root = pathlib.Path(project_dir)
+            azure_link = project_root / ".azure"
+            try:
+                azure_link.symlink_to(target_dir, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+
+            allowed = copilot_guard.matches_allowed_path(
+                ".azure/deployment-plan.md",
+                [".azure/deployment-plan.md"],
+                project_root,
+            )
+
+        self.assertFalse(allowed)
+
 
 class CopilotGuardCommandMatchingTests(unittest.TestCase):
     def test_command_ignores_non_path_substrings(self) -> None:
@@ -150,6 +267,28 @@ class CopilotGuardCommandMatchingTests(unittest.TestCase):
             ["**/accessTokens.json"],
         )
         self.assertEqual(hit, "**/accessTokens.json")
+
+    def test_command_does_not_apply_file_tool_exception(self) -> None:
+        hit = copilot_guard.check_blocked_command(
+            "type .azure/deployment-plan.md",
+            ["**/.azure/**"],
+        )
+        self.assertEqual(hit, "**/.azure/**")
+
+    def test_command_cannot_change_to_home_before_using_exception_path(self) -> None:
+        result = run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": "powershell",
+                "toolArgs": {
+                    "command": "Set-Location ~; Get-Content .azure/deployment-plan.md",
+                },
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decision = json.loads(result.stdout)
+        self.assertEqual(decision["permissionDecision"], "deny")
 
 
 class CopilotGuardEnvBlockingTests(unittest.TestCase):

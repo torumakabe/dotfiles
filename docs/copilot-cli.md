@@ -49,13 +49,13 @@ GitHub Docs の Agent Finder 手順に従い、`home/private_dot_copilot/skills/
 
 `preToolUse` で以下を検査する。設計は [`architecture.md`](architecture.md#copilot-guard-の設計) を参照。
 
-- `copilot-guard.py`: 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / 機微な環境変数の読み取り / `git commit` の明示承認
+- `copilot-guard.py`: ファイルツールのプロジェクト相対パス例外 (`allowed-files.txt`) / 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / 機微な環境変数の読み取り / `git commit` の明示承認
 - `uv-enforcer.py`: `python` / `pip` の直接実行を抑止
 - `node-global-enforcer.py`: `npm` / `yarn` / `pnpm` のグローバルインストールを抑止
 
 パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化する。判定の優先度は `deny > ask > no opinion（空出力）` とし、`allow` は出力しない（[ADR-006](adr/006-pretooluse-hook-no-allow.md)）。
 
-`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。
+`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。`allowed-files.txt` の例外は、シェルが `cd` で基準ディレクトリを変更できるため、シェルコマンドには適用しない。
 
 動作確認:
 

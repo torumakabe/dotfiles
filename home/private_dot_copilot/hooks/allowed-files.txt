@@ -1,0 +1,8 @@
+# Project-relative file-tool exceptions:
+# - Write patterns with `/` separators even for Windows paths.
+# - Do not add `**/`; exceptions must not match home-directory credential stores.
+# - Shell commands do not use these exceptions because `cd` can change their base path.
+# - Symlinks and junctions are rejected by the guard.
+
+# microsoft/azure-skills: skills/azure-deploy
+.azure/deployment-plan.md
