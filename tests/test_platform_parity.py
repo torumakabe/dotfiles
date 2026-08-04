@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 
@@ -15,6 +16,7 @@ ZSHRC_PATH = REPO_ROOT / "home/dot_zshrc.tmpl"
 POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 INSTALL_PS1_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.ps1.tmpl"
+MISE_CONFIG_PATH = REPO_ROOT / "home/dot_config/mise/config.toml.tmpl"
 WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-copilot-hooks.yml"
 POSIX_RC_TEMPLATE_PATHS = tuple(
     REPO_ROOT / "home" / name
@@ -85,6 +87,7 @@ PLATFORM_CONTRACT = {
     ),
     "tool:fieldalignment": _implemented_everywhere(),
     "tool:fast": _implemented_everywhere(),
+    "tool:lefthook": _implemented_everywhere(),
     "tool:ty": _implemented_everywhere(),
 }
 
@@ -369,6 +372,34 @@ class PlatformParityTests(unittest.TestCase):
         for feature in TOOL_ANCHORS:
             with self.subTest(feature=feature):
                 self.assertIn(feature, PLATFORM_CONTRACT)
+
+    @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
+    def test_lefthook_is_managed_by_mise_on_every_platform(self) -> None:
+        platform_data = {
+            "windows-powershell": {"os": "windows", "arch": "amd64"},
+            "macos-zsh": {"os": "darwin", "arch": "arm64"},
+            "linux-zsh": {"os": "linux", "arch": "amd64"},
+            "wsl-zsh": {"os": "linux", "arch": "amd64"},
+        }
+
+        for platform, chezmoi_data in platform_data.items():
+            with self.subTest(platform=platform):
+                result = subprocess.run(
+                    [
+                        "chezmoi",
+                        "execute-template",
+                        "--override-data",
+                        json.dumps({"chezmoi": chezmoi_data}),
+                        "--file",
+                        str(MISE_CONFIG_PATH),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    encoding="utf-8",
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                config = tomllib.loads(result.stdout)
+                self.assertEqual(config["tools"]["lefthook"], "latest")
 
     def test_powershell_completion_cache_executes_generated_sources(self) -> None:
         pwsh = shutil.which("pwsh")
