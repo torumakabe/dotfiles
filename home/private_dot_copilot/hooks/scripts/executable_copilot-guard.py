@@ -3,8 +3,9 @@
 # ///
 """Copilot Guard — cross-platform preToolUse hook (bash / powershell).
 
-Reads a JSON tool-call from stdin, checks against blocked-files.txt and
-ask-files.txt, and emits a JSON permission decision on stdout.
+Reads a JSON tool-call from stdin, checks against allowed-files.txt,
+blocked-files.txt, and ask-files.txt, and emits a JSON permission decision
+on stdout.
 
 Architecture:
     Each security check is implemented as a *checker function* with the
@@ -142,6 +143,7 @@ class CheckContext(NamedTuple):
     tool_name: str
     tool_args: dict[str, Any]
     command: str
+    allowed_patterns: list[str]
     blocked_patterns: list[str]
     ask_patterns: list[str]
 
@@ -246,6 +248,32 @@ def check_blocked_path(target: str, patterns: list[str]) -> str | None:
     return None
 
 
+def matches_allowed_path(
+    target: str,
+    patterns: list[str],
+    project_root: Path | None = None,
+) -> bool:
+    """Return True when a path matches a project-relative exception."""
+    raw_target = target.strip().strip("\"'")
+    if (
+        raw_target.lower().startswith("file://")
+        or raw_target.startswith(("/", "\\"))
+        or re.match(r"^[A-Za-z]:[\\/]", raw_target)
+    ):
+        return False
+    if not any(matches_blocked_pattern(target, pattern) for pattern in patterns):
+        return False
+
+    root = (project_root or Path.cwd()).resolve()
+    relative_path = Path(normalize_path(target))
+    candidate = root
+    for part in relative_path.parts:
+        candidate /= part
+        if candidate.is_symlink() or candidate.is_junction():
+            return False
+    return candidate.resolve(strict=False).is_relative_to(root)
+
+
 PATH_ARG_KEYS: tuple[str, ...] = ("path", "file", "uri", "glob", "paths", "files", "uris", "globs")
 
 
@@ -293,6 +321,11 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
     Blocked patterns are checked first (deny takes priority over ask).
     """
     path_arg_values = extract_path_arg_values(ctx.tool_args)
+    path_arg_values = [
+        value
+        for value in path_arg_values
+        if not matches_allowed_path(value, ctx.allowed_patterns)
+    ]
 
     for prop_value in path_arg_values:
         matched_pattern = check_blocked_path(prop_value, ctx.blocked_patterns)
@@ -651,6 +684,7 @@ def build_context() -> CheckContext:
 
     script_dir = Path(__file__).resolve().parent
     hooks_dir = script_dir.parent
+    allowed_file = hooks_dir / "allowed-files.txt"
     blocked_file = hooks_dir / "blocked-files.txt"
     ask_file = hooks_dir / "ask-files.txt"
 
@@ -661,6 +695,7 @@ def build_context() -> CheckContext:
         tool_name=tool_name,
         tool_args=tool_args,
         command=command,
+        allowed_patterns=load_config_lines(allowed_file),
         blocked_patterns=load_config_lines(blocked_file),
         ask_patterns=load_config_lines(ask_file),
     )

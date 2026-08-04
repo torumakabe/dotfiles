@@ -5,7 +5,7 @@
 # - Patterns are evaluated as path globs, not as plain substrings.
 
 # Azure CLI 認証
-**/.azure/*
+**/.azure/**
 **/accessTokens.json
 **/azureProfile.json
 **/msal_token_cache*
