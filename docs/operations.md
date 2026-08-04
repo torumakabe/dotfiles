@@ -202,7 +202,7 @@ CIはzshとpwshの存在を確認した後、全テストをdiscover形式で実
 
 ## git pre-commit フック
 
-`~/.config/git/templates/hooks/pre-commit` を `gitleaks` の scan スクリプトとして配置し、`init.templateDir` 経由で新規リポジトリ（`git init`/`git clone`）にのみ既定配布する（ADR-018、旧 `core.hooksPath` グローバル方式からの移行）。
+`~/.config/git/templates/hooks/pre-commit` を `gitleaks` の scan スクリプトとして配置し、`init.templateDir` 経由で新規リポジトリ（`git init`/`git clone`）にのみ既定配布する（ADR-018）。
 
 ```bash
 git config --global init.templateDir   # 期待値: ~/.config/git/templates
