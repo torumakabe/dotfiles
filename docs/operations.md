@@ -10,6 +10,7 @@
 | macOS | `brew` + `mise` | OS パッケージ、GUI アプリ、Azure CLI、開発ツール |
 | Codespaces / Dev Container | ベースイメージ / Feature + `mise` | コンテナ基盤側ツール、開発ツール |
 | Windows | `winget` (DSC) + `mise` | GUI/CLI アプリ、Azure CLI、開発ツール |
+| 全環境共通 | `rustup` | Rust toolchain |
 | 全環境共通 | `uv` | Python スクリプト実行 |
 
 ## 定期チェック対象の制約
@@ -107,6 +108,35 @@ chezmoi re-add ~/.config/mise/config.toml ~/.config/mise/mise.lock
 ```
 
 lockfile を削除して再生成したいケース: 新プラットフォーム追加、不要プラットフォーム除去、lockfile 破損。
+
+## Rust toolchain の更新
+
+Rust toolchain は mise ではなく、全 OS で公式 rustup が管理する（[ADR-016](adr/016-rust-external-rustup.md)）。`mise-upgrade` と `Invoke-MiseUpgrade` は Rust toolchain を更新しない。
+
+default toolchain として stable を使う環境では、次のコマンドで stable を更新する。
+
+```bash
+rustup show
+rustup update stable
+rustc --version
+cargo --version
+```
+
+`rustup show` で default toolchain が stable 以外を指しており、stable へ戻す場合は、更新後に次のコマンドを実行する。
+
+```bash
+rustup default stable
+```
+
+プロジェクトに `rust-toolchain.toml` がある場合、rustup はそのファイルの `channel` を default toolchain より優先する。固定バージョンを更新する場合は、対象プロジェクトで `rust-toolchain.toml` を変更し、そのプロジェクトの検証手順を実行する。dotfiles の更新操作では、プロジェクトが指定するバージョンを変更しない。
+
+Linux または WSL で更新後も古い Rust が選択される場合は、次のコマンドで実行ファイルと有効な toolchain を確認する。
+
+```bash
+command -v rustup
+command -v rustc
+rustup show active-toolchain
+```
 
 ## GitHub API と `GITHUB_TOKEN`
 
