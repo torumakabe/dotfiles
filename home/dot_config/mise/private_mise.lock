@@ -524,6 +524,40 @@ checksum = "sha256:8ec7f5e815e526d4622c06df0a7793d8cfb6eb1c74f816b46166097fef8b2
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_windows_amd64.zip"
 url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160980"
 
+[[tools.lefthook]]
+version = "2.1.10"
+backend = "aqua:evilmartians/lefthook"
+
+[tools.lefthook."platforms.linux-arm64"]
+checksum = "sha256:6380a6ad6dd484466fd69bd83f24491d6ec27dc0b84e837be025620f7c4e11e3"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.10/lefthook_2.1.10_Linux_aarch64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/470227512"
+provenance = "github-attestations"
+
+[tools.lefthook."platforms.linux-x64"]
+checksum = "sha256:0b14162a0bb2f0c64ae0759f6102f6e19c4d00981666a8ac73d4f5a6878ada4f"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.10/lefthook_2.1.10_Linux_x86_64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/470227493"
+provenance = "github-attestations"
+
+[tools.lefthook."platforms.macos-arm64"]
+checksum = "sha256:1dd4dc7b4c50efb1f9d9122cd6535c793738d6e59751c228d49f768ec9dbb604"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.10/lefthook_2.1.10_MacOS_arm64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/470227499"
+provenance = "github-attestations"
+
+[tools.lefthook."platforms.windows-arm64"]
+checksum = "sha256:933b3c2aaa016d84cd2b3926ea9b99c3febdc6bb778bfd854640223a3a4c5e50"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.10/lefthook_2.1.10_Windows_arm64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/470227473"
+provenance = "github-attestations"
+
+[tools.lefthook."platforms.windows-x64"]
+checksum = "sha256:beabbce824641ae71229ed11dd8634f47148921cb649d25c90441b737481494a"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.10/lefthook_2.1.10_Windows_x86_64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/470227505"
+provenance = "github-attestations"
+
 [[tools.node]]
 version = "24.18.1"
 backend = "core:node"
