@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "Warning: gh-stack was not installed because GitHub CLI (gh) is not available. The next 'chezmoi apply' will retry." >&2
+  exit 0
+fi
+
+if ! extension_list="$(gh extension list 2>/dev/null)"; then
+  echo "Warning: could not inspect GitHub CLI extensions. The next 'chezmoi apply' will retry gh-stack installation." >&2
+else
+  if ! printf '%s\n' "${extension_list}" | awk '{
+    for (field = 1; field <= NF; field++) {
+      if ($field == "github/gh-stack") {
+        found = 1
+      }
+    }
+  }
+  END { exit !found }'; then
+    if ! gh extension install github/gh-stack; then
+      echo "Warning: failed to install the github/gh-stack extension. The next 'chezmoi apply' will retry." >&2
+    fi
+  fi
+fi
+
+if ! installed_skill="$(
+  gh skill list \
+    --agent github-copilot \
+    --scope user \
+    --json skillName \
+    --jq '.[] | select(.skillName == "gh-stack") | .skillName' \
+    2>/dev/null
+)"; then
+  echo "Warning: could not inspect GitHub Copilot skills. GitHub CLI 2.90 or later is required. The next 'chezmoi apply' will retry." >&2
+  exit 0
+fi
+
+if [ "${installed_skill}" = "gh-stack" ]; then
+  exit 0
+fi
+
+if ! gh skill install github/gh-stack gh-stack --agent github-copilot --scope user; then
+  echo "Warning: failed to install the github/gh-stack skill. The next 'chezmoi apply' will retry." >&2
+fi
+
+exit 0

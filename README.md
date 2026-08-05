@@ -60,9 +60,10 @@ VS Code の **Dotfiles** 設定で次を指定する。
 ```bash
 gh auth login
 GITHUB_TOKEN=$(gh auth token) mise install --yes
+chezmoi apply
 ```
 
-`mise install` は作成時にはスキップする。追加の注意点は [`docs/troubleshooting.md`](docs/troubleshooting.md#dev-container-で-mise-ツールが入っていない) を参照。
+`mise install` は作成時にはスキップする。最後の `chezmoi apply` は、認証やツール導入を待っていたセットアップ処理を再実行する。追加の注意点は [`docs/troubleshooting.md`](docs/troubleshooting.md#dev-container-で-mise-ツールが入っていない) を参照。
 
 このリポジトリ自体を Dev Container で開発する場合は `.devcontainer/devcontainer.json` を使う。構成の意図と起動後の手順は [`docs/operations.md`](docs/operations.md#このリポジトリを-dev-container-で開発する) を参照。
 
@@ -70,25 +71,27 @@ GITHUB_TOKEN=$(gh auth token) mise install --yes
 
 ```powershell
 winget install twpayne.chezmoi
-chezmoi init --apply torumakabe
+chezmoi init torumakabe
 winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"
 ```
 
-PowerShell Profile のローダー設定が未追加なら、初回のみ以下を実行する。
-
-```powershell
-if (!(Test-Path $PROFILE)) { New-Item -Path $PROFILE -Type File -Force }
-$line = '. "$env:USERPROFILE\PowerShell_profile.ps1"'
-if (!(Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
-    Add-Content -Path $PROFILE -Value $line
-}
-```
-
-残りのツールは `mise` で導入する。
+DSC 完了後は PowerShell を開き直し、`gh` と `mise` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は mise lockfile に従って残りのツールも導入する。
 
 ```powershell
 gh auth login
-$env:GITHUB_TOKEN = (gh auth token); mise install; $env:GITHUB_TOKEN = $null
+chezmoi apply
+```
+
+PowerShell Profile のローダー設定が未追加なら、dotfiles の初回適用後に次を実行する。
+
+```powershell
+if (!(Test-Path $PROFILE)) { New-Item -Path $PROFILE -Type File -Force }
+$legacyLine = '. "$env:USERPROFILE\PowerShell_profile.ps1"'
+$line = 'if (Test-Path "$env:USERPROFILE\PowerShell_profile.ps1") { . "$env:USERPROFILE\PowerShell_profile.ps1" }'
+if (!(Select-String -Path $PROFILE -SimpleMatch $legacyLine -Quiet) -and
+    !(Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
+    Add-Content -Path $PROFILE -Value $line
+}
 ```
 
 `copilot` は DSC 側で導入するため、Windows では `mise` の対象外である。

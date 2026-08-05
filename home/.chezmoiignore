@@ -13,6 +13,7 @@
 {{ if ne .chezmoi.os "windows" -}}
 PowerShell_profile.ps1
 run_once_after_05-setup-mise-shims-path.ps1
+run_after_31-install-gh-stack.ps1
 {{ end -}}
 # Windows では POSIX shell の rc を管理しない。過去に誤配布した .zshrc だけは
 # dot_zshrc.tmpl の Windows ガードを空展開して削除するため、ignore しない。
@@ -22,6 +23,7 @@ run_once_after_05-setup-mise-shims-path.ps1
 .zshenv
 .bash_profile
 .bashrc
+run_after_31-install-gh-stack.sh
 {{ end -}}
 
 # ADR-012 の wrapper は WSL interop 経由でしか機能せず、windowsUser が空でも

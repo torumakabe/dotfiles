@@ -36,6 +36,7 @@
 | [021](021-mise-lockfile-platforms.md) | lockfile の対象プラットフォームは lockfile_platforms で固定する | Accepted |
 | [022](022-pnpm-via-mise-not-corepack.md) | pnpm は corepack ではなく mise で直接管理する | Accepted |
 | [023](023-chezmoi-ps1-interpreter-noprofile.md) | chezmoi の ps1 実行系を固定しプロファイルを読ませない | Accepted |
+| [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension の配布と更新を分離する | Accepted |
 
 ## テンプレート
 

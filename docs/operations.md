@@ -12,6 +12,7 @@
 | Windows | `winget` (DSC) + `mise` | GUI/CLI アプリ、Azure CLI、開発ツール |
 | 全環境共通 | `rustup` | Rust toolchain |
 | 全環境共通 | `uv` | Python スクリプト実行 |
+| 全環境共通 | `gh extension` + `gh skill` | `gh-stack` extension と Copilot skill |
 
 ## 定期チェック対象の制約
 
@@ -22,6 +23,19 @@
 - **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: `install-azd.sh`、更新は `azd update`）
 - **copilot-cli**: mise の `github:` バックエンドで更新遅延・バージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: `gh.io/copilot-install`、更新は `copilot update`）
 - **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
+
+## gh-stack の更新
+
+セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
+
+更新前には、skill と extension の候補を確認する。
+
+```bash
+gh skill update gh-stack --dry-run
+gh extension upgrade gh-stack --dry-run
+```
+
+更新する場合は、公式 skill の内容と extension のリリースノートを確認してから、`gh skill update gh-stack` と `gh extension upgrade gh-stack` を明示的に実行する。更新後は `gh skill list --agent github-copilot --scope user`、`gh extension list`、`gh stack --version` で導入版を確認する。日常の apply へ更新処理を含めない理由は [ADR-024](adr/024-gh-stack-distribution-and-updates.md) を参照する。
 
 ## chezmoi での編集
 
@@ -176,7 +190,10 @@ dotfiles は `devcontainer.json` からは適用しない。VS Code の Dotfiles
 ```bash
 gh auth login
 GITHUB_TOKEN=$(gh auth token) mise install --yes
+chezmoi apply
 ```
+
+最後の `chezmoi apply` は、コンテナ作成時に `gh` の認証やツール導入を待って終了した `run_after` 処理を再実行する。
 
 構成上の判断は次のとおりである。
 
