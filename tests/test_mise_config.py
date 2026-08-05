@@ -17,6 +17,7 @@ LOCK_PATH = REPO_ROOT / "home/dot_config/mise/private_mise.lock"
 INSTRUCTIONS_PATH = REPO_ROOT / ".github/copilot-instructions.md"
 SYNC_SH_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.sh.tmpl"
 SYNC_PS1_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.ps1.tmpl"
+INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_20-mise-install.sh.tmpl"
 ZSHRC_PATH = REPO_ROOT / "home/dot_zshrc.tmpl"
 POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 OPERATIONS_PATH = REPO_ROOT / "docs/operations.md"
@@ -131,6 +132,15 @@ def _powershell_mise_upgrade_function() -> str:
 
 
 class MiseConfigTests(unittest.TestCase):
+    def test_mise_install_does_not_retry_without_github_credentials(self) -> None:
+        install_script = INSTALL_SH_PATH.read_text(encoding="utf-8")
+
+        self.assertNotIn("retry_missing_tools_without_github_credentials", install_script)
+        self.assertNotIn(
+            "unset GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN",
+            install_script,
+        )
+
     def test_dotnet_alias_matches_lock_backend(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")
         lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))

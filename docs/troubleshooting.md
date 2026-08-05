@@ -127,6 +127,25 @@ mise reshim
 
 warning は標準エラーに表示される。表示されたコマンドを手動で再実行して復旧する。
 
+## GitHub API または `gh extension install` が SAML 403 で失敗する
+
+次のエラーは、GitHub CLI が使用する OAuth token に対象 organization の SAML SSO 承認がない場合に発生する。
+
+```text
+Resource protected by organization SAML enforcement.
+You must grant your OAuth token access to this organization.
+```
+
+ブラウザーで `https://github.com/orgs/<organization>/sso` を開いて SSO を完了し、同じ環境で GitHub CLI を再認証する。
+
+```bash
+gh auth refresh --hostname github.com
+gh api repos/<organization>/<repository>/releases/latest
+chezmoi apply
+```
+
+Windows と WSL は通常、GitHub CLI の認証情報を別々に保持する。一方で解決しても他方には反映されないため、それぞれで再認証する。WSL からブラウザーを起動できない場合は、表示された URL を Windows のブラウザーで開く。
+
 ## `run_once_*` スクリプトが sudo を要求して停止する
 
 Codespaces 以外ではパッケージ導入に sudo が必要である。パスワードを入力するか、sudoers を設定する。
