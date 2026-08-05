@@ -111,16 +111,17 @@ class GhStackInstallTests(unittest.TestCase):
         )
         self.assertTrue(
             any(
-                "run_after_31-install-gh-stack.ps1" in block
+                "31-install-gh-stack.ps1" in block
                 for block in non_windows_blocks
             )
         )
         self.assertTrue(
             any(
-                "run_after_31-install-gh-stack.sh" in block
+                "31-install-gh-stack.sh" in block
                 for block in windows_blocks
             )
         )
+        self.assertNotIn("run_after_31-install-gh-stack", self.ignore)
 
     def test_first_setup_reapplies_after_gh_is_available(self) -> None:
         readme = README.read_text(encoding="utf-8")
