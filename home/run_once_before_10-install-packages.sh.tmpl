@@ -97,10 +97,8 @@ git_unshadow /usr/local/bin /usr/bin
 # 公式スクリプトは非 root で ~/.local/bin へ入れるため、その実体で判定する。
 if [ ! -x "${HOME}/.local/bin/copilot" ]; then
   echo "Installing GitHub Copilot CLI via official script..."
-  # GITHUB_TOKEN を外して実行する: Codespaces が注入するトークンでは、public repo の
-  # release asset でも SAML SSO により 403 になることがある (mise 側の回避と同じ理由)。
   # 導入失敗で chezmoi apply 全体を止めないよう、警告に留める。
-  if ! (unset GITHUB_TOKEN GH_TOKEN; curl -fsSL https://gh.io/copilot-install | bash); then
+  if ! curl -fsSL https://gh.io/copilot-install | bash; then
     echo "Warning: Copilot CLI installation failed. Run 'curl -fsSL https://gh.io/copilot-install | bash' manually." >&2
   fi
 fi
