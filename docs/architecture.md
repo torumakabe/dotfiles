@@ -77,7 +77,7 @@ Git 2.54 以降では、これに加えて `~/.gitconfig` の `[hook "dotfiles-g
 - Terraform は公式の PowerShell completion を提供していないため、補完はzshだけで提供する
 - RadicleはWindows向け公式配布を確認できないため、`rad` の補完はzshだけで提供する
 
-helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両方で提供する。`fieldalignment` と `fast` は、Unix系とWindowsの両 install scriptで導入する。
+helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両方で提供する。`fieldalignment` と `fast` は、Unix系とWindowsの両 install scriptで導入する。`gh-stack` は、公式 Copilot skill と GitHub CLI extension が未導入の場合だけ、OS別のセットアップスクリプトで全環境へ導入する。
 
 `ghcd` の fzf preview は、zshでは `ls -la`、Windowsでは `cmd.exe` の `dir /a` を使う。コマンドは異なるが、選択候補のリポジトリにある隠し項目を含む一覧を表示する目的は等価である。
 
@@ -128,9 +128,9 @@ Windows で cargo が `windows-msvc` ターゲットをビルドするには MSV
 - `run_onchange_after_20-resolve-msvc-linker.ps1` が `vswhere.exe` で現在の `link.exe` を解決し、ユーザー環境変数 `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER` に設定する。PATH に依存しないため $PROFILE を読まないシェル（Copilot CLI 等）でも有効
 - `{{ now }}` を script hash に埋め込み `chezmoi apply` の度に再評価するため、VS Build Tools の更新でツールセットのバージョンフォルダが変わっても追従する
 
-## `run_once_*` スクリプトの実行順
+## セットアップスクリプトの実行順
 
-chezmoi は `run_once_before_*` → 通常ファイル適用 → `run_once_after_*` の順に処理し、同フェーズ内は数字順で実行する。
+chezmoi は `run_*_before_*` → 通常ファイル適用 → `run_*_after_*` の順に処理し、同フェーズ内は数字順で実行する。
 
 | # | スクリプト | 役割 |
 |---|-----------|------|
@@ -140,6 +140,7 @@ chezmoi は `run_once_before_*` → 通常ファイル適用 → `run_once_after
 | 4 | `after_10-setup-shell.sh` | shell 設定 |
 | 5 | `after_20-mise-install.sh` | `config.toml` に従ってツール導入 |
 | 6 | `after_30-install-tools.ps1` (Windows) / `after_30-install-tools.sh` (POSIX) | 追加ツール導入 |
+| 7 | `after_31-install-gh-stack.ps1` (Windows) / `after_31-install-gh-stack.sh` (POSIX) | 未導入時だけ公式 `gh-stack` skill と extension を取得 |
 
 変更時は、mise 設定配置前に `mise install` しないこと、Codespaces / Dev Container の分岐を壊さないことを確認する。
 

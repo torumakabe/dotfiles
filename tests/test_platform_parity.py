@@ -39,6 +39,25 @@ PLATFORMS = frozenset(
     }
 )
 ZSH_PLATFORMS = PLATFORMS - {"windows-powershell"}
+GH_STACK_COMPONENT_PATHS = {
+    "skill:gh-stack": {
+        **{
+            platform: REPO_ROOT / "home/run_after_31-install-gh-stack.sh.tmpl"
+            for platform in ZSH_PLATFORMS
+        },
+        "windows-powershell": REPO_ROOT
+        / "home/run_after_31-install-gh-stack.ps1.tmpl",
+    },
+    "tool:gh-stack-extension": {
+        **{
+            platform: REPO_ROOT
+            / "home/run_after_31-install-gh-stack.sh.tmpl"
+            for platform in ZSH_PLATFORMS
+        },
+        "windows-powershell": REPO_ROOT
+        / "home/run_after_31-install-gh-stack.ps1.tmpl",
+    },
+}
 
 
 def _implemented_everywhere() -> dict[str, str]:
@@ -73,6 +92,7 @@ PLATFORM_CONTRACT = {
     "shell:ll": _implemented_everywhere(),
     "shell:copilot-guardrails": _implemented_everywhere(),
     "shell:zoxide": _implemented_everywhere(),
+    "skill:gh-stack": _implemented_everywhere(),
     "completion:azure-cli": _implemented_everywhere(),
     "completion:kubectl": _implemented_everywhere(),
     "completion:helm": _implemented_everywhere(),
@@ -87,6 +107,7 @@ PLATFORM_CONTRACT = {
     ),
     "tool:fieldalignment": _implemented_everywhere(),
     "tool:fast": _implemented_everywhere(),
+    "tool:gh-stack-extension": _implemented_everywhere(),
     "tool:lefthook": _implemented_everywhere(),
     "tool:ty": _implemented_everywhere(),
 }
@@ -287,6 +308,29 @@ class PlatformParityTests(unittest.TestCase):
                         status == "implemented" or status.startswith("exception: docs/"),
                         status,
                     )
+
+    def test_gh_stack_contract_components_exist_for_each_platform(self) -> None:
+        for feature, paths in GH_STACK_COMPONENT_PATHS.items():
+            self.assertEqual(set(paths), PLATFORMS)
+            for platform, path in paths.items():
+                with self.subTest(feature=feature, platform=platform):
+                    self.assertEqual(
+                        PLATFORM_CONTRACT[feature][platform],
+                        "implemented",
+                    )
+                    self.assertTrue(path.is_file(), path)
+
+                    source = path.read_text(encoding="utf-8")
+                    if feature == "skill:gh-stack":
+                        self.assertIn(
+                            "--agent github-copilot --scope user",
+                            source,
+                        )
+                    else:
+                        self.assertIn(
+                            "gh extension install github/gh-stack",
+                            source,
+                        )
 
     def test_exceptions_reference_relevant_existing_documentation(self) -> None:
         checked_features = set()

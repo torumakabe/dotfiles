@@ -120,7 +120,7 @@ mise reshim
 
 ## `run_once_*` スクリプトの warning / error
 
-実行順と役割は [`docs/architecture.md`](architecture.md#run_once_-スクリプトの実行順) を参照。
+実行順と役割は [`docs/architecture.md`](architecture.md#セットアップスクリプトの実行順) を参照。
 
 - **warning で継続**: shell 設定の一部、`mise install` 後の任意ツール、追加ツール導入の失敗
 - **error で停止**: Oh My Zsh の clone、Docker 本体導入など継続に必要な処理

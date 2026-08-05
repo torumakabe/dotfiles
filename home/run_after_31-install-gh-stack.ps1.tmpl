@@ -1,0 +1,42 @@
+$ErrorActionPreference = 'Continue'
+
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+    Write-Warning "gh-stack was not installed because GitHub CLI (gh) is not available. The next 'chezmoi apply' will retry."
+    exit 0
+}
+
+$extensionList = & gh extension list 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Could not inspect GitHub CLI extensions. The next 'chezmoi apply' will retry gh-stack installation."
+} else {
+    $extensionInstalled = @($extensionList) | Where-Object {
+        ([string]$_ -split '\s+') -contains 'github/gh-stack'
+    }
+    if (-not $extensionInstalled) {
+        & gh extension install github/gh-stack
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Failed to install the github/gh-stack extension. The next 'chezmoi apply' will retry."
+        }
+    }
+}
+
+$skillList = & gh skill list --agent github-copilot --scope user --json skillName 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Could not inspect GitHub Copilot skills. GitHub CLI 2.90 or later is required. The next 'chezmoi apply' will retry."
+    exit 0
+}
+
+$skill = @($skillList | ConvertFrom-Json) | Where-Object {
+    $_.skillName -eq 'gh-stack'
+} | Select-Object -First 1
+
+if ($skill) {
+    exit 0
+}
+
+& gh skill install github/gh-stack gh-stack --agent github-copilot --scope user
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Failed to install the github/gh-stack skill. The next 'chezmoi apply' will retry."
+}
+
+exit 0

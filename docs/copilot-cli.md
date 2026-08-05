@@ -33,17 +33,18 @@ Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilo
 
 ## プラグインとスキル
 
-プラグインは `/plugin` で管理（chezmoi 管理外）。プラグイン由来のスキルはプラグイン側で管理され、手動追加分のみ `~/.copilot/skills/` を chezmoi で管理する。
+プラグインは `/plugin`、外部 skill は `gh skill` で管理し、chezmoi の管理対象にしない。自作 skill と公式の導入コマンドを持たない skill だけを `~/.copilot/skills/` から chezmoi へ取り込む。
 
 ```bash
-# 外部スキルの取り込み（または ~/.copilot/skills/<skill-name>/SKILL.md を自作）
-npx skills add -g <owner>/<repo>/<path>
-chezmoi re-add ~/.copilot/skills/<skill-name>
+# GitHub Copilot の user scope へ外部 skill を導入する
+gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 ```
 
 `agentfinder` は GitHub Agent Finder (`https://agentfinder.github.com/api/v1/search`) を使って、MCP サーバー、ツール、スキル、エージェントを検索する手動追加スキル。
 GitHub Docs の Agent Finder 手順に従い、`home/private_dot_copilot/skills/agentfinder/SKILL.md` を `~/.copilot/skills/agentfinder/SKILL.md` として配置する。
 利用時は `/agentfinder <探したい連携や作業>` を実行し、返された候補はユーザーが明示的に選ぶまで自動インストールしない。
+
+`gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。Stacked PR を提案する条件は `copilot-instructions.md`、操作方法は公式 skill を正本とする。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
 
 ## セキュリティフック
 

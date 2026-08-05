@@ -96,6 +96,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 - 固定版のリリース、対象asset、公式checksumを確認する
 - 固定版から最新安定版までの compare view と changelog を確認し、セキュリティ、互換性、利用機能に関係する差分だけを詳しく調べる
+- 公式 skill と対応する CLI extension を組み合わせる機能は、実機の導入版と上流の更新を区別して確認する。現在は `gh-stack` を対象とし、`gh skill update gh-stack --dry-run` と `gh extension upgrade gh-stack --dry-run` で候補を確認する。GitHub CLI extension 全般へ対象を広げない
 - GitHub Security Advisories と、根拠としている上流issueの状態を確認する
 - 外部URLはリダイレクト後の到達先と記述内容を確認する
 - 記述された前提（版、対象イメージ、経路、責任範囲）が現在も成立するか確認する
