@@ -45,15 +45,13 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 パス比較前に `\` を `/` へ正規化する。パターンファイルはプロジェクト相対パスとして `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。シンボリックリンク、ジャンクション、file URI、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
 各 command hook は mise shim 経由の `uv run` で起動する。起動時に `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象をフックが必要とする `uv` だけに限定する。これにより `uv` の未導入版は mise が自動導入できる一方、dotnet など無関係な missing ツールの導入失敗はフックの終了状態へ影響しない。
 
-shell command の外部ネットワーク通信は、`~/.copilot/settings.json` の `sandbox.userPolicy.network` で設定する。初期状態では sandbox を有効化するだけにとどめ、外向き通信の遮断や host rule は設定しない。
+local sandbox が制御するのは Copilot CLI が起動する shell command のネットワーク通信だけである。MCP、LSP、ファイルシステムの隔離は保証しない。方針は [ADR-015](adr/015-copilot-cli-shell-network-via-local-sandbox.md)、実際に投入する値は `home/run_onchange_after_35-configure-copilot-sandbox.{sh,ps1}.tmpl` を正本とする。
 
 ## git pre-commit フック
 
-`~/.config/git/templates/hooks/pre-commit` を配置し、`git config --global init.templateDir` で有効化（ADR-018）。`git init`/`git clone` の瞬間に各リポジトリの `.git/hooks/pre-commit` へコピーされ、以降は通常のローカル hook として扱われる。`core.hooksPath` のようにグローバルに強制するのではなく「新規リポジトリの既定値」として配る方式のため、lefthook/husky 等の repo-local hook manager を導入した他リポジトリを巻き込まない。
+gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテンプレートフックと、リポジトリ内のフックとは別に動く設定ベースフックの二層で構成する。テンプレートフックは他のフック管理ツールへの影響をリポジトリ内へ限定し、設定ベースフックはリポジトリの作成時期やローカルフックの置換に依存しない走査を担う。両者の判断と保証範囲は [ADR-018](adr/018-git-hooks-via-init-templatedir.md) と [ADR-020](adr/020-git-hooks-via-config.md) を参照する。
 
-トレードオフとして、既存リポジトリには自動適用されない（`git init` を一度再実行して backfill するか、独自 hook manager を使うリポジトリはそのままにする）。`git-hooks-audit`（zsh 関数 / PowerShell `Invoke-GitHooksAudit`）で ghq 管理下の全リポジトリの状態（hook 未配置・local hooksPath 上書き・gitleaks 以外の hook に置き換え済み）を確認できる。
-
-Git 2.54 以降では、これに加えて `~/.gitconfig` の `[hook "dotfiles-gitleaks"]` が `~/.local/bin/gitleaks-pre-commit` を実行する（ADR-020）。設定ベースフックは `.git/hooks` とは別レイヤで加算的に走るため、`lefthook install` が `.git/hooks/pre-commit` を置き換えても gitleaks は実行され続け、backfill していない既存リポジトリも対象になる。Git 2.54 より前のバージョンは `[hook]` セクションを無視するため、そこでは `init.templateDir` だけが効く。リポジトリ単位の無効化は `git config --local hook.dotfiles-gitleaks.enabled false`。
+二つの起動スクリプトは別ファイルとして管理し、走査ロジックの一致をテストで検査する。更新と確認は [`operations.md`](operations.md#git-pre-commit-フック)、症状別の復旧は [`troubleshooting.md`](troubleshooting.md#新規リポジトリに-gitleaks-pre-commit-hook-が入らない) を参照する。
 
 ## プラットフォーム検出
 
@@ -130,18 +128,8 @@ Windows で cargo が `windows-msvc` ターゲットをビルドするには MSV
 
 ## セットアップスクリプトの実行順
 
-chezmoi は `run_*_before_*` → 通常ファイル適用 → `run_*_after_*` の順に処理し、同フェーズ内は数字順で実行する。
+chezmoi は `run_*_before_*`、通常ファイル、`run_*_after_*` の順に適用し、同じフェーズではファイル名の番号順に実行する。全件一覧は変化しやすいため、gh-stack の導入と Git hook の確認を含む全実装は `home/run_*` を正本とする。
 
-| # | スクリプト | 役割 |
-|---|-----------|------|
-| 1 | `before_10-install-packages.sh` | OS パッケージ導入 |
-| 2 | `before_20-install-mise.sh` | `mise` 本体導入 |
-| 3 | `after_05-setup-mise-shims-path.ps1` | Windows: mise shims を PATH 追加 |
-| 4 | `after_10-setup-shell.sh` | shell 設定 |
-| 5 | `after_20-mise-install.sh` | `config.toml` に従ってツール導入 |
-| 6 | `after_30-install-tools.ps1` (Windows) / `after_30-install-tools.sh` (POSIX) | 追加ツール導入 |
-| 7 | `after_31-install-gh-stack.ps1` (Windows) / `after_31-install-gh-stack.sh` (POSIX) | 未導入時だけ公式 `gh-stack` skill と extension を取得 |
-
-変更時は、mise 設定配置前に `mise install` しないこと、Codespaces / Dev Container の分岐を壊さないことを確認する。
+mise 関連では、本体を導入する `run_once_before_20-install-mise`、lockfile 変更を同期する `run_onchange_after_15-mise-sync-tools`、通常適用時にツールを導入する `run_once_after_20-mise-install`、macOS の shim symlink を更新する `run_onchange_after_21-link-mise-shims` の依存関係を保つ。変更時は、mise 本体と設定の配置前に `mise install` を実行しないこと、Codespaces と Dev Container の分岐を壊さないことを確認する。
 
 `.ps1` スクリプトの実行系は `.chezmoi.toml.tmpl` の `[interpreters.ps1]` で `pwsh -NoLogo -NoProfile -File` に固定している（ADR-023）。プロファイルを読まないため、スクリプトは Machine+User の PATH に載るものだけに依存できる。プロファイル経由でしか PATH に入らないツールは使えない。
