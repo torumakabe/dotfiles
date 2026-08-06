@@ -28,7 +28,7 @@ lefthook = "latest"
 jq = "latest"
 bun = "latest"
 "npm:typescript" = "latest"
-# 社内 npm プロキシ (Azure DevOps Artifacts) が 5.3.0 の
+# 利用中の npm レジストリプロキシが 5.3.0 の
 # _npmUser.trustedPublisher を落とすため、aube の trustPolicy=no-downgrade が
 # 5.2.0 からの証跡後退と判定して install を止める。上流の release workflow は
 # v5.2.0 と v5.3.0 で同一なので、欠落はプロキシ側で起きている。
