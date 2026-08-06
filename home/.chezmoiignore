@@ -31,3 +31,7 @@ PowerShell_profile.ps1
 {{ if not (and .isWSL (stat "/proc/sys/fs/binfmt_misc/WSLInterop") (ne .windowsUser "")) -}}
 .local/bin/op-ssh-sign-wrapper.sh
 {{ end -}}
+
+# Python bytecode は配布対象にしない。
+**/__pycache__/**
+**/*.pyc

@@ -9,6 +9,7 @@ on:
       - 'docs/**'
       - '.github/workflows/test-copilot-hooks.yml'
       - 'install.sh'
+      - 'README.md'
   push:
     branches: [main]
     paths:
@@ -19,6 +20,7 @@ on:
       - 'docs/**'
       - '.github/workflows/test-copilot-hooks.yml'
       - 'install.sh'
+      - 'README.md'
   schedule:
     # Weekly Monday 00:00 UTC — detect fail-open regressions
     - cron: '0 0 * * 1'
