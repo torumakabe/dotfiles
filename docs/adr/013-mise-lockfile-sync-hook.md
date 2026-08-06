@@ -14,7 +14,7 @@ Accepted
 
 `home/run_onchange_after_15-mise-sync-tools.{sh,ps1}.tmpl` を新設し、`{{ include "dot_config/mise/private_mise.lock" | sha256sum }}` を template hash に埋め込む。chezmoi の `run_onchange` は hash 変化時のみ再実行するため、lockfile が変わるたびに `mise install` と `mise reshim` を流して install marker と shim を lockfile と同期させる。
 
-- 番号 15 は `run_onchange_after_21-link-mise-shims.sh.tmpl`（macOS の shim symlink, ADR-002）より前で `run_once_after_20-mise-install.sh.tmpl` の後に走らせるための位置取り。
+- 実行順は `run_once_before_20-install-mise`、`run_onchange_after_15-mise-sync-tools`、`run_once_after_20-mise-install`、`run_onchange_after_21-link-mise-shims` となる。番号 15 は、lockfile 変更の同期を通常のツール導入と macOS の shim symlink 更新より前に実行するために使う。
 - mise が PATH に無い環境（CI 等）は skip して exit 0、apply 全体を止めない。
 - mise 用の GitHub token が未設定で `gh` が認証済みの場合は、`gh auth token` から取得した token を `MISE_GITHUB_TOKEN` としてフックのプロセス内だけで `mise install` へ渡す。`gh` が未認証の環境では従来の動作を変更しない。
 - `mise install` / `mise reshim` は一括処理し、いずれかが失敗した場合は原因と `chezmoi apply` による再実行方法を表示して非ゼロ終了する。失敗した `run_onchange` の状態は成功として保存されないため、原因解消後の apply で再実行される。

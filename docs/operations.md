@@ -19,10 +19,12 @@
 `mise` 設定や導入元を見直すときに、次の制約が残っているか確認する。解消されていれば条件分岐やワークアラウンドを外せる。
 
 - **cargo-make**: linux/arm64 向け配布なし
-- **npm:typescript-language-server**: 社内 npm プロキシが 5.3.0 の `_npmUser.trustedPublisher` を落とすため `trust_policy_excludes` で 5.3.0 を除外（[docs/troubleshooting.md](troubleshooting.md#mise-install-が-aube-install-failed-failed-to-resolve-dependencies-で止まる)）
+- **npm:typescript-language-server**: 社内 npm プロキシが trusted publisher の証跡を保持しない版だけを `trust_policy_excludes` の対象とする。対象版は `home/dot_config/mise/config.toml.tmpl` を正本とする
 - **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: `install-azd.sh`、更新は `azd update`）
 - **copilot-cli**: mise の `github:` バックエンドで更新遅延・バージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: `gh.io/copilot-install`、更新は `copilot update`）
 - **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
+
+TypeScript language server の除外を撤去するときは、`home/dot_config/mise/config.toml.tmpl` の版限定エントリを削除し、`mise install --force npm:typescript-language-server` で既存導入済み版も再検証する。成功後に `uv run -m unittest tests.test_mise_config -v` を実行する。失敗時の確認は [`troubleshooting.md`](troubleshooting.md#mise-install-が-aube-install-failed-failed-to-resolve-dependencies-で止まる) を参照する。
 
 ## gh-stack の更新
 
@@ -183,7 +185,13 @@ sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
 
 `.devcontainer/devcontainer.json` は、このリポジトリ自体を開発するための構成である。dotfiles を任意のプロジェクトの Dev Container へ適用する手順（`README.md` の「Dev Container (ローカル)」節）とは別のものを指す。
 
-dotfiles は `devcontainer.json` からは適用しない。VS Code の Dotfiles ユーザ設定（Repository に `torumakabe/dotfiles`、Install Command に `install.sh`）で入れる。Codespaces がアカウント設定から dotfiles を入れる構造と揃えるためである。**この設定をしていないコンテナには `uv`、`mise`、`chezmoi`、`gitleaks` が入らず、テストを実行できない。**
+dotfiles は `devcontainer.json` から適用しない。VS Code の Dotfiles ユーザ設定は `README.md` の「Dev Container (ローカル)」節に従う。この設定がないコンテナにはテストに必要なツールが入らない。
+
+CLI で起動または更新するときは、chezmoi の Dev Container 判定に必要な環境変数を渡す。
+
+```bash
+devcontainer up --workspace-folder . --remote-env REMOTE_CONTAINERS=true
+```
 
 コンテナ起動後に次を実行する。
 
@@ -195,17 +203,15 @@ chezmoi apply
 
 最後の `chezmoi apply` は、コンテナ作成時に `gh` の認証やツール導入を待って終了した `run_after` 処理を再実行する。
 
-構成上の判断は次のとおりである。
-
-- **`image`**：`mcr.microsoft.com/devcontainers/base:ubuntu` を使い、`git` feature は指定し直さない。指定すると `/usr/local` へ git を作り直すことになり、ADR-020 が対象とする「ベースイメージのソースビルドが apt 版を隠す」状態を再現できなくなる
-- **`git-lfs` feature**：ベースイメージに `git-lfs` が含まれないため足す。ADR-020 の張り替えが `git-lfs` を対象から外すことを実機で確認するには、`/usr/local/bin/git-lfs` が存在する必要がある
-- **`powershell` feature**：dotfiles は Linux に pwsh を入れないため、これが無いと `tests/test_platform_parity.py` と `tests/test_mise_config.py` の PowerShell 依存テストが skip される。CI（ubuntu-latest）は同梱の pwsh を使うので、同じ範囲を流すために足す
-
-chezmoi のコンテナ判定は、環境変数 `CODESPACES` と `REMOTE_CONTAINERS` の有無だけで決まる。`REMOTE_CONTAINERS` を立てるのは VS Code の Dev Containers 拡張であり、`@devcontainers/cli` は立てない。この判定が対象とするのは拡張と Codespaces で起動したコンテナであり、CLI で起動したコンテナは対象外である。CLI を対象へ含めるには `/.dockerenv` のような別の指標を足すことになるが、判定の軸が増えるため採らない。
-
-CLI で検証するときは `--remote-env REMOTE_CONTAINERS=true` を渡す。渡さないと `.devcontainer` が false になり、Docker Engine、draw.io、Azure CLI など、ホストへ入れる前提の導入処理がコンテナ内で走る。Docker Desktop の WSL2 バックエンドではコンテナがホストの WSL カーネルを共有して `.isWSL` が true になるため Docker Engine と draw.io は止まるが、macOS や Linux の Docker で起動したコンテナでは止まらない。
+イメージ内の Git を維持する理由は [ADR-020](adr/020-git-hooks-via-config.md)、PowerShell を含むクロスプラットフォーム検査の保証範囲は [ADR-019](adr/019-cross-platform-parity-contract.md) を参照する。
 
 Windows ホストでは、`tests/test_git_shadow_resolution.py` のうち POSIX 版のチェックスクリプトを実行するテストが skip される。`bash` が WSL の interop 版に解決され、テストが用意した偽の git を参照できないためである。全件を実行するには、このコンテナか WSL、または CI を使う。
+
+構成を更新した後は、コンテナ内で全テストを実行する。
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 uv run -m unittest discover -s tests
+```
 
 ## プラットフォーム契約の運用確認
 
@@ -219,32 +225,22 @@ CIはzshとpwshの存在を確認した後、全テストをdiscover形式で実
 
 ## git pre-commit フック
 
-`~/.config/git/templates/hooks/pre-commit` を `gitleaks` の scan スクリプトとして配置し、`init.templateDir` 経由で新規リポジトリ（`git init`/`git clone`）にのみ既定配布する（ADR-018）。
+テンプレートフックと設定ベースフックを更新するときは、対応する二つの起動スクリプトを同じ変更で編集する。配布方式と保証範囲は [ADR-018](adr/018-git-hooks-via-init-templatedir.md) と [ADR-020](adr/020-git-hooks-via-config.md) を参照する。
 
 ```bash
-git config --global init.templateDir   # 期待値: ~/.config/git/templates
-chezmoi edit ~/.config/git/templates/hooks/pre-commit && chezmoi apply
-```
-
-既存リポジトリへの backfill（`git init` の再実行は既存 hook を上書きしないため安全・冪等）:
-
-```bash
-git -C <repo-path> init
-```
-
-状態の確認は `git-hooks-audit`（zsh）/ `Invoke-GitHooksAudit`（PowerShell）で ghq 管理下の全リポジトリを一括チェックできる。
-
-Git 2.54 以降では、設定ベースフック（ADR-020）が全リポジトリで加算的に走る。
-
-```bash
-git hook list --show-scope pre-commit   # 期待値: global<TAB>dotfiles-gitleaks
+chezmoi edit ~/.config/git/templates/hooks/pre-commit
 chezmoi edit ~/.local/bin/gitleaks-pre-commit && chezmoi apply
-git config --local hook.dotfiles-gitleaks.enabled false   # リポジトリ単位で無効化
+git-hooks-audit
+git hook list --show-scope pre-commit
 ```
 
-`git hook list` が `unknown subcommand` で失敗する場合、その git は 2.54 より前であり `init.templateDir` だけが効いている。
+PowerShell では `git-hooks-audit` の代わりに `Invoke-GitHooksAudit` を使う。確認結果が想定と異なる場合は、[`troubleshooting.md`](troubleshooting.md#新規リポジトリに-gitleaks-pre-commit-hook-が入らない) と [`troubleshooting.md`](troubleshooting.md#設定ベースフックが全リポジトリで動いていない) を参照する。
 
-設定ベースフックが有効かどうかは `chezmoi apply` のたびに確認され、無効なら原因ごとに案内を変えた警告が出る。復旧手順は [`troubleshooting.md`](troubleshooting.md#設定ベースフックが全リポジトリで動いていない) を参照。
+設定ベースフックを現在のリポジトリだけで無効化するには、次を実行する。再有効化は `git config --local --unset hook.dotfiles-gitleaks.enabled` で行う。
+
+```bash
+git config --local hook.dotfiles-gitleaks.enabled false
+```
 
 ## `run_once_*` の再実行
 
@@ -253,4 +249,4 @@ chezmoi state delete-bucket --bucket=scriptState
 chezmoi apply
 ```
 
-実行順は [`architecture.md`](architecture.md#run_once_-スクリプトの実行順) を参照。
+実行順は [`architecture.md`](architecture.md#セットアップスクリプトの実行順) を参照。

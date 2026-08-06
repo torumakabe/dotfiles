@@ -668,8 +668,17 @@ $result = @{{
                 ):
                     with self.subTest(path=path):
                         self.assertIn("trust_policy_excludes", document)
+                self.assertIn(
+                    "home/dot_config/mise/config.toml.tmpl", instructions
+                )
+                self.assertIn("version literal", instructions)
+                self.assertIn("パッケージ名だけの除外へ広げず", instructions)
+                self.assertIn(
+                    "home/dot_config/mise/config.toml.tmpl", operations
+                )
                 for pattern in patterns:
-                    self.assertIn(pattern, instructions)
+                    self.assertNotIn(pattern, instructions)
+                    self.assertNotIn(pattern, operations)
 
     def test_powershell_registers_kubectl_completer_for_k_alias(self) -> None:
         profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")

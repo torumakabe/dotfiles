@@ -71,8 +71,8 @@ uv run -m unittest tests.test_copilot_guard -v
 
 設計上の前提と限界:
 
-- local sandbox は Copilot が起動する shell command の実行環境を制御する。MCP、LSP、Copilot CLI のファイル読み書きツールの sandbox 化はこの repo では設定しない。
-- `run_onchange_after_35-configure-copilot-sandbox.*` は `~/.copilot/settings.json` の他のキーを保ったまま `sandbox` セクションを更新する。初期状態では sandbox を有効化するだけにとどめ、`allowOutbound = true`、`allowLocalNetwork = true`、`allowedHosts = []`、`blockedHosts = []` に正規化する。
+- local sandbox の対象は Copilot CLI が起動する shell command のネットワーク通信だけである。MCP、LSP、Copilot CLI のファイル読み書きツールは保証範囲に含めない。方針は [ADR-015](adr/015-copilot-cli-shell-network-via-local-sandbox.md) を参照する。
+- `run_onchange_after_35-configure-copilot-sandbox.*` は `~/.copilot/settings.json` の他のキーを保ったまま `sandbox` セクションを更新する。投入する値は POSIX 版と PowerShell 版のスクリプトを正本とする。
 - `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。
 - `/share gist`（`--share-gist`）は **ユーザー直接コマンドのため preToolUse Hook の対象外**。`--allow-all` 下で秘匿情報がエージェントのコンテキストに入った状態で実行すると、secret Gist として外部化され得る。非 EMU 環境では技術的に防ぐ手段が無いため、運用ルール（実行前に `/reset-allowed-tools` で承認状態をクリアする等）で補う。
 - `permissionRequest` / `notification` / `userPromptSubmitted` 等の Hook タイプは現状未使用。`--allow-all` を外して承認を自動化する運用に切り替える場合の拡張余地として記録しておく。
