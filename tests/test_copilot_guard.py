@@ -33,6 +33,19 @@ def make_ctx(
 
 
 class CopilotGuardApplyPatchTests(unittest.TestCase):
+    @staticmethod
+    def _payload_for_path(tool_name: str, path: pathlib.Path) -> dict:
+        if tool_name == "apply_patch":
+            return {
+                "toolName": tool_name,
+                "toolArgs": (
+                    "*** Begin Patch\n"
+                    f"*** Update File: {path}\n"
+                    "*** End Patch\n"
+                ),
+            }
+        return {"toolName": tool_name, "toolArgs": {"path": str(path)}}
+
     def test_extracts_all_apply_patch_target_paths(self) -> None:
         patch = """*** Begin Patch
 *** Add File: docs/new.md
@@ -109,6 +122,22 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "")
 
+    def test_allows_absolute_project_azure_deploy_plan_for_file_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as project_dir:
+            project_root = pathlib.Path(project_dir).resolve()
+            plan = project_root / ".azure/deployment-plan.md"
+
+            for tool_name in ("apply_patch", "edit", "create", "write"):
+                with self.subTest(tool_name=tool_name):
+                    result = run_hook(
+                        SCRIPT_PATH,
+                        self._payload_for_path(tool_name, plan),
+                        cwd=project_root,
+                    )
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, "")
+
     def test_denies_other_project_azure_files(self) -> None:
         for path in (
             ".azure/config.json",
@@ -155,6 +184,56 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 decision = json.loads(result.stdout)
                 self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_absolute_azure_deploy_plan_outside_project_for_file_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as parent_dir:
+            parent = pathlib.Path(parent_dir).resolve()
+            project_root = parent / "project"
+            other_project = parent / "other-project"
+            project_root.mkdir()
+            other_project.mkdir()
+            targets = {
+                "home": pathlib.Path.home() / ".azure/deployment-plan.md",
+                "other-project": other_project / ".azure/deployment-plan.md",
+                "project-parent": parent / ".azure/deployment-plan.md",
+            }
+
+            for target_name, target in targets.items():
+                for tool_name in ("apply_patch", "edit", "create", "write"):
+                    with self.subTest(target=target_name, tool_name=tool_name):
+                        result = run_hook(
+                            SCRIPT_PATH,
+                            self._payload_for_path(tool_name, target),
+                            cwd=project_root,
+                        )
+
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        decision = json.loads(result.stdout)
+                        self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_absolute_azure_deploy_plan_through_symlink_for_file_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as project_dir:
+            project_root = pathlib.Path(project_dir).resolve()
+            real_azure = project_root / "real-azure"
+            real_azure.mkdir()
+            azure_link = project_root / ".azure"
+            try:
+                azure_link.symlink_to(real_azure, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+            plan = azure_link / "deployment-plan.md"
+
+            for tool_name in ("apply_patch", "edit", "create", "write"):
+                with self.subTest(tool_name=tool_name):
+                    result = run_hook(
+                        SCRIPT_PATH,
+                        self._payload_for_path(tool_name, plan),
+                        cwd=project_root,
+                    )
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    decision = json.loads(result.stdout)
+                    self.assertEqual(decision["permissionDecision"], "deny")
 
     def test_denies_blocked_target_beside_allowed_azure_deploy_plan(self) -> None:
         result = run_hook(

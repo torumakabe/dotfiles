@@ -253,19 +253,33 @@ def matches_allowed_path(
     patterns: list[str],
     project_root: Path | None = None,
 ) -> bool:
-    """Return True when a path matches a project-relative exception."""
+    """Return True when a path resolves to a project-contained exception."""
     raw_target = target.strip().strip("\"'")
-    if (
-        raw_target.lower().startswith("file://")
-        or raw_target.startswith(("/", "\\"))
-        or re.match(r"^[A-Za-z]:[\\/]", raw_target)
-    ):
-        return False
-    if not any(matches_blocked_pattern(target, pattern) for pattern in patterns):
+    if raw_target.lower().startswith("file://"):
         return False
 
     root = (project_root or Path.cwd()).resolve()
-    relative_path = Path(normalize_path(target))
+    raw_path = Path(raw_target)
+    windows_absolute = bool(re.match(r"^[A-Za-z]:[\\/]", raw_target))
+    if windows_absolute and os.name != "nt":
+        return False
+
+    if raw_path.is_absolute():
+        try:
+            relative_path = raw_path.relative_to(root)
+        except ValueError:
+            return False
+    else:
+        if raw_target.startswith(("/", "\\")) or windows_absolute:
+            return False
+        relative_path = Path(normalize_path(target))
+
+    if ".." in relative_path.parts:
+        return False
+    relative_target = relative_path.as_posix()
+    if not any(matches_blocked_pattern(relative_target, pattern) for pattern in patterns):
+        return False
+
     candidate = root
     for part in relative_path.parts:
         candidate /= part

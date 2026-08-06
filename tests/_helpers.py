@@ -29,7 +29,12 @@ def load_script(module_name: str, path: pathlib.Path) -> ModuleType:
     return module
 
 
-def run_hook(script_path: pathlib.Path, payload: dict | str) -> subprocess.CompletedProcess[str]:
+def run_hook(
+    script_path: pathlib.Path,
+    payload: dict | str,
+    *,
+    cwd: pathlib.Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run a hook script end to end and return the completed process.
 
     A dict payload is JSON-encoded; a str payload is sent verbatim so tests
@@ -42,4 +47,5 @@ def run_hook(script_path: pathlib.Path, payload: dict | str) -> subprocess.Compl
         input=stdin,
         capture_output=True,
         text=True,
+        cwd=cwd,
     )

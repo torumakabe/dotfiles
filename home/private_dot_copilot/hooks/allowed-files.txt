@@ -1,6 +1,7 @@
-# Project-relative file-tool exceptions:
+# Project-contained file-tool exceptions:
 # - Write patterns with `/` separators even for Windows paths.
 # - Do not add `**/`; exceptions must not match home-directory credential stores.
+# - Absolute paths are converted to project-relative paths only when they are inside the current project.
 # - Shell commands do not use these exceptions because `cd` can change their base path.
 # - Symlinks and junctions are rejected by the guard.
 
