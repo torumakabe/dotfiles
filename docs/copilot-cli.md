@@ -10,7 +10,7 @@
 - `mcp-config.json` — 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
 - `settings.json` の `sandbox` セクション — `run_onchange_after_35-configure-copilot-sandbox.*` で既存設定へマージ
 - `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`, `audit-log.py`, `audit-failure.py`）
-- `hooks/{blocked-files,ask-files}.txt` — ファイルアクセス制御リスト
+- `hooks/{allowed-files,blocked-files,ask-files}.txt` — ファイルアクセス制御リスト
 - `skills/` — 手動追加分のみ（プラグイン由来は対象外）
 
 管理外: `installed-plugins/`（Copilot CLI 側で管理）。

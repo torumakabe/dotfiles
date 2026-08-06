@@ -1,32 +1,9 @@
 {{ if eq .chezmoi.os "darwin" -}}
 #!/usr/bin/env bash
-# mise shims の一部を ~/.local/bin へシンボリックリンク。
-#
-# 背景:
-#   GitHub Desktop の Copilot CLI SDK は `bash --norc --noprofile` で子 shell を
-#   起動するうえ、親プロセス (copilot --server) が独自に hardcoded PATH を組み立てる
-#   ため、dotfiles の rc/profile や launchctl setenv では mise shims を注入できない。
-#   一方 Copilot CLI の PATH には `~/.local/bin` が確実に含まれるため、ここへ
-#   必要な mise shim をシンボリックリンクすることで非対話 bash からも解決可能にする。
-#
-#   シンボリックリンクの先は mise shims なので、mise でバージョンを切り替えた際も
-#   自動で追従する (shim 本体は不変)。
-#
-# 方針:
-#   mise shims の内容を自動走査し、以下を除外したうえで全件リンクする。
-#     - 言語ランタイム本体 (EXCLUDE_EXACT): 想定外の場所で拾われると副作用が大きいため。
-#     - ランタイム付随サブコマンド / 補助ファイル (EXCLUDE_PATTERN): cargo-*, rust-*,
-#       *.bat, *.ps1, *.sh, *.zst, *.txt, *-darwin-* など。
-#     - 実行可能な通常ファイルでないもの。
-#
-# メンテナンス:
-#   - 除外を増減したい場合は EXCLUDE_EXACT / EXCLUDE_PATTERN を編集。
-#   - mise のツール一覧 (config.toml) が変わったら本スクリプトが再実行される。
-#   - **本スクリプトが作成したリンクだけ**を state ファイルで管理し、対象外になった or
-#     shim が消えたエントリのみを掃除する。ユーザーが手動で作った symlink や非 symlink
-#     は一切触れない。
-#
-# 関連: docs/architecture.md "PATH 管理（非対話シェル対応）"
+# GitHub Desktop の Copilot SDK は mise shims を含まない固定 PATH で子 shell を
+# 起動するが、~/.local/bin は含めるため、安全な shim だけをここへリンクする。
+# 本スクリプトが作成したリンクだけを state ファイルで管理する。
+# 関連: docs/architecture.md「PATH 管理（非対話シェル対応）」
 #
 # mise config hash: {{ include "dot_config/mise/config.toml.tmpl" | sha256sum }}
 
@@ -36,9 +13,8 @@ SHIM_DIR="$HOME/.local/share/mise/shims"
 LINK_DIR="$HOME/.local/bin"
 STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-links"
 
-# 言語ランタイム本体。VS Code 等が ~/.local/bin を優先して拾うと予期せぬバージョンで
-# 起動する恐れがあるため、Copilot 経由での利用価値より副作用リスクを優先して除外。
-# rust は mise 管理外 (docs/adr/016-rust-external-rustup.md) のため shim 自体が存在せず対象外。
+# ~/.local/bin を優先するアプリケーションが意図しない版を使わないようにする。
+# Rust は ADR-016 により mise の管理外であり、cargo / rust の除外は不要。
 EXCLUDE_EXACT=(
   node npm npx pnpm
   dotnet dnx

@@ -5,7 +5,7 @@
 ## 原則
 
 - 1 ADR = 30 行以下を目安
-- セクションは **Status / Context / Decision / Consequences** の 4 つ
+- **Status / Context / Decision / Consequences** の 4 セクションを必須とし、追加セクションは必要な場合だけ設ける
 - Status は `Proposed` / `Accepted` / `Deprecated` / `Superseded by ADR-NNN` のいずれか
 - 作成・廃止・置換・レビューは `manage-adr` エージェントで管理する
 
@@ -36,7 +36,7 @@
 | [021](021-mise-lockfile-platforms.md) | lockfile の対象プラットフォームは lockfile_platforms で固定する | Accepted |
 | [022](022-pnpm-via-mise-not-corepack.md) | pnpm は corepack ではなく mise で直接管理する | Accepted |
 | [023](023-chezmoi-ps1-interpreter-noprofile.md) | chezmoi の ps1 実行系を固定しプロファイルを読ませない | Accepted |
-| [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension の配布と更新を分離する | Accepted |
+| [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension は公式 CLI で導入する | Accepted |
 
 ## テンプレート
 

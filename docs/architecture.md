@@ -112,7 +112,7 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 Dock / Spotlight / GitHub Desktop から起動された子プロセスは launchd 既定 PATH しか継承しない。特に **GitHub Desktop の Copilot SDK は `bash --norc --noprofile` で bash を spawn し、親が独自の hardcoded PATH を組む**ため、`.bashrc` / `BASH_ENV` / `launchctl setenv` では PATH 注入不可。唯一 **`~/.local/bin` だけは確実に含まれる**ため、`run_onchange_after_21-link-mise-shims.sh` が mise shims をそこへ symlink する。
 
-- 言語ランタイム本体（`node`, `cargo`, `dotnet` 等）とサブコマンド・補助ファイルは除外。リストはスクリプト内の `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` を編集
+- 言語ランタイム本体と実行可能な補助ファイルは除外する。対象はスクリプト内の `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` を正本とする。Rust は mise の管理外であり、`cargo` / `rust` の shim は除外対象に含めない（ADR-016）
 - 作成 symlink は state file (`${XDG_STATE_HOME}/chezmoi-dotfiles/mise-shim-links`) に記録され、管理対象だった symlink のみ自動掃除。手動で作ったものには触れない
 - darwin 限定。Linux は `~/.profile` 経由、Windows は `run_once_after_05` で解決済み
 

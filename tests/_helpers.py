@@ -25,7 +25,8 @@ def load_script(module_name: str, path: pathlib.Path) -> ModuleType:
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load {module_name} from {path}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    code = compile(path.read_text(encoding="utf-8"), str(path), "exec")
+    exec(code, module.__dict__)
     return module
 
 
