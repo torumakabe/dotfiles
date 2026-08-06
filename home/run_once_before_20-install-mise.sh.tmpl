@@ -15,7 +15,7 @@ fi
 {{ if eq .chezmoi.os "darwin" -}}
 brew install mise
 {{ else -}}
-MISE_VERSION="v2026.7.12"
+MISE_VERSION="v2026.8.2"
 MISE_BIN_DIR="${HOME}/.local/bin"
 
 download_file() {
@@ -48,11 +48,11 @@ sha256_file() {
 case "$(uname -m)" in
   x86_64|amd64)
     mise_archive="mise-${MISE_VERSION}-linux-x64.tar.gz"
-    expected_sha256="81a05761cb901808bfae3e494e07ec80329eab66a49cd2fa7b8d9cd1ad96683d"
+    expected_sha256="febda574ac4e036bf91e1ef9d33ec5e24dbfad6839eb0defa6abc12125186b74"
     ;;
   aarch64|arm64)
     mise_archive="mise-${MISE_VERSION}-linux-arm64.tar.gz"
-    expected_sha256="763f1bccf74f5c34f766a189a4a029a88d44b83f709e28af497ce2aae2704ead"
+    expected_sha256="bc2f838d484199e1af132f4cbed0a9a9a8b2a61e8b5203bc3ebc275d0ee69875"
     ;;
   *)
     echo "error: unsupported architecture: $(uname -m)" >&2

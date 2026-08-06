@@ -18,6 +18,7 @@ INSTRUCTIONS_PATH = REPO_ROOT / ".github/copilot-instructions.md"
 SYNC_SH_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.sh.tmpl"
 SYNC_PS1_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_20-mise-install.sh.tmpl"
+BOOTSTRAP_SH_PATH = REPO_ROOT / "home/run_once_before_20-install-mise.sh.tmpl"
 ZSHRC_PATH = REPO_ROOT / "home/dot_zshrc.tmpl"
 POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 OPERATIONS_PATH = REPO_ROOT / "docs/operations.md"
@@ -132,6 +133,22 @@ def _powershell_mise_upgrade_function() -> str:
 
 
 class MiseConfigTests(unittest.TestCase):
+    def test_mise_bootstrap_excludes_known_vulnerable_release(self) -> None:
+        bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
+        version_match = re.search(
+            r'^MISE_VERSION="v(\d+)\.(\d+)\.(\d+)"$',
+            bootstrap_script,
+            re.MULTILINE,
+        )
+
+        self.assertIsNotNone(version_match)
+        version = tuple(int(part) for part in version_match.groups())
+        self.assertGreaterEqual(version, (2026, 7, 14), "GHSA-g74g-rg72-j2p3")
+        self.assertEqual(
+            len(re.findall(r'expected_sha256="[0-9a-f]{64}"', bootstrap_script)),
+            2,
+        )
+
     def test_mise_install_does_not_retry_without_github_credentials(self) -> None:
         install_script = INSTALL_SH_PATH.read_text(encoding="utf-8")
 
