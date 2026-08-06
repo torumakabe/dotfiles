@@ -96,7 +96,7 @@ for v in <古い版> <入らない版>; do
 done
 ```
 
-古い版にだけ証跡があれば証跡後退である。まず上流の公開経路が変わったのかを確認する（リリース workflow の差分、公開者）。変わっていなければレジストリ側で剥がれている。社内 npm プロキシ (Azure DevOps Artifacts) は `dist.integrity` / `signatures` / `attestations` を全バージョンで落とし、`_npmUser.trustedPublisher` の保持もバージョンによってばらつく。
+古い版にだけ証跡があれば証跡後退である。まず上流の公開経路が変わったのかを確認する（リリース workflow の差分、公開者）。変わっていなければレジストリ側で剥がれている。利用中の npm レジストリプロキシは `dist.integrity` / `signatures` / `attestations` を全バージョンで落とし、`_npmUser.trustedPublisher` の保持もバージョンによってばらつく。
 
 対処は `trust_policy_excludes` をバージョン指定で足す。
 
