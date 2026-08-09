@@ -18,6 +18,7 @@ def make_ctx(
     tool_name: str = "",
     tool_args: dict | None = None,
     command: str = "",
+    project_root: pathlib.Path | None = None,
     allowed_patterns: list[str] | None = None,
     blocked_patterns: list[str] | None = None,
     ask_patterns: list[str] | None = None,
@@ -26,6 +27,7 @@ def make_ctx(
         tool_name=tool_name,
         tool_args=tool_args or {},
         command=command,
+        project_root=project_root or pathlib.Path.cwd(),
         allowed_patterns=allowed_patterns or [],
         blocked_patterns=blocked_patterns or [],
         ask_patterns=ask_patterns or [],
@@ -90,50 +92,45 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
         self.assertEqual(decision["permissionDecision"], "deny")
         self.assertTrue(decision["permissionDecisionReason"].startswith("Blocked pattern:"))
 
-    def test_allows_azure_deploy_plan(self) -> None:
-        result = run_hook(
-            SCRIPT_PATH,
-            {
-                "toolName": "apply_patch",
-                "toolArgs": (
-                    "*** Begin Patch\n"
-                    "*** Update File: .azure/deployment-plan.md\n"
-                    "*** End Patch\n"
-                ),
-            },
-        )
+    def test_allows_azure_deploy_plan_with_unix_or_windows_separators(self) -> None:
+        for tool_name in ("view", "apply_patch", "edit", "create", "write"):
+            for path in (".azure/deployment-plan.md", r".azure\deployment-plan.md"):
+                with self.subTest(tool_name=tool_name, path=path):
+                    payload = self._payload_for_path(tool_name, pathlib.Path(path))
+                    payload["cwd"] = str(REPO_ROOT)
+                    result = run_hook(SCRIPT_PATH, payload)
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, "")
 
-    def test_allows_windows_separators_for_azure_deploy_plan(self) -> None:
-        result = run_hook(
-            SCRIPT_PATH,
-            {
-                "toolName": "apply_patch",
-                "toolArgs": (
-                    "*** Begin Patch\n"
-                    "*** Update File: .azure\\deployment-plan.md\n"
-                    "*** End Patch\n"
-                ),
-            },
-        )
+    def test_uses_hook_input_cwd_for_absolute_project_path(self) -> None:
+        with tempfile.TemporaryDirectory() as project_dir, tempfile.TemporaryDirectory() as hook_dir:
+            project_root = pathlib.Path(project_dir).resolve()
+            plan = project_root / ".azure/deployment-plan.md"
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "")
+            for tool_name in ("view", "apply_patch", "edit", "create", "write"):
+                with self.subTest(tool_name=tool_name):
+                    payload = self._payload_for_path(tool_name, plan)
+                    payload["cwd"] = str(project_root)
+                    result = run_hook(
+                        SCRIPT_PATH,
+                        payload,
+                        cwd=pathlib.Path(hook_dir),
+                    )
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, "")
 
     def test_allows_absolute_project_azure_deploy_plan_for_file_tools(self) -> None:
         with tempfile.TemporaryDirectory() as project_dir:
             project_root = pathlib.Path(project_dir).resolve()
             plan = project_root / ".azure/deployment-plan.md"
 
-            for tool_name in ("apply_patch", "edit", "create", "write"):
+            for tool_name in ("view", "apply_patch", "edit", "create", "write"):
                 with self.subTest(tool_name=tool_name):
-                    result = run_hook(
-                        SCRIPT_PATH,
-                        self._payload_for_path(tool_name, plan),
-                        cwd=project_root,
-                    )
+                    payload = self._payload_for_path(tool_name, plan)
+                    payload["cwd"] = str(project_root)
+                    result = run_hook(SCRIPT_PATH, payload, cwd=project_root)
 
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stdout, "")
@@ -144,22 +141,16 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
             ".azure/dev/.env",
             ".azure/dev/notes.txt",
         ):
-            with self.subTest(path=path):
-                result = run_hook(
-                    SCRIPT_PATH,
-                    {
-                        "toolName": "apply_patch",
-                        "toolArgs": (
-                            "*** Begin Patch\n"
-                            f"*** Update File: {path}\n"
-                            "*** End Patch\n"
-                        ),
-                    },
-                )
+            for tool_name in ("view", "apply_patch"):
+                with self.subTest(path=path, tool_name=tool_name):
+                    result = run_hook(
+                        SCRIPT_PATH,
+                        self._payload_for_path(tool_name, pathlib.Path(path)),
+                    )
 
-                self.assertEqual(result.returncode, 0, result.stderr)
-                decision = json.loads(result.stdout)
-                self.assertEqual(decision["permissionDecision"], "deny")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    decision = json.loads(result.stdout)
+                    self.assertEqual(decision["permissionDecision"], "deny")
 
     def test_denies_home_azure_deployment_plan(self) -> None:
         for path in (
@@ -199,11 +190,13 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
             }
 
             for target_name, target in targets.items():
-                for tool_name in ("apply_patch", "edit", "create", "write"):
+                for tool_name in ("view", "apply_patch", "edit", "create", "write"):
                     with self.subTest(target=target_name, tool_name=tool_name):
+                        payload = self._payload_for_path(tool_name, target)
+                        payload["cwd"] = str(project_root)
                         result = run_hook(
                             SCRIPT_PATH,
-                            self._payload_for_path(tool_name, target),
+                            payload,
                             cwd=project_root,
                         )
 
@@ -223,11 +216,13 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
                 self.skipTest(f"symlinks unavailable: {error}")
             plan = azure_link / "deployment-plan.md"
 
-            for tool_name in ("apply_patch", "edit", "create", "write"):
+            for tool_name in ("view", "apply_patch", "edit", "create", "write"):
                 with self.subTest(tool_name=tool_name):
+                    payload = self._payload_for_path(tool_name, plan)
+                    payload["cwd"] = str(project_root)
                     result = run_hook(
                         SCRIPT_PATH,
-                        self._payload_for_path(tool_name, plan),
+                        payload,
                         cwd=project_root,
                     )
 
@@ -246,6 +241,7 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
                     "*** Update File: .azure/config.json\n"
                     "*** End Patch\n"
                 ),
+                "cwd": str(REPO_ROOT),
             },
         )
 
