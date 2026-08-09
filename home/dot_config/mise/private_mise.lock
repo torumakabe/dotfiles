@@ -139,33 +139,33 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url_api = "https://api.github.com/repos/sagiegurari/cargo-make/releases/assets/221410756"
 
 [[tools.codex]]
-version = "0.146.0"
+version = "0.146.1"
 backend = "aqua:openai/codex"
 
 [tools.codex."platforms.linux-arm64"]
-checksum = "sha256:c6eb28ec19bb5615b60e6787165ef28482481c2ce2617da565b83e591bc44c13"
-url = "https://github.com/openai/codex/releases/download/rust-v0.146.0/codex-package-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/493444553"
+checksum = "sha256:a72b2bd37dd69ece77f5584a418bc34ecfa4b28e769727134a1d604b4b2b8e5f"
+url = "https://github.com/openai/codex/releases/download/rust-v0.146.1/codex-package-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/502807806"
 
 [tools.codex."platforms.linux-x64"]
-checksum = "sha256:3c89125af1d7c98abec8beb551292ef99daca52e204e5852a9139feae2c467e5"
-url = "https://github.com/openai/codex/releases/download/rust-v0.146.0/codex-package-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/493444505"
+checksum = "sha256:15d9b6aaa47ee02743266581f8ab96b6049e3a2a13a82fbd7920745ba9fc34cb"
+url = "https://github.com/openai/codex/releases/download/rust-v0.146.1/codex-package-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/502807717"
 
 [tools.codex."platforms.macos-arm64"]
-checksum = "sha256:cd961b480f6dfc4703bd244601f1927231fa31a587cb9046ccdffa6c4c29e7d5"
-url = "https://github.com/openai/codex/releases/download/rust-v0.146.0/codex-package-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/493444574"
+checksum = "sha256:a0be385972f38d02e81f9b40de1f842daf8354636fc295666b8630d2f6a5aec6"
+url = "https://github.com/openai/codex/releases/download/rust-v0.146.1/codex-package-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/502807854"
 
 [tools.codex."platforms.windows-arm64"]
-checksum = "sha256:a945559cc0da3437c022d53e5f601f9e8c95980d717c9aad82997e4582ecd55e"
-url = "https://github.com/openai/codex/releases/download/rust-v0.146.0/codex-package-x86_64-pc-windows-msvc.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/493444472"
+checksum = "sha256:6b26524c4287564a2c6c3511e73dcd32ea3c8c0a994cc1caa731b63f7844c8b6"
+url = "https://github.com/openai/codex/releases/download/rust-v0.146.1/codex-package-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/502807746"
 
 [tools.codex."platforms.windows-x64"]
-checksum = "sha256:a945559cc0da3437c022d53e5f601f9e8c95980d717c9aad82997e4582ecd55e"
-url = "https://github.com/openai/codex/releases/download/rust-v0.146.0/codex-package-x86_64-pc-windows-msvc.tar.gz"
-url_api = "https://api.github.com/repos/openai/codex/releases/assets/493444472"
+checksum = "sha256:6b26524c4287564a2c6c3511e73dcd32ea3c8c0a994cc1caa731b63f7844c8b6"
+url = "https://github.com/openai/codex/releases/download/rust-v0.146.1/codex-package-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/openai/codex/releases/assets/502807746"
 
 [[tools.cosign]]
 version = "3.1.3"
@@ -763,37 +763,37 @@ url_api = "https://api.github.com/repos/aquasecurity/trivy/releases/assets/49993
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.12.2"
+version = "0.12.3"
 backend = "aqua:astral-sh/uv"
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:73b87f0d65d7dfcd39753a51ce65592360b02c29f8e1bc2c85cc4190fe914499"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.2/uv-aarch64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/502996507"
+checksum = "sha256:fa513fca1eb2913334c944fe9adbdd410274a1cbe8dd05d03699a9eb85311d4e"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/505387718"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:2dbe8209c9592f6d1009b8565f4bf29813427907bee2236023c013101ede343f"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.2/uv-x86_64-unknown-linux-musl.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/502996593"
+checksum = "sha256:0643b9fb8c9fb27458e709ce6ff939695013c41975ff7b02d3f3b138d8d4bdb3"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/505387821"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:fa909fea3bc06f460db79017030a221fdbc43ec4478f089cb554d8335c090817"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.2/uv-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/502996487"
+checksum = "sha256:546f7f8a6c70ff13a3a9d2bc958db3427298cebf3e0cb756f9177133b7068843"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/505387707"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:01442d8ce5c7124151a73e697c836d252c6da853c18c73206d3cc4c2378a91d2"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.2/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/502996579"
+checksum = "sha256:b23350c79e8ad0192b8124af13a0f17e8d4e4549524785e1aef389ae5a06990e"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/505387809"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:01442d8ce5c7124151a73e697c836d252c6da853c18c73206d3cc4c2378a91d2"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.2/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/502996579"
+checksum = "sha256:b23350c79e8ad0192b8124af13a0f17e8d4e4549524785e1aef389ae5a06990e"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.3/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/505387809"
 provenance = "github-attestations"
 
 [[tools.yq]]
