@@ -18,7 +18,6 @@ def make_ctx(
     tool_name: str = "",
     tool_args: dict | None = None,
     command: str = "",
-    project_root: pathlib.Path | None = None,
     allowed_patterns: list[str] | None = None,
     blocked_patterns: list[str] | None = None,
     ask_patterns: list[str] | None = None,
@@ -27,7 +26,6 @@ def make_ctx(
         tool_name=tool_name,
         tool_args=tool_args or {},
         command=command,
-        project_root=project_root or pathlib.Path.cwd(),
         allowed_patterns=allowed_patterns or [],
         blocked_patterns=blocked_patterns or [],
         ask_patterns=ask_patterns or [],
@@ -103,19 +101,19 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stdout, "")
 
-    def test_uses_hook_input_cwd_for_absolute_project_path(self) -> None:
-        with tempfile.TemporaryDirectory() as project_dir, tempfile.TemporaryDirectory() as hook_dir:
+    def test_uses_hook_process_cwd_for_absolute_project_path(self) -> None:
+        with tempfile.TemporaryDirectory() as project_dir:
             project_root = pathlib.Path(project_dir).resolve()
             plan = project_root / ".azure/deployment-plan.md"
 
             for tool_name in ("view", "apply_patch", "edit", "create", "write"):
                 with self.subTest(tool_name=tool_name):
                     payload = self._payload_for_path(tool_name, plan)
-                    payload["cwd"] = str(project_root)
+                    payload["cwd"] = str(pathlib.Path.home())
                     result = run_hook(
                         SCRIPT_PATH,
                         payload,
-                        cwd=pathlib.Path(hook_dir),
+                        cwd=project_root,
                     )
 
                     self.assertEqual(result.returncode, 0, result.stderr)

@@ -143,7 +143,6 @@ class CheckContext(NamedTuple):
     tool_name: str
     tool_args: dict[str, Any]
     command: str
-    project_root: Path
     allowed_patterns: list[str]
     blocked_patterns: list[str]
     ask_patterns: list[str]
@@ -254,7 +253,7 @@ def matches_allowed_path(
     patterns: list[str],
     project_root: Path | None = None,
 ) -> bool:
-    """Return True when a path resolves to a project-contained exception."""
+    """Return True when a path resolves inside the hook's configured cwd."""
     raw_target = target.strip().strip("\"'")
     if raw_target.lower().startswith("file://"):
         return False
@@ -339,7 +338,7 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
     path_arg_values = [
         value
         for value in path_arg_values
-        if not matches_allowed_path(value, ctx.allowed_patterns, ctx.project_root)
+        if not matches_allowed_path(value, ctx.allowed_patterns)
     ]
 
     for prop_value in path_arg_values:
@@ -696,8 +695,6 @@ def build_context() -> CheckContext:
     else:
         tool_args = parse_tool_args(raw_tool_args)
     command: str = tool_args.get("command", "")
-    input_cwd = input_data.get("cwd")
-    project_root = Path(input_cwd).resolve() if isinstance(input_cwd, str) and input_cwd else Path.cwd().resolve()
 
     script_dir = Path(__file__).resolve().parent
     hooks_dir = script_dir.parent
@@ -712,7 +709,6 @@ def build_context() -> CheckContext:
         tool_name=tool_name,
         tool_args=tool_args,
         command=command,
-        project_root=project_root,
         allowed_patterns=load_config_lines(allowed_file),
         blocked_patterns=load_config_lines(blocked_file),
         ask_patterns=load_config_lines(ask_file),

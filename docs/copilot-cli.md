@@ -56,7 +56,11 @@ GitHub Docs の Agent Finder 手順に従い、`home/private_dot_copilot/skills/
 
 パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化する。判定の優先度は `deny > ask > no opinion（空出力）` とし、`allow` は出力しない（[ADR-006](adr/006-pretooluse-hook-no-allow.md)）。
 
-`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。`allowed-files.txt` の例外は、シェルが `cd` で基準ディレクトリを変更できるため、シェルコマンドには適用しない。ファイルツールの絶対パスは、PreToolUse 入力の `cwd` をプロジェクトルートとして判定する。
+`copilot-guard.py` の `blocked-files.txt` チェックは `view` / `edit` 系ツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。`allowed-files.txt` の例外は、シェルが `cd` で基準ディレクトリを変更できるため、シェルコマンドには適用しない。
+
+すべての command Hook は `cwd: "."` でリポジトリルートから起動する。guard はファイルツールの絶対パスをそのルートに対して判定し、audit Hook は同じルートを操作元として記録する。PreToolUse 入力の `cwd` は、Copilot Workspace セッションで GitHub Copilot のインストール先になる場合があるため、判定には使わない。
+
+Copilot CLI は Hook 設定をセッション開始時に読み込む。`hooks.json` を配備した後、既存セッションへ `cwd` の変更を反映するにはセッションを再起動する。
 
 動作確認:
 
