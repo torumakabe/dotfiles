@@ -32,6 +32,11 @@ class CopilotHooksConfigTests(unittest.TestCase):
                     command["powershell"].startswith(EXPECTED_POWERSHELL_PREFIX)
                 )
 
+    def test_all_commands_run_from_repository_root(self) -> None:
+        for command in _commands():
+            with self.subTest(command=command):
+                self.assertEqual(command["cwd"], ".")
+
     @unittest.skipUnless(shutil.which("bash"), "bash is required")
     @unittest.skipIf(os.name == "nt", "the POSIX stub requires a POSIX shell")
     def test_bash_exports_uv_allowlist_to_hook_process(self) -> None:
