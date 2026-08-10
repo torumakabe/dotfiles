@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-WSL 上で 1Password の SSH 署名 (`gpg.format = ssh`) を使うと、`git verify-commit` / `git log --show-signature` が `Could not verify signature.` で失敗する。原因は git と 1Password の Windows バイナリの間の改行の不整合:
+Git 2.36 未満の WSL で 1Password の SSH 署名 (`gpg.format = ssh`) を使うと、`git verify-commit` / `git log --show-signature` が `Could not verify signature.` で失敗する。原因は git と 1Password の Windows バイナリの間の改行の不整合:
 
 1. git は `op-ssh-sign-wsl.exe -Y find-principals` を呼び stdout から principal を取り出す
 2. Windows 流に CRLF で出力されるため `993850+...github.com\r\n` となる
@@ -41,8 +41,7 @@ WSL 限定で `op-ssh-sign-wsl.exe` の stdout/stderr から CR を剥がすラ�
 ## Consequences
 
 - WSL でも `git verify-commit` / `git log --show-signature` がローカル検証できる
-- 1Password が CRLF 出力を改善した場合は wrapper を撤去できる（`.github/copilot-instructions.md` のワークアラウンド節で追跡）
-- 将来 git 本体が find-principals 出力の `\r` を剥がすよう修正された場合も同様に撤去可能
+- Git 2.36 以降は find-principals 出力の `\r` を剥がすが、Git 2.36 未満への fallback が残る対応 WSL 経路では wrapper が必要になる。撤去条件は `.github/copilot-instructions.md` のワークアラウンド節で追跡する
 - wrapper は bash の `set -o pipefail` と process substitution に依存するため、`/usr/bin/env bash` が必須
 - `wsl.conf` で interop を無効化した WSL では `isWSL` は真のままだが、本 ADR の 3 ヶ所では偽と同じ扱いになる。その環境では `.exe` を起動できずラッパーも機能しないため、この扱いが正しい
 - interop を確認していなかった時期は、Dev Container で `gpg.ssh.program` がラッパーを指し、`home/.chezmoiignore` の `not .isWSL` ゲートが外れてラッパーが不要に配布され、TTY があれば `windowsUser` の入力を求められた（実測）

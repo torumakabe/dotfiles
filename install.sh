@@ -5,7 +5,7 @@
 
 set -eu
 
-CHEZMOI_VERSION="2.70.0"
+CHEZMOI_VERSION="2.72.0"
 
 download_file() {
   url=$1
@@ -74,19 +74,19 @@ if ! command -v chezmoi >/dev/null 2>&1; then
   case "${os}-${arch}" in
     linux-amd64)
       archive="chezmoi_${CHEZMOI_VERSION}_linux_amd64.tar.gz"
-      expected_sha256="32dbc87a4db7163d0f8c3156b631e3ee1cc6fed400f43ff467eca4211f2905e7"
+      expected_sha256="0d6665b96c527d57fdc562bf19e808f80f48c2d977062c03e3e65c6b09eafbce"
       ;;
     linux-arm64)
       archive="chezmoi_${CHEZMOI_VERSION}_linux_arm64.tar.gz"
-      expected_sha256="c65fb55bee4fb2bc14362998e2ce0cf1b1688bce0abfd7dd48cbac6448d6fc75"
+      expected_sha256="e79a27621256390f03166d3965e6a1946f983a096c4d90f02c43d2aa5b563728"
       ;;
     darwin-amd64)
       archive="chezmoi_${CHEZMOI_VERSION}_darwin_amd64.tar.gz"
-      expected_sha256="8d8abb5da0805ce6fa4d387cf3d9615281ad5b26007bf4d469af603ab3c237af"
+      expected_sha256="41be255eacf46b1b333591b4ddc7e90e2aa98ccb8dce47609b8284b856841652"
       ;;
     darwin-arm64)
       archive="chezmoi_${CHEZMOI_VERSION}_darwin_arm64.tar.gz"
-      expected_sha256="87142ac0465e9b1cd04a71c06c5164867fded7778c3c098f8efbea3ee9df1ade"
+      expected_sha256="53e576042afba703290bbc320e64d0b6bdf1082a8fb9f0d13b97e68a6e6c059f"
       ;;
     *)
       echo "error: unsupported platform: ${os}-${arch}" >&2
