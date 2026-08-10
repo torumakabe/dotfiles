@@ -119,6 +119,26 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(result.stdout, "")
 
+    def test_denies_plan_when_hook_process_cwd_is_outside_payload_project(self) -> None:
+        with tempfile.TemporaryDirectory() as parent_dir:
+            parent = pathlib.Path(parent_dir).resolve()
+            project_root = parent / "project"
+            process_root = parent / "hook-process"
+            project_root.mkdir()
+            process_root.mkdir()
+            plan = project_root / ".azure/deployment-plan.md"
+
+            payload = self._payload_for_path("view", plan)
+            payload["cwd"] = str(project_root)
+            result = run_hook(SCRIPT_PATH, payload, cwd=process_root)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            decision = json.loads(result.stdout)
+            self.assertEqual(decision["permissionDecision"], "deny")
+            self.assertTrue(
+                decision["permissionDecisionReason"].startswith("Blocked pattern:")
+            )
+
     def test_allows_absolute_project_azure_deploy_plan_for_file_tools(self) -> None:
         with tempfile.TemporaryDirectory() as project_dir:
             project_root = pathlib.Path(project_dir).resolve()
@@ -236,7 +256,12 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
                 "toolArgs": (
                     "*** Begin Patch\n"
                     "*** Update File: .azure/deployment-plan.md\n"
-                    "*** Update File: .azure/config.json\n"
+                    "*** Add File: .azure/vmpoc-disabled.parameters.json\n"
+                    "+{}\n"
+                    "*** Add File: .azure/vmpoc-both-one.parameters.json\n"
+                    "+{}\n"
+                    "*** Add File: .azure/vmpoc-fallback.parameters.json\n"
+                    "+{}\n"
                     "*** End Patch\n"
                 ),
                 "cwd": str(REPO_ROOT),
@@ -246,6 +271,22 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         decision = json.loads(result.stdout)
         self.assertEqual(decision["permissionDecision"], "deny")
+        self.assertIn(".azure/vmpoc-disabled.parameters.json", decision["permissionDecisionReason"])
+
+    def test_denies_allowed_path_for_unrecognized_path_tool(self) -> None:
+        result = run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": "future_path_tool",
+                "toolArgs": {"path": ".azure/deployment-plan.md"},
+                "cwd": str(REPO_ROOT),
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decision = json.loads(result.stdout)
+        self.assertEqual(decision["permissionDecision"], "deny")
+        self.assertIn(".azure/deployment-plan.md", decision["permissionDecisionReason"])
 
     def test_asks_for_protected_hook_apply_patch_target(self) -> None:
         result = run_hook(
