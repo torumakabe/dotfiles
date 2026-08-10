@@ -289,6 +289,7 @@ def matches_allowed_path(
 
 
 PATH_ARG_KEYS: tuple[str, ...] = ("path", "file", "uri", "glob", "paths", "files", "uris", "globs")
+ALLOWED_PATH_TOOL_NAMES = frozenset(("view", "apply_patch", "edit", "create", "write"))
 
 
 def extract_path_arg_values(tool_args: dict[str, Any]) -> list[str]:
@@ -335,16 +336,21 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
     Blocked patterns are checked first (deny takes priority over ask).
     """
     path_arg_values = extract_path_arg_values(ctx.tool_args)
-    path_arg_values = [
-        value
-        for value in path_arg_values
-        if not matches_allowed_path(value, ctx.allowed_patterns)
-    ]
+    if ctx.tool_name in ALLOWED_PATH_TOOL_NAMES:
+        path_arg_values = [
+            value
+            for value in path_arg_values
+            if not matches_allowed_path(value, ctx.allowed_patterns)
+        ]
 
     for prop_value in path_arg_values:
         matched_pattern = check_blocked_path(prop_value, ctx.blocked_patterns)
         if matched_pattern:
-            return CheckResult("deny", f"Blocked pattern: {matched_pattern}")
+            display_path = normalize_path(prop_value)[:500]
+            return CheckResult(
+                "deny",
+                f"Blocked pattern: {matched_pattern} (path: {display_path})",
+            )
 
     if ctx.command:
         matched_pattern = check_blocked_command(ctx.command, ctx.blocked_patterns)
