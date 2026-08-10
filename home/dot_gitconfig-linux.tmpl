@@ -7,9 +7,8 @@
 [core]
 	editor = vim -c \"set fenc=utf-8\"
 [gpg "ssh"]
-	# CRLF interop ワークアラウンド (ADR-012): op-ssh-sign-wsl.exe を直接呼ぶと
-	# find-principals 出力の \r が後段 verify -I に混入し検証失敗するため、
-	# CR を剥がす wrapper を経由する。
+	# CRLF interop ワークアラウンド (ADR-012): Git 2.36 未満では find-principals
+	# 出力の \r が verify -I に混入するため、CR を剥がす wrapper を経由する。
 	program = {{ .chezmoi.homeDir }}/.local/bin/op-ssh-sign-wrapper.sh
 {{- else -}}
 [core]
