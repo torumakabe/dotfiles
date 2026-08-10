@@ -8,7 +8,7 @@ README から分離した、構成と設計判断の詳細である。運用手�
 home/                           ← chezmoi source
 ├── .chezmoi.toml.tmpl          ← 共通 flag・変数定義
 ├── .chezmoiignore              ← 条件付き除外
-├── .chezmoiremove              ← 不要ファイルの削除（現在は ~/.mise.toml）
+├── .chezmoiremove              ← 不要ファイルの削除
 ├── dot_gitconfig*.tmpl         ← Git 設定
 ├── dot_zshrc.tmpl              ← 対話 zsh
 ├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
