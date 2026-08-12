@@ -543,6 +543,9 @@ $result = @{{
     def test_closed_azure_warning_workaround_is_removed(self) -> None:
         self.assertNotRegex(self.zshrc, r"(?m)^az\(\)\s*\{")
 
+    def test_copilot_app_cli_path_override_is_removed(self) -> None:
+        self.assertNotIn("COPILOT_CLI_PATH", self.zshrc)
+
     def test_ci_runs_for_home_changes_on_pull_requests_and_main_pushes(self) -> None:
         pull_request = self.workflow.split("  push:", maxsplit=1)[0]
         push = self.workflow.split("  push:", maxsplit=1)[1].split(

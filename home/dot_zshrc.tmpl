@@ -381,10 +381,4 @@ mise-upgrade() {
   echo "✅ mise ツールの更新が完了しました"
 }
 
-{{ if eq .chezmoi.os "darwin" -}}
-# Copilot Desktop に brew 管理の copilot CLI パスを公開
-if command -v copilot >/dev/null 2>&1; then
-  launchctl setenv COPILOT_CLI_PATH "$(command -v copilot)"
-fi
-{{ end -}}
 {{ end -}}

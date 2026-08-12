@@ -23,7 +23,7 @@
 | macOS | `brew` |
 | Windows | `winget` (`reference/windows/configuration.dsc.yaml`) |
 
-更新は全 OS で `copilot update`。macOS では Copilot Desktop から参照できるよう、`.zshrc` で `COPILOT_CLI_PATH` を公開する。
+更新は全 OS で `copilot update`。
 
 Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilot` が同梱されていることがあり、`copilot update` の対象外のまま古くなる。このため導入判定は `command -v copilot` ではなく `~/.local/bin/copilot` の実体で行う（[`docs/troubleshooting.md`](troubleshooting.md#codespaces--dev-container-で-copilot-のバージョンが古い)）。
 
