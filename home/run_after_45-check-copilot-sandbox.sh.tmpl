@@ -8,8 +8,14 @@ warn() {
   printf 'Warning: %s\n' "$*" >&2
 }
 
+settings_path="${COPILOT_HOME:-$HOME/.copilot}/settings.json"
+if [ -f "${settings_path}" ] &&
+  jq -e '.sandbox.enabled == false' "${settings_path}" >/dev/null 2>&1; then
+  exit 0
+fi
+
 if ! command -v bwrap >/dev/null 2>&1; then
-  warn "bubblewrap is not on PATH; Copilot sandbox commands will require an approved bypass."
+  warn "bubblewrap is not on PATH; shell commands may not run while the Copilot sandbox is enabled. Check with '/sandbox status' or disable with '/sandbox disable'."
   exit 0
 fi
 
@@ -32,6 +38,6 @@ if [ -r /proc/sys/user/max_user_namespaces ] &&
 fi
 
 if ! bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true >/dev/null 2>&1; then
-  warn "bubblewrap could not start an unprivileged sandbox; Copilot commands will require an approved bypass."
+  warn "bubblewrap could not start an unprivileged sandbox; shell commands may not run while the Copilot sandbox is enabled. Check with '/sandbox status' or disable with '/sandbox disable'."
 fi
 {{- end -}}
