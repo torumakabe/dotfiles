@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # Copilot CLI local sandbox 設定 (Linux/macOS)
 #
-# Copilot sandbox policy version: 2
+# Copilot sandbox policy version: 3
 
 set -euo pipefail
 
@@ -11,13 +11,23 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-settings_path="${HOME}/.copilot/settings.json"
+copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
+settings_path="${copilot_home}/settings.json"
 settings_dir="$(dirname "${settings_path}")"
 mkdir -p "${settings_dir}"
 
-tmp="$(mktemp)"
-empty_input="${tmp}.empty"
-trap 'rm -f "${tmp}" "${empty_input}"' EXIT
+tmp_dir="$(mktemp -d)"
+merged="${tmp_dir}/merged.json"
+empty_input="${tmp_dir}/empty.json"
+desired="${tmp_dir}/desired.json"
+settings_tmp="$(mktemp "${settings_dir}/.settings.json.XXXXXX")"
+chmod 0600 "${settings_tmp}"
+trap 'rm -f "${merged}" "${empty_input}" "${desired}" "${settings_tmp}"; rmdir "${tmp_dir}" 2>/dev/null || true' EXIT
+
+cat >"${desired}" <<'JSON'
+{{ include ".chezmoitemplates/copilot-user-settings.json" }}
+JSON
+jq -e . "${desired}" >/dev/null
 
 if [ -f "${settings_path}" ]; then
   input_path="${settings_path}"
@@ -26,13 +36,28 @@ else
   printf '{}\n' >"${input_path}"
 fi
 
-jq '
-  .sandbox = (
-    (.sandbox // {})
-    | .enabled = true
-    | .sandboxMcpServers = false
-    | .sandboxLspServers = false
-    | .addCurrentWorkingDirectory = false
+# `/sandbox disable` persists sandbox.enabled=false in settings.json, and that
+# must survive this template update until `/sandbox enable` restores it. jq's
+# `//` cannot be used here because it also substitutes on `false`; presence
+# and type must be checked explicitly before the desired template is merged.
+enabled_present="$(jq -r '(.sandbox // {}) | has("enabled")' "${input_path}")"
+if [ "${enabled_present}" = "true" ]; then
+  enabled_type="$(jq -r '.sandbox.enabled | type' "${input_path}")"
+  case "${enabled_type}" in
+  boolean)
+    existing_enabled="$(jq -c '.sandbox.enabled' "${input_path}")"
+    ;;
+  *)
+    echo "Error: ${settings_path} has a non-boolean sandbox.enabled (${enabled_type}); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply." >&2
+    exit 1
+    ;;
+  esac
+fi
+
+jq --slurpfile desired "${desired}" '
+  .experimental = $desired[0].experimental
+  | .sandbox = (
+    ((.sandbox // {}) * $desired[0].sandbox)
     | .userPolicy = (
       (.userPolicy // {})
       | del(.version)
@@ -45,15 +70,19 @@ jq '
       )
       | .network = (
         (.network // {})
-        | .allowOutbound = true
-        | .allowLocalNetwork = true
-        | .allowedHosts = []
-        | .blockedHosts = []
+        | del(.allowedHosts, .blockedHosts)
       )
     )
   )
-' "${input_path}" >"${tmp}"
+' "${input_path}" >"${merged}"
 
-mv "${tmp}" "${settings_path}"
+if [ "${enabled_present}" = "true" ]; then
+  jq --argjson enabled "${existing_enabled}" '.sandbox.enabled = $enabled' "${merged}" >"${settings_tmp}"
+else
+  cat "${merged}" >"${settings_tmp}"
+fi
+
+jq -e . "${settings_tmp}" >/dev/null
+mv -f "${settings_tmp}" "${settings_path}"
 echo "Configured Copilot CLI local sandbox in ${settings_path}"
 {{- end -}}
