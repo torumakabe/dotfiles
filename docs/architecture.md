@@ -28,7 +28,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 - 設定配布 `chezmoi` / ツール版管理 `mise` / Python 実行 `uv`
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
 - `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` でネットワーク以外の危険操作を抑止、`postToolUse` で監査ログ
-- Copilot CLI local sandbox を有効化
+- Copilot CLI local sandbox は環境別の初期値を user-level settings へ設定し、OS 別 backend で shell と filesystem policy を適用
 - `copilot-guardrails` で利便性と秘匿環境変数の扱いを固定
 - `gitleaks` 付き pre-commit を `init.templateDir`（ADR-018）と設定ベースフック（ADR-020）の 2 レイヤで配布
 
@@ -45,7 +45,11 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 パス比較前に `\` を `/` へ正規化する。パターンファイルはプロジェクト相対パスとして `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。シンボリックリンク、ジャンクション、file URI、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
 各 command hook は mise shim 経由の `uv run` で起動する。起動時に `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象をフックが必要とする `uv` だけに限定する。これにより `uv` の未導入版は mise が自動導入できる一方、dotnet など無関係な missing ツールの導入失敗はフックの終了状態へ影響しない。
 
-local sandbox が制御するのは Copilot CLI が起動する shell command のネットワーク通信だけである。MCP、LSP、ファイルシステムの隔離は保証しない。方針は [ADR-015](adr/015-copilot-cli-shell-network-via-local-sandbox.md)、実際に投入する値は `home/run_onchange_after_35-configure-copilot-sandbox.{sh,ps1}.tmpl` を正本とする。
+Copilot CLI local sandbox は、user-level settings の `sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean なら、次回以降の `chezmoi apply` とテンプレート更新でもその値を維持する。既存値が boolean 以外なら、暗黙に変換せず適用を停止する。初期値を環境別にする判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) を参照する。
+
+`copilot-guardrails --allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。MCP と LSP は sandbox 対象外である。backend は macOS の Seatbelt、Linux、WSL、Codespaces、Dev Container の bubblewrap、Windows の ProcessContainer である。Linux 系の診断は `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap を確認し、`false` の場合は probe を省略する。診断は利用可否を報告するものであり、sandbox 外での再実行方法が提示されることを保証しない。
+
+コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトを正本とする。
 
 ## git pre-commit フック
 
@@ -60,7 +64,7 @@ gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテ�
 | `.chezmoi.os` | `linux`, `darwin`, `windows` |
 | `.isLinux` / `.isMac` / `.isWindows` | 上から導出 |
 | `.isWSL` | Linux かつ `kernel.osrelease` に `microsoft` を含む。Docker Desktop の WSL2 バックエンドで動くコンテナはホストの WSL カーネルを共有するため、この変数だけでは実 WSL と区別できない。区別が要る箇所では `/proc/sys/fs/binfmt_misc/WSLInterop` の存在を併せて確認する（ADR-012） |
-| `.codespaces` / `.devcontainer` | それぞれ環境変数 `CODESPACES` / `REMOTE_CONTAINERS` の有無で判定。`REMOTE_CONTAINERS` を立てるのは VS Code の Dev Containers 拡張であり、`@devcontainers/cli` は立てない |
+| `.codespaces` / `.devcontainer` | Codespaces は `CODESPACES` で判定する。Dev Container は、VS Code の Dev Containers 拡張が Dotfiles セットアップへ渡す `REMOTE_CONTAINERS` で判定する。判定結果は chezmoi の初期化時に設定へ保存されるため、後続の統合ターミナルに同じ環境変数がなくても維持される |
 | `.windowsUser` / `.corpUser` | 初回セットアップで入力する。入力を求めるのは stdin が TTY のときだけなので、非対話の `chezmoi init` では既存の設定値をそのまま引き継ぐ（引き継がないと空文字で上書きされ、`gitconfig-corp` の includeIf と ADR-012 の署名パスが壊れる） |
 
 ## プラットフォーム機能契約
@@ -74,6 +78,7 @@ gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテ�
 - Windows の `e` は、Microsoft Edit を winget/DSC で管理する Windows 固有機能である（ADR-011）。`mise-self-upgrade` も winget 管理の mise を更新するため Windows 固有である
 - Terraform は公式の PowerShell completion を提供していないため、補完はzshだけで提供する
 - RadicleはWindows向け公式配布を確認できないため、`rad` の補完はzshだけで提供する
+- bubblewrap は Linux と WSL の sandbox backend に必要である。macOS は Seatbelt、Windows は ProcessContainer を使うため導入しない
 
 helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両方で提供する。`fieldalignment` と `fast` は、Unix系とWindowsの両 install scriptで導入する。`gh-stack` は、公式 Copilot skill と GitHub CLI extension が未導入の場合だけ、OS別のセットアップスクリプトで全環境へ導入する。
 
