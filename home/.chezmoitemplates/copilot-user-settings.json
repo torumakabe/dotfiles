@@ -1,0 +1,24 @@
+{
+  "experimental": true,
+  "sandbox": {
+    "enabled": true,
+    "allowBypass": true,
+    "sandboxMcpServers": false,
+    "sandboxLspServers": false,
+    "addCurrentWorkingDirectory": true,
+    "allowDevToolAccess": true,
+    "auth": {
+      "git": true,
+      "gh": true
+    },
+    "userPolicy": {
+      "filesystem": {
+        "clearPolicyOnExit": false
+      },
+      "network": {
+        "allowOutbound": true,
+        "allowLocalNetwork": true
+      }
+    }
+  }
+}
