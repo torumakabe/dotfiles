@@ -251,7 +251,7 @@ POSIX_ENVIRONMENT_CASES = (
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
-    """Pin that `/sandbox disable` survives `chezmoi apply` (see ADR-025)."""
+    """Pin the environment defaults and user override contract in ADR-026."""
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
