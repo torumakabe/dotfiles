@@ -1,9 +1,9 @@
 """Verify the cross-platform Copilot CLI sandbox settings contract.
 
-`sandbox.enabled` defaults to true through the user-level settings template,
-but `/sandbox disable` persists `sandbox.enabled=false` in
-`~/.copilot/settings.json`, and that value must survive every future
-`chezmoi apply` until `/sandbox enable` restores it. The
+On POSIX, `sandbox.enabled` defaults to false in Codespaces and this
+repository's Dev Container, and to true elsewhere. `/sandbox disable`
+persists `sandbox.enabled=false` in `~/.copilot/settings.json`, and that value
+must survive every future `chezmoi apply` until `/sandbox enable` restores it. The
 ``CopilotSandboxEnabledPreservationTests`` below execute the rendered POSIX
 and PowerShell scripts against seeded settings files to pin that contract.
 """
@@ -39,7 +39,13 @@ FILESYSTEM_PATHS = {
 _ENABLED_KEY_ABSENT = object()
 
 
-def _render(path: pathlib.Path, platform: str) -> str:
+def _render(
+    path: pathlib.Path,
+    platform: str,
+    *,
+    codespaces: bool = False,
+    devcontainer: bool = False,
+) -> str:
     result = subprocess.run(
         [
             "chezmoi",
@@ -47,7 +53,13 @@ def _render(path: pathlib.Path, platform: str) -> str:
             str(SOURCE_ROOT),
             "execute-template",
             "--override-data",
-            json.dumps({"chezmoi": {"os": platform, "arch": "amd64"}}),
+            json.dumps(
+                {
+                    "chezmoi": {"os": platform, "arch": "amd64"},
+                    "codespaces": codespaces,
+                    "devcontainer": devcontainer,
+                }
+            ),
             "--file",
             str(path),
         ],
@@ -83,10 +95,22 @@ def _seed_settings(home: pathlib.Path, enabled: object = _ENABLED_KEY_ABSENT) ->
 
 
 def _run_posix_script(
-    home: pathlib.Path, settings_path: pathlib.Path
+    home: pathlib.Path,
+    settings_path: pathlib.Path,
+    *,
+    codespaces: bool = False,
+    devcontainer: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     script_path = home / "configure-sandbox.sh"
-    script_path.write_text(_render(POSIX_SCRIPT_PATH, "linux"), encoding="utf-8")
+    script_path.write_text(
+        _render(
+            POSIX_SCRIPT_PATH,
+            "linux",
+            codespaces=codespaces,
+            devcontainer=devcontainer,
+        ),
+        encoding="utf-8",
+    )
     return subprocess.run(
         ["bash", str(script_path)],
         env={
@@ -201,7 +225,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
 
 
 # (case name, seeded value, expected merged value). ``_ENABLED_KEY_ABSENT``
-# seeds no `sandbox.enabled` key at all, exercising the "first apply" path.
+# seeds an existing settings file without a `sandbox.enabled` key.
 VALID_ENABLED_CASES = (
     ("missing", _ENABLED_KEY_ABSENT, True),
     ("true", True, True),
@@ -217,6 +241,13 @@ INVALID_ENABLED_CASES = (
     ("array", [True]),
 )
 
+# (case name, Codespaces, Dev Container, first-apply default)
+POSIX_ENVIRONMENT_CASES = (
+    ("ordinary-linux", False, False, True),
+    ("codespaces", True, False, False),
+    ("devcontainer", False, True, False),
+)
+
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
@@ -224,13 +255,18 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
-    def test_posix_preserves_or_defaults_enabled(self) -> None:
-        for case_name, seeded, expected in VALID_ENABLED_CASES:
-            with self.subTest(case=case_name):
+    def test_posix_defaults_enabled_when_settings_file_is_absent(self) -> None:
+        for environment, codespaces, devcontainer, expected in POSIX_ENVIRONMENT_CASES:
+            with self.subTest(environment=environment):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     home = pathlib.Path(temp_dir)
-                    settings_path = _seed_settings(home, enabled=seeded)
-                    result = _run_posix_script(home, settings_path)
+                    settings_path = home / ".copilot/settings.json"
+                    result = _run_posix_script(
+                        home,
+                        settings_path,
+                        codespaces=codespaces,
+                        devcontainer=devcontainer,
+                    )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     settings = json.loads(settings_path.read_text(encoding="utf-8"))
                     self.assertIs(settings["sandbox"]["enabled"], expected)
@@ -238,6 +274,30 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                         stat.S_IMODE(settings_path.stat().st_mode),
                         0o600,
                     )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_preserves_or_defaults_enabled(self) -> None:
+        for environment, codespaces, devcontainer, default in POSIX_ENVIRONMENT_CASES:
+            for case_name, seeded, ordinary_expected in VALID_ENABLED_CASES:
+                expected = default if seeded is _ENABLED_KEY_ABSENT else ordinary_expected
+                with self.subTest(environment=environment, case=case_name):
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        home = pathlib.Path(temp_dir)
+                        settings_path = _seed_settings(home, enabled=seeded)
+                        result = _run_posix_script(
+                            home,
+                            settings_path,
+                            codespaces=codespaces,
+                            devcontainer=devcontainer,
+                        )
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                        self.assertIs(settings["sandbox"]["enabled"], expected)
+                        self.assertEqual(
+                            stat.S_IMODE(settings_path.stat().st_mode),
+                            0o600,
+                        )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_preserves_or_defaults_enabled(self) -> None:
@@ -256,19 +316,25 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
     def test_posix_rejects_non_boolean_enabled(self) -> None:
-        for case_name, seeded in INVALID_ENABLED_CASES:
-            with self.subTest(case=case_name):
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    home = pathlib.Path(temp_dir)
-                    settings_path = _seed_settings(home, enabled=seeded)
-                    original = settings_path.read_text(encoding="utf-8")
-                    result = _run_posix_script(home, settings_path)
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("non-boolean", result.stderr)
-                    self.assertIn("sandbox.enabled", result.stderr)
-                    self.assertEqual(
-                        settings_path.read_text(encoding="utf-8"), original
-                    )
+        for environment, codespaces, devcontainer, _ in POSIX_ENVIRONMENT_CASES:
+            for case_name, seeded in INVALID_ENABLED_CASES:
+                with self.subTest(environment=environment, case=case_name):
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        home = pathlib.Path(temp_dir)
+                        settings_path = _seed_settings(home, enabled=seeded)
+                        original = settings_path.read_text(encoding="utf-8")
+                        result = _run_posix_script(
+                            home,
+                            settings_path,
+                            codespaces=codespaces,
+                            devcontainer=devcontainer,
+                        )
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("non-boolean", result.stderr)
+                        self.assertIn("sandbox.enabled", result.stderr)
+                        self.assertEqual(
+                            settings_path.read_text(encoding="utf-8"), original
+                        )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_rejects_non_boolean_enabled(self) -> None:

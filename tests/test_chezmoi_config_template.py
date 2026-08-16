@@ -68,6 +68,13 @@ class ConfigTemplateSourceTests(unittest.TestCase):
         self.assertIn(f'command = "{EXPECTED_PS1_INTERPRETER["command"]}"', self.template)
         self.assertIn(f"args = [{args}]", self.template)
 
+    def test_devcontainer_detection_uses_remote_containers(self) -> None:
+        self.assertIn(
+            '$devcontainer := env "REMOTE_CONTAINERS" | not | not',
+            self.template,
+        )
+        self.assertNotIn('stat "/.dockerenv"', self.template)
+
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi renders the config template")
 class ConfigTemplateBehaviourTests(unittest.TestCase):
@@ -85,10 +92,21 @@ class ConfigTemplateBehaviourTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root, True)
         self.template = CONFIG_TEMPLATE_PATH.read_text(encoding="utf-8")
 
-    def _render(self, existing: str | None, *, stdin_is_atty: bool) -> str:
+    def _render(
+        self,
+        existing: str | None,
+        *,
+        stdin_is_atty: bool,
+        environment: dict[str, str] | None = None,
+    ) -> str:
         config = self.root / "config.toml"
         if existing is not None:
             config.write_text(existing, encoding="utf-8")
+        env = dict(os.environ)
+        for name in ("CODESPACES", "REMOTE_CONTAINERS"):
+            env.pop(name, None)
+        if environment is not None:
+            env.update(environment)
         return subprocess.run(
             [
                 "chezmoi",
@@ -101,6 +119,7 @@ class ConfigTemplateBehaviourTests(unittest.TestCase):
             input=self.template,
             capture_output=True,
             text=True,
+            env=env,
             check=True,
         ).stdout
 
@@ -145,6 +164,23 @@ class ConfigTemplateBehaviourTests(unittest.TestCase):
         rendered = self._render(None, stdin_is_atty=False)
         config = tomllib.loads(rendered)
         self.assertEqual(config["interpreters"]["ps1"], EXPECTED_PS1_INTERPRETER)
+
+    def test_container_environment_detection(self) -> None:
+        cases = (
+            ("ordinary", {}, False, False),
+            ("codespaces", {"CODESPACES": "true"}, True, False),
+            ("devcontainer", {"REMOTE_CONTAINERS": "true"}, False, True),
+        )
+        for name, environment, expected_codespaces, expected_devcontainer in cases:
+            with self.subTest(environment=name):
+                rendered = self._render(
+                    None,
+                    stdin_is_atty=False,
+                    environment=environment,
+                )
+                data = tomllib.loads(rendered)["data"]
+                self.assertIs(data["codespaces"], expected_codespaces)
+                self.assertIs(data["devcontainer"], expected_devcontainer)
 
 
 if __name__ == "__main__":

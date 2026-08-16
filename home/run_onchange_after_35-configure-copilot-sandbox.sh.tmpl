@@ -6,6 +6,8 @@
 
 set -euo pipefail
 
+sandbox_default_enabled={{ if or .codespaces .devcontainer }}false{{ else }}true{{ end }}
+
 if ! command -v jq >/dev/null 2>&1; then
   echo 'jq not found on PATH; cannot configure Copilot sandbox settings.' >&2
   exit 1
@@ -52,6 +54,8 @@ if [ "${enabled_present}" = "true" ]; then
     exit 1
     ;;
   esac
+else
+  existing_enabled="${sandbox_default_enabled}"
 fi
 
 jq --slurpfile desired "${desired}" '
@@ -76,11 +80,7 @@ jq --slurpfile desired "${desired}" '
   )
 ' "${input_path}" >"${merged}"
 
-if [ "${enabled_present}" = "true" ]; then
-  jq --argjson enabled "${existing_enabled}" '.sandbox.enabled = $enabled' "${merged}" >"${settings_tmp}"
-else
-  cat "${merged}" >"${settings_tmp}"
-fi
+jq --argjson enabled "${existing_enabled}" '.sandbox.enabled = $enabled' "${merged}" >"${settings_tmp}"
 
 jq -e . "${settings_tmp}" >/dev/null
 mv -f "${settings_tmp}" "${settings_path}"
