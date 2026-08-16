@@ -78,6 +78,15 @@ def _zsh_only(reason: str) -> dict[str, str]:
     }
 
 
+def _linux_only(reason: str) -> dict[str, str]:
+    return {
+        platform: (
+            "implemented" if platform in {"linux-zsh", "wsl-zsh"} else reason
+        )
+        for platform in PLATFORMS
+    }
+
+
 PLATFORM_CONTRACT = {
     "shell:edit-shortcut": _windows_only(
         "exception: docs/architecture.md documents the Windows-only edit.exe launcher"
@@ -92,6 +101,7 @@ PLATFORM_CONTRACT = {
     "shell:ll": _implemented_everywhere(),
     "shell:copilot-guardrails": _implemented_everywhere(),
     "shell:zoxide": _implemented_everywhere(),
+    "feature:copilot-local-sandbox": _implemented_everywhere(),
     "skill:gh-stack": _implemented_everywhere(),
     "completion:azure-cli": _implemented_everywhere(),
     "completion:kubectl": _implemented_everywhere(),
@@ -109,6 +119,9 @@ PLATFORM_CONTRACT = {
     "tool:fast": _implemented_everywhere(),
     "tool:gh-stack-extension": _implemented_everywhere(),
     "tool:lefthook": _implemented_everywhere(),
+    "tool:bubblewrap": _linux_only(
+        "exception: docs/architecture.md documents the platform-specific MXC backends"
+    ),
     "tool:ty": _implemented_everywhere(),
 }
 
@@ -227,6 +240,7 @@ EXCEPTION_DOCUMENT_IDENTIFIERS = {
     "shell:mise-self-upgrade": ("mise-self-upgrade",),
     "completion:terraform": ("Terraform", "PowerShell completion"),
     "completion:rad": ("Radicle", "Windows"),
+    "tool:bubblewrap": ("bubblewrap", "Seatbelt", "ProcessContainer"),
 }
 
 
