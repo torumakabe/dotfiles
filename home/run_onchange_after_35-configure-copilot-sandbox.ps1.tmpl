@@ -1,13 +1,18 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 2
+# Copilot sandbox policy version: 3
 
 $ErrorActionPreference = 'Stop'
 
-$settingsPath = Join-Path $HOME '.copilot\settings.json'
+$copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
+$settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
 New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+
+$desiredSettings = @'
+{{ include ".chezmoitemplates/copilot-user-settings.json" }}
+'@ | ConvertFrom-Json
 
 if (Test-Path -LiteralPath $settingsPath) {
   try {
@@ -52,6 +57,26 @@ function Get-JsonProperty {
   return $prop.Value
 }
 
+function Merge-JsonObject {
+  param(
+    [Parameter(Mandatory = $true)] [object] $Target,
+    [Parameter(Mandatory = $true)] [object] $Source
+  )
+
+  foreach ($property in $Source.PSObject.Properties) {
+    $targetProperty = $Target.PSObject.Properties[$property.Name]
+    if (
+      $null -ne $targetProperty -and
+      $targetProperty.Value -is [pscustomobject] -and
+      $property.Value -is [pscustomobject]
+    ) {
+      Merge-JsonObject -Target $targetProperty.Value -Source $property.Value
+    } else {
+      Set-JsonProperty -Object $Target -Name $property.Name -Value $property.Value
+    }
+  }
+}
+
 function Remove-JsonProperty {
   param(
     $Object,
@@ -62,6 +87,48 @@ function Remove-JsonProperty {
     $Object.PSObject.Properties.Remove($Name)
   }
 }
+
+# `/sandbox disable` persists sandbox.enabled=$false in settings.json, and that
+# must survive this template update until `/sandbox enable` restores it.
+# PSObject.Properties['enabled'] must be inspected on the pre-merge object,
+# because Merge-JsonObject below would otherwise let the desired template's
+# `true` win over a pre-existing `false`. A present-but-non-boolean value
+# fails explicitly instead of being silently coerced.
+$preMergeSandbox = Get-JsonProperty -Object $settings -Name 'sandbox'
+$preMergeEnabledProperty = if ($null -ne $preMergeSandbox) { $preMergeSandbox.PSObject.Properties['enabled'] } else { $null }
+
+$preserveEnabled = $false
+$preservedEnabledValue = $null
+if ($null -ne $preMergeEnabledProperty) {
+  $preMergeEnabledValue = $preMergeEnabledProperty.Value
+  if ($preMergeEnabledValue -is [bool]) {
+    $preserveEnabled = $true
+    $preservedEnabledValue = $preMergeEnabledValue
+  } else {
+    $enabledTypeDescription = if ($null -eq $preMergeEnabledValue) { 'null' } else { $preMergeEnabledValue.GetType().Name }
+    Write-Error "$settingsPath has a non-boolean sandbox.enabled ($enabledTypeDescription); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply."
+    exit 1
+  }
+}
+
+$preMergePolicy = Get-JsonProperty -Object $preMergeSandbox -Name 'userPolicy'
+$preMergeFilesystem = Get-JsonProperty -Object $preMergePolicy -Name 'filesystem'
+foreach ($pathName in @('readwritePaths', 'readonlyPaths', 'deniedPaths')) {
+  $pathProperty = if ($null -ne $preMergeFilesystem) {
+    $preMergeFilesystem.PSObject.Properties[$pathName]
+  } else {
+    $null
+  }
+  if ($null -ne $pathProperty -and $null -ne $pathProperty.Value -and $pathProperty.Value -isnot [array]) {
+    $pathTypeDescription = $pathProperty.Value.GetType().Name
+    Write-Error "$settingsPath has a non-array sandbox.userPolicy.filesystem.$pathName ($pathTypeDescription); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply."
+    exit 1
+  }
+}
+
+# This template renders only on native Windows. Codespaces and Dev Containers
+# use the POSIX template, which applies their environment-specific false default.
+Merge-JsonObject -Target $settings -Source $desiredSettings
 
 $existingSandbox = Get-JsonProperty -Object $settings -Name 'sandbox'
 $existingPolicy = Get-JsonProperty -Object $existingSandbox -Name 'userPolicy'
@@ -80,19 +147,63 @@ Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
 
 Set-JsonProperty -Object $network -Name 'allowOutbound' -Value $true
 Set-JsonProperty -Object $network -Name 'allowLocalNetwork' -Value $true
-Set-JsonProperty -Object $network -Name 'allowedHosts' -Value @()
-Set-JsonProperty -Object $network -Name 'blockedHosts' -Value @()
+Remove-JsonProperty -Object $network -Name 'allowedHosts'
+Remove-JsonProperty -Object $network -Name 'blockedHosts'
 
 Set-JsonProperty -Object $userPolicy -Name 'filesystem' -Value $filesystem
 Set-JsonProperty -Object $userPolicy -Name 'network' -Value $network
 Remove-JsonProperty -Object $userPolicy -Name 'version'
-Set-JsonProperty -Object $sandbox -Name 'enabled' -Value $true
-Set-JsonProperty -Object $sandbox -Name 'sandboxMcpServers' -Value $false
-Set-JsonProperty -Object $sandbox -Name 'sandboxLspServers' -Value $false
-Set-JsonProperty -Object $sandbox -Name 'addCurrentWorkingDirectory' -Value $false
 Set-JsonProperty -Object $sandbox -Name 'userPolicy' -Value $userPolicy
+if ($preserveEnabled) {
+  Set-JsonProperty -Object $sandbox -Name 'enabled' -Value $preservedEnabledValue
+}
 
 Set-JsonProperty -Object $settings -Name 'sandbox' -Value $sandbox
-$settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
+
+$settingsJson = $settings | ConvertTo-Json -Depth 100
+$temporaryPath = Join-Path $settingsDir ([System.IO.Path]::GetRandomFileName())
+$backupPath = $null
+try {
+  $encoding = [System.Text.UTF8Encoding]::new($false)
+  $stream = [System.IO.File]::Open(
+    $temporaryPath,
+    [System.IO.FileMode]::CreateNew,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::None
+  )
+  try {
+    $writer = [System.IO.StreamWriter]::new($stream, $encoding)
+    try {
+      $writer.WriteLine($settingsJson)
+    } finally {
+      $writer.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+
+  [void](Get-Content -LiteralPath $temporaryPath -Raw | ConvertFrom-Json)
+
+  $destinationItem = Get-Item -LiteralPath $settingsPath -Force -ErrorAction SilentlyContinue
+  if ($destinationItem) {
+    if ($destinationItem.PSIsContainer) {
+      throw "Refusing to replace a directory: $settingsPath"
+    }
+    if ($destinationItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+      [System.IO.File]::Move($temporaryPath, $settingsPath, $true)
+    } else {
+      $backupPath = Join-Path $settingsDir ([System.IO.Path]::GetRandomFileName())
+      [System.IO.File]::Replace($temporaryPath, $settingsPath, $backupPath)
+    }
+  } else {
+    [System.IO.File]::Move($temporaryPath, $settingsPath)
+  }
+} finally {
+  Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+  if ($backupPath) {
+    Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
+  }
+}
+
 Write-Host "Configured Copilot CLI local sandbox in $settingsPath"
 {{- end -}}
