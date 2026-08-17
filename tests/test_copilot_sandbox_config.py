@@ -167,6 +167,21 @@ def _run_powershell_script(
 
 
 class CopilotSandboxPolicyTests(unittest.TestCase):
+    def test_platform_scripts_share_policy_version(self) -> None:
+        marker = "# Copilot sandbox policy version: "
+        versions = []
+
+        for script_path in (POSIX_SCRIPT_PATH, POWERSHELL_SCRIPT_PATH):
+            matches = [
+                line.removeprefix(marker)
+                for line in script_path.read_text(encoding="utf-8").splitlines()
+                if line.startswith(marker)
+            ]
+            self.assertEqual(len(matches), 1, script_path)
+            versions.append(matches[0])
+
+        self.assertEqual(versions[0], versions[1])
+
     def test_user_policy_has_the_cross_platform_defaults(self) -> None:
         policy = json.loads(USER_POLICY_PATH.read_text(encoding="utf-8"))
 

@@ -2,9 +2,9 @@
 
 ## Status
 
-Superseded by ADR-026
+Superseded by ADR-025
 
-[ADR-026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) により、shell command の network control だけを対象とする方針から、環境別の初回値と利用者の明示設定を user-level settings で管理する方針へ移行した。MCP と LSP を sandbox の対象外とする判断も ADR-026 が引き継ぐ。
+[ADR-025](025-copilot-cli-sandbox-user-level-default.md) により、shell command の network control だけを対象とする方針から、cross-platform な shell/filesystem sandbox の既定値を user-level settings で管理する方針へ移行した。MCP と LSP を sandbox の対象外とする判断も ADR-025 が引き継ぐ。
 
 ## Context
 
