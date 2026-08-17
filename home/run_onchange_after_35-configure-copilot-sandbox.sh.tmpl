@@ -58,6 +58,27 @@ else
   existing_enabled="${sandbox_default_enabled}"
 fi
 
+for path_name in readwritePaths readonlyPaths deniedPaths; do
+  path_type="$(
+    jq -r --arg name "${path_name}" '
+      (.sandbox.userPolicy.filesystem // {}) as $filesystem
+      | if ($filesystem | has($name)) then
+          ($filesystem[$name] | type)
+        else
+          "missing"
+        end
+    ' "${input_path}"
+  )"
+  case "${path_type}" in
+  missing|null|array)
+    ;;
+  *)
+    echo "Error: ${settings_path} has a non-array sandbox.userPolicy.filesystem.${path_name} (${path_type}); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply." >&2
+    exit 1
+    ;;
+  esac
+done
+
 jq --slurpfile desired "${desired}" '
   .experimental = $desired[0].experimental
   | .sandbox = (
