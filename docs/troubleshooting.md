@@ -18,6 +18,34 @@ chezmoi init torumakabe
 
 まず [`docs/operations.md`](operations.md#github-api-と-github_token) の手順で `GITHUB_TOKEN` を付けて再実行する。
 
+## Copilot sandbox が Linux で起動しない
+
+`sandbox.enabled` が `true` または未設定で、shell command の実行に失敗する場合は、bubblewrap と user namespace を確認する。`false` の場合、`chezmoi apply` の診断はこの probe を省略する。
+
+```bash
+bwrap --version
+cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null
+cat /proc/sys/user/max_user_namespaces 2>/dev/null
+bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true
+```
+
+`bwrap` は 0.5.0 以上が必要である。sysctl が無効、または最小起動が失敗する場合は OS、WSL、container runtime の user namespace 設定を確認する。probe の失敗は bubblewrap を利用できないことを示すが、Codespaces と Dev Container の dotfiles 契約は初期値 `false` であるため、probe の成功を適用完了の条件にはしない。Copilot CLI が sandbox 外での再実行方法を提示するとは限らない。
+
+## Copilot sandbox.enabled が意図した値にならない
+
+user-level `~/.copilot/settings.json` の `sandbox.enabled` を確認する。
+
+```bash
+jq .sandbox.enabled ~/.copilot/settings.json
+```
+
+- `true`: 通常の macOS、Windows、Linux、WSL の初期値、または利用者が有効化した値。Codespaces と Dev Container でも既存値として維持される
+- `false`: Codespaces と Dev Container の初期値、または利用者が無効化した値。通常環境でも既存値として維持される
+- `chezmoi apply` が `sandbox.enabled` の型に関するエラーで失敗する場合、既存の値が null や文字列など真偽値以外になっている。値を `true`/`false` に修正するか、キー自体を削除してから再実行する
+- `/sandbox` の UI が managed もしくは locked と表示される場合、組織の enterprise managed-settings.json が sandbox を強制している。本リポジトリの chezmoi 設定はこの状態を作らないため、組織の IT 部門に確認する
+
+本リポジトリの以前のブランチ（file-based managed settings 方式）を適用したことがある場合、Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json` が残っている可能性がある。組織が所有するファイルの可能性があるため自動削除しない。内容が本リポジトリ由来（`sandbox.enabled=true` の強制のみ等）と確認できた場合に限り、手動で削除するか組織の管理者に確認する。
+
 lockfile 側の問題なら再生成する。
 
 ```bash
@@ -153,6 +181,22 @@ Codespaces 以外ではパッケージ導入に sudo が必要である。パス
 ## Dev Container で mise ツールが入っていない
 
 コンテナ作成時は `mise install` を自動実行しない。README の Dev Container セクション、または [`docs/operations.md`](operations.md#github-api-と-github_token) の手順で起動後に実行する。
+
+## Dev Container から npm registry へ接続できない
+
+このリポジトリは、ホストの npm 設定をコンテナへ自動継承しない。公式レジストリへの接続に失敗した場合は、まずコンテナ内で現在の設定を確認する。
+
+```bash
+npm config get registry
+```
+
+組織がレジストリを指定している場合だけ、管理者から提示された URL を設定する。
+
+```bash
+npm config set registry '<管理者指定の registry URL>'
+```
+
+ホストのトークン、認証情報を含む `.npmrc`、その他の資格情報をコンテナへコピーしない。認証が必要な場合は、管理者が定めたコンテナ向けの認証手順を使う。
 
 ## 非対話シェルで PATH が通らない
 

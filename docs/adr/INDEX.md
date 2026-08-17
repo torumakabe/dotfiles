@@ -27,7 +27,7 @@
 | [012](012-wsl-op-ssh-sign-crlf-wrapper.md) | WSL では op-ssh-sign-wsl.exe を CR 除去ラッパー経由で呼ぶ | Accepted |
 | [013](013-mise-lockfile-sync-hook.md) | mise lockfile 変更時に install / reshim を自動同期する | Accepted |
 | [014](014-github-multi-account-https-auth-per-owner.md) | GitHub 多アカウント HTTPS 認証は credential の URL パス方式 + gh auth token --user で解決する | Accepted |
-| [015](015-copilot-cli-shell-network-via-local-sandbox.md) | Copilot CLI shell のネットワーク制御は local sandbox で行う | Accepted |
+| [015](015-copilot-cli-shell-network-via-local-sandbox.md) | Copilot CLI shell のネットワーク制御は local sandbox で行う | Superseded by ADR-025 |
 | [016](016-rust-external-rustup.md) | Rust は全 OS で外部 rustup 管理とする (mise 管理から除外) | Accepted |
 | [017](017-msvc-linker-env-var-override-windows.md) | Windows の MSVC リンカーは CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER で明示指定する | Accepted |
 | [018](018-git-hooks-via-init-templatedir.md) | 機械全体への Git hook 配布は init.templateDir で行う | Accepted |
@@ -37,6 +37,8 @@
 | [022](022-pnpm-via-mise-not-corepack.md) | pnpm は corepack ではなく mise で直接管理する | Accepted |
 | [023](023-chezmoi-ps1-interpreter-noprofile.md) | chezmoi の ps1 実行系を固定しプロファイルを読ませない | Accepted |
 | [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension は公式 CLI で導入する | Accepted |
+| [025](025-copilot-cli-sandbox-user-level-default.md) | Copilot CLI local sandbox は user-level settings で既定有効にする | Superseded by ADR-026 |
+| [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 初回既定値と明示設定保持 | Accepted |
 
 ## テンプレート
 

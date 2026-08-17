@@ -39,6 +39,24 @@ gh extension upgrade gh-stack --dry-run
 
 更新する場合は、公式 skill の内容と extension のリリースノートを確認してから、`gh skill update gh-stack` と `gh extension upgrade gh-stack` を明示的に実行する。更新後は `gh skill list --agent github-copilot --scope user`、`gh extension list`、`gh stack --version` で導入版を確認する。日常の apply へ更新処理を含めない理由は [ADR-024](adr/024-gh-stack-distribution-and-updates.md) を参照する。
 
+## Copilot local sandbox の既定値
+
+`chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
+
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を保持する。文字列、数値、真偽値、オブジェクトなどの非配列値は、設定ファイルを書き換える前にエラーとして拒否する。
+
+現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
+
+利用者は `/sandbox enable` と `/sandbox disable` で値を変更でき、変更後の boolean 値も次回の適用で維持される。コンテナでの手動有効化は互換性調査の対象であり、このリポジトリは動作を保証しない。Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。WinGet Configuration は Copilot CLI パッケージの導入だけを担い、設定ファイルは配布しない。環境別の初期値を採用した判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) を参照する。
+
+組織が enterprise の managed-settings.json（Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json`）で sandbox を強制している場合、`/sandbox` の UI は managed もしくは locked と表示され、利用者はローカルで無効化できない。これは組織のポリシーによるものであり、本リポジトリの chezmoi 設定は関与しない。
+
+本リポジトリの以前のブランチ（file-based managed settings 方式）を適用したことがある場合、上記の managed-settings.json が残っている可能性がある。組織が所有するファイルの可能性があるため自動削除しない。内容が本リポジトリ由来と確認できた場合に限り手動で削除するか、組織の管理者に確認する。
+
+更新後は Copilot CLI を再起動し、`/sandbox` の General、Auth、Filesystem、Network の各タブを確認する。Linux 系では `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap 診断が実行され、`false` の場合は probe が省略される。
+
+WSL2、macOS、Codespaces、Dev Container でリモートブランチを検証するときは、[Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) に従う。ホストからの非対話起動だけでスラッシュコマンドや backend を確認済みと扱わない。
+
 ## chezmoi での編集
 
 通常は `chezmoi edit`。テンプレート全体を見ながら編集したいときだけソースを直接触る。
@@ -187,10 +205,10 @@ sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
 
 dotfiles は `devcontainer.json` から適用しない。VS Code の Dotfiles ユーザ設定は `README.md` の「Dev Container (ローカル)」節に従う。この設定がないコンテナにはテストに必要なツールが入らない。
 
-CLI で起動または更新するときは、chezmoi の Dev Container 判定に必要な環境変数を渡す。
+VS Code の Dev Containers 拡張は Dotfiles セットアップコマンドへ `REMOTE_CONTAINERS=true` を渡す。chezmoi は初期化時にこの値を `.devcontainer` として設定へ保存する。統合ターミナルでは `REMOTE_CONTAINERS` が未設定の場合があるため、ターミナルの環境変数だけで初期化時の判定を再検証しない。
 
 ```bash
-devcontainer up --workspace-folder . --remote-env REMOTE_CONTAINERS=true
+devcontainer up --workspace-folder .
 ```
 
 コンテナ起動後に次を実行する。
@@ -202,6 +220,8 @@ chezmoi apply
 ```
 
 最後の `chezmoi apply` は、コンテナ作成時に `gh` の認証やツール導入を待って終了した `run_after` 処理を再実行する。
+
+ホストの npm 設定と資格情報はコンテナへ自動継承しない。公式レジストリへ接続できない場合の確認と設定は、[`troubleshooting.md`](troubleshooting.md#dev-container-から-npm-registry-へ接続できない) を参照する。
 
 イメージ内の Git を維持する理由は [ADR-020](adr/020-git-hooks-via-config.md)、PowerShell を含むクロスプラットフォーム検査の保証範囲は [ADR-019](adr/019-cross-platform-parity-contract.md) を参照する。
 

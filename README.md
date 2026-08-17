@@ -45,6 +45,7 @@ GitHub の dotfiles リポジトリに登録すると自動適用される。
 
 - `corpUser` / `windowsUser` の入力は省略される
 - 1Password SSH エージェントが使えないため、コミット署名は自動で無効化する
+- Copilot local sandbox は、設定がない初回に無効となる
 
 参考: [Codespaces docs](https://docs.github.com/en/codespaces/setting-your-user-preferences/personalizing-github-codespaces-for-your-account#dotfiles)
 
@@ -65,6 +66,8 @@ chezmoi apply
 
 `mise install` は作成時にはスキップする。最後の `chezmoi apply` は、認証やツール導入を待っていたセットアップ処理を再実行する。追加の注意点は [`docs/troubleshooting.md`](docs/troubleshooting.md#dev-container-で-mise-ツールが入っていない) を参照。
 
+Copilot local sandbox は、Codespaces と Dev Container では `sandbox.enabled` が未設定のときに `false` を設定する。既存の boolean 値は `chezmoi apply` 後も維持される。利用者はコンテナ内でも手動で有効化できるが、このリポジトリは動作を保証しない。組織管理設定がある場合は、利用者設定より優先される。
+
 このリポジトリ自体を Dev Container で開発する場合は `.devcontainer/devcontainer.json` を使う。構成の意図と起動後の手順は [`docs/operations.md`](docs/operations.md#このリポジトリを-dev-container-で開発する) を参照。
 
 ### Windows
@@ -75,7 +78,7 @@ chezmoi init torumakabe
 winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"
 ```
 
-DSC 完了後は PowerShell を開き直し、`gh` と `mise` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は mise lockfile に従って残りのツールも導入する。
+DSC は Copilot CLI を含む Windows パッケージを導入する。完了後は PowerShell を開き直し、`gh` と `mise` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は mise lockfile に従って残りのツールを導入し、Copilot local sandbox は user-level settings で `sandbox.enabled=true` を既定有効にする。
 
 ```powershell
 gh auth login

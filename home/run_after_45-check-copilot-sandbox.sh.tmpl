@@ -1,0 +1,43 @@
+{{- if eq .chezmoi.os "linux" -}}
+#!/usr/bin/env bash
+# Diagnose the Linux prerequisites for the Copilot CLI bubblewrap backend.
+
+set -uo pipefail
+
+warn() {
+  printf 'Warning: %s\n' "$*" >&2
+}
+
+settings_path="${COPILOT_HOME:-$HOME/.copilot}/settings.json"
+if [ -f "${settings_path}" ] &&
+  jq -e '.sandbox.enabled == false' "${settings_path}" >/dev/null 2>&1; then
+  exit 0
+fi
+
+if ! command -v bwrap >/dev/null 2>&1; then
+  warn "bubblewrap is not on PATH; shell commands may not run while the Copilot sandbox is enabled. Check with '/sandbox status' or disable with '/sandbox disable'."
+  exit 0
+fi
+
+bwrap_version="$(bwrap --version 2>/dev/null | awk '{print $2}' || true)"
+if [ -z "${bwrap_version}" ]; then
+  warn "could not determine the bubblewrap version."
+elif command -v dpkg >/dev/null 2>&1 &&
+  ! dpkg --compare-versions "${bwrap_version}" ge "0.5.0"; then
+  warn "bubblewrap ${bwrap_version} is older than the required 0.5.0."
+fi
+
+if [ -r /proc/sys/kernel/unprivileged_userns_clone ] &&
+  [ "$(cat /proc/sys/kernel/unprivileged_userns_clone)" != "1" ]; then
+  warn "kernel.unprivileged_userns_clone is disabled."
+fi
+
+if [ -r /proc/sys/user/max_user_namespaces ] &&
+  [ "$(cat /proc/sys/user/max_user_namespaces)" = "0" ]; then
+  warn "user.max_user_namespaces is zero."
+fi
+
+if ! bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true >/dev/null 2>&1; then
+  warn "bubblewrap could not start an unprivileged sandbox; shell commands may not run while the Copilot sandbox is enabled. Check with '/sandbox status' or disable with '/sandbox disable'."
+fi
+{{- end -}}

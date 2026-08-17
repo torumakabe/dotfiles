@@ -319,9 +319,19 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                 json.loads(settings_path.read_text(encoding="utf-8-sig"))
             )
 
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_normalizes_missing_or_null_filesystem_paths(self) -> None:
+        self._assert_normalizes_empty_filesystem_paths(_run_posix_script)
+
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_normalizes_missing_or_null_filesystem_paths(self) -> None:
         self._assert_normalizes_empty_filesystem_paths(_run_powershell_script)
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_rejects_non_array_filesystem_paths(self) -> None:
+        self._assert_rejects_invalid_filesystem_paths(_run_posix_script)
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_rejects_non_array_filesystem_paths(self) -> None:
