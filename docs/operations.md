@@ -43,6 +43,10 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を保持する。文字列、数値、真偽値、オブジェクトなどの非配列値は、設定ファイルを書き換える前にエラーとして拒否する。
+
+現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
+
 利用者は `/sandbox enable` と `/sandbox disable` で値を変更でき、変更後の boolean 値も次回の適用で維持される。コンテナでの手動有効化は互換性調査の対象であり、このリポジトリは動作を保証しない。Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。WinGet Configuration は Copilot CLI パッケージの導入だけを担い、設定ファイルは配布しない。環境別の初期値を採用した判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) を参照する。
 
 組織が enterprise の managed-settings.json（Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json`）で sandbox を強制している場合、`/sandbox` の UI は managed もしくは locked と表示され、利用者はローカルで無効化できない。これは組織のポリシーによるものであり、本リポジトリの chezmoi 設定は関与しない。
