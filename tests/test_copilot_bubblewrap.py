@@ -110,6 +110,7 @@ class CopilotBubblewrapTemplateTests(unittest.TestCase):
         self.assertEqual(_render("darwin"), "")
         self.assertEqual(_render("windows"), "")
 
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux CI")
     def test_disabled_sandbox_skips_bubblewrap_diagnostics(self) -> None:
         with tempfile.TemporaryDirectory(
             dir=REPO_ROOT, prefix=".test-copilot-bubblewrap-"
@@ -121,6 +122,7 @@ class CopilotBubblewrapTemplateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, [])
 
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux CI")
     def test_enabled_or_unset_sandbox_runs_bubblewrap_diagnostics(self) -> None:
         cases = {
             "enabled": {"sandbox": {"enabled": True}},
