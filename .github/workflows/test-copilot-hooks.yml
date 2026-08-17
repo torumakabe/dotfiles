@@ -9,6 +9,7 @@ on:
       - 'docs/**'
       - 'reference/windows/**'
       - '.github/workflows/test-copilot-hooks.yml'
+      - '.python-version'
       - 'install.sh'
       - 'README.md'
   push:
@@ -21,6 +22,7 @@ on:
       - 'docs/**'
       - 'reference/windows/**'
       - '.github/workflows/test-copilot-hooks.yml'
+      - '.python-version'
       - 'install.sh'
       - 'README.md'
   schedule:

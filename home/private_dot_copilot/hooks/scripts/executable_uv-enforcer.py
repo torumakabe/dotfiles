@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.14"
 # ///
 """uv Enforcer — preToolUse hook that blocks direct python/pip execution.
 

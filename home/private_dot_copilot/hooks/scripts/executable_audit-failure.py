@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.14"
 # ///
 """Copilot Audit Failure Log — postToolUseFailure hook for tool error logging.
 

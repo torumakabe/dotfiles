@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.14"
 # ///
 """Copilot Audit Log — postToolUse hook for recording tool invocations.
 
