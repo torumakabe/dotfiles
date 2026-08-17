@@ -111,6 +111,23 @@ if ($null -ne $preMergeEnabledProperty) {
   }
 }
 
+$preMergePolicy = Get-JsonProperty -Object $preMergeSandbox -Name 'userPolicy'
+$preMergeFilesystem = Get-JsonProperty -Object $preMergePolicy -Name 'filesystem'
+foreach ($pathName in @('readwritePaths', 'readonlyPaths', 'deniedPaths')) {
+  $pathProperty = if ($null -ne $preMergeFilesystem) {
+    $preMergeFilesystem.PSObject.Properties[$pathName]
+  } else {
+    $null
+  }
+  if ($null -ne $pathProperty -and $null -ne $pathProperty.Value -and $pathProperty.Value -isnot [array]) {
+    $pathTypeDescription = $pathProperty.Value.GetType().Name
+    Write-Error "$settingsPath has a non-array sandbox.userPolicy.filesystem.$pathName ($pathTypeDescription); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply."
+    exit 1
+  }
+}
+
+# This template renders only on native Windows. Codespaces and Dev Containers
+# use the POSIX template, which applies their environment-specific false default.
 Merge-JsonObject -Target $settings -Source $desiredSettings
 
 $existingSandbox = Get-JsonProperty -Object $settings -Name 'sandbox'
@@ -143,7 +160,7 @@ if ($preserveEnabled) {
 
 Set-JsonProperty -Object $settings -Name 'sandbox' -Value $sandbox
 
-$settingsJson = $settings | ConvertTo-Json -Depth 20
+$settingsJson = $settings | ConvertTo-Json -Depth 100
 $temporaryPath = Join-Path $settingsDir ([System.IO.Path]::GetRandomFileName())
 $backupPath = $null
 try {

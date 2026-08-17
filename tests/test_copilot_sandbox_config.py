@@ -33,6 +33,22 @@ FILESYSTEM_PATHS = {
     "readonlyPaths": ["/tmp/readonly"],
     "deniedPaths": ["/tmp/denied"],
 }
+UNKNOWN_SETTINGS = {
+    "sandbox": {"keep": "sandbox"},
+    "userPolicy": {"keep": "policy"},
+    "filesystem": {"keep": {"nested": "filesystem"}},
+    "network": {"keep": ["network"]},
+}
+
+
+def _nested_unknown(depth: int) -> object:
+    value: object = "deep-value"
+    for level in reversed(range(depth)):
+        value = {f"level{level}": value}
+    return value
+
+
+DEEP_UNKNOWN = _nested_unknown(25)
 
 # Sentinel distinguishing "no sandbox.enabled key seeded" from any JSON value,
 # including `None` (JSON null), which is itself one of the invalid cases.
@@ -76,19 +92,31 @@ def _seed_settings(home: pathlib.Path, enabled: object = _ENABLED_KEY_ABSENT) ->
     settings_path = home / ".copilot/settings.json"
     settings_path.parent.mkdir(parents=True)
     sandbox: dict = {
+        "keep": UNKNOWN_SETTINGS["sandbox"]["keep"],
         "userPolicy": {
             "version": 1,
-            "filesystem": FILESYSTEM_PATHS,
+            "keep": UNKNOWN_SETTINGS["userPolicy"]["keep"],
+            "filesystem": {
+                **FILESYSTEM_PATHS,
+                **UNKNOWN_SETTINGS["filesystem"],
+            },
             "network": {
                 "allowedHosts": ["api.github.com"],
                 "blockedHosts": ["example.invalid"],
+                **UNKNOWN_SETTINGS["network"],
             },
         }
     }
     if enabled is not _ENABLED_KEY_ABSENT:
         sandbox["enabled"] = enabled
     settings_path.write_text(
-        json.dumps({"unrelated": {"keep": True}, "sandbox": sandbox}),
+        json.dumps(
+            {
+                "unrelated": {"keep": True},
+                "deepUnknown": DEEP_UNKNOWN,
+                "sandbox": sandbox,
+            }
+        ),
         encoding="utf-8",
     )
     return settings_path
@@ -179,9 +207,11 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
 class CopilotSandboxMergeTests(unittest.TestCase):
     def _assert_settings(self, settings: dict, expected_enabled: bool = True) -> None:
         self.assertEqual(settings["unrelated"], {"keep": True})
+        self.assertEqual(settings["deepUnknown"], DEEP_UNKNOWN)
         self.assertTrue(settings["experimental"])
 
         sandbox = settings["sandbox"]
+        self.assertEqual(sandbox["keep"], UNKNOWN_SETTINGS["sandbox"]["keep"])
         self.assertIs(sandbox["enabled"], expected_enabled)
         self.assertTrue(sandbox["allowBypass"])
         self.assertFalse(sandbox["sandboxMcpServers"])
@@ -191,16 +221,82 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self.assertEqual(sandbox["auth"], {"git": True, "gh": True})
 
         policy = sandbox["userPolicy"]
+        self.assertEqual(policy["keep"], UNKNOWN_SETTINGS["userPolicy"]["keep"])
         self.assertNotIn("version", policy)
         self.assertEqual(
             {name: policy["filesystem"][name] for name in FILESYSTEM_PATHS},
             FILESYSTEM_PATHS,
         )
-        self.assertFalse(policy["filesystem"]["clearPolicyOnExit"])
         self.assertEqual(
-            policy["network"],
-            {"allowOutbound": True, "allowLocalNetwork": True},
+            policy["filesystem"]["keep"],
+            UNKNOWN_SETTINGS["filesystem"]["keep"],
         )
+        self.assertFalse(policy["filesystem"]["clearPolicyOnExit"])
+        self.assertTrue(policy["network"]["allowOutbound"])
+        self.assertTrue(policy["network"]["allowLocalNetwork"])
+        self.assertEqual(
+            policy["network"]["keep"],
+            UNKNOWN_SETTINGS["network"]["keep"],
+        )
+        self.assertNotIn("allowedHosts", policy["network"])
+        self.assertNotIn("blockedHosts", policy["network"])
+
+    def _assert_normalizes_empty_filesystem_paths(self, run_script) -> None:
+        for path_name in FILESYSTEM_PATHS:
+            for case_name, remove_key in (("missing", True), ("null", False)):
+                with self.subTest(path=path_name, case=case_name):
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        home = pathlib.Path(temp_dir)
+                        settings_path = _seed_settings(home)
+                        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                        filesystem = settings["sandbox"]["userPolicy"]["filesystem"]
+                        if remove_key:
+                            filesystem.pop(path_name)
+                        else:
+                            filesystem[path_name] = None
+                        settings_path.write_text(json.dumps(settings), encoding="utf-8")
+
+                        result = run_script(home, settings_path)
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        merged = json.loads(
+                            settings_path.read_text(encoding="utf-8-sig")
+                        )
+                        self.assertEqual(
+                            merged["sandbox"]["userPolicy"]["filesystem"][path_name],
+                            [],
+                        )
+
+    def _assert_rejects_invalid_filesystem_paths(self, run_script) -> None:
+        invalid_cases = (
+            ("string", "/tmp/not-an-array"),
+            ("number", 1),
+            ("boolean", True),
+            ("object", {"path": "/tmp"}),
+        )
+        for path_name in FILESYSTEM_PATHS:
+            for case_name, invalid_value in invalid_cases:
+                with self.subTest(path=path_name, case=case_name):
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        home = pathlib.Path(temp_dir)
+                        settings_path = _seed_settings(home)
+                        settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                        settings["sandbox"]["userPolicy"]["filesystem"][path_name] = (
+                            invalid_value
+                        )
+                        settings_path.write_text(json.dumps(settings), encoding="utf-8")
+                        original = settings_path.read_text(encoding="utf-8")
+
+                        result = run_script(home, settings_path)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("non-array", result.stderr)
+                        self.assertIn(
+                            f"sandbox.userPolicy.filesystem.{path_name}",
+                            result.stderr,
+                        )
+                        self.assertEqual(
+                            settings_path.read_text(encoding="utf-8"),
+                            original,
+                        )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
@@ -222,6 +318,14 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8-sig"))
             )
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_normalizes_missing_or_null_filesystem_paths(self) -> None:
+        self._assert_normalizes_empty_filesystem_paths(_run_powershell_script)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_rejects_non_array_filesystem_paths(self) -> None:
+        self._assert_rejects_invalid_filesystem_paths(_run_powershell_script)
 
 
 # (case name, seeded value, expected merged value). ``_ENABLED_KEY_ABSENT``
@@ -251,7 +355,7 @@ POSIX_ENVIRONMENT_CASES = (
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
-    """Pin that `/sandbox disable` survives `chezmoi apply` (see ADR-025)."""
+    """Pin the environment defaults and user override contract in ADR-026."""
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
