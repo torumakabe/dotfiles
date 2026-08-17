@@ -120,7 +120,7 @@ PLATFORM_CONTRACT = {
     "tool:gh-stack-extension": _implemented_everywhere(),
     "tool:lefthook": _implemented_everywhere(),
     "tool:bubblewrap": _linux_only(
-        "exception: docs/architecture.md documents the platform-specific MXC backends"
+        "exception: docs/architecture.md documents the platform-specific sandbox backends"
     ),
     "tool:ty": _implemented_everywhere(),
 }

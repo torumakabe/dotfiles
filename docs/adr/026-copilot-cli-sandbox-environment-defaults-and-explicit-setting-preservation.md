@@ -6,13 +6,13 @@ Accepted
 
 ## Context
 
-ADR-025 は全環境で local sandbox を初回から有効にした。しかし実機の Dev Container では bubblewrap の user namespace probe と Copilot CLI の shell command が失敗し、個別 bypass も提示されなかった。GitHub Copilot CLI の公式文書は Linux ホストを説明するがコンテナ内でのネスト実行を保証せず、MXC の文書も Linux ホストを前提とする。変化しやすい版と詳細ログは ADR に固定せず、[`docs/copilot-sandbox-verification.md`](../copilot-sandbox-verification.md) を検証記録とする。ADR-025 を本 ADR で置換する。
+ADR-025 は全環境で local sandbox を初回から有効にした。しかし実機の Dev Container では bubblewrap の user namespace probe と Copilot CLI の shell command が失敗し、個別 bypass も提示されなかった。GitHub Copilot CLI の公式文書は Linux ホストを説明するが、コンテナ内での bubblewrap のネスト実行を保証しない。変化しやすい版と詳細ログは ADR に固定せず、[`docs/copilot-sandbox-verification.md`](../copilot-sandbox-verification.md) を検証記録とする。ADR-025 を本 ADR で置換する。
 
 ## Decision
 
 通常の macOS、Windows、Linux、WSL では、利用者設定に `sandbox.enabled` が無い初回だけ `true` とする。Codespaces は `CODESPACES`、Dev Container は VS Code の Dev Containers 拡張が Dotfiles セットアップへ渡す `REMOTE_CONTAINERS` で判定し、未設定時は `false` とする。
 
-全環境で、既存値が boolean の `true` または `false` なら `chezmoi apply` 後も維持し、非 boolean は上書きせずエラーとして拒否する。コンテナでも利用者は手動で有効化できるが、MXC/bubblewrap のネスト実行は公式サポートを確認できない限り成功を保証しない。組織の managed settings は利用者設定より優先する。
+全環境で、既存値が boolean の `true` または `false` なら `chezmoi apply` 後も維持し、非 boolean は上書きせずエラーとして拒否する。コンテナでも利用者は手動で有効化できるが、bubblewrap のネスト実行は公式サポートを確認できない限り成功を保証しない。組織の managed settings は利用者設定より優先する。
 
 ## Consequences
 

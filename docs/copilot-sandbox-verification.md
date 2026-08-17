@@ -311,11 +311,11 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 | 2026-08-16 | macOS、対話ターミナルと自動テスト | macOS 26.6.1、arm64 | 1.0.81-0 | 2.70.0 | 2026.8.6、成功 | N/A | 全368テストが成功し、27テストをskip。初期値は`true`。`/sandbox`のGeneral、Auth、Filesystem、Networkを確認し、手動enableとdisableの値が再起動後も維持された。backend名の表示はなかった |
 | 2026-08-16 | Dev Container、対話ターミナルでの互換性調査 | Ubuntu 26.04、arm64 | 1.0.80 | 未記録 | npmミラーの一時設定後に成功 | 0.11.1、probe失敗 | Dev Containers 0.88.0のログで、Dotfilesセットアップへ`--remote-env REMOTE_CONTAINERS=true`が渡されることを確認した。bubblewrapはインストール済みだが、user namespace作成が`No permissions to create a new namespace`で失敗した。Copilot CLIのshell commandも同じ理由で失敗した。現行契約では初期値を`false`とし、この互換性調査を合否条件に含めない |
 | 2026-08-16 | Codespaces、commit `1ec7eee`で隔離した設定ディレクトリを使用 | Linux 6.8.0-1052-azure、x86_64 | 実体の配置を確認。version取得は未完了 | 2.72.0 | miseとuvが未導入のため未実施 | 未導入 | `CODESPACES=true`を検出し、初期値`false`、ファイルモード`600`、既存boolean値の維持を確認した。`~/.copilot/settings.json`は未作成で、`/sandbox`と自動テストは未実施 |
-| 2026-08-16 | WSL2、Windows からの非対話起動 | Ubuntu 22.04、architecture 未記録、kernel 6.18.35.2 | PATH 上になし | PATH 上になし | 未確認 | 0.6.1、probe 成功 | 対話ターミナル、通常 PATH、`/sandbox` は未確認 |
+| 2026-08-16 | WSL2、対話ターミナルと自動テスト | Ubuntu 22.04.5、x86_64、kernel 6.18.35.2-microsoft-standard-WSL2 | version未記録 | version未記録 | 未記録 | 0.6.1、probe成功 | 対象33テストが成功し、4テストをskip。全363テストが成功し、18テストをskip。隔離した設定同期、`chezmoi apply`、手動enableとdisableの値が再起動後と再適用後も維持されることを確認した。backend名の表示はなかった |
 | 2026-08-16 | Windows native | Windows build 26200、architecture 未記録 | 1.0.81-0 | 未記録 | 未確認 | N/A | 単体テストと WinGet Configuration 構文は成功。対話的な enable、disable は未実施 |
 
 ### PR作成前に残っている確認
 
-Windows nativeでは、対話ターミナルで`/sandbox`の各画面とenable、disable後の値の維持を確認する。WSL2では、通常の対話シェルからCopilot CLI、chezmoi、miseを参照できる状態で、自動テスト、初期値、`/sandbox`の各画面、boolean値の維持、bubblewrapの動作を確認する。
+Windows nativeでは、対話ターミナルで`/sandbox`の各画面とenable、disable後の値の維持を確認する。
 
 Codespacesではdotfilesの初期値と設定保持を確認済みだが、環境構築中にmiseとuvが利用可能にならなかった。このため、Codespaces内の自動テストと`/sandbox`の対話確認は未実施であり、コンテナ内sandboxの互換性を保証する結果としては扱わない。
