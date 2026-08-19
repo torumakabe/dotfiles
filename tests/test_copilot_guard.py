@@ -389,6 +389,104 @@ class CopilotGuardCommandMatchingTests(unittest.TestCase):
         )
         self.assertEqual(hit, "**/.azure/**")
 
+    def test_command_matches_posix_adjacent_quote_fragments(self) -> None:
+        for command in (
+            "cat .e''nv",
+            'cat .e""nv',
+            "c'a't '.e'nv",
+            """c"a"t .e'n'"v" """,
+        ):
+            with self.subTest(command=command):
+                hit = copilot_guard.check_blocked_command(
+                    command,
+                    ["**/.env"],
+                    "bash",
+                )
+                self.assertEqual(hit, "**/.env")
+
+    def test_hook_denies_posix_adjacent_quote_secret_path(self) -> None:
+        for command in ("cat .e''nv", """c"a"t .e'n'"v" """):
+            with self.subTest(command=command):
+                result = run_hook(
+                    SCRIPT_PATH,
+                    {
+                        "toolName": "bash",
+                        "toolArgs": {"command": command},
+                    },
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_command_matches_powershell_adjacent_quote_fragments(self) -> None:
+        for command in (
+            'Get-Content .en"v"',
+            "Get-Content .en'v'",
+            'Get-"Content" .e"n"v',
+        ):
+            with self.subTest(command=command):
+                hit = copilot_guard.check_blocked_command(
+                    command,
+                    ["**/.env"],
+                    "powershell",
+                )
+                self.assertEqual(hit, "**/.env")
+
+    def test_hook_denies_powershell_adjacent_quote_secret_path(self) -> None:
+        for command in ('Get-Content .en"v"', "Get-Content .en'v'"):
+            with self.subTest(command=command):
+                result = run_hook(
+                    SCRIPT_PATH,
+                    {
+                        "toolName": "powershell",
+                        "toolArgs": {"command": command},
+                    },
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_unbalanced_quote_still_matches_protected_path(self) -> None:
+        for shell, command in (
+            ("bash", 'cat .e"nv'),
+            ("powershell", 'Get-Content .e"nv'),
+        ):
+            with self.subTest(shell=shell):
+                hit = copilot_guard.check_blocked_command(
+                    command,
+                    ["**/.env"],
+                    shell,
+                )
+                self.assertEqual(hit, "**/.env")
+
+    def test_hook_allows_ordinary_heredoc_and_unbalanced_text(self) -> None:
+        for command in (
+            "cat <<'EOF'\nit's ordinary text\nEOF",
+            "printf '%s\n ordinary",
+        ):
+            with self.subTest(command=command):
+                result = run_hook(
+                    SCRIPT_PATH,
+                    {
+                        "toolName": "bash",
+                        "toolArgs": {"command": command},
+                    },
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, "")
+
+    def test_punctuation_only_tokens_are_ignored_exhaustively(self) -> None:
+        self.assertEqual(
+            copilot_guard.extract_command_candidates(
+                "echo ok ;&|()<> &&||",
+                "bash",
+            ),
+            ["echo", "ok"],
+        )
+
     def test_command_cannot_change_to_home_before_using_exception_path(self) -> None:
         result = run_hook(
             SCRIPT_PATH,
@@ -419,6 +517,33 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
         result = copilot_guard.check_env_access("printenv | grep SECRET")
         self.assertIsNotNone(result)
 
+    def test_blocks_posix_adjacent_quote_env_dump(self) -> None:
+        for command in (
+            "print''env",
+            'print""env',
+            "pr'int'en'v'",
+            """pr"in"t'e'nv""",
+        ):
+            with self.subTest(command=command):
+                result = copilot_guard.check_env_access(command)
+                self.assertIsNotNone(result)
+                self.assertIn("printenv", result)
+
+    def test_hook_denies_posix_adjacent_quote_env_dump(self) -> None:
+        for command in ("print''env", """pr"in"t'e'nv"""):
+            with self.subTest(command=command):
+                result = run_hook(
+                    SCRIPT_PATH,
+                    {
+                        "toolName": "bash",
+                        "toolArgs": {"command": command},
+                    },
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
     def test_blocks_bare_env(self) -> None:
         result = copilot_guard.check_env_access("env")
         self.assertIsNotNone(result)
@@ -442,6 +567,26 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
     def test_blocks_bare_set(self) -> None:
         result = copilot_guard.check_env_access("set")
         self.assertIsNotNone(result)
+
+    def test_blocks_quote_obfuscated_enumeration_commands(self) -> None:
+        for command in (
+            '"s"et',
+            'dec"lare" -p',
+            'expo"rt" -p',
+            'comp"gen" -v',
+        ):
+            with self.subTest(command=command):
+                self.assertIsNotNone(copilot_guard.check_env_access(command))
+
+    def test_blocks_powershell_quote_obfuscated_runtime_dump(self) -> None:
+        for command in (
+            'Get-Ch"ildItem" Env:',
+            "Get-Ch'ildItem' Env:",
+        ):
+            with self.subTest(command=command):
+                self.assertIsNotNone(
+                    copilot_guard.check_env_access(command, "powershell")
+                )
 
     def test_allows_set_with_options(self) -> None:
         result = copilot_guard.check_env_access("set -e")
@@ -634,6 +779,12 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
         )
         self.assertIsNotNone(result)
 
+    def test_blocks_quote_obfuscated_runtime_env_dump(self) -> None:
+        result = copilot_guard.check_env_access(
+            "node -e 'console.log(process.'env')'"
+        )
+        self.assertIsNotNone(result)
+
     def test_blocks_perl_env(self) -> None:
         result = copilot_guard.check_env_access(
             'perl -e \'foreach (keys %ENV) { print }\''
@@ -674,6 +825,13 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
     def test_allows_normal_command(self) -> None:
         result = copilot_guard.check_env_access("ls -la /tmp")
         self.assertIsNone(result)
+
+    def test_allows_ordinary_heredoc_with_apostrophe(self) -> None:
+        command = "cat <<'EOF'\nit's ordinary text\nEOF"
+        self.assertIsNone(copilot_guard.check_env_access(command))
+
+    def test_unbalanced_quote_does_not_raise(self) -> None:
+        self.assertIsNone(copilot_guard.check_env_access("printf '%s\n ordinary"))
 
     def test_allows_git_commands(self) -> None:
         result = copilot_guard.check_env_access("git --no-pager status")
@@ -1049,6 +1207,22 @@ class GitCommitCheckerTests(unittest.TestCase):
         result = copilot_guard.check_git_commit(ctx)
         self.assertIsNotNone(result)
         self.assertEqual(result.decision, "ask")
+
+    def test_quote_obfuscated_git_commit(self) -> None:
+        for shell, command in (
+            ("bash", 'git "commit" -m x'),
+            ("powershell", 'git "commit" -m x'),
+            ("powershell", "git 'commit' -m x"),
+        ):
+            with self.subTest(shell=shell, command=command):
+                ctx = make_ctx(
+                    tool_name=shell,
+                    command=command,
+                    tool_args={"command": command},
+                )
+                result = copilot_guard.check_git_commit(ctx)
+                self.assertIsNotNone(result)
+                self.assertEqual(result.decision, "ask")
 
     def test_git_commit_amend(self) -> None:
         ctx = make_ctx(tool_name="bash", command="git commit --amend", tool_args={"command": "git commit --amend"})

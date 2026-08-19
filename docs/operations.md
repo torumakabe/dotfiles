@@ -20,8 +20,8 @@
 
 - **cargo-make**: linux/arm64 向け配布なし
 - **npm:typescript-language-server**: 利用中の npm レジストリプロキシが trusted publisher の証跡を保持しない版だけを `trust_policy_excludes` の対象とする。対象版は `home/dot_config/mise/config.toml.tmpl` を正本とする
-- **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: `install-azd.sh`、更新は `azd update`）
-- **copilot-cli**: mise の `github:` バックエンドで更新遅延・バージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: `gh.io/copilot-install`、更新は `copilot update`）
+- **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式 `.deb`、更新は `azd update`）
+- **copilot-cli**: mise の `github:` バックエンドで更新遅延やバージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式リリースアーカイブ、更新は `copilot update`）
 - **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
 
 TypeScript language server の除外を撤去するときは、`home/dot_config/mise/config.toml.tmpl` の版限定エントリを削除し、`mise install --force npm:typescript-language-server` で既存導入済み版も再検証する。成功後に `uv run -m unittest tests.test_mise_config -v` を実行する。失敗時の確認は [`troubleshooting.md`](troubleshooting.md#mise-install-が-aube-install-failed-failed-to-resolve-dependencies-で止まる) を参照する。
@@ -185,18 +185,33 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 ## Bootstrap / shell pin の更新
 
-初期セットアップ系スクリプトは、上流の最新版をその場で実行せず、リリース番号や SHA256 を pin している。更新時は **バージョン更新 → 公式チェックサム確認 → スクリプト反映** の順で行う。
+初期セットアップ系スクリプトは、上流の最新版をその場で実行しない。ダウンロードする成果物はバージョンと公式 SHA-256、Git から取得するソースは完全な commit SHA で固定する。各値は、その値を定義するスクリプトを正本とする。
 
-- `install.sh`: `CHEZMOI_VERSION` と対応する SHA256
-- `home/run_once_before_20-install-mise.sh.tmpl`: `MISE_VERSION` と対応する SHA256
-- `home/run_once_after_10-setup-shell.sh.tmpl`: `OH_MY_ZSH_COMMIT`, `ZSH_COMPLETIONS_TAG`
+| 正本 | pin |
+|------|-----|
+| `install.sh` | `CHEZMOI_VERSION` とアーキテクチャ別 SHA-256 |
+| `home/run_once_before_20-install-mise.sh.tmpl` | `MISE_VERSION` とアーキテクチャ別 SHA-256 |
+| `home/run_once_before_10-install-packages.sh.tmpl` | `COPILOT_VERSION`、`AZD_VERSION`、`RUSTUP_VERSION` と各プラットフォーム別 SHA-256、Microsoft 署名鍵の primary-key fingerprint |
+| `home/run_once_after_30-install-tools.sh.tmpl` | `DRAWIO_VERSION` とアーキテクチャ別 SHA-256 |
+| `home/run_once_after_10-setup-shell.sh.tmpl` | `OH_MY_ZSH_COMMIT`、zsh-completions の更新確認用 `ZSH_COMPLETIONS_TAG` と取得を強制する `ZSH_COMPLETIONS_COMMIT` |
+
+成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。現在の draw.io 配布フローには公式 checksum がないため、更新担当者が対象リリース asset の SHA-256 を計算し、上流リリースの出所と asset を確認してから pin を更新する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。
+
+ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
+
+`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
 最低限の確認:
 
 ```bash
 shellcheck install.sh
-sed '/^{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
-sed '/^{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
+sed '/^[[:space:]]*{{/d' home/run_once_before_10-install-packages.sh.tmpl | shellcheck -e SC1091 -
+sed '/^[[:space:]]*{{/d' home/run_once_before_10-install-packages.sh.tmpl | bash -n
+sed '/^[[:space:]]*{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
+sed '/^[[:space:]]*{{/d' home/run_once_after_10-setup-shell.sh.tmpl | shellcheck -e SC2034 -
+sed '/^[[:space:]]*{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
+sed '/^[[:space:]]*{{/d' home/run_once_after_30-install-tools.sh.tmpl | shellcheck -
+sed '/^[[:space:]]*{{/d' home/run_once_after_30-install-tools.sh.tmpl | bash -n
 ```
 
 ## このリポジトリを Dev Container で開発する

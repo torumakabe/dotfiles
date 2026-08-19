@@ -11,20 +11,38 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export PATH="${HOME}/.local/share/mise/shims:${HOME}/.local/bin:${GOPATH:-${HOME}/go}/bin:${PATH}"
 
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify draw.io" >&2
+    exit 1
+  fi
+}
+
 # --- Docker (Linux only, skip in WSL where Docker Desktop is used) ---
 {{ if and (eq .chezmoi.os "linux") (not .isWSL) -}}
 if ! command -v docker >/dev/null 2>&1; then
   echo "Installing Docker..."
   sudo apt-get install -y -qq ca-certificates curl gnupg lsb-release
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-    sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
-    sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-  if ! sudo apt-get update -qq; then
-    echo "Warning: apt-get update had errors (possibly from third-party repos), continuing..." >&2
+  if ! curl --proto '=https' --tlsv1.2 -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+    sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg; then
+    echo "Warning: failed to download the Docker repository key; skipping Docker installation." >&2
+  else
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+      sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+    if ! sudo apt-get update -qq; then
+      echo "Warning: apt-get update failed for the Docker repository; skipping Docker installation." >&2
+    elif ! sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin; then
+      echo "Warning: failed to install Docker from apt; continue and retry after network recovery." >&2
+    else
+      sudo usermod -aG docker "${USER}"
+    fi
   fi
-  sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
-  sudo usermod -aG docker "${USER}"
 fi
 {{ end -}}
 
@@ -61,19 +79,41 @@ fi
 {{ if and (eq .chezmoi.os "linux") (not .isWSL) -}}
 # --- draw.io (native Linux only) ---
 if ! command -v drawio >/dev/null 2>&1; then
-  echo "Installing draw.io..."
+  DRAWIO_VERSION="31.1.8"
+  echo "Installing draw.io ${DRAWIO_VERSION}..."
   (
-    ARCH=$(dpkg --print-architecture)
-    RELEASE_JSON=$(curl -fsSL https://api.github.com/repos/jgraph/drawio-desktop/releases/latest)
-    DEB_URL=$(echo "${RELEASE_JSON}" | jq -r --arg arch "${ARCH}" \
-      '.assets[] | select(.name | test("drawio-" + $arch + "-.*\\.deb$")) | .browser_download_url')
-    if [ -n "${DEB_URL}" ]; then
-      TMP_DEB=$(mktemp /tmp/drawio-XXXXXX.deb)
-      curl -fsSL -o "${TMP_DEB}" "${DEB_URL}"
-      sudo dpkg -i "${TMP_DEB}" || sudo apt-get -f -y install
-      rm -f "${TMP_DEB}"
+    arch="$(dpkg --print-architecture)"
+    case "${arch}" in
+      amd64) expected_sha256="f4c49ed84422ea4afd95818f53c54bc666e57b33bd036d468c7096619b47ffd9" ;;
+      arm64) expected_sha256="62a9ea636accada76076bd5a20f61b707e0e8093d3fd28c6583518663ca795d6" ;;
+      *)
+        echo "error: unsupported architecture for draw.io: ${arch}" >&2
+        exit 1
+        ;;
+    esac
+    tmp_root="${XDG_RUNTIME_DIR:-${HOME}/.cache}/dotfiles-install"
+    mkdir -p "${tmp_root}"
+    chmod 700 "${tmp_root}"
+    tmp_dir="$(mktemp -d "${tmp_root}/drawio.XXXXXX")"
+    trap 'rm -rf "${tmp_dir}"' EXIT
+    deb_name="drawio-${arch}-${DRAWIO_VERSION}.deb"
+    deb_path="${tmp_dir}/${deb_name}"
+    if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${deb_path}" \
+      "https://github.com/jgraph/drawio-desktop/releases/download/v${DRAWIO_VERSION}/${deb_name}"; then
+      echo "Warning: failed to download draw.io ${DRAWIO_VERSION}; skipping installation." >&2
+      exit 0
     fi
-  ) || echo "Warning: draw.io installation failed, skipping..." >&2
+    actual_sha256="$(sha256_file "${deb_path}")"
+    if [ "${actual_sha256}" != "${expected_sha256}" ]; then
+      echo "error: checksum verification failed for ${deb_name}" >&2
+      exit 1
+    fi
+    if ! sudo dpkg -i "${deb_path}"; then
+      if ! sudo apt-get -f -y install; then
+        echo "Warning: failed to install draw.io; continue and retry after network recovery." >&2
+      fi
+    fi
+  )
 fi
 {{ end -}}
 

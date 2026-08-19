@@ -12,7 +12,9 @@ OH_MY_ZSH_REPO="https://github.com/ohmyzsh/ohmyzsh"
 OH_MY_ZSH_COMMIT="8df5c1b18b1393dc5046c729094f897bd3636a9b"
 ZSH_COMPLETIONS_DIR="${OH_MY_ZSH_DIR}/custom/plugins/zsh-completions"
 ZSH_COMPLETIONS_REPO="https://github.com/zsh-users/zsh-completions"
+# TAG is release metadata for update checks; COMMIT enforces installation.
 ZSH_COMPLETIONS_TAG="0.36.0"
+ZSH_COMPLETIONS_COMMIT="28c5bdcaf81bb89e56d0df8267d822c3b8aed9e0"
 
 if [ ! -d "${OH_MY_ZSH_DIR}" ]; then
   echo "Installing Oh My Zsh..."
@@ -33,10 +35,13 @@ fi
 
 # zsh-completions plugin
 if [ ! -d "${ZSH_COMPLETIONS_DIR}" ]; then
-  echo "Installing zsh-completions plugin..."
-  git clone --branch "${ZSH_COMPLETIONS_TAG}" --depth=1 "${ZSH_COMPLETIONS_REPO}" "${ZSH_COMPLETIONS_DIR}"
-  if [ "$(git -C "${ZSH_COMPLETIONS_DIR}" describe --tags --exact-match)" != "${ZSH_COMPLETIONS_TAG}" ]; then
-    echo "error: failed to pin zsh-completions to ${ZSH_COMPLETIONS_TAG}" >&2
+  echo "Installing zsh-completions ${ZSH_COMPLETIONS_TAG}..."
+  git init "${ZSH_COMPLETIONS_DIR}"
+  git -C "${ZSH_COMPLETIONS_DIR}" remote add origin "${ZSH_COMPLETIONS_REPO}"
+  git -C "${ZSH_COMPLETIONS_DIR}" fetch --depth=1 origin "${ZSH_COMPLETIONS_COMMIT}"
+  git -C "${ZSH_COMPLETIONS_DIR}" checkout --detach FETCH_HEAD
+  if [ "$(git -C "${ZSH_COMPLETIONS_DIR}" rev-parse HEAD)" != "${ZSH_COMPLETIONS_COMMIT}" ]; then
+    echo "error: failed to pin zsh-completions to ${ZSH_COMPLETIONS_COMMIT}" >&2
     exit 1
   fi
 fi
