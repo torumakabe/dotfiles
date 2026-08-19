@@ -230,6 +230,13 @@ class MiseConfigTests(unittest.TestCase):
                 str(source_root),
                 "execute-template",
                 "--stdinisatty=false",
+                "--override-data",
+                json.dumps(
+                    {
+                        "chezmoi": {"os": "windows", "arch": "amd64"},
+                        "typescriptLsp": {"version": LSP_TYPESCRIPT_VERSION},
+                    }
+                ),
                 "--file",
                 str(LSP_INSTALL_PS1_PATH),
             ],
