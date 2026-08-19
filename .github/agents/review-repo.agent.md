@@ -96,6 +96,8 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 - 固定版のリリース、対象asset、公式checksumを確認する
 - 固定版から最新安定版までの compare view と changelog を確認し、セキュリティ、互換性、利用機能に関係する差分だけを詳しく調べる
+- `home/run_once_after_10-setup-shell.sh.tmpl` の値を正本として、Oh My Zsh は固定commitの存在を確認し、公式default branchと比較する。新しいcommitの存在だけなら外部情報の更新候補として扱い、現在の不一致や自動修正の対象にしない
+- 同じテンプレートのzsh-completionsは、lightweight tagとannotated tagの両方をcommitまで解決し、`ZSH_COMPLETIONS_TAG`が`ZSH_COMPLETIONS_COMMIT`と一致することを必須とする。不一致は現在の不一致として報告する。TAGを最新のdraftでもprereleaseでもないreleaseと比較し、新しいreleaseは外部情報の更新候補として扱う。どちらのpinも自動更新しない
 - 公式 skill と対応する CLI extension を組み合わせる機能は、実機の導入版と上流の更新を区別して確認する。現在は `gh-stack` を対象とし、`gh skill update gh-stack --dry-run` と `gh extension upgrade gh-stack --dry-run` で候補を確認する。GitHub CLI extension 全般へ対象を広げない
 - GitHub Security Advisories と、根拠としている上流issueの状態を確認する
 - 外部URLはリダイレクト後の到達先と記述内容を確認する

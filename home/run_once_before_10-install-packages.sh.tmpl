@@ -9,6 +9,53 @@ set -euo pipefail
 #   have the commands they expect on each platform.
 export DEBIAN_FRONTEND=noninteractive
 
+download_file() {
+  local url=$1
+  local output=$2
+  curl --proto '=https' --tlsv1.2 -fsSL -o "${output}" "${url}"
+}
+
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify downloads" >&2
+    exit 1
+  fi
+}
+
+make_install_tmp_dir() {
+  local tmp_root="${XDG_RUNTIME_DIR:-${HOME}/.cache}/dotfiles-install"
+  mkdir -p "${tmp_root}"
+  chmod 700 "${tmp_root}"
+  mktemp -d "${tmp_root}/run.XXXXXX"
+}
+
+primary_key_fingerprints() {
+  local key_file=$1
+
+  gpg --batch --with-colons --import-options show-only --import "${key_file}" 2>/dev/null \
+    | awk -F: '
+        $1 == "pub" { primary = 1; next }
+        primary && $1 == "fpr" { print $10; primary = 0 }
+      '
+}
+
+azure_cli_suite() {
+  case "$1" in
+    bullseye|bookworm|jammy|noble)
+      printf '%s\n' "$1"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 {{ if eq .chezmoi.os "linux" -}}
 echo "Installing system packages via apt..."
 # git: ディストロ標準の git は設定ベースフック (git >= 2.54) に届かない
@@ -32,6 +79,7 @@ sudo apt-get install -y -qq \
   bubblewrap \
   curl \
   git \
+  gnupg \
   keychain \
   libreoffice-impress \
   poppler-utils \
@@ -91,17 +139,47 @@ git_unshadow /usr/local/bin /usr/bin
 
 {{ end -}}
 # Copilot CLI — mise の github: バックエンドでは更新が遅れるため、
-# 公式インストールスクリプトで導入し、更新は copilot update で行う
+# 公式リリースを checksum 検証して導入し、更新は copilot update で行う
 # 判定に command -v を使わない: Codespaces / Dev Container のベースイメージには
 # /usr/local/bin/copilot が同梱されていることがあり、これを検出すると自前の導入が
 # スキップされ、copilot update の対象外の古いバイナリが使われ続ける。
 # 公式スクリプトは非 root で ~/.local/bin へ入れるため、その実体で判定する。
 if [ ! -x "${HOME}/.local/bin/copilot" ]; then
-  echo "Installing GitHub Copilot CLI via official script..."
-  # 導入失敗で chezmoi apply 全体を止めないよう、警告に留める。
-  if ! curl -fsSL https://gh.io/copilot-install | bash; then
-    echo "Warning: Copilot CLI installation failed. Run 'curl -fsSL https://gh.io/copilot-install | bash' manually." >&2
-  fi
+  COPILOT_VERSION="1.0.80"
+  case "$(dpkg --print-architecture)" in
+    amd64)
+      copilot_archive="copilot-linux-x64.tar.gz"
+      expected_sha256="039933c9247686131c4406abb1d439bdbf68103edc1ff585bd70d5b0dc940f72"
+      ;;
+    arm64)
+      copilot_archive="copilot-linux-arm64.tar.gz"
+      expected_sha256="3ed85e711955e13be523bf492bc6c93b40b69925bcb7f817c9d08abf4839cf89"
+      ;;
+    *)
+      echo "error: unsupported architecture for Copilot CLI: $(dpkg --print-architecture)" >&2
+      exit 1
+      ;;
+  esac
+  echo "Installing GitHub Copilot CLI ${COPILOT_VERSION}..."
+  (
+    tmp_dir="$(make_install_tmp_dir)"
+    trap 'rm -rf "${tmp_dir}"' EXIT
+    archive_path="${tmp_dir}/${copilot_archive}"
+    if ! download_file \
+      "https://github.com/github/copilot-cli/releases/download/v${COPILOT_VERSION}/${copilot_archive}" \
+      "${archive_path}"; then
+      echo "Warning: failed to download GitHub Copilot CLI ${COPILOT_VERSION}; skipping installation." >&2
+      exit 0
+    fi
+    actual_sha256="$(sha256_file "${archive_path}")"
+    if [ "${actual_sha256}" != "${expected_sha256}" ]; then
+      echo "error: checksum verification failed for ${copilot_archive}" >&2
+      exit 1
+    fi
+    mkdir -p "${HOME}/.local/bin"
+    tar -xzf "${archive_path}" -C "${HOME}/.local/bin" copilot
+    chmod 755 "${HOME}/.local/bin/copilot"
+  )
 fi
 
 {{ if not .codespaces -}}
@@ -111,34 +189,121 @@ fi
 if ! command -v gh >/dev/null 2>&1; then
   echo "Installing GitHub CLI via apt..."
   sudo mkdir -p -m 755 /etc/apt/keyrings
-  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | \
-    sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
-  sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | \
-    sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-  if ! sudo apt-get update -qq; then
-    echo "Warning: apt-get update had errors, continuing..." >&2
+  if ! curl --proto '=https' --tlsv1.2 -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | \
+    sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null; then
+    echo "Warning: failed to download the GitHub CLI repository key; skipping GitHub CLI installation." >&2
+  else
+    sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | \
+      sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+    if ! sudo apt-get update -qq; then
+      echo "Warning: apt-get update failed for the GitHub CLI repository; skipping GitHub CLI installation." >&2
+    elif ! sudo apt-get install -y -qq gh; then
+      echo "Warning: failed to install GitHub CLI from apt; continue and retry after network recovery." >&2
+    fi
   fi
-  sudo apt-get install -y -qq gh
 fi
 {{ end -}}
 
 {{ if and (not .codespaces) (not .devcontainer) -}}
-# Azure CLI — 公式インストールスクリプト (https://aka.ms/InstallAzureCLIDeb)
+# Azure CLI — Microsoft 署名付き apt リポジトリから導入する
 # Codespaces では devcontainer Feature で導入するためスキップ。このリポジトリの
 # .devcontainer/devcontainer.json は chezmoi テンプレートと Python テストの開発だけを
 # 対象とするため az / azd の Feature を含めない
 if ! command -v az >/dev/null 2>&1; then
-  echo "Installing Azure CLI via official script..."
-  curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+  echo "Installing Azure CLI via Microsoft apt repository..."
+  (
+    tmp_dir="$(make_install_tmp_dir)"
+    trap 'rm -rf "${tmp_dir}"' EXIT
+    microsoft_key="${tmp_dir}/microsoft.asc"
+    microsoft_key_home="${tmp_dir}/gnupg"
+    expected_fingerprint="BC528686B50D79E339D3721CEB3E94ADBE1229CF"
+    if ! download_file "https://packages.microsoft.com/keys/microsoft.asc" "${microsoft_key}"; then
+      echo "Warning: failed to download the Microsoft repository key; skipping Azure CLI installation." >&2
+      exit 0
+    fi
+    if ! downloaded_fingerprints="$(primary_key_fingerprints "${microsoft_key}")"; then
+      echo "error: failed to inspect the downloaded Microsoft signing key" >&2
+      exit 1
+    fi
+    if ! printf '%s\n' "${downloaded_fingerprints}" | grep -Fxq "${expected_fingerprint}"; then
+      echo "error: Microsoft signing key fingerprint verification failed" >&2
+      exit 1
+    fi
+    mkdir -m 700 "${microsoft_key_home}"
+    GNUPGHOME="${microsoft_key_home}" gpg --batch --import "${microsoft_key}" >/dev/null 2>&1
+    GNUPGHOME="${microsoft_key_home}" gpg --batch --export "${expected_fingerprint}" \
+      >"${tmp_dir}/microsoft.gpg"
+    if ! exported_fingerprints="$(primary_key_fingerprints "${tmp_dir}/microsoft.gpg")"; then
+      echo "error: failed to inspect the isolated Microsoft signing key" >&2
+      exit 1
+    fi
+    if [ "${exported_fingerprints}" != "${expected_fingerprint}" ]; then
+      echo "error: isolated Microsoft signing key did not contain exactly the verified primary key" >&2
+      exit 1
+    fi
+    sudo install -D -m 644 "${tmp_dir}/microsoft.gpg" /etc/apt/keyrings/microsoft.gpg
+    . /etc/os-release
+    repository_suite=""
+    if [ -n "${VERSION_CODENAME:-}" ]; then
+      repository_suite="$(azure_cli_suite "${VERSION_CODENAME}")" || true
+    fi
+    if [ -z "${repository_suite}" ] && [ -n "${UBUNTU_CODENAME:-}" ]; then
+      repository_suite="$(azure_cli_suite "${UBUNTU_CODENAME}")" || true
+    fi
+    if [ -z "${repository_suite}" ]; then
+      echo "Warning: unsupported distribution codename for the Azure CLI repository: ${VERSION_CODENAME:-${UBUNTU_CODENAME:-unknown}}; skipping Azure CLI installation." >&2
+      exit 0
+    fi
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ ${repository_suite} main" | \
+      sudo tee /etc/apt/sources.list.d/azure-cli.list >/dev/null
+    if ! sudo apt-get update -qq; then
+      echo "Warning: apt-get update failed for the Azure CLI repository; skipping Azure CLI installation." >&2
+      exit 0
+    fi
+    if ! sudo apt-get install -y -qq azure-cli; then
+      echo "Warning: failed to install Azure CLI from apt; continue and retry after network recovery." >&2
+    fi
+  )
 fi
 
-# Azure Developer CLI — 公式インストールスクリプト (https://aka.ms/install-azd.sh)
+# Azure Developer CLI — 固定した公式 .deb を checksum 検証して導入する
 # github: バックエンドはバイナリ名を正規化しないため、macOS (brew) / Windows (winget) と同様に
 # mise 外で管理する。更新は azd update で行う
 if ! command -v azd >/dev/null 2>&1; then
-  echo "Installing Azure Developer CLI via official script..."
-  curl -fsSL https://aka.ms/install-azd.sh | bash
+  AZD_VERSION="1.31.1"
+  case "$(dpkg --print-architecture)" in
+    amd64)
+      expected_sha256="414bc5a111ade678f2bf81f5396019b8c42e6151154a7e332307e7ce1146180e"
+      ;;
+    arm64)
+      expected_sha256="009dae211c4a8f9001f7e7dd3aca88e89caba9d45a7e7c80506c9d8372c95514"
+      ;;
+    *)
+      echo "error: unsupported architecture for Azure Developer CLI: $(dpkg --print-architecture)" >&2
+      exit 1
+      ;;
+  esac
+  echo "Installing Azure Developer CLI ${AZD_VERSION}..."
+  (
+    tmp_dir="$(make_install_tmp_dir)"
+    trap 'rm -rf "${tmp_dir}"' EXIT
+    azd_deb="${tmp_dir}/azd_${AZD_VERSION}_$(dpkg --print-architecture).deb"
+    if ! download_file \
+      "https://github.com/Azure/azure-dev/releases/download/azure-dev-cli_${AZD_VERSION}/azd_${AZD_VERSION}_$(dpkg --print-architecture).deb" \
+      "${azd_deb}"; then
+      echo "Warning: failed to download Azure Developer CLI ${AZD_VERSION}; skipping installation." >&2
+      exit 0
+    fi
+    actual_sha256="$(sha256_file "${azd_deb}")"
+    if [ "${actual_sha256}" != "${expected_sha256}" ]; then
+      echo "error: checksum verification failed for Azure Developer CLI" >&2
+      exit 1
+    fi
+    if ! sudo apt-get install -y -qq "${azd_deb}"; then
+      echo "Warning: failed to install Azure Developer CLI; continue and retry after network recovery." >&2
+    fi
+  )
 fi
 {{ end -}}
 
@@ -174,7 +339,49 @@ brew install --cask libreoffice
 # Rust — rust-toolchain.toml を持つプロジェクトでの version pinning を機能させるため、
 # mise ではなく公式インストーラー (rustup) で管理する。詳細: docs/adr/016-rust-external-rustup.md
 if ! command -v rustup >/dev/null 2>&1; then
-  echo "Installing Rust via rustup (official installer)..."
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+  RUSTUP_VERSION="1.29.0"
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64)
+      rustup_target="x86_64-unknown-linux-gnu"
+      expected_sha256="4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10"
+      ;;
+    Linux-aarch64|Linux-arm64)
+      rustup_target="aarch64-unknown-linux-gnu"
+      expected_sha256="9732d6c5e2a098d3521fca8145d826ae0aaa067ef2385ead08e6feac88fa5792"
+      ;;
+    Darwin-x86_64)
+      rustup_target="x86_64-apple-darwin"
+      expected_sha256="33cf85df9142bc6d29cbc62fa5ca1d4c29622cddb55213a4c1a43c457fb9b2d7"
+      ;;
+    Darwin-arm64)
+      rustup_target="aarch64-apple-darwin"
+      expected_sha256="aeb4105778ca1bd3c6b0e75768f581c656633cd51368fa61289b6a71696ac7e1"
+      ;;
+    *)
+      echo "error: unsupported platform for rustup: $(uname -s)-$(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+  echo "Installing Rust via rustup-init ${RUSTUP_VERSION}..."
+  (
+    tmp_dir="$(make_install_tmp_dir)"
+    trap 'rm -rf "${tmp_dir}"' EXIT
+    rustup_init="${tmp_dir}/rustup-init"
+    if ! download_file \
+      "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/${rustup_target}/rustup-init" \
+      "${rustup_init}"; then
+      echo "Warning: failed to download rustup-init ${RUSTUP_VERSION}; skipping installation." >&2
+      exit 0
+    fi
+    actual_sha256="$(sha256_file "${rustup_init}")"
+    if [ "${actual_sha256}" != "${expected_sha256}" ]; then
+      echo "error: checksum verification failed for rustup-init" >&2
+      exit 1
+    fi
+    chmod 755 "${rustup_init}"
+    if ! "${rustup_init}" -y --no-modify-path; then
+      echo "Warning: rustup-init could not complete installation; continue and retry after network recovery." >&2
+    fi
+  )
 fi
 {{ end -}}

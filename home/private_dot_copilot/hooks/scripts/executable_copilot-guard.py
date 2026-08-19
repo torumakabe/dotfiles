@@ -27,6 +27,7 @@ from functools import lru_cache
 import json
 import os
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import Any, Callable, NamedTuple, Optional
@@ -157,10 +158,9 @@ Checker = Callable[[CheckContext], Optional[CheckResult]]
 # ---------------------------------------------------------------------------
 
 COMMAND_STRIP_CHARS = "\"'`()[]{};,"
-# Match one shell-ish token composed of unquoted text, double-quoted text,
-# and/or single-quoted text, so paths with spaces remain intact.
-# Quoted spans also allow backslash escapes such as \" and \'.
-COMMAND_TOKEN_RE = re.compile(r"""(?:[^\s"']+|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')+""")
+COMMAND_PUNCTUATION = ";&|()<>"
+COMMAND_PUNCTUATION_RE = re.compile(r"^[;&|()<>]+$")
+_CONSERVATIVE_TOKEN_RE = re.compile(r"\S+")
 
 
 def normalize_pattern(pattern: str) -> str:
@@ -304,10 +304,114 @@ def extract_path_arg_values(tool_args: dict[str, Any]) -> list[str]:
     return values
 
 
-def extract_command_candidates(command: str) -> list[str]:
-    """Extract path-like command tokens while preserving quoted substrings."""
+def _conservative_tokenize(command: str) -> list[str]:
+    """Tokenize malformed input without treating quote characters as protection."""
+    return [
+        token.replace('"', "").replace("'", "")
+        for token in _CONSERVATIVE_TOKEN_RE.findall(command)
+    ]
+
+
+def _tokenize_powershell(command: str) -> list[str]:
+    """Tokenize PowerShell argument-mode quotes without expanding expressions."""
+    tokens: list[str] = []
+    current: list[str] = []
+    state = "unquoted"
+    index = 0
+
+    def finish_token() -> None:
+        if current:
+            tokens.append("".join(current))
+            current.clear()
+
+    while index < len(command):
+        char = command[index]
+        if state == "single":
+            if char == "'":
+                if index + 1 < len(command) and command[index + 1] == "'":
+                    current.append("'")
+                    index += 2
+                    continue
+                state = "unquoted"
+            else:
+                current.append(char)
+            index += 1
+            continue
+
+        if state == "double":
+            if char == '"':
+                state = "unquoted"
+            elif char == "`" and index + 1 < len(command):
+                current.append(command[index + 1])
+                index += 2
+                continue
+            else:
+                current.append(char)
+            index += 1
+            continue
+
+        if char.isspace():
+            finish_token()
+        elif char in COMMAND_PUNCTUATION:
+            finish_token()
+            punctuation = [char]
+            while (
+                index + 1 < len(command)
+                and command[index + 1] in COMMAND_PUNCTUATION
+            ):
+                index += 1
+                punctuation.append(command[index])
+            tokens.append("".join(punctuation))
+        elif char == "'":
+            state = "single"
+        elif char == '"':
+            state = "double"
+        elif char == "`" and index + 1 < len(command):
+            current.append(command[index + 1])
+            index += 1
+        else:
+            current.append(char)
+        index += 1
+
+    if state != "unquoted":
+        return _conservative_tokenize(command)
+    finish_token()
+    return tokens
+
+
+def tokenize_command(command: str, shell: str = "bash") -> list[str]:
+    """Return shell-effective literal tokens without evaluating the command."""
+    if shell == "powershell":
+        return _tokenize_powershell(command)
+
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()<>")
+        lexer.commenters = ""
+        lexer.whitespace_split = True
+        return list(lexer)
+    except ValueError:
+        return _conservative_tokenize(command)
+
+
+def _command_segments(tokens: list[str]) -> list[list[str]]:
+    """Split tokens at shell punctuation, including combined operators."""
+    segments: list[list[str]] = [[]]
+    for token in tokens:
+        if COMMAND_PUNCTUATION_RE.fullmatch(token):
+            segments.append([])
+        else:
+            segments[-1].append(token)
+    return segments
+
+
+def extract_command_candidates(command: str, shell: str | None = None) -> list[str]:
+    """Extract path-like command tokens using the selected shell's quote rules."""
     candidates: list[str] = []
-    for token in COMMAND_TOKEN_RE.findall(command):
+    tokens = tokenize_command(command, shell or "bash")
+
+    for token in tokens:
+        if COMMAND_PUNCTUATION_RE.fullmatch(token):
+            continue
         cleaned = token.strip(COMMAND_STRIP_CHARS)
         if not cleaned:
             continue
@@ -319,9 +423,13 @@ def extract_command_candidates(command: str) -> list[str]:
     return candidates
 
 
-def check_blocked_command(target: str, patterns: list[str]) -> str | None:
+def check_blocked_command(
+    target: str,
+    patterns: list[str],
+    shell: str | None = None,
+) -> str | None:
     """Path-aware glob match for command arguments."""
-    candidates = extract_command_candidates(target)
+    candidates = extract_command_candidates(target, shell)
     for pat in patterns:
         if any(matches_blocked_pattern(candidate, pat) for candidate in candidates):
             return pat
@@ -353,7 +461,11 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
             )
 
     if ctx.command:
-        matched_pattern = check_blocked_command(ctx.command, ctx.blocked_patterns)
+        matched_pattern = check_blocked_command(
+            ctx.command,
+            ctx.blocked_patterns,
+            ctx.tool_name,
+        )
         if matched_pattern:
             return CheckResult("deny", f"Blocked pattern: {matched_pattern}")
 
@@ -364,7 +476,11 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
             return CheckResult("ask", f"Confirm access — matched pattern: {matched_pattern}")
 
     if ctx.command:
-        matched_pattern = check_blocked_command(ctx.command, ctx.ask_patterns)
+        matched_pattern = check_blocked_command(
+            ctx.command,
+            ctx.ask_patterns,
+            ctx.tool_name,
+        )
         if matched_pattern:
             return CheckResult("ask", f"Confirm access — matched pattern: {matched_pattern}")
 
@@ -379,29 +495,6 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
 ENV_DUMP_COMMANDS: frozenset[str] = frozenset({
     "printenv",
 })
-
-# Commands that dump all variables when invoked *without meaningful arguments*.
-# ``env`` is allowed with ``-i`` / ``-u`` / ``--`` (environment manipulation),
-# so only a bare ``env`` (optionally with trailing pipe) is blocked.
-_BARE_ENV_RE = re.compile(
-    r"(?:^|\s*(?:&&|\|\||;)\s*)"  # start or after shell operator
-    r"env"
-    r"(?:\s*(?:\||;|&&|\|\||$))",  # followed by pipe, operator, or end
-)
-
-# ``set`` without arguments dumps all variables; ``set -e`` etc. is fine.
-_BARE_SET_RE = re.compile(
-    r"(?:^|\s*(?:&&|\|\||;)\s*)"
-    r"set"
-    r"(?:\s*(?:\||;|&&|\|\||$))",
-)
-
-# Full-variable enumeration builtins.
-_ENUM_BUILTINS_RE = re.compile(
-    r"\b(?:declare|typeset)\s+-p\b"
-    r"|\bexport\s+-p\b"
-    r"|\bcompgen\s+-[ve]\b",
-)
 
 # Language-runtime patterns that dump the *entire* environment mapping.
 _RUNTIME_ENV_DUMP_RE = re.compile(
@@ -503,21 +596,13 @@ def check_env_access(command: str, shell: str = "bash") -> str | None:
     if not stripped:
         return None
 
-    # --- 1. Dump-all commands in leading position (per shell segment) ---
-    # Split by shell operators so ``ls && printenv`` catches ``printenv``.
-    segments = re.split(r"\s*(?:&&|\|\||;)\s*", stripped)
-    for seg in segments:
-        seg = seg.strip()
-        if not seg:
-            continue
-        # Also look past pipes — ``foo | printenv`` should be caught.
-        pipe_parts = seg.split("|")
-        for part in pipe_parts:
-            part = part.strip()
-            if not part:
-                continue
-            seg_tokens = part.split()
-            seg_lead = seg_tokens[0] if seg_tokens else ""
+    shell_tokens = tokenize_command(stripped, shell)
+    segments = _command_segments(shell_tokens)
+    normalized = " ".join(shell_tokens)
+
+    for seg_tokens in segments:
+        if seg_tokens:
+            seg_lead = seg_tokens[0]
             if seg_lead in ENV_DUMP_COMMANDS:
                 return f"Blocked env dump command: {seg_lead}"
             if seg_lead == "env":
@@ -526,16 +611,19 @@ def check_env_access(command: str, shell: str = "bash") -> str | None:
                 second = seg_tokens[1]
                 if not (second.startswith("-") or "=" in second or second == "--"):
                     return "Blocked env dump command: env (use 'env -i' to run with clean environment)"
-
-    if _BARE_SET_RE.search(stripped):
-        return "Blocked env dump command: set (without arguments lists all variables)"
-
-    # --- 2. Enumeration builtins ---
-    if _ENUM_BUILTINS_RE.search(stripped):
-        return "Blocked env enumeration builtin"
+            if seg_lead == "set" and len(seg_tokens) == 1:
+                return "Blocked env dump command: set (without arguments lists all variables)"
+            if (
+                seg_lead in {"declare", "typeset", "export"}
+                and "-p" in seg_tokens[1:]
+            ) or (
+                seg_lead == "compgen"
+                and any(token in {"-v", "-e"} for token in seg_tokens[1:])
+            ):
+                return "Blocked env enumeration builtin"
 
     # --- 3. Runtime env dump patterns ---
-    m = _RUNTIME_ENV_DUMP_RE.search(stripped)
+    m = _RUNTIME_ENV_DUMP_RE.search(normalized)
     if m:
         return f"Blocked runtime env dump pattern: {m.group(0)}"
 
@@ -577,9 +665,6 @@ _GIT_ARG_OPTIONS: frozenset[str] = frozenset({
     "--namespace", "--super-prefix", "--config-env",
 })
 
-# Shell operators that delimit independent commands.
-_SHELL_OPERATORS: frozenset[str] = frozenset({"&&", "||", ";", "|"})
-
 # Shell wrapper commands that delegate to the next command on the line.
 _SHELL_WRAPPERS: frozenset[str] = frozenset({
     "command", "exec", "nice", "nohup", "time", "sudo",
@@ -598,23 +683,16 @@ def _normalize_executable(token: str) -> str:
     return name
 
 
-def _has_git_commit(command: str) -> bool:
+def _has_git_commit(command: str, shell: str = "bash") -> bool:
     """Return True if *command* contains a ``git commit`` invocation.
 
-    Uses the quote-aware ``COMMAND_TOKEN_RE`` tokenizer so that shell
-    operators inside quoted strings are not treated as command separators.
+    Uses the shared quote-aware tokenizer so shell operators inside quoted
+    strings are not treated as command separators.
     Skips ``env``, ``command``, ``sudo`` and other common shell wrappers,
     and normalises the executable name (basename, strip ``.exe``).
     """
-    tokens = COMMAND_TOKEN_RE.findall(command.strip())
-
-    # Split token list into segments by shell operators.
-    segments: list[list[str]] = [[]]
-    for tok in tokens:
-        if tok in _SHELL_OPERATORS:
-            segments.append([])
-        else:
-            segments[-1].append(tok)
+    tokens = tokenize_command(command.strip(), shell)
+    segments = _command_segments(tokens)
 
     for seg in segments:
         if not seg:
@@ -667,7 +745,7 @@ def check_git_commit(ctx: CheckContext) -> CheckResult | None:
     """Require explicit user approval for ``git commit`` commands."""
     if ctx.tool_name not in ("bash", "powershell") or not ctx.command:
         return None
-    if _has_git_commit(ctx.command):
+    if _has_git_commit(ctx.command, ctx.tool_name):
         return CheckResult("ask", "git commit requires user approval")
     return None
 
