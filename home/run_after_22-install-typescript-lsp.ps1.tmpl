@@ -1,0 +1,66 @@
+{{- if eq .chezmoi.os "windows" -}}
+$ErrorActionPreference = 'Stop'
+
+$typescriptVersion = '{{ .typescriptLsp.version }}'
+$installRoot = Join-Path $HOME '.local\share\chezmoi-dotfiles\typescript-lsp'
+$typescriptPackageRoot = Join-Path $installRoot 'node_modules\typescript'
+$packagePath = Join-Path $installRoot 'node_modules\typescript\package.json'
+$tsserverPath = Join-Path $installRoot 'node_modules\typescript\lib\tsserver.js'
+
+$miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
+  Select-Object -First 1).Source
+if (-not $miseExe) {
+  $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
+  if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
+}
+if (-not $miseExe -or -not (Test-Path -LiteralPath $miseExe)) {
+  Write-Warning 'mise.exe was not found; skipping TypeScript LSP dependency installation.'
+  exit 0
+}
+
+$nodeOutput = & $miseExe which node 2>$null
+if ($LASTEXITCODE -ne 0 -or -not $nodeOutput) {
+  Write-Warning 'mise-managed node was not found; run mise install and apply chezmoi again.'
+  exit 0
+}
+$nodeExe = ([string]$nodeOutput).Trim()
+if (-not (Test-Path -LiteralPath $nodeExe)) {
+  Write-Warning 'mise-managed node was not found; run mise install and apply chezmoi again.'
+  exit 0
+}
+
+if ((Test-Path -LiteralPath $packagePath) -and (Test-Path -LiteralPath $tsserverPath)) {
+  try {
+    $installedVersion = (Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json).version
+  }
+  catch {
+    $installedVersion = $null
+  }
+  if ($installedVersion -eq $typescriptVersion) {
+    exit 0
+  }
+}
+
+if (Test-Path -LiteralPath $typescriptPackageRoot) {
+  Remove-Item -LiteralPath $typescriptPackageRoot -Recurse -Force
+}
+
+$npmCmd = Join-Path (Split-Path -Parent $nodeExe) 'npm.cmd'
+if (-not (Test-Path -LiteralPath $npmCmd)) {
+  throw "npm.cmd was not found beside mise-managed node: $npmCmd"
+}
+
+& $npmCmd install --prefix $installRoot --no-save --package-lock=false "typescript@$typescriptVersion"
+if ($LASTEXITCODE -ne 0) {
+  throw "TypeScript LSP dependency installation failed with exit code $LASTEXITCODE."
+}
+
+if (-not (Test-Path -LiteralPath $packagePath) -or -not (Test-Path -LiteralPath $tsserverPath)) {
+  throw 'TypeScript LSP dependency installation did not produce package.json and tsserver.js.'
+}
+
+$installedVersion = (Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json).version
+if ($installedVersion -ne $typescriptVersion) {
+  throw "Expected TypeScript $typescriptVersion but found $installedVersion."
+}
+{{- end -}}
