@@ -11,6 +11,11 @@
     "typescript": {
       "command": "typescript-language-server",
       "args": ["--stdio"],
+      "initializationOptions": {
+        "tsserver": {
+          "path": {{ joinPath .chezmoi.homeDir ".local/share/chezmoi-dotfiles/typescript-lsp/node_modules/typescript/lib/tsserver.js" | toJson }}
+        }
+      },
       "fileExtensions": {
         ".ts": "typescript",
         ".tsx": "typescriptreact",

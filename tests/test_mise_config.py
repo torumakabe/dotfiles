@@ -40,6 +40,15 @@ CARGO_MAKE_UPSTREAM_ISSUE = "https://github.com/sagiegurari/cargo-make/issues/54
 TRUST_POLICY_EXCLUDES = {
     "npm:typescript-language-server": ("typescript-language-server@5.3.0",),
 }
+LSP_TYPESCRIPT_VERSION = "6.0.3"
+LSP_CONFIG_PATH = REPO_ROOT / "home/private_dot_copilot/lsp-config.json.tmpl"
+LSP_VERSION_PATH = REPO_ROOT / "home/.chezmoidata.toml"
+LSP_INSTALL_SH_PATH = (
+    REPO_ROOT / "home/run_after_22-install-typescript-lsp.sh.tmpl"
+)
+LSP_INSTALL_PS1_PATH = (
+    REPO_ROOT / "home/run_after_22-install-typescript-lsp.ps1.tmpl"
+)
 
 ALLOWED_WARNING = (
     "mise WARN  newer codex release 0.145.0 ignored by "
@@ -173,6 +182,92 @@ class MiseConfigTests(unittest.TestCase):
         self.assertIn('{{ if eq .chezmoi.os "windows" -}}', config)
         self.assertIn("install_env = { DOTNET_ROOT =", config)
         self.assertIn(r"\mise\dotnet-root;$PATH", config)
+
+    def test_typescript_language_server_uses_stable_typescript_path(self) -> None:
+        config = CONFIG_PATH.read_text(encoding="utf-8")
+        tools = _config_toml(config)["tools"]
+        language_server = tools["npm:typescript-language-server"]
+
+        self.assertEqual(tools["npm:typescript"], "latest")
+        self.assertNotIn("postinstall", language_server)
+        self.assertEqual(
+            tomllib.loads(LSP_VERSION_PATH.read_text(encoding="utf-8"))[
+                "typescriptLsp"
+            ]["version"],
+            LSP_TYPESCRIPT_VERSION,
+        )
+
+        chezmoi = shutil.which("chezmoi")
+        if chezmoi is None:
+            self.skipTest("chezmoi is required for LSP template tests")
+        rendered_lsp = subprocess.run(
+            [
+                chezmoi,
+                "execute-template",
+                "--init",
+                "--stdinisatty=false",
+                "--file",
+                str(LSP_CONFIG_PATH),
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        lsp_typescript = json.loads(rendered_lsp.stdout)["lspServers"]["typescript"]
+        self.assertTrue(
+            lsp_typescript["initializationOptions"]["tsserver"]["path"].endswith(
+                "typescript-lsp\\node_modules\\typescript\\lib\\tsserver.js"
+                if os.name == "nt"
+                else "typescript-lsp/node_modules/typescript/lib/tsserver.js"
+            )
+        )
+
+        source_root = REPO_ROOT / "home"
+        rendered_ps1 = subprocess.run(
+            [
+                chezmoi,
+                "--source",
+                str(source_root),
+                "execute-template",
+                "--stdinisatty=false",
+                "--file",
+                str(LSP_INSTALL_PS1_PATH),
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+        rendered_sh = subprocess.run(
+            [
+                chezmoi,
+                "--source",
+                str(source_root),
+                "execute-template",
+                "--stdinisatty=false",
+                "--override-data",
+                json.dumps(
+                    {
+                        "chezmoi": {"os": "linux", "arch": "amd64"},
+                        "typescriptLsp": {"version": LSP_TYPESCRIPT_VERSION},
+                    }
+                ),
+                "--file",
+                str(LSP_INSTALL_SH_PATH),
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+        for rendered_script in (rendered_ps1, rendered_sh):
+            with self.subTest(script=rendered_script[:30]):
+                self.assertIn(LSP_TYPESCRIPT_VERSION, rendered_script)
+                self.assertIn("typescript-lsp", rendered_script)
+                self.assertIn("node_modules", rendered_script)
+                self.assertIn("tsserver.js", rendered_script)
+                self.assertIn("--prefix", rendered_script)
+                self.assertIn("--no-save", rendered_script)
+                self.assertIn("--package-lock=false", rendered_script)
+                self.assertNotIn("install --global", rendered_script)
 
     def test_backend_migration_requires_postconditions(self) -> None:
         instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")

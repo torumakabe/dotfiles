@@ -146,6 +146,33 @@ mise install
 mise reshim
 ```
 
+## TypeScript language server が TypeScript を発見できない
+
+Copilot CLI の起動ログに `Could not find a valid TypeScript installation` が出る場合、安定 prefix に LSP 用 TypeScript が導入されているか確認する。`tsc --version` の成功は、別の mise インストール先にあるコンパイラーを確認するだけであり、language server の依存解決を保証しない。
+
+設定と導入スクリプトを配布すると、`run_after_22-install-typescript-lsp` が mise 管理 Node に同梱された npm で LSP 用 TypeScript を確認し、不足または版違いの場合だけ導入する。
+
+```powershell
+chezmoi apply
+$lspTypeScriptRoot = Join-Path $HOME '.local\share\chezmoi-dotfiles\typescript-lsp'
+Test-Path (Join-Path $lspTypeScriptRoot 'node_modules\typescript\lib\tsserver.js')
+tsc --version
+$typescriptPackage = Join-Path $lspTypeScriptRoot 'node_modules\typescript\package.json'
+(Get-Content $typescriptPackage -Raw | ConvertFrom-Json).version
+```
+
+macOS、Linux、WSL では同じ確認を POSIX シェルで実行する。
+
+```bash
+chezmoi apply
+lsp_typescript_root="$HOME/.local/share/chezmoi-dotfiles/typescript-lsp"
+test -f "$lsp_typescript_root/node_modules/typescript/lib/tsserver.js"
+tsc --version
+node -p "require('$lsp_typescript_root/node_modules/typescript/package.json').version"
+```
+
+`tsc` がコンパイラー用 TypeScript 7.x、安定 prefix の `package.json` が LSP 用 TypeScript 6.x を返すことを確認する。その後 Copilot CLI を通常どおり再起動し、起動ログの `Using Typescript version` が安定 prefix の `tsserver.js` を示すことと、`typescript language server ready` を確認する。最後に実際の `.ts` ファイルで定義参照とシンボル検索を実行する。`/lsp test` は stdio を閉じて終了させる経路があるため、この復旧の完了判定には使用しない。
+
 ## `run_once_*` スクリプトの warning / error
 
 実行順と役割は [`docs/architecture.md`](architecture.md#セットアップスクリプトの実行順) を参照。

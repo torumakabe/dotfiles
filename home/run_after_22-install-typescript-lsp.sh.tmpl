@@ -1,0 +1,60 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env sh
+
+set -eu
+
+typescript_version='{{ .typescriptLsp.version }}'
+install_root="$HOME/.local/share/chezmoi-dotfiles/typescript-lsp"
+typescript_package_root="$install_root/node_modules/typescript"
+package_path="$install_root/node_modules/typescript/package.json"
+tsserver_path="$install_root/node_modules/typescript/lib/tsserver.js"
+
+PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+export PATH
+
+if ! command -v mise >/dev/null 2>&1; then
+  echo 'mise was not found; skipping TypeScript LSP dependency installation.' >&2
+  exit 0
+fi
+
+if ! node_exe="$(mise which node 2>/dev/null)"; then
+  echo 'mise-managed node was not found; run mise install and apply chezmoi again.' >&2
+  exit 0
+fi
+
+if [ -f "$package_path" ] && [ -f "$tsserver_path" ]; then
+  installed_version="$("$node_exe" -p "require(process.argv[1]).version" "$package_path" 2>/dev/null || true)"
+  if [ "$installed_version" = "$typescript_version" ]; then
+    exit 0
+  fi
+fi
+
+if [ -e "$typescript_package_root" ]; then
+  rm -rf -- "$typescript_package_root"
+fi
+
+node_bin="$(dirname "$node_exe")"
+npm_cli="$node_bin/npm"
+
+if [ ! -x "$node_exe" ]; then
+  echo 'mise-managed node executable was not found.' >&2
+  exit 1
+fi
+if [ ! -x "$npm_cli" ]; then
+  echo "npm was not found beside mise-managed node: $npm_cli" >&2
+  exit 1
+fi
+
+"$npm_cli" install --prefix "$install_root" --no-save --package-lock=false "typescript@$typescript_version"
+
+if [ ! -f "$package_path" ] || [ ! -f "$tsserver_path" ]; then
+  echo 'TypeScript LSP dependency installation did not produce package.json and tsserver.js.' >&2
+  exit 1
+fi
+
+installed_version="$("$node_exe" -p "require(process.argv[1]).version" "$package_path")"
+if [ "$installed_version" != "$typescript_version" ]; then
+  echo "Expected TypeScript $typescript_version but found $installed_version." >&2
+  exit 1
+fi
+{{- end -}}
