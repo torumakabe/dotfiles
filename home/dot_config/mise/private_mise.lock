@@ -356,28 +356,28 @@ url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378333178"
 
 [[tools.go]]
-version = "1.26.6"
+version = "1.27.0"
 backend = "core:go"
 
 [tools.go."platforms.linux-arm64"]
-checksum = "sha256:d0507e9e9d7fe012aae570108cbd76c15de879e17130ab8cb90d4d7445cb1f2e"
-url = "https://dl.google.com/go/go1.26.6.linux-arm64.tar.gz"
+checksum = "sha256:51798d2c42d0e1c6ed7fd9f48728b4193abac9e8aad6dbac2fe96a81f5909bda"
+url = "https://dl.google.com/go/go1.27.0.linux-arm64.tar.gz"
 
 [tools.go."platforms.linux-x64"]
-checksum = "sha256:708effb774be8237570d0add163225abbdfaf4fca28b2611df167beba4feef89"
-url = "https://dl.google.com/go/go1.26.6.linux-amd64.tar.gz"
+checksum = "sha256:675c26c449cbb18fc24b74650de1eabbae6e16f64326fd85a283fb3b58280685"
+url = "https://dl.google.com/go/go1.27.0.linux-amd64.tar.gz"
 
 [tools.go."platforms.macos-arm64"]
-checksum = "sha256:2dc95ce4675829f2df0e86b28bcef3283635902062a5f0580ca659bf570f3204"
-url = "https://dl.google.com/go/go1.26.6.darwin-arm64.tar.gz"
+checksum = "sha256:90493b3bbd5e10f91d12153198bf1994fd756399b4fec93b49b0c6e2acdeeb3e"
+url = "https://dl.google.com/go/go1.27.0.darwin-arm64.tar.gz"
 
 [tools.go."platforms.windows-arm64"]
-checksum = "sha256:06dbe785743d534ef8a469dad88adf7f1b2b438507ccfef9b98e7cf8c97b4b68"
-url = "https://dl.google.com/go/go1.26.6.windows-arm64.zip"
+checksum = "sha256:6e0156b9788209931dd340fadc04171ce15063c17b51c92e7b86b51109626e90"
+url = "https://dl.google.com/go/go1.27.0.windows-arm64.zip"
 
 [tools.go."platforms.windows-x64"]
-checksum = "sha256:5b6c5b556525810463b5c897b50dc7a82d6a3dc0bfaf55d990a7e9f31d6b2318"
-url = "https://dl.google.com/go/go1.26.6.windows-amd64.zip"
+checksum = "sha256:f0c0a0d33ba94f4d2c5dbc887334ce678b21813504ddb3aafcb06e60a5a667c4"
+url = "https://dl.google.com/go/go1.27.0.windows-amd64.zip"
 
 [[tools.golangci-lint]]
 version = "2.12.2"
@@ -705,28 +705,28 @@ url = "https://downloads.sqlc.dev/sqlc_1.31.1_windows_amd64.tar.gz"
 url = "https://downloads.sqlc.dev/sqlc_1.31.1_windows_amd64.tar.gz"
 
 [[tools.terraform]]
-version = "1.15.8"
+version = "1.15.9"
 backend = "aqua:hashicorp/terraform"
 
 [tools.terraform."platforms.linux-arm64"]
-checksum = "sha256:8891e9dcedc9e3b8950bc6af9d4d8af1f4cfade3062f53b9dc403a89f6ce8c9c"
-url = "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_arm64.zip"
+checksum = "sha256:0afa6c29f61ca5ea270e950e43e50ecf2418b598507bf580e8ae76e1e6699b19"
+url = "https://releases.hashicorp.com/terraform/1.15.9/terraform_1.15.9_linux_arm64.zip"
 
 [tools.terraform."platforms.linux-x64"]
-checksum = "sha256:d25ce7b6902013ad905db3d2eab0be4cd905887fe88b81a6171b8d5503c31f3d"
-url = "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip"
+checksum = "sha256:76edd0b22d2f27d3d2e097cd793209646f719cf60f02ff3af626b07361137da1"
+url = "https://releases.hashicorp.com/terraform/1.15.9/terraform_1.15.9_linux_amd64.zip"
 
 [tools.terraform."platforms.macos-arm64"]
-checksum = "sha256:f210110c5698b94d803a7a63cdb0251b5455c150841478808e2bbb343f95ed68"
-url = "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_darwin_arm64.zip"
+checksum = "sha256:05b27586a5d7d84105690ecccc7edbbf48bc3d6d577745cb61f163ba990adf4f"
+url = "https://releases.hashicorp.com/terraform/1.15.9/terraform_1.15.9_darwin_arm64.zip"
 
 [tools.terraform."platforms.windows-arm64"]
-checksum = "sha256:ffd9399a37ee8123263d84ec5c00d09d7704f9997cb345d7c9cac56c3fc1348e"
-url = "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_windows_arm64.zip"
+checksum = "sha256:ae35a0df5899640df09d3ed6a5de88159495b9b50d2e3eba9ae564354193832f"
+url = "https://releases.hashicorp.com/terraform/1.15.9/terraform_1.15.9_windows_arm64.zip"
 
 [tools.terraform."platforms.windows-x64"]
-checksum = "sha256:2ff41d2129afb1982733c132c61a8d6ef038f879f3aeede7fc28b8b8b24acf02"
-url = "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_windows_amd64.zip"
+checksum = "sha256:b0fcd57e2abd19fc6d8e64b86a22f5f3fb734b0407385553cdcffc64677f18b6"
+url = "https://releases.hashicorp.com/terraform/1.15.9/terraform_1.15.9_windows_amd64.zip"
 
 [[tools.trivy]]
 version = "0.74.0"
@@ -797,37 +797,37 @@ url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/514851084"
 provenance = "github-attestations"
 
 [[tools.yq]]
-version = "4.53.3"
+version = "4.53.4"
 backend = "aqua:mikefarah/yq"
 
 [tools.yq."platforms.linux-arm64"]
-checksum = "sha256:578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_arm64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/440146727"
+checksum = "sha256:8c3cf4cff01536588947b6e0ba1544768039e34054cd9ca8a9e4c5706dfb8631"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.4/yq_linux_arm64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/520402292"
 provenance = "cosign"
 
 [tools.yq."platforms.linux-x64"]
-checksum = "sha256:fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/440146735"
+checksum = "sha256:f67d8a6a2dc2308c961f83d5ba8707fd4c7c44ad77902fef87eb3a4646cdfa2a"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.4/yq_linux_amd64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/520402337"
 provenance = "cosign"
 
 [tools.yq."platforms.macos-arm64"]
-checksum = "sha256:877de31753a4dd2401aa048937aa9a7fc4d5f6ce858cf31508c5802954297213"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_darwin_arm64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/440146762"
+checksum = "sha256:e2cf7aa3e7402a25798c4a131a8c38514efdabdc185ca081efd134448aef0428"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.4/yq_darwin_arm64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/520402323"
 provenance = "cosign"
 
 [tools.yq."platforms.windows-arm64"]
-checksum = "sha256:c80ac96ff2a8d77d452d91304e11feef8fb23239900b3d1d88f47c2ec93be970"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_windows_arm64.exe"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/440146718"
+checksum = "sha256:002d8e5fc302415b039e783d2c318988b6ea942d6fbed3186638f3926f8143fb"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.4/yq_windows_arm64.exe"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/520402278"
 provenance = "cosign"
 
 [tools.yq."platforms.windows-x64"]
-checksum = "sha256:e279bc506a452eeafcdf364f91a025455e402a8001169083caf01f4b64a544e2"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_windows_amd64.exe"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/440146721"
+checksum = "sha256:acf5c8f9b49b173a30c413636a72a0cc4eccecc3eed137fd0b2c89587a1c8766"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.4/yq_windows_amd64.exe"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/520402299"
 provenance = "cosign"
 
 [[tools.zoxide]]
