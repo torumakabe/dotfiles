@@ -206,7 +206,9 @@ class MiseConfigTests(unittest.TestCase):
         move_index = bootstrap_script.index(
             'mv -f "${staged_path}" "${MISE_BIN_DIR}/mise"'
         )
-        cleanup_index = bootstrap_script.index("remove_homebrew_mise", move_index)
+        cleanup_index = bootstrap_script.index(
+            "report_homebrew_mise_cleanup", move_index
+        )
         self.assertLess(checksum_index, install_index)
         self.assertLess(install_index, verify_index)
         self.assertLess(verify_index, move_index)
@@ -253,43 +255,61 @@ class MiseConfigTests(unittest.TestCase):
             formula_detection.index(
                 'if ! existing_version="$("${mise_path}" --version)"; then'
             ),
-            formula_detection.index("remove_homebrew_mise"),
+            formula_detection.index("report_homebrew_mise_cleanup"),
         )
 
-    def test_mise_bootstrap_homebrew_cleanup_is_nonfatal(self) -> None:
+    def test_mise_bootstrap_defers_homebrew_cleanup_until_new_shell(self) -> None:
         bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
+        operations = OPERATIONS_PATH.read_text(encoding="utf-8")
+        troubleshooting = TROUBLESHOOTING_PATH.read_text(encoding="utf-8")
         cleanup_function = bootstrap_script[
-            bootstrap_script.index("remove_homebrew_mise() {") :
+            bootstrap_script.index("report_homebrew_mise_cleanup() {") :
             bootstrap_script.index("{{ if eq .chezmoi.os")
         ]
         bash = shutil.which("bash")
         if bash is None:
             self.skipTest("bash is required")
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            fake_brew = pathlib.Path(temp_dir) / "brew"
-            fake_brew.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
-            fake_brew.chmod(0o755)
-            env = os.environ.copy()
-            env["PATH"] = f"{temp_dir}{os.pathsep}{env['PATH']}"
-
-            result = subprocess.run(
-                [bash],
-                input=(
-                    "set -euo pipefail\n"
-                    f"{cleanup_function}\n"
-                    "remove_homebrew_mise\n"
-                    'echo "cleanup continued"\n'
-                ),
-                check=False,
-                capture_output=True,
-                encoding="utf-8",
-                env=env,
-            )
+        expected_mise = "/custom/bin/mise"
+        result = subprocess.run(
+            [bash],
+            input=(
+                "set -euo pipefail\n"
+                f"{cleanup_function}\n"
+                f'report_homebrew_mise_cleanup "{expected_mise}"\n'
+            ),
+            check=False,
+            capture_output=True,
+            encoding="utf-8",
+        )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Homebrew mise formula remains", result.stderr)
-        self.assertIn("cleanup continued", result.stdout)
+        self.assertIn("current shell activation", result.stderr)
+        self.assertIn("Restart every shell", result.stderr)
+        self.assertIn("command -v mise", result.stderr)
+        self.assertIn(expected_mise, result.stderr)
+        self.assertIn("brew uninstall mise", result.stderr)
+        uninstall_lines = [
+            line.strip()
+            for line in bootstrap_script.splitlines()
+            if "brew uninstall mise" in line
+        ]
+        self.assertEqual(
+            uninstall_lines,
+            ['echo "then run \'brew uninstall mise\' manually." >&2'],
+        )
+        self.assertIn("導入スクリプトは formula を削除しない", operations)
+        self.assertIn("PATH 外の任意の場所は探索しない", operations)
+        self.assertIn("_mise_hook: no such file or directory", troubleshooting)
+        self.assertIn("unset __DOTFILES_PROFILE_LOADED", troubleshooting)
+        self.assertIn(
+            'mise_path="$HOME/.local/bin/mise"',
+            troubleshooting,
+        )
+        self.assertIn(
+            'eval "$("$mise_path" activate zsh)"',
+            troubleshooting,
+        )
 
     def test_mise_bootstrap_renders_cleanly_for_unix_platforms(self) -> None:
         chezmoi = shutil.which("chezmoi")
@@ -336,11 +356,12 @@ class MiseConfigTests(unittest.TestCase):
     def test_mise_homebrew_migration_has_removal_condition(self) -> None:
         instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("Homebrew formula 版 mise の自動移行 (ADR-027)", instructions)
+        self.assertIn("Homebrew formula 版 mise の移行案内 (ADR-027)", instructions)
         self.assertIn("brew list --formula mise", instructions)
+        self.assertIn("activation hook", instructions)
         self.assertIn(
-            "Homebrew の検出、既存バイナリとの調停、formula 削除処理"
-            "と関連テストを撤去する",
+            "Homebrew の検出、既存バイナリとの調停、移行案内と関連テスト"
+            "を撤去する",
             instructions,
         )
         self.assertIn("公式バイナリの導入処理は残す", instructions)
