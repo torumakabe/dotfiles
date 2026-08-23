@@ -125,11 +125,11 @@ esac
 
 echo "Installing mise..."
 tmp_dir=$(mktemp -d)
-staged_path=""
+staged_dir=""
 cleanup() {
   rm -rf "${tmp_dir}"
-  if [ -n "${staged_path}" ]; then
-    rm -f "${staged_path}"
+  if [ -n "${staged_dir}" ]; then
+    rm -rf "${staged_dir}"
   fi
 }
 trap cleanup EXIT
@@ -149,11 +149,12 @@ fi
 
 mkdir -p "${MISE_BIN_DIR}"
 tar -xzf "${archive_path}" -C "${tmp_dir}" mise/bin/mise
-staged_path="$(mktemp "${MISE_BIN_DIR}/.mise.XXXXXX")"
+staged_dir="$(mktemp -d "${MISE_BIN_DIR}/.mise.XXXXXX")"
+staged_path="${staged_dir}/mise"
 install -m 0755 "${tmp_dir}/mise/bin/mise" "${staged_path}"
 "${staged_path}" --version
 mv -f "${staged_path}" "${MISE_BIN_DIR}/mise"
-staged_path=""
+
 if [ "${homebrew_mise}" -eq 1 ]; then
   remove_homebrew_mise
 fi

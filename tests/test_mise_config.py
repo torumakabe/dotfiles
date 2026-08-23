@@ -212,6 +212,19 @@ class MiseConfigTests(unittest.TestCase):
         self.assertLess(verify_index, move_index)
         self.assertLess(move_index, cleanup_index)
 
+    def test_mise_bootstrap_verifies_binary_with_mise_basename(self) -> None:
+        bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'staged_dir="$(mktemp -d "${MISE_BIN_DIR}/.mise.XXXXXX")"',
+            bootstrap_script,
+        )
+        self.assertIn('staged_path="${staged_dir}/mise"', bootstrap_script)
+        self.assertNotIn(
+            'staged_path="$(mktemp "${MISE_BIN_DIR}/.mise.XXXXXX")"',
+            bootstrap_script,
+        )
+
     def test_mise_bootstrap_preserves_non_homebrew_installations(self) -> None:
         bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
 
