@@ -87,10 +87,17 @@ mise which dotnet
 mise --version
 ```
 
-`lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。既存の mise がある端末では `run_once_before_20-install-mise.sh` がバージョンを問わず何もしないため、自分で更新する。
+`lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。Homebrew formula 以外の mise がある端末では `run_once_before_20-install-mise.sh` がバージョンを問わず既存バイナリを保持するため、自分で更新する。
+
+```text
+macOS / Linux: mise self-update
+Windows:       mise-self-upgrade
+```
+
+macOS の移行時に `Homebrew mise formula remains` と警告された場合、公式バイナリの導入または既存バイナリの確認は完了している。残った formula を手動で削除する。
 
 ```bash
-mise self-update        # macOS/Homebrew は brew upgrade mise、Windows は mise-self-upgrade
+brew uninstall mise
 ```
 
 mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。

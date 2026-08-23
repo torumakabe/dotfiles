@@ -155,8 +155,182 @@ class MiseConfigTests(unittest.TestCase):
         self.assertGreaterEqual(version, (2026, 7, 14), "GHSA-g74g-rg72-j2p3")
         self.assertEqual(
             len(re.findall(r'expected_sha256="[0-9a-f]{64}"', bootstrap_script)),
-            2,
+            3,
         )
+
+    def test_mise_bootstrap_uses_official_release_archives(self) -> None:
+        bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'archive_url="https://github.com/jdx/mise/releases/download/'
+            '${MISE_VERSION}/${mise_archive}"',
+            bootstrap_script,
+        )
+        archives = {
+            "macos-arm64.tar.gz": (
+                "ac6ed53215e70abfb220524aed121bf02"
+                "dbd3fbd4a19355032dd1c5a108fb212"
+            ),
+            "linux-x64.tar.gz": (
+                "e013fe11a0a9055fe78d2546baa85eba"
+                "90a56e6445c431021b4fe328e6910fe2"
+            ),
+            "linux-arm64.tar.gz": (
+                "5fd8a9ffb312b47e29f642d377ad4fa"
+                "9093962b47061ef5c15665086904e1046"
+            ),
+        }
+        for archive, checksum in archives.items():
+            archive_index = bootstrap_script.index(archive)
+            checksum_index = bootstrap_script.index(checksum)
+            self.assertLess(archive_index, checksum_index)
+        self.assertNotIn("brew install mise", bootstrap_script)
+
+    def test_mise_bootstrap_migrates_homebrew_after_verification(self) -> None:
+        bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("brew list --formula mise", bootstrap_script)
+        self.assertIn(
+            '[ -n "${mise_path}" ] && [ "${homebrew_mise}" -eq 0 ]',
+            bootstrap_script,
+        )
+        checksum_index = bootstrap_script.index(
+            'if [ "${actual_sha256}" != "${expected_sha256}" ]'
+        )
+        install_index = bootstrap_script.index(
+            'install -m 0755 "${tmp_dir}/mise/bin/mise" "${staged_path}"'
+        )
+        verify_index = bootstrap_script.index(
+            '"${staged_path}" --version'
+        )
+        move_index = bootstrap_script.index(
+            'mv -f "${staged_path}" "${MISE_BIN_DIR}/mise"'
+        )
+        cleanup_index = bootstrap_script.index("remove_homebrew_mise", move_index)
+        self.assertLess(checksum_index, install_index)
+        self.assertLess(install_index, verify_index)
+        self.assertLess(verify_index, move_index)
+        self.assertLess(move_index, cleanup_index)
+
+    def test_mise_bootstrap_preserves_non_homebrew_installations(self) -> None:
+        bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
+
+        formula_detection = bootstrap_script[
+            bootstrap_script.index("brew list --formula mise") :
+            bootstrap_script.index("download_file() {")
+        ]
+        self.assertIn(
+            '[ "${mise_path}" -ef "${brew_mise_link}" ]',
+            formula_detection,
+        )
+        self.assertIn(
+            '[ "${mise_path}" -ef "${brew_mise_bin}" ]',
+            formula_detection,
+        )
+        self.assertIn(
+            'if ! existing_version="$("${mise_path}" --version)"; then',
+            formula_detection,
+        )
+        self.assertIn(
+            'if [ -e "${MISE_BIN_DIR}/mise" ] '
+            '|| [ -L "${MISE_BIN_DIR}/mise" ]; then',
+            formula_detection,
+        )
+        self.assertLess(
+            formula_detection.index(
+                'if ! existing_version="$("${mise_path}" --version)"; then'
+            ),
+            formula_detection.index("remove_homebrew_mise"),
+        )
+
+    def test_mise_bootstrap_homebrew_cleanup_is_nonfatal(self) -> None:
+        bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
+        cleanup_function = bootstrap_script[
+            bootstrap_script.index("remove_homebrew_mise() {") :
+            bootstrap_script.index("{{ if eq .chezmoi.os")
+        ]
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("bash is required")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fake_brew = pathlib.Path(temp_dir) / "brew"
+            fake_brew.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+            fake_brew.chmod(0o755)
+            env = os.environ.copy()
+            env["PATH"] = f"{temp_dir}{os.pathsep}{env['PATH']}"
+
+            result = subprocess.run(
+                [bash],
+                input=(
+                    "set -euo pipefail\n"
+                    f"{cleanup_function}\n"
+                    "remove_homebrew_mise\n"
+                    'echo "cleanup continued"\n'
+                ),
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Homebrew mise formula remains", result.stderr)
+        self.assertIn("cleanup continued", result.stdout)
+
+    def test_mise_bootstrap_renders_cleanly_for_unix_platforms(self) -> None:
+        chezmoi = shutil.which("chezmoi")
+        bash = shutil.which("bash")
+        shellcheck = shutil.which("shellcheck")
+        if chezmoi is None or bash is None or shellcheck is None:
+            self.skipTest("chezmoi, bash, and shellcheck are required")
+
+        for os_name, arch in (("darwin", "arm64"), ("linux", "amd64")):
+            with self.subTest(os=os_name, arch=arch):
+                rendered = subprocess.run(
+                    [
+                        chezmoi,
+                        "execute-template",
+                        "--override-data",
+                        json.dumps({"chezmoi": {"os": os_name, "arch": arch}}),
+                        "--file",
+                        str(BOOTSTRAP_SH_PATH),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    encoding="utf-8",
+                )
+                self.assertEqual(rendered.returncode, 0, rendered.stderr)
+
+                syntax = subprocess.run(
+                    [bash, "-n"],
+                    input=rendered.stdout,
+                    check=False,
+                    capture_output=True,
+                    encoding="utf-8",
+                )
+                self.assertEqual(syntax.returncode, 0, syntax.stderr)
+
+                lint = subprocess.run(
+                    [shellcheck, "-s", "bash", "-"],
+                    input=rendered.stdout,
+                    check=False,
+                    capture_output=True,
+                    encoding="utf-8",
+                )
+                self.assertEqual(lint.returncode, 0, lint.stdout + lint.stderr)
+
+    def test_mise_homebrew_migration_has_removal_condition(self) -> None:
+        instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("Homebrew formula 版 mise の自動移行 (ADR-027)", instructions)
+        self.assertIn("brew list --formula mise", instructions)
+        self.assertIn(
+            "Homebrew の検出、既存バイナリとの調停、formula 削除処理"
+            "と関連テストを撤去する",
+            instructions,
+        )
+        self.assertIn("公式バイナリの導入処理は残す", instructions)
 
     def test_mise_install_does_not_retry_without_github_credentials(self) -> None:
         install_script = INSTALL_SH_PATH.read_text(encoding="utf-8")

@@ -45,6 +45,7 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 ## ワークアラウンド（定期チェック対象）
 
+- **Homebrew formula 版 mise の自動移行 (ADR-027)**: `home/run_once_before_20-install-mise.sh.tmpl` は macOS で Homebrew formula 版を検出し、検証済みの公式バイナリを配置してから formula の削除を試みる。管理対象の macOS 端末で formula 版からの移行が完了し、`brew list --formula mise` が mise を返さないことを確認できたら、Homebrew の検出、既存バイナリとの調停、formula 削除処理と関連テストを撤去する。公式バイナリの導入処理は残す
 - **azure-deploy のプロジェクト内 `.azure` 参照**: `home/private_dot_copilot/hooks/allowed-files.txt` は、`microsoft/azure-skills` の `azure-deploy` が直接読み書きする `.azure/deployment-plan.md` だけを Copilot Guard の拒否対象から除外する。ホームの `~/.azure` と、`azd` が内部管理する `.azure/<environment-name>/.env`、`.azure/config.json` は除外しない。PreToolUse がスキル識別子を提供し、呼び出し元を限定できるようになった場合、または上流スキルが `.azure/deployment-plan.md` を直接扱わなくなった場合は、この規則と関連テストを撤去する
 - **core:dotnet Windows install-time verification**: `home/dot_config/mise/config.toml.tmpl` は Windows の `dotnet.install_env` で `%LOCALAPPDATA%\mise\dotnet-root` を `DOTNET_ROOT` と PATH の先頭へ設定する。mise の `core:dotnet` が install-time verification へ管理下の dotnet を自動設定するようになったら、このオプションと関連テスト、`docs/troubleshooting.md` の復旧手順を撤去する
 - **op-ssh-sign-wsl.exe CRLF (ADR-012)**: `home/dot_local/bin/executable_op-ssh-sign-wrapper.sh.tmpl` で stdout/stderr の CR を剥がしている。1Password が WSL バイナリの改行を LF に揃えた場合、または全対応 WSL 経路で Git 2.36 以上を保証できるようになった場合は、wrapper と `.gitconfig-linux` の `program` 切替を撤去する
