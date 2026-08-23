@@ -15,13 +15,12 @@ homebrew_mise=0
 brew_mise_link=""
 brew_mise_bin=""
 
-remove_homebrew_mise() {
-  echo "Removing unused Homebrew mise formula..."
-  if brew uninstall mise; then
-    return 0
-  fi
-  echo "warning: Homebrew mise formula remains; run 'brew uninstall mise' manually" >&2
-  return 0
+report_homebrew_mise_cleanup() {
+  local expected_mise=$1
+  echo "Homebrew mise formula remains to keep the current shell activation valid." >&2
+  echo "Restart every shell using the Homebrew activation, then verify" >&2
+  echo "'command -v mise' returns ${expected_mise}," >&2
+  echo "then run 'brew uninstall mise' manually." >&2
 }
 
 {{ if eq .chezmoi.os "darwin" -}}
@@ -41,7 +40,7 @@ if command -v brew >/dev/null 2>&1 \
       exit 1
     fi
     echo "mise is already installed: ${existing_version}"
-    remove_homebrew_mise
+    report_homebrew_mise_cleanup "${mise_path}"
     exit 0
   fi
 fi
@@ -71,7 +70,7 @@ if [ -e "${MISE_BIN_DIR}/mise" ] || [ -L "${MISE_BIN_DIR}/mise" ]; then
     fi
     echo "mise is already installed: ${existing_version}"
     if [ "${homebrew_mise}" -eq 1 ]; then
-      remove_homebrew_mise
+      report_homebrew_mise_cleanup "${MISE_BIN_DIR}/mise"
     fi
     exit 0
   fi
@@ -156,6 +155,6 @@ install -m 0755 "${tmp_dir}/mise/bin/mise" "${staged_path}"
 mv -f "${staged_path}" "${MISE_BIN_DIR}/mise"
 
 if [ "${homebrew_mise}" -eq 1 ]; then
-  remove_homebrew_mise
+  report_homebrew_mise_cleanup "${MISE_BIN_DIR}/mise"
 fi
 {{ end -}}

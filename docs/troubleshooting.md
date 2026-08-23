@@ -94,10 +94,26 @@ macOS / Linux: mise self-update
 Windows:       mise-self-upgrade
 ```
 
-macOS の移行時に `Homebrew mise formula remains` と警告された場合、公式バイナリの導入または既存バイナリの確認は完了している。残った formula を手動で削除する。
+macOS の移行では、現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、formula を自動削除しない。Homebrew 版の activation を読み込んだターミナルやシェルをすべて終了する。現在のシェルを継続して使う場合は、profile の再実行ガードを解除して login shell を起動し直す。
 
 ```bash
+unset __DOTFILES_PROFILE_LOADED
+exec zsh -l
+```
+
+新しいシェルで、`command -v mise` が導入スクリプトの案内したパスを返すことを確認して formula を削除する。新規に公式バイナリを配置した場合のパスは `~/.local/bin/mise` である。
+
+```bash
+command -v mise   # ~/.local/bin/mise
 brew uninstall mise
+```
+
+formula をすでに削除し、`_mise_hook: no such file or directory: /opt/homebrew/bin/mise` が出る場合は、影響を受ける各シェルで公式バイナリの hook を読み直すか、そのシェルを終了する。
+
+```bash
+mise_path="$HOME/.local/bin/mise" # 導入スクリプトが別のパスを案内した場合は置き換える
+eval "$("$mise_path" activate zsh)"
+rehash
 ```
 
 mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。
