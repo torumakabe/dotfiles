@@ -51,7 +51,7 @@ gh extension upgrade gh-stack --dry-run
 
 組織が enterprise の managed-settings.json（Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json`）で sandbox を強制している場合、`/sandbox` の UI は managed もしくは locked と表示され、利用者はローカルで無効化できない。これは組織のポリシーによるものであり、本リポジトリの chezmoi 設定は関与しない。
 
-本リポジトリの以前のブランチ（file-based managed settings 方式）を適用したことがある場合、上記の managed-settings.json が残っている可能性がある。組織が所有するファイルの可能性があるため自動削除しない。内容が本リポジトリ由来と確認できた場合に限り手動で削除するか、組織の管理者に確認する。
+本リポジトリの以前のブランチ（file-based managed settings 方式）が残した設定の確認と復旧は、[`troubleshooting.md`](troubleshooting.md#copilot-sandboxenabled-が意図した値にならない) を参照する。
 
 更新後は Copilot CLI を再起動し、`/sandbox` の General、Auth、Filesystem、Network の各タブを確認する。Linux 系では `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap 診断が実行され、`false` の場合は probe が省略される。
 
