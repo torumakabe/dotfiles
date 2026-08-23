@@ -78,7 +78,7 @@ uv run -m unittest tests.test_copilot_guard -v
 - `--allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。
 - local sandbox は shell command と filesystem policy を対象とする。MCP と LSP は対象外であり、Copilot CLI 組み込みファイルツールの filesystem policy は software-only safeguard である。
 - `run_onchange_after_35-configure-copilot-sandbox.*` は `~/.copilot/settings.json` の他のキーと既存 filesystem path rules を保ったまま設定を更新する。投入値は `home/.chezmoitemplates/copilot-user-settings.json` を正本とする。
-- `sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存の boolean 値は、`chezmoi apply` とテンプレート更新でも維持する。利用者はコンテナでも手動で有効化できるが、動作は本リポジトリの保証対象外である。組織が managed settings で値を強制している場合は、その設定が利用者設定より優先される。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) を参照する。
+- `sandbox.enabled` の初回値、設定保持、組織管理設定との優先関係は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) に記録する。
 - Linux 系の bubblewrap 診断は `sandbox.enabled` が `true` または未設定の場合に実行し、`false` の場合は probe を省略する。
 - `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。
 - `/share gist`（`--share-gist`）は **ユーザー直接コマンドのため preToolUse Hook の対象外**。`--allow-all` 下で秘匿情報がエージェントのコンテキストに入った状態で実行すると、secret Gist として外部化され得る。非 EMU 環境では技術的に防ぐ手段が無いため、運用ルール（実行前に `/reset-allowed-tools` で承認状態をクリアする等）で補う。
@@ -88,7 +88,7 @@ uv run -m unittest tests.test_copilot_guard -v
 
 Copilot CLI を再起動し、`/sandbox` の General、Auth、Filesystem、Network の各タブで状態を確認する。Copilot CLI の版によって backend 名が表示されない場合があるため、表示の有無は記録するが成功条件にはしない。Linux 系の bubblewrap 利用可否は別途記録する。user-level settings.json の配置先は、Linux 系と macOS が `~/.copilot/settings.json`、Windows が `$env:USERPROFILE\.copilot\settings.json` である。
 
-> 本リポジトリの以前のブランチ（file-based managed settings 方式）を適用したことがある場合、Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json` が残っている可能性がある。これらは組織が所有している場合があるため自動削除しない。内容が本リポジトリ由来（`sandbox.enabled=true` の強制のみ等）と確認できた場合に限り、手動で削除するか組織の管理者に確認する。
+以前の file-based managed settings 方式が残した設定の復旧は、[`troubleshooting.md`](troubleshooting.md#copilot-sandboxenabled-が意図した値にならない) を参照する。
 
 ## 監査ログ
 

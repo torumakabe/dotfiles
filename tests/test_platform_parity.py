@@ -89,12 +89,12 @@ def _linux_only(reason: str) -> dict[str, str]:
 
 PLATFORM_CONTRACT = {
     "shell:edit-shortcut": _windows_only(
-        "exception: docs/architecture.md documents the Windows-only edit.exe launcher"
+        "exception: docs/architecture.md platform exception rationale"
     ),
     "shell:ghcd": _implemented_everywhere(),
     "shell:git-hooks-audit": _implemented_everywhere(),
     "shell:mise-self-upgrade": _windows_only(
-        "exception: docs/operations.md documents the winget-only update command"
+        "exception: docs/operations.md platform exception rationale"
     ),
     "shell:mise-upgrade": _implemented_everywhere(),
     "shell:kubectl-shortcut": _implemented_everywhere(),
@@ -110,17 +110,17 @@ PLATFORM_CONTRACT = {
     "completion:azd": _implemented_everywhere(),
     "completion:trivy": _implemented_everywhere(),
     "completion:terraform": _zsh_only(
-        "exception: docs/architecture.md records that Terraform has no native PowerShell completion"
+        "exception: docs/architecture.md platform exception rationale"
     ),
     "completion:rad": _zsh_only(
-        "exception: docs/architecture.md records that Radicle has no supported Windows distribution"
+        "exception: docs/architecture.md platform exception rationale"
     ),
     "tool:fieldalignment": _implemented_everywhere(),
     "tool:fast": _implemented_everywhere(),
     "tool:gh-stack-extension": _implemented_everywhere(),
     "tool:lefthook": _implemented_everywhere(),
     "tool:bubblewrap": _linux_only(
-        "exception: docs/architecture.md documents the platform-specific sandbox backends"
+        "exception: docs/architecture.md platform exception rationale"
     ),
     "tool:ty": _implemented_everywhere(),
 }
