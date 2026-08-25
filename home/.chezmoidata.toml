@@ -1,2 +1,5 @@
 [typescriptLsp]
 version = "6.0.3"
+
+[specKit]
+version = "1.0.1"

@@ -17,6 +17,7 @@ POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 INSTALL_PS1_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.ps1.tmpl"
 MISE_CONFIG_PATH = REPO_ROOT / "home/dot_config/mise/config.toml.tmpl"
+CHEZMOI_DATA_PATH = REPO_ROOT / "home/.chezmoidata.toml"
 WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-copilot-hooks.yml"
 POSIX_RC_TEMPLATE_PATHS = tuple(
     REPO_ROOT / "home" / name
@@ -123,6 +124,7 @@ PLATFORM_CONTRACT = {
         "exception: docs/architecture.md platform exception rationale"
     ),
     "tool:ty": _implemented_everywhere(),
+    "tool:spec-kit": _implemented_everywhere(),
 }
 
 ZSH_INTERNAL_FUNCTIONS = {
@@ -223,6 +225,7 @@ TOOL_ANCHORS = {
     "tool:fieldalignment": "golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest",
     "tool:fast": "github.com/ddo/fast@latest",
     "tool:ty": "uv tool install --quiet ty",
+    "tool:spec-kit": "uv tool install --quiet specify-cli",
 }
 
 SOURCE_INITIALIZERS = {
@@ -430,6 +433,35 @@ class PlatformParityTests(unittest.TestCase):
         for feature in TOOL_ANCHORS:
             with self.subTest(feature=feature):
                 self.assertIn(feature, PLATFORM_CONTRACT)
+
+    def test_spec_kit_installers_use_the_pinned_github_release(self) -> None:
+        version = tomllib.loads(CHEZMOI_DATA_PATH.read_text(encoding="utf-8"))[
+            "specKit"
+        ]["version"]
+        source = (
+            "git+https://github.com/github/spec-kit.git@v{{ .specKit.version }}"
+        )
+
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        for installer_path in (INSTALL_SH_PATH, INSTALL_PS1_PATH):
+            with self.subTest(installer=installer_path.name):
+                installer = installer_path.read_text(encoding="utf-8")
+                self.assertIn("uv tool install --quiet specify-cli", installer)
+                self.assertIn(source, installer)
+                self.assertIn("mise uninstall --all 'ubi:github/spec-kit'", installer)
+        mise_config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
+        self.assertNotIn('"ubi:github/spec-kit"', mise_config)
+        self.assertNotIn('"pipx:specify-cli"', mise_config)
+
+    def test_powershell_uv_tool_failures_are_reported(self) -> None:
+        installer = INSTALL_PS1_PATH.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            installer.count(
+                'if ($LASTEXITCODE -ne 0) { throw "uv tool install failed" }'
+            ),
+            2,
+        )
 
     @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
     def test_lefthook_is_managed_by_mise_on_every_platform(self) -> None:
