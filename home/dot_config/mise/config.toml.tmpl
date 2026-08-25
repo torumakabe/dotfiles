@@ -35,6 +35,7 @@ bun = "latest"
 # 将来版でも検査が働くよう、除外はバージョン指定に留める。
 "npm:typescript-language-server" = { version = "latest", trust_policy_excludes = ["typescript-language-server@5.3.0"] }
 codex = "latest"
+"ubi:github/spec-kit" = "latest"
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
 # プリビルドバイナリが linux/arm64 未提供のためスキップ
 cargo-make = "latest"
