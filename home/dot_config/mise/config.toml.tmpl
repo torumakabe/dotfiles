@@ -28,12 +28,11 @@ lefthook = "latest"
 jq = "latest"
 bun = "latest"
 "npm:typescript" = "latest"
-# 利用中の npm レジストリプロキシが 5.3.0 の
-# _npmUser.trustedPublisher を落とすため、aube の trustPolicy=no-downgrade が
-# 5.2.0 からの証跡後退と判定して install を止める。上流の release workflow は
-# v5.2.0 と v5.3.0 で同一なので、欠落はプロキシ側で起きている。
-# 将来版でも検査が働くよう、除外はバージョン指定に留める。
-"npm:typescript-language-server" = { version = "latest", trust_policy_excludes = ["typescript-language-server@5.3.0"] }
+# 利用中の npm レジストリプロキシが trusted publisher の証跡を落とすため、
+# aube の trustPolicy=no-downgrade が install を止める。上流は OIDC 権限付きの
+# release workflow から npm publish しており、欠落はプロキシ側で起きている。
+# 5.3.0 と 6.x を除外し、7.x 以降では検査を再開する。
+"npm:typescript-language-server" = { version = "latest", trust_policy_excludes = ["typescript-language-server@5.3.0", "typescript-language-server@>=6 <7"] }
 codex = "latest"
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
 # プリビルドバイナリが linux/arm64 未提供のためスキップ
