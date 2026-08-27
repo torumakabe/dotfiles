@@ -38,7 +38,10 @@ CARGO_MAKE_UPSTREAM_ISSUE = "https://github.com/sagiegurari/cargo-make/issues/54
 # aube の trustPolicy=no-downgrade 除外。プロキシが証跡を落とす版だけを明記し、
 # パッケージ名だけの除外へ広げない（将来版の検査を残すため）。
 TRUST_POLICY_EXCLUDES = {
-    "npm:typescript-language-server": ("typescript-language-server@5.3.0",),
+    "npm:typescript-language-server": (
+        "typescript-language-server@5.3.0",
+        "typescript-language-server@>=6 <7",
+    ),
 }
 LSP_TYPESCRIPT_VERSION = "6.0.3"
 LSP_CONFIG_PATH = REPO_ROOT / "home/private_dot_copilot/lsp-config.json.tmpl"
