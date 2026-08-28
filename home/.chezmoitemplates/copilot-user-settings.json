@@ -1,5 +1,18 @@
 {
   "experimental": true,
+  "extraKnownMarketplaces": {
+    "torumakabe-agent-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "torumakabe/copilot-agent-plugins"
+      },
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": {
+    "personal-skills@torumakabe-agent-plugins": true,
+    "skill-creator@torumakabe-agent-plugins": true
+  },
   "sandbox": {
     "enabled": true,
     "allowBypass": true,
