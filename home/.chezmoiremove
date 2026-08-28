@@ -2,3 +2,7 @@
 .mise.toml
 # Superseded by ~/.config/git/templates/hooks/pre-commit + init.templateDir (ADR-018)
 .config/git/hooks/pre-commit
+# Superseded by personal-skills@torumakabe-agent-plugins
+.copilot/skills/agentfinder
+.copilot/skills/japanese-technical-writing
+.copilot/skills/lsp-setup

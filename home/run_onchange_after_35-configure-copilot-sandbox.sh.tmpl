@@ -80,9 +80,9 @@ for path_name in readwritePaths readonlyPaths deniedPaths; do
 done
 
 jq --slurpfile desired "${desired}" '
-  .experimental = $desired[0].experimental
+  . * $desired[0]
   | .sandbox = (
-    ((.sandbox // {}) * $desired[0].sandbox)
+    (.sandbox // {})
     | .userPolicy = (
       (.userPolicy // {})
       | del(.version)

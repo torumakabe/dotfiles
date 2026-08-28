@@ -8,12 +8,12 @@
 
 - `copilot-instructions.md` — ユーザーレベルのカスタム指示
 - `mcp-config.json` — 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
-- `settings.json` の `experimental` と `sandbox` セクション — `run_onchange_after_35-configure-copilot-sandbox.*` で既存設定へマージ
+- `settings.json` の実験機能、プラグイン、sandbox 設定 — `run_onchange_after_35-configure-copilot-sandbox.*` で既存設定へマージ
 - `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`, `audit-log.py`, `audit-failure.py`）
 - `hooks/{allowed-files,blocked-files,ask-files}.txt` — ファイルアクセス制御リスト
 - `skills/` — 手動追加分のみ（プラグイン由来は対象外）
 
-管理外: `installed-plugins/`（Copilot CLI 側で管理）。
+管理外: `installed-plugins/` と `plugin-data/`（Copilot CLI 側で管理）。
 
 ## CLI 本体の導入元
 
@@ -33,16 +33,14 @@ Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilo
 
 ## プラグインとスキル
 
-プラグインは `/plugin`、外部 skill は `gh skill` で管理し、chezmoi の管理対象にしない。自作 skill と公式の導入コマンドを持たない skill だけを `~/.copilot/skills/` から chezmoi へ取り込む。
+chezmoi は `settings.json` で追加 marketplace と有効なプラグインを宣言する。Copilot CLI は宣言されたプラグインの導入とセッション開始時の更新を担当し、導入実体とキャッシュは chezmoi で管理しない。プラグインに含めない外部 skill は `gh skill` で管理し、自作 skill と公式の導入コマンドを持たない skill だけを `~/.copilot/skills/` から chezmoi へ取り込む。
 
 ```bash
 # GitHub Copilot の user scope へ外部 skill を導入する
 gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 ```
 
-`agentfinder` は GitHub Agent Finder (`https://agentfinder.github.com/api/v1/search`) を使って、MCP サーバー、ツール、スキル、エージェントを検索する手動追加スキル。
-GitHub Docs の Agent Finder 手順に従い、`home/private_dot_copilot/skills/agentfinder/SKILL.md` を `~/.copilot/skills/agentfinder/SKILL.md` として配置する。
-利用時は `/agentfinder <探したい連携や作業>` を実行し、返された候補はユーザーが明示的に選ぶまで自動インストールしない。
+`personal-skills@torumakabe-agent-plugins` は `agentfinder`、`japanese-technical-writing`、`lsp-setup` を提供する。利用時はスキル名を指定する。`agentfinder` が返した候補は、ユーザーが明示的に選ぶまで自動インストールしない。
 
 `gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。Stacked PR を提案する条件は `copilot-instructions.md`、操作方法は公式 skill を正本とする。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
 

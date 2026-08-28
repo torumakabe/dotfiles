@@ -21,6 +21,7 @@ import unittest
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "home"
 USER_POLICY_PATH = SOURCE_ROOT / ".chezmoitemplates/copilot-user-settings.json"
+REMOVE_PATH = SOURCE_ROOT / ".chezmoiremove"
 POSIX_SCRIPT_PATH = SOURCE_ROOT / "run_onchange_after_35-configure-copilot-sandbox.sh.tmpl"
 POWERSHELL_SCRIPT_PATH = (
     SOURCE_ROOT / "run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl"
@@ -34,10 +35,30 @@ FILESYSTEM_PATHS = {
     "deniedPaths": ["/tmp/denied"],
 }
 UNKNOWN_SETTINGS = {
+    "extraKnownMarketplaces": {
+        "existing-marketplace": {
+            "source": {
+                "source": "github",
+                "repo": "example/existing-marketplace",
+            }
+        }
+    },
+    "enabledPlugins": {"existing-plugin@existing-marketplace": False},
     "sandbox": {"keep": "sandbox"},
     "userPolicy": {"keep": "policy"},
     "filesystem": {"keep": {"nested": "filesystem"}},
     "network": {"keep": ["network"]},
+}
+EXPECTED_MARKETPLACE = {
+    "source": {
+        "source": "github",
+        "repo": "torumakabe/copilot-agent-plugins",
+    },
+    "autoUpdate": True,
+}
+EXPECTED_PLUGINS = {
+    "personal-skills@torumakabe-agent-plugins": True,
+    "skill-creator@torumakabe-agent-plugins": True,
 }
 
 
@@ -114,6 +135,10 @@ def _seed_settings(home: pathlib.Path, enabled: object = _ENABLED_KEY_ABSENT) ->
             {
                 "unrelated": {"keep": True},
                 "deepUnknown": DEEP_UNKNOWN,
+                "extraKnownMarketplaces": UNKNOWN_SETTINGS[
+                    "extraKnownMarketplaces"
+                ],
+                "enabledPlugins": UNKNOWN_SETTINGS["enabledPlugins"],
                 "sandbox": sandbox,
             }
         ),
@@ -186,6 +211,11 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         policy = json.loads(USER_POLICY_PATH.read_text(encoding="utf-8"))
 
         self.assertTrue(policy["experimental"])
+        self.assertEqual(
+            policy["extraKnownMarketplaces"]["torumakabe-agent-plugins"],
+            EXPECTED_MARKETPLACE,
+        )
+        self.assertEqual(policy["enabledPlugins"], EXPECTED_PLUGINS)
         sandbox = policy["sandbox"]
         self.assertTrue(sandbox["enabled"])
         self.assertTrue(sandbox["allowBypass"])
@@ -198,6 +228,25 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             sandbox["userPolicy"]["network"],
             {"allowOutbound": True, "allowLocalNetwork": True},
         )
+
+    def test_plugin_skills_replace_legacy_user_copies(self) -> None:
+        skill_names = ("agentfinder", "japanese-technical-writing", "lsp-setup")
+        removals = {
+            line
+            for line in REMOVE_PATH.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        }
+
+        for skill_name in skill_names:
+            self.assertIn(f".copilot/skills/{skill_name}", removals)
+            self.assertFalse(
+                any(
+                    path.is_file()
+                    for path in (
+                        SOURCE_ROOT / "private_dot_copilot" / "skills" / skill_name
+                    ).rglob("*")
+                )
+            )
 
     def test_guardrails_aliases_keep_allow_all(self) -> None:
         self.assertIn("--allow-all", ZSHRC_PATH.read_text(encoding="utf-8"))
@@ -224,6 +273,20 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self.assertEqual(settings["unrelated"], {"keep": True})
         self.assertEqual(settings["deepUnknown"], DEEP_UNKNOWN)
         self.assertTrue(settings["experimental"])
+        self.assertEqual(
+            settings["extraKnownMarketplaces"],
+            {
+                **UNKNOWN_SETTINGS["extraKnownMarketplaces"],
+                "torumakabe-agent-plugins": EXPECTED_MARKETPLACE,
+            },
+        )
+        self.assertEqual(
+            settings["enabledPlugins"],
+            {
+                **UNKNOWN_SETTINGS["enabledPlugins"],
+                **EXPECTED_PLUGINS,
+            },
+        )
 
         sandbox = settings["sandbox"]
         self.assertEqual(sandbox["keep"], UNKNOWN_SETTINGS["sandbox"]["keep"])
