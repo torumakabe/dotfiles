@@ -35,7 +35,9 @@
 
 ## 図解
 
-- Markdown で図解する場合、コードブロックには Mermaid を使い、図解の構成・粒度は C4 model に従う
+- Markdown で図解する場合は、fenced code block の言語タグに `mermaid` を指定する。`c4` タグは使わない
+- C4 の図には Mermaid C4 構文を使い、一つの図では Context、Container、Component、Dynamic、Deployment のいずれか一つを扱う。対象 UI が Mermaid C4 構文に対応しない場合は、標準 `flowchart` 構文で同じ抽象レベルを表現する
+- 各コードブロックには単独で構文解析できる完全な Mermaid を記述し、構文内で `...` などの省略表現を使わない。図だけに情報を依存させず、主要な要素と関係を本文でも説明する
 
 ## エージェント行動規範
 
