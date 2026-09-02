@@ -33,7 +33,6 @@ bun = "latest"
 # release workflow から npm publish しており、欠落はプロキシ側で起きている。
 # 5.3.0 と 6.x を除外し、7.x 以降では検査を再開する。
 "npm:typescript-language-server" = { version = "latest", trust_policy_excludes = ["typescript-language-server@5.3.0", "typescript-language-server@>=6 <7"] }
-codex = "latest"
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
 # プリビルドバイナリが linux/arm64 未提供のためスキップ
 cargo-make = "latest"

@@ -54,7 +54,7 @@ LSP_INSTALL_PS1_PATH = (
 )
 
 ALLOWED_WARNING = (
-    "mise WARN  newer codex release 0.145.0 ignored by "
+    "mise WARN  newer example-tool release 0.145.0 ignored by "
     "minimum_release_age (24h); latest eligible release is 0.144.6"
 )
 RECOVERED_FALLBACK_WARNING = (
