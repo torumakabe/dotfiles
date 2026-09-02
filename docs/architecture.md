@@ -125,7 +125,7 @@ mise は shims と `mise activate` を併用する。対話 zsh では `mise act
 
 ### TypeScript language server の依存配置
 
-mise の npm backend はパッケージごとにインストール先を分ける。`npm:typescript` の TypeScript 7.x は `tsc` の実行に使い、`npm:typescript-language-server` からは参照しない。language server 5.3.0 が必要とする `lib/tsserver.js` は、`run_after_22-install-typescript-lsp` が固定版の TypeScript 6.x を `~/.local/share/chezmoi-dotfiles/typescript-lsp` へ導入して提供する。スクリプトは mise 管理 Node と同じディレクトリの npm を使い、package version と `tsserver.js` が正しければ何もしない。不足または版違いの場合だけ再導入するため、初回適用で Node 導入を保留する Dev Container でも、`mise install` 後の次回適用で回復する。
+mise の npm backend はパッケージごとにインストール先を分ける。`npm:typescript` の TypeScript 7.x は `tsc` の実行に使い、`npm:typescript-language-server` からは参照しない。language server が利用する `lib/tsserver.js` は、`run_after_22-install-typescript-lsp` が固定版の TypeScript 6.x を `~/.local/share/chezmoi-dotfiles/typescript-lsp` へ導入して提供する。スクリプトは mise 管理 Node と同じディレクトリの npm を使い、package version と `tsserver.js` が正しければ何もしない。不足または版違いの場合だけ再導入するため、初回適用で Node 導入を保留する Dev Container でも、`mise install` 後の次回適用で回復する。
 
 Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、この安定 prefix 配下の `node_modules/typescript/lib/tsserver.js` を指定する。mise の language server インストール先とバージョンをパスに含めないため、language server の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` を正本とする。
 

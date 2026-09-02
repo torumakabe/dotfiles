@@ -19,8 +19,8 @@ Accepted
 
 | ツール | macOS | Windows | Linux | 更新 |
 | --- | --- | --- | --- | --- |
-| azd | brew | winget | `install-azd.sh` | `azd update` |
-| copilot-cli | brew | winget | `gh.io/copilot-install` | `copilot update` |
+| azd | brew | winget | 固定した公式 `.deb` を SHA-256 検証 | `azd update` |
+| copilot-cli | brew | winget | 固定した公式リリースアーカイブを SHA-256 検証 | `copilot update` |
 
 `home/run_once_before_10-install-packages.sh.tmpl` で初期導入する。
 
