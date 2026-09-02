@@ -36,13 +36,13 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 `copilot-guard.py` は `preToolUse` フックで以下を検査する。優先度は **deny > ask > no opinion（空出力）**（[ADR-006](adr/006-pretooluse-hook-no-allow.md)）。
 
-1. ファイルツールのプロジェクト配下パス例外 (`allowed-files.txt`)
+1. ファイル操作と読み取り専用検索のプロジェクト配下パス例外 (`allowed-files.txt`)
 2. 秘匿ファイル拒否 (`blocked-files.txt`)
 3. 確認付きアクセス (`ask-files.txt`)
 4. 機微な環境変数の読み取り拒否 (`printenv`, `$TOKEN`, `os.environ` 等)。通常使う変数は許可リストで除外
 5. `git commit` の明示承認
 
-パス比較前に `\` を `/` へ正規化する。パターンファイルはプロジェクト相対パスとして `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。シンボリックリンク、ジャンクション、file URI、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
+パス比較前に `\` を `/` へ正規化する。`allowed-files.txt` は、ワイルドカードのない単一のプロジェクト相対パスを `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。読み取り専用の `rg` と `glob` にも例外を適用するが、検索フィルターはワイルドカードのない許可パスに限定し、明示された検索ルートがすべてプロジェクト内にあることを確認する。シンボリックリンク、ジャンクション、file URI、`..` を含むパス、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
 各 command hook は mise shim 経由の `uv run` で起動する。起動時に `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象をフックが必要とする `uv` だけに限定する。これにより `uv` の未導入版は mise が自動導入できる一方、dotnet など無関係な missing ツールの導入失敗はフックの終了状態へ影響しない。
 
 Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。

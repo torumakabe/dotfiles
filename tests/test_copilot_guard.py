@@ -2,6 +2,7 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 from tests._helpers import load_script, run_hook
 
@@ -306,6 +307,267 @@ class CopilotGuardApplyPatchTests(unittest.TestCase):
         self.assertEqual(decision["permissionDecision"], "ask")
         self.assertIn(".copilot/hooks", decision["permissionDecisionReason"])
 
+
+class CopilotGuardReadOnlySearchTests(unittest.TestCase):
+    @staticmethod
+    def _run(
+        tool_name: str,
+        tool_args: dict,
+        project_root: pathlib.Path = REPO_ROOT,
+    ):
+        return run_hook(
+            SCRIPT_PATH,
+            {
+                "toolName": tool_name,
+                "toolArgs": tool_args,
+                "cwd": str(project_root),
+            },
+            cwd=project_root,
+        )
+
+    def test_allows_rg_allowed_file_in_scalar_or_array_paths(self) -> None:
+        paths = (
+            ".azure/deployment-plan.md",
+            r".azure\deployment-plan.md",
+            str(REPO_ROOT / ".azure/deployment-plan.md"),
+        )
+        for path in paths:
+            for value in (path, [path]):
+                with self.subTest(path=path, value_type=type(value).__name__):
+                    result = self._run("rg", {"pattern": "deployment", "paths": value})
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, "")
+
+    def test_allows_glob_exact_allowed_pattern_with_project_roots(self) -> None:
+        for pattern in (
+            ".azure/deployment-plan.md",
+            r".azure\deployment-plan.md",
+        ):
+            for paths in (None, ".", [str(REPO_ROOT)]):
+                with self.subTest(pattern=pattern, paths=paths):
+                    tool_args = {"pattern": pattern}
+                    if paths is not None:
+                        tool_args["paths"] = paths
+                    result = self._run("glob", tool_args)
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, "")
+
+    def test_does_not_treat_rg_content_pattern_as_a_path(self) -> None:
+        result = self._run(
+            "rg",
+            {
+                "pattern": r"\.azure/deployment-plan\.md",
+                "paths": "docs",
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_denies_blocked_only_paths_for_read_only_search_tools(self) -> None:
+        cases = (
+            ("rg", {"pattern": "clientSecret", "paths": ".azure/config.json"}),
+            ("glob", {"pattern": ".azure/config.json", "paths": "."}),
+        )
+        for tool_name, tool_args in cases:
+            with self.subTest(tool_name=tool_name):
+                result = self._run(tool_name, tool_args)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_wildcard_search_filter_in_blocked_area(self) -> None:
+        cases = (
+            ("rg", {"pattern": "deployment", "paths": ".", "glob": ".azure/**"}),
+            ("glob", {"pattern": ".azure/**", "paths": "."}),
+        )
+        for tool_name, tool_args in cases:
+            with self.subTest(tool_name=tool_name):
+                result = self._run(tool_name, tool_args)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_exact_allowed_filter_with_outside_search_root(self) -> None:
+        with tempfile.TemporaryDirectory() as outside_dir:
+            cases = (
+                (
+                    "rg",
+                    {
+                        "pattern": "deployment",
+                        "paths": [".", outside_dir],
+                        "glob": ".azure/deployment-plan.md",
+                    },
+                ),
+                (
+                    "glob",
+                    {
+                        "pattern": ".azure/deployment-plan.md",
+                        "paths": [outside_dir],
+                    },
+                ),
+            )
+            for tool_name, tool_args in cases:
+                with self.subTest(tool_name=tool_name):
+                    result = self._run(tool_name, tool_args)
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    decision = json.loads(result.stdout)
+                    self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_exact_allowed_filter_with_wildcard_search_root(self) -> None:
+        cases = (
+            (
+                "rg",
+                {
+                    "pattern": "deployment",
+                    "paths": "*",
+                    "glob": ".azure/deployment-plan.md",
+                },
+            ),
+            (
+                "glob",
+                {
+                    "pattern": ".azure/deployment-plan.md",
+                    "paths": ["*"],
+                },
+            ),
+        )
+        for tool_name, tool_args in cases:
+            with self.subTest(tool_name=tool_name):
+                result = self._run(tool_name, tool_args)
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_exact_allowed_filter_with_symlink_search_root(self) -> None:
+        with tempfile.TemporaryDirectory() as project_dir:
+            project_root = pathlib.Path(project_dir).resolve()
+            real_root = project_root / "real-root"
+            real_root.mkdir()
+            search_root = project_root / "search-root"
+            try:
+                search_root.symlink_to(real_root, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+
+            cases = (
+                (
+                    "rg",
+                    {
+                        "pattern": "deployment",
+                        "paths": str(search_root),
+                        "glob": ".azure/deployment-plan.md",
+                    },
+                ),
+                (
+                    "glob",
+                    {
+                        "pattern": ".azure/deployment-plan.md",
+                        "paths": str(search_root),
+                    },
+                ),
+            )
+            for tool_name, tool_args in cases:
+                with self.subTest(tool_name=tool_name):
+                    result = self._run(tool_name, tool_args, project_root)
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    decision = json.loads(result.stdout)
+                    self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_allowed_file_with_dotdot_or_file_uri(self) -> None:
+        for path in (
+            "../project/.azure/deployment-plan.md",
+            "file:///.azure/deployment-plan.md",
+        ):
+            with self.subTest(path=path):
+                result = self._run("rg", {"pattern": "deployment", "paths": path})
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_allowed_file_outside_project(self) -> None:
+        with tempfile.TemporaryDirectory() as parent_dir:
+            parent = pathlib.Path(parent_dir).resolve()
+            project_root = parent / "project"
+            other_project = parent / "other-project"
+            project_root.mkdir()
+            other_project.mkdir()
+            target = other_project / ".azure/deployment-plan.md"
+
+            for value in (str(target), [str(target)]):
+                with self.subTest(value_type=type(value).__name__):
+                    result = self._run(
+                        "rg",
+                        {"pattern": "deployment", "paths": value},
+                        project_root,
+                    )
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    decision = json.loads(result.stdout)
+                    self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_allowed_file_through_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as project_dir:
+            project_root = pathlib.Path(project_dir).resolve()
+            real_azure = project_root / "real-azure"
+            real_azure.mkdir()
+            azure_link = project_root / ".azure"
+            try:
+                azure_link.symlink_to(real_azure, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+
+            result = self._run(
+                "rg",
+                {
+                    "pattern": "deployment",
+                    "paths": str(azure_link / "deployment-plan.md"),
+                },
+                project_root,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            decision = json.loads(result.stdout)
+            self.assertEqual(decision["permissionDecision"], "deny")
+
+    def test_denies_mixed_allowed_and_blocked_search_paths(self) -> None:
+        result = self._run(
+            "rg",
+            {
+                "pattern": "azure",
+                "paths": [
+                    ".azure/deployment-plan.md",
+                    ".azure/config.json",
+                ],
+            },
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decision = json.loads(result.stdout)
+        self.assertEqual(decision["permissionDecision"], "deny")
+        self.assertIn(".azure/config.json", decision["permissionDecisionReason"])
+
+    def test_denies_unrecognized_search_tool_names(self) -> None:
+        for tool_name in ("grep", "RG", "Glob"):
+            with self.subTest(tool_name=tool_name):
+                result = self._run(
+                    tool_name,
+                    {"paths": ".azure/deployment-plan.md"},
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                decision = json.loads(result.stdout)
+                self.assertEqual(decision["permissionDecision"], "deny")
+
+
 class CopilotGuardPathMatchingTests(unittest.TestCase):
     def test_does_not_match_by_substring(self) -> None:
         hit = copilot_guard.check_blocked_path(
@@ -358,6 +620,29 @@ class CopilotGuardPathMatchingTests(unittest.TestCase):
             )
 
         self.assertFalse(allowed)
+
+    def test_allowed_path_rejects_wildcard_allowed_pattern(self) -> None:
+        allowed = copilot_guard.matches_allowed_path(
+            ".azure/deployment-plan.md",
+            [".azure/**"],
+            REPO_ROOT,
+        )
+
+        self.assertFalse(allowed)
+
+    def test_project_containment_rejects_junction_component(self) -> None:
+        with tempfile.TemporaryDirectory() as project_dir:
+            project_root = pathlib.Path(project_dir)
+            with (
+                mock.patch.object(pathlib.Path, "is_symlink", return_value=False),
+                mock.patch.object(pathlib.Path, "is_junction", return_value=True),
+            ):
+                contained = copilot_guard.is_project_contained_path(
+                    "search-root",
+                    project_root,
+                )
+
+        self.assertFalse(contained)
 
 
 class CopilotGuardCommandMatchingTests(unittest.TestCase):
