@@ -12,8 +12,6 @@ Accepted
 
 公開関数・alias・補完・ツール導入について、4 環境の対応状況を `PLATFORM_CONTRACT` として `tests/test_platform_parity.py` に記録する。変更時は全プラットフォームの実装を更新するか、理由と適用範囲を `exception: docs/...` 形式で契約と `docs/architecture.md` に記録する。
 
-理由付き例外（現状）：`e` / `mise-self-upgrade` は winget 管理の Windows 固有機能（ADR-011）；`completion:terraform` は公式 PowerShell completion が存在しない；`completion:rad` は Windows 向け公式配布を確認できない。
-
 CI は `home/**` 変更で起動し（PR・main push 共通）、`command -v zsh` / `command -v pwsh` を確認してから `uv run -m unittest discover -s tests -v` を実行する（`test_ci_installs_and_requires_both_shells_before_unittest` で検証済み）。git pre-commit フックや専用エージェント単独には依存せず、CI 機械検査・`.github/copilot-instructions.md` の規約・`review-repo` の意味判断を組み合わせる。
 
 高リスク機能には両シェルで同じ期待結果を検証する共有の振る舞いテストを設け、実装差ではなく意味差を検出する。CI で保証できない OS 固有の実行時挙動は、4 環境の実機スモークテストで確認する。

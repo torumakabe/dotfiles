@@ -359,10 +359,9 @@ chezmoi apply ~/.local/bin/gitleaks-pre-commit
 
 原因: ベースイメージ（Codespaces universal 等）に `/usr/local/bin/copilot` が同梱されており、`run_once_before_10-install-packages.sh` の導入判定が `command -v copilot` だと、これを検出して公式スクリプトによる導入をスキップしていた。同梱バイナリはイメージのビルド時点で固定されるため、`copilot update` の対象にもならない。
 
-対策は導入済み。判定は `~/.local/bin/copilot` の実体で行う。既存のコンテナでは次で復旧する。
+対策は導入済み。判定は `~/.local/bin/copilot` の実体で行う。既存のコンテナでは [`run_once_*` の再実行](operations.md#run_once_-の再実行)により固定した公式リリースアーカイブを導入し、次を確認する。
 
 ```bash
-curl -fsSL https://gh.io/copilot-install | bash   # ~/.local/bin/copilot へ導入
 exec zsh -l
 type -a copilot                                   # 先頭が ~/.local/bin/copilot であること
 ~/.local/bin/copilot --version

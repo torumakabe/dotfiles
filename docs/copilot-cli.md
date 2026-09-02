@@ -19,7 +19,7 @@
 
 | 環境 | 導入元 |
 |------|--------|
-| Linux / WSL / Codespaces / Dev Container | 公式インストールスクリプト (`gh.io/copilot-install`) |
+| Linux / WSL / Codespaces / Dev Container | 固定した公式リリースアーカイブを SHA-256 検証（[`docs/operations.md`](operations.md#bootstrap--shell-pin-の更新)） |
 | macOS | `brew` |
 | Windows | `winget` (`reference/windows/configuration.dsc.yaml`) |
 

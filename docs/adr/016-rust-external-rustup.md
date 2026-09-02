@@ -16,7 +16,7 @@ ADR-009 は Windows 限定で「外部 rustup が既に存在する」ことを�
 
 全 OS (macOS/Linux/Windows) で `home/dot_config/mise/config.toml.tmpl` の `[tools]` から `rust` を除外する。rust toolchain の解決は公式 rustup + `rust-toolchain.toml` のネイティブ解決に一本化する。
 
-導入は macOS/Linux では公式インストールスクリプト (`https://sh.rustup.rs`, `command -v rustup` が無い場合のみ) で、Windows では winget (`Rustlang.Rustup`) で行う。
+導入は macOS/Linux では固定した公式 `rustup-init` を SHA-256 検証して実行し、Windows では winget (`Rustlang.Rustup`) で行う。
 
 ## Consequences
 
