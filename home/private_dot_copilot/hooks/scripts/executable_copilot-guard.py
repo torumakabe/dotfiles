@@ -254,32 +254,52 @@ def matches_allowed_path(
     project_root: Path | None = None,
 ) -> bool:
     """Return True when a path resolves inside the hook's configured cwd."""
-    raw_target = target.strip().strip("\"'")
-    if raw_target.lower().startswith("file://"):
+    resolved_path = _project_relative_path(target, project_root)
+    if resolved_path is None:
         return False
+    root, relative_path = resolved_path
+    relative_target = relative_path.as_posix()
+    if not any(
+        not _PATH_GLOB_META_RE.search(pattern)
+        and matches_blocked_pattern(relative_target, pattern)
+        for pattern in patterns
+    ):
+        return False
+    return _path_has_no_links(root, relative_path)
+
+
+def _project_relative_path(
+    target: str,
+    project_root: Path | None = None,
+) -> tuple[Path, Path] | None:
+    """Resolve a literal path to a project-relative path without following links."""
+    raw_target = target.strip().strip("\"'")
+    if not raw_target or raw_target.lower().startswith("file://"):
+        return None
 
     root = (project_root or Path.cwd()).resolve()
     raw_path = Path(raw_target)
     windows_absolute = bool(re.match(r"^[A-Za-z]:[\\/]", raw_target))
     if windows_absolute and os.name != "nt":
-        return False
+        return None
 
     if raw_path.is_absolute():
         try:
             relative_path = raw_path.relative_to(root)
         except ValueError:
-            return False
+            return None
     else:
         if raw_target.startswith(("/", "\\")) or windows_absolute:
-            return False
+            return None
         relative_path = Path(normalize_path(target))
 
     if ".." in relative_path.parts:
-        return False
-    relative_target = relative_path.as_posix()
-    if not any(matches_blocked_pattern(relative_target, pattern) for pattern in patterns):
-        return False
+        return None
+    return root, relative_path
 
+
+def _path_has_no_links(root: Path, relative_path: Path) -> bool:
+    """Return True when every path component stays inside root without links."""
     candidate = root
     for part in relative_path.parts:
         candidate /= part
@@ -288,20 +308,107 @@ def matches_allowed_path(
     return candidate.resolve(strict=False).is_relative_to(root)
 
 
-PATH_ARG_KEYS: tuple[str, ...] = ("path", "file", "uri", "glob", "paths", "files", "uris", "globs")
-ALLOWED_PATH_TOOL_NAMES = frozenset(("view", "apply_patch", "edit", "create", "write"))
+def is_project_contained_path(
+    target: str,
+    project_root: Path | None = None,
+) -> bool:
+    """Return True for a literal project-contained path without links."""
+    resolved_path = _project_relative_path(target, project_root)
+    if resolved_path is None:
+        return False
+    return _path_has_no_links(*resolved_path)
 
 
-def extract_path_arg_values(tool_args: dict[str, Any]) -> list[str]:
-    """Extract path-like string values from scalar and array tool arguments."""
-    values: list[str] = []
-    for prop in PATH_ARG_KEYS:
+PATH_ARG_KEYS: tuple[str, ...] = (
+    "path",
+    "file",
+    "uri",
+    "glob",
+    "paths",
+    "files",
+    "uris",
+    "globs",
+)
+FILE_PATH_TOOL_NAMES = frozenset(("view", "apply_patch", "edit", "create", "write"))
+READ_ONLY_SEARCH_FILTER_ARG_KEYS = {
+    "rg": ("glob", "globs"),
+    "glob": ("pattern",),
+}
+READ_ONLY_SEARCH_ROOT_ARG_KEYS = {
+    "rg": ("paths",),
+    "glob": ("paths",),
+}
+READ_ONLY_SEARCH_TOOL_NAMES = frozenset(READ_ONLY_SEARCH_FILTER_ARG_KEYS)
+ALLOWED_PATH_TOOL_NAMES = FILE_PATH_TOOL_NAMES | READ_ONLY_SEARCH_TOOL_NAMES
+_PATH_GLOB_META_RE = re.compile(r"[*?\[\]{}]")
+
+
+def extract_path_arg_items(
+    tool_name: str,
+    tool_args: dict[str, Any],
+) -> list[tuple[str, str]]:
+    """Extract keyed path-like strings, including tool-specific search filters."""
+    keys = PATH_ARG_KEYS + tuple(READ_ONLY_SEARCH_FILTER_ARG_KEYS.get(tool_name, ()))
+    items: list[tuple[str, str]] = []
+    for prop in dict.fromkeys(keys):
         prop_value = tool_args.get(prop)
         if isinstance(prop_value, str):
-            values.append(prop_value)
+            items.append((prop, prop_value))
         elif isinstance(prop_value, list):
-            values.extend(item for item in prop_value if isinstance(item, str))
-    return values
+            items.extend(
+                (prop, item) for item in prop_value if isinstance(item, str)
+            )
+    return items
+
+
+def _search_roots_are_project_contained(
+    tool_name: str,
+    tool_args: dict[str, Any],
+) -> bool:
+    """Validate search roots before allowing an exact path filter exception."""
+    raw_roots = [
+        tool_args[key]
+        for key in READ_ONLY_SEARCH_ROOT_ARG_KEYS[tool_name]
+        if key in tool_args
+    ]
+    if not raw_roots:
+        return True
+    roots: list[str] = []
+    for value in raw_roots:
+        if isinstance(value, str):
+            roots.append(value)
+        elif isinstance(value, list):
+            string_roots = [root for root in value if isinstance(root, str)]
+            if len(string_roots) != len(value):
+                return False
+            roots.extend(string_roots)
+        else:
+            return False
+    return bool(roots) and all(
+        not _PATH_GLOB_META_RE.search(root) and is_project_contained_path(root)
+        for root in roots
+    )
+
+
+def _allowed_path_exception_applies(
+    ctx: CheckContext,
+    arg_name: str,
+    value: str,
+) -> bool:
+    """Apply allowed paths only to explicit tools and literal project paths."""
+    if ctx.tool_name not in ALLOWED_PATH_TOOL_NAMES:
+        return False
+    if ctx.tool_name in FILE_PATH_TOOL_NAMES:
+        return matches_allowed_path(value, ctx.allowed_patterns)
+    if _PATH_GLOB_META_RE.search(value):
+        return False
+    if not matches_allowed_path(value, ctx.allowed_patterns):
+        return False
+    filter_keys = READ_ONLY_SEARCH_FILTER_ARG_KEYS[ctx.tool_name]
+    return arg_name not in filter_keys or _search_roots_are_project_contained(
+        ctx.tool_name,
+        ctx.tool_args,
+    )
 
 
 def _conservative_tokenize(command: str) -> list[str]:
@@ -443,15 +550,15 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
     CheckResult("ask", ...) for ask patterns, or None if no match.
     Blocked patterns are checked first (deny takes priority over ask).
     """
-    path_arg_values = extract_path_arg_values(ctx.tool_args)
+    path_arg_items = extract_path_arg_items(ctx.tool_name, ctx.tool_args)
     if ctx.tool_name in ALLOWED_PATH_TOOL_NAMES:
-        path_arg_values = [
-            value
-            for value in path_arg_values
-            if not matches_allowed_path(value, ctx.allowed_patterns)
+        path_arg_items = [
+            (arg_name, value)
+            for arg_name, value in path_arg_items
+            if not _allowed_path_exception_applies(ctx, arg_name, value)
         ]
 
-    for prop_value in path_arg_values:
+    for _, prop_value in path_arg_items:
         matched_pattern = check_blocked_path(prop_value, ctx.blocked_patterns)
         if matched_pattern:
             display_path = normalize_path(prop_value)[:500]
@@ -470,7 +577,7 @@ def check_blocked_files(ctx: CheckContext) -> CheckResult | None:
             return CheckResult("deny", f"Blocked pattern: {matched_pattern}")
 
     # Ask patterns (lower priority than deny)
-    for prop_value in path_arg_values:
+    for _, prop_value in path_arg_items:
         matched_pattern = check_blocked_path(prop_value, ctx.ask_patterns)
         if matched_pattern:
             return CheckResult("ask", f"Confirm access — matched pattern: {matched_pattern}")

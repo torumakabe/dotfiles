@@ -48,13 +48,15 @@ gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 
 `preToolUse` で以下を検査する。設計は [`architecture.md`](architecture.md#copilot-guard-の設計) を参照。
 
-- `copilot-guard.py`: ファイルツールのプロジェクト相対パス例外 (`allowed-files.txt`) / 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / 機微な環境変数の読み取り / `git commit` の明示承認
+- `copilot-guard.py`: ファイル操作と読み取り専用検索のプロジェクト相対パス例外 (`allowed-files.txt`) / 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / 機微な環境変数の読み取り / `git commit` の明示承認
 - `uv-enforcer.py`: `python` / `pip` の直接実行を抑止
 - `node-global-enforcer.py`: `npm` / `yarn` / `pnpm` のグローバルインストールを抑止
 
 パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化する。判定の優先度は `deny > ask > no opinion（空出力）` とし、`allow` は出力しない（[ADR-006](adr/006-pretooluse-hook-no-allow.md)）。
 
-`copilot-guard.py` の `blocked-files.txt` チェックはパス引数を持つツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。`allowed-files.txt` の例外を適用するツールは `view`、`apply_patch`、`edit`、`create`、`write` に限定する。シェルコマンドと、それ以外のツールには例外を適用しない。一つのツール呼び出しに許可対象と拒否対象のパスが混在する場合は、呼び出し全体を拒否する。
+`copilot-guard.py` の `blocked-files.txt` チェックはパス引数を持つツールだけでなく **`bash`/`powershell` ツール内の `cat` / `Get-Content` 等のシェル経由参照にも適用される**。これは CLI 本体のパス検出が shell コマンド内に埋め込まれたパスを十分に追えない（公式ドキュメントの "Path detection for shell commands has limitations" 記載）穴を Hook で塞ぐ意図的な設計である。
+
+`allowed-files.txt` の例外を適用するツールは、ファイル操作の `view`、`apply_patch`、`edit`、`create`、`write` と、読み取り専用検索の `rg`、`glob` に限定する。`allowed-files.txt` の各行はワイルドカードのない単一のプロジェクト相対パスとし、ワイルドカードを含む行は例外として扱わない。`rg` の `paths` で許可ファイルを直接指定した場合は、ファイル操作ツールと同じ判定を使う。`rg` の `glob` / `globs` と `glob` の `pattern` は、ワイルドカードを含まず `allowed-files.txt` のパスと一致し、明示された `paths` がすべてプロジェクト内にある場合だけ例外を適用する。`paths` を省略した場合は Hook のプロセス作業ディレクトリを検索ルートとする。シェルコマンド、プロジェクト外の検索ルート、シンボリックリンクまたはジャンクションを含むパス、file URI、`..` を含むパス、未知のツールには例外を適用しない。一つのツール呼び出しに許可対象と拒否対象のパスが混在する場合は、呼び出し全体を拒否する。
 
 すべての command Hook は `cwd: "."` でリポジトリルートから起動する。guard は許可対象ツールの絶対パスをそのルートに対して判定し、audit Hook は同じルートを操作元として記録する。PreToolUse 入力の `cwd` は、Copilot Workspace セッションで GitHub Copilot のインストール先になる場合があるため、判定には使わない。
 

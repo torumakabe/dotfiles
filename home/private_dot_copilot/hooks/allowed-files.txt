@@ -1,7 +1,9 @@
-# Project-contained file-tool exceptions:
+# Project-contained path exceptions:
 # - Write patterns with `/` separators even for Windows paths.
-# - Do not add `**/`; exceptions must not match home-directory credential stores.
+# - Wildcards are ignored; each line must name one exact project-relative path.
 # - Absolute paths are converted to project-relative paths only when they are inside the current project.
+# - Read-only search filters must name an exact allowed path without wildcards.
+# - Every explicit search root must remain inside the current project.
 # - Shell commands do not use these exceptions because `cd` can change their base path.
 # - Symlinks and junctions are rejected by the guard.
 
