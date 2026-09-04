@@ -345,6 +345,17 @@ class InstallerRenderingTests(unittest.TestCase):
                 for hint in hints:
                     self.assertIn(hint, rendered)
 
+    def test_windows_github_cli_uses_only_winget_locations(self) -> None:
+        rendered = _render(GH_PS1, "windows", "amd64")
+
+        self.assertIn("Join-Path $env:ProgramFiles 'GitHub CLI\\gh.exe'", rendered)
+        self.assertIn(
+            "Join-Path $env:LOCALAPPDATA 'Microsoft\\WinGet\\Links\\gh.exe'",
+            rendered,
+        )
+        self.assertNotIn("Get-Command -All", rendered)
+        self.assertNotIn("mise\\shims", rendered)
+
     def test_macos_github_cli_uses_only_the_homebrew_owned_binary(self) -> None:
         rendered = _render(GH_SH, "darwin", "arm64")
 
