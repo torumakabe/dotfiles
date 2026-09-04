@@ -61,6 +61,24 @@ GH_STACK_COMPONENT_PATHS = {
 }
 
 
+def _paired_installer(stem: str) -> dict[str, pathlib.Path]:
+    return {
+        **{
+            platform: REPO_ROOT / f"home/{stem}.sh.tmpl"
+            for platform in ZSH_PLATFORMS
+        },
+        "windows-powershell": REPO_ROOT / f"home/{stem}.ps1.tmpl",
+    }
+
+
+# mise から外し、ツールごとの公式導入経路へ移した 3 つ。
+DIRECT_INSTALL_COMPONENT_PATHS = {
+    "tool:uv": _paired_installer("run_after_25-install-uv"),
+    "tool:jq": _paired_installer("run_after_26-install-jq"),
+    "tool:github-cli": _paired_installer("run_after_27-ensure-github-cli"),
+}
+
+
 def _implemented_everywhere() -> dict[str, str]:
     return {platform: "implemented" for platform in PLATFORMS}
 
@@ -125,6 +143,9 @@ PLATFORM_CONTRACT = {
     ),
     "tool:ty": _implemented_everywhere(),
     "tool:spec-kit": _implemented_everywhere(),
+    "tool:uv": _implemented_everywhere(),
+    "tool:jq": _implemented_everywhere(),
+    "tool:github-cli": _implemented_everywhere(),
 }
 
 ZSH_INTERNAL_FUNCTIONS = {
@@ -348,6 +369,31 @@ class PlatformParityTests(unittest.TestCase):
                             "gh extension install github/gh-stack",
                             source,
                         )
+
+    def test_direct_install_contract_components_exist_for_each_platform(self) -> None:
+        """mise から外した 3 つは、全プラットフォームに導入経路の実装を持つ。"""
+        anchors = {
+            "tool:uv": "uv-installer",
+            "tool:jq": "jq",
+            "tool:github-cli": "githubCli.minimumVersion",
+        }
+        for feature, paths in DIRECT_INSTALL_COMPONENT_PATHS.items():
+            self.assertEqual(set(paths), PLATFORMS)
+            for platform, path in paths.items():
+                with self.subTest(feature=feature, platform=platform):
+                    self.assertEqual(
+                        PLATFORM_CONTRACT[feature][platform],
+                        "implemented",
+                    )
+                    self.assertTrue(path.is_file(), path)
+                    self.assertIn(anchors[feature], path.read_text(encoding="utf-8"))
+
+    def test_removed_mise_tools_have_no_mise_declaration_left(self) -> None:
+        config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
+
+        for tool in ("uv", "jq", "github-cli"):
+            with self.subTest(tool=tool):
+                self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
 
     def test_exceptions_reference_relevant_existing_documentation(self) -> None:
         checked_features = set()

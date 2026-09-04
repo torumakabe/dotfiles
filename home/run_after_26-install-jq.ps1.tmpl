@@ -1,0 +1,86 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# jq — 公式リリースの検証済みバイナリを ~/.local/bin へ直接配置する。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ置き、
+# checksum と版の確認まで終えてから最終パスへ移す。失敗した場合は既存の jq を残す。
+$ErrorActionPreference = 'Stop'
+
+$jqVersion = '{{ .jq.version }}'
+{{ if not (hasKey .jq.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+Write-Warning "jq $jqVersion has no official asset for {{ $platform }}; skipping installation."
+exit 0
+{{ else }}
+{{- $asset := index .jq.assets $platform }}
+$binDir = Join-Path $HOME '.local\bin'
+$assetFile = '{{ $asset.file }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+$assetUrl = '{{ $.jq.releaseBaseUrl }}/jq-{{ $.jq.version }}/{{ $asset.file }}'
+
+# `jq --version` は "jq-1.8.2" を出力する。
+function Get-InstalledJqVersion {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    try {
+        $output = & $Path --version 2>$null
+    }
+    catch {
+        return $null
+    }
+    if ($LASTEXITCODE -ne 0 -or -not $output) { return $null }
+    return (([string]($output | Select-Object -First 1)).Trim() -replace '^jq-', '')
+}
+
+$targetJq = Join-Path $binDir 'jq.exe'
+if ((Get-InstalledJqVersion -Path $targetJq) -eq $jqVersion) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $binDir (".jq-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+try {
+    $stagedJq = Join-Path $stageDir 'jq.exe'
+    try {
+        Invoke-WebRequest -Uri $assetUrl -OutFile $stagedJq -UseBasicParsing
+    }
+    catch {
+        Write-Warning "Failed to download $assetFile; keeping the current jq."
+        exit 0
+    }
+
+    $actualSha256 = (Get-FileHash -LiteralPath $stagedJq -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $assetSha256) {
+        throw "checksum verification failed for $assetFile"
+    }
+
+    # ダウンロードした実行ファイルの mark-of-the-web を、公式の SHA-256 と一致することを
+    # 確認した後にだけ解除する。
+    Unblock-File -LiteralPath $stagedJq
+
+    $stagedVersion = Get-InstalledJqVersion -Path $stagedJq
+    if ($stagedVersion -ne $jqVersion) {
+        $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+        throw "expected jq $jqVersion but $assetFile reported $found"
+    }
+
+    Write-Host "Installing jq $jqVersion..."
+    try {
+        Move-Item -LiteralPath $stagedJq -Destination $targetJq -Force
+    }
+    catch {
+        # 実行中の jq.exe は置き換えられない。既存のバイナリはそのまま残す。
+        throw ("jq.exe を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "jq を使っているプロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "既存の jq.exe は変更していません。")
+    }
+}
+finally {
+    Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+{{ end }}
+{{- end -}}

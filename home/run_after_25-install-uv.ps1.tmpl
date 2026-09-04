@@ -1,0 +1,180 @@
+{{- if eq .chezmoi.os "windows" -}}
+# uv — upstream 公式インストーラーを版固定で実行し、~/.local/bin へ配置する。
+# 実行順序:
+# - run_once_after_30-install-tools より前。あちらは `uv tool install` に uv を要求する。
+# - Copilot CLI の command hook も `uv run` を使うため、mise には依存させない。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ展開し、
+# 版の確認まで終えてから最終パスへ移す。途中で失敗した場合は既存の uv を残す。
+$ErrorActionPreference = 'Stop'
+
+$uvVersion = '{{ .uv.version }}'
+$installerUrl = '{{ .uv.installerBaseUrl }}/{{ .uv.version }}/uv-installer.ps1'
+$installerSha256 = '{{ .uv.ps1InstallerSha256 }}'
+$binDir = Join-Path $HOME '.local\bin'
+
+# `uv --version` は "uv 0.12.9 (<commit> <date>)" を出力する。
+function Get-UvExecutableVersion {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    try {
+        $output = & $Path --version 2>$null
+    }
+    catch {
+        return $null
+    }
+    if ($LASTEXITCODE -ne 0 -or -not $output) { return $null }
+    return (([string]($output | Select-Object -First 1)).Trim() -split '\s+')[1]
+}
+
+# 実行中の uv.exe / uvx.exe は置き換えられない。両方を変更する前に排他で開けるか
+# 確認し、検査後に lock された場合も backup から rollback する。
+function Assert-BinaryReplaceable {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        $name = Split-Path -Leaf $Path
+        throw ("$name を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "uv を使っているプロセス (Copilot CLI の command hook など) を終了してから " +
+            "'chezmoi apply' を再実行してください。既存の $name は変更していません。")
+    }
+}
+
+$targetUv = Join-Path $binDir 'uv.exe'
+$targetUvx = Join-Path $binDir 'uvx.exe'
+if ((Get-UvExecutableVersion -Path $targetUv) -eq $uvVersion -and
+    (Get-UvExecutableVersion -Path $targetUvx) -eq $uvVersion) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $binDir (".uv-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+$cleanupStageDir = $true
+try {
+    $installer = Join-Path $stageDir 'uv-installer.ps1'
+    try {
+        Invoke-WebRequest -Uri $installerUrl -OutFile $installer -UseBasicParsing
+    }
+    catch {
+        Write-Warning "Failed to download the uv $uvVersion installer; keeping the current uv."
+        exit 0
+    }
+
+    $actualSha256 = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $installerSha256) {
+        throw "checksum verification failed for the uv $uvVersion installer"
+    }
+
+    # ダウンロードした .ps1 には mark-of-the-web が付き、RemoteSigned では実行できない。
+    # 上で公式の SHA-256 と一致することを確認した後にだけ解除する。
+    Unblock-File -LiteralPath $installer
+
+    Write-Host "Installing uv $uvVersion..."
+    $env:UV_INSTALL_DIR = $stageDir
+    $env:UV_NO_MODIFY_PATH = '1'
+    $env:INSTALLER_NO_MODIFY_PATH = '1'
+    try {
+        # 成否は $LASTEXITCODE ではなく、このあとの成果物と版の確認で判定する。
+        # インストーラーはネイティブコマンドを呼ばずに終わることがあり、
+        # $LASTEXITCODE は直前のコマンドの値のままになり得る。
+        & $installer | Out-Null
+    }
+    catch {
+        Write-Warning "The uv $uvVersion installer did not complete; keeping the current uv."
+        exit 0
+    }
+    finally {
+        Remove-Item Env:\UV_INSTALL_DIR, Env:\UV_NO_MODIFY_PATH, Env:\INSTALLER_NO_MODIFY_PATH `
+            -ErrorAction SilentlyContinue
+    }
+
+    $stagedUv = Join-Path $stageDir 'uv.exe'
+    $stagedUvx = Join-Path $stageDir 'uvx.exe'
+    foreach ($staged in @($stagedUv, $stagedUvx)) {
+        if (-not (Test-Path -LiteralPath $staged)) {
+            throw "the uv installer did not produce $(Split-Path -Leaf $staged)"
+        }
+    }
+
+    foreach ($staged in @($stagedUv, $stagedUvx)) {
+        $stagedVersion = Get-UvExecutableVersion -Path $staged
+        if ($stagedVersion -ne $uvVersion) {
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($staged)
+            $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+            throw "expected $name $uvVersion but the installer produced $found"
+        }
+    }
+
+    Assert-BinaryReplaceable -Path $targetUv
+    Assert-BinaryReplaceable -Path $targetUvx
+
+    $backupUv = Join-Path $stageDir 'previous-uv.exe'
+    $backupUvx = Join-Path $stageDir 'previous-uvx.exe'
+    try {
+        if (Test-Path -LiteralPath $targetUv) {
+            Move-Item -LiteralPath $targetUv -Destination $backupUv
+        }
+        if (Test-Path -LiteralPath $targetUvx) {
+            Move-Item -LiteralPath $targetUvx -Destination $backupUvx
+        }
+        Move-Item -LiteralPath $stagedUv -Destination $targetUv
+        Move-Item -LiteralPath $stagedUvx -Destination $targetUvx
+    }
+    catch {
+        $replacementError = $_
+        $rollbackErrors = [System.Collections.Generic.List[string]]::new()
+        foreach ($pair in @(
+            [PSCustomObject]@{ Staged = $stagedUv; Target = $targetUv; Backup = $backupUv },
+            [PSCustomObject]@{ Staged = $stagedUvx; Target = $targetUvx; Backup = $backupUvx }
+        )) {
+            $staged = $pair.Staged
+            $target = $pair.Target
+            $backup = $pair.Backup
+            try {
+                if (Test-Path -LiteralPath $backup) {
+                    Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+                    Move-Item -LiteralPath $backup -Destination $target -Force
+                }
+                elseif (-not (Test-Path -LiteralPath $staged)) {
+                    Remove-Item -LiteralPath $target -Force -ErrorAction Stop
+                }
+            }
+            catch {
+                $rollbackErrors.Add(
+                    "$(Split-Path -Leaf $target): $($_.Exception.Message)"
+                )
+            }
+        }
+        if ($rollbackErrors.Count -gt 0) {
+            $cleanupStageDir = $false
+            throw ("uv.exe と uvx.exe の復旧を完了できませんでした。" +
+                "復旧用ファイルは $stageDir に残しています。" +
+                "実行中の uv 関連プロセスを終了し、同ディレクトリの previous-*.exe を確認してください。" +
+                "置換原因: $($replacementError.Exception.Message); " +
+                "復旧原因: $($rollbackErrors -join '; ')")
+        }
+        throw ("uv.exe と uvx.exe の置き換えに失敗したため、以前の実体へ戻しました。" +
+            "実行中の uv 関連プロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "原因: $($replacementError.Exception.Message)")
+    }
+}
+finally {
+    if ($cleanupStageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+{{- end -}}

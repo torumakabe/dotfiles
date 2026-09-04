@@ -3,6 +3,8 @@
 # GitHub Desktop の Copilot SDK は mise shims を含まない固定 PATH で子 shell を
 # 起動するが、~/.local/bin は含めるため、安全な shim だけをここへリンクする。
 # 本スクリプトが作成したリンクだけを state ファイルで管理する。
+# 公式インストーラーが ~/.local/bin へ置いた実体（uv / uvx / jq / gh）は本スクリプトの
+# 管理対象ではなく、mise から外れた shim のリンクはここで掃除される。
 # 関連: docs/architecture.md「PATH 管理（非対話シェル対応）」
 #
 # mise config hash: {{ include "dot_config/mise/config.toml.tmpl" | sha256sum }}

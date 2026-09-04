@@ -1,12 +1,16 @@
 {{ if eq .chezmoi.os "windows" -}}
 # Windows 向け追加ツールのインストール
-# 実行順序: run_once_after_20-mise-install の後。mise でインストールされた uv 等が PATH に必要
+# 実行順序: run_after_25-install-uv の後。uv が ~/.local/bin にある必要がある
 $ErrorActionPreference = 'Stop'
 
-# mise shims を PATH に追加 (非対話シェル対応)
+# ~/.local/bin を mise shims より前に置く (非対話シェル対応)。
+# 恒久的なユーザー PATH の順序は run_once_after_05-setup-user-path が所有する。
+$localBinDir = Join-Path $HOME '.local\bin'
 $shimsDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
-if (($env:Path -split ';') -notcontains $shimsDir) {
-    $env:Path = "$shimsDir;$env:Path"
+foreach ($dir in @($shimsDir, $localBinDir)) {
+    if (($env:Path -split ';') -notcontains $dir) {
+        $env:Path = "$dir;$env:Path"
+    }
 }
 
 # --- Go tools ---
@@ -54,14 +58,6 @@ if (Get-Command uv -ErrorAction SilentlyContinue) {
         if ($LASTEXITCODE -ne 0) { throw "uv tool install failed" }
     } catch {
         Write-Warning "Failed to install Spec Kit CLI. Retry manually with 'uv tool install specify-cli --from git+https://github.com/github/spec-kit.git@v{{ .specKit.version }}'."
-    }
-
-    # uv tool の bin ディレクトリ (~/.local/bin) を User PATH に登録。
-    # PowerShell プロファイルを読まない子プロセス (Copilot CLI 等) からも uv tool が見えるようにする。
-    try {
-        uv tool update-shell | Out-Null
-    } catch {
-        Write-Warning "Failed to run 'uv tool update-shell'. Add '$HOME\.local\bin' to PATH manually."
     }
 }
 

@@ -40,6 +40,7 @@
 | [025](025-copilot-cli-sandbox-user-level-default.md) | Copilot CLI local sandbox は user-level settings で既定有効にする | Superseded by ADR-026 |
 | [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 初回既定値と明示設定保持 | Accepted |
 | [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Accepted |
+| [028](028-remove-mise-use-official-per-tool-install-paths.md) | mise を撤去しツールごとの公式導入経路を使用する | Proposed |
 
 ## テンプレート
 

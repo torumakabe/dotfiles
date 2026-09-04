@@ -4,22 +4,22 @@
     "preToolUse": [
       {
         "type": "command",
-        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/copilot-guard.py\"",
-        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\copilot-guard.py\"",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/copilot-guard.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\copilot-guard.py\"",
         "cwd": ".",
         "timeoutSec": 30
       },
       {
         "type": "command",
-        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/uv-enforcer.py\"",
-        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\uv-enforcer.py\"",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/uv-enforcer.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\uv-enforcer.py\"",
         "cwd": ".",
         "timeoutSec": 30
       },
       {
         "type": "command",
-        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/node-global-enforcer.py\"",
-        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\node-global-enforcer.py\"",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/node-global-enforcer.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\node-global-enforcer.py\"",
         "cwd": ".",
         "timeoutSec": 30
       }
@@ -27,8 +27,8 @@
     "postToolUse": [
       {
         "type": "command",
-        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/audit-log.py\"",
-        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\audit-log.py\"",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/audit-log.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\audit-log.py\"",
         "cwd": ".",
         "timeoutSec": 15
       }
@@ -36,8 +36,8 @@
     "postToolUseFailure": [
       {
         "type": "command",
-        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/audit-failure.py\"",
-        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\audit-failure.py\"",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/audit-failure.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\audit-failure.py\"",
         "cwd": ".",
         "timeoutSec": 15
       }

@@ -2,12 +2,12 @@
 
 Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](https://mise.jdx.dev/).
 
-Linux / macOS / WSL / Windows / Codespaces / Dev Container で、できるだけ同じ運用感を保つための dotfiles である。設定ファイルは `chezmoi` で管理し、開発ツールのバージョンは `mise` でそろえ、GitHub Copilot CLI 向けの指示・フック・スキルも同じリポジトリで管理する。
+Linux / macOS / WSL / Windows / Codespaces / Dev Container で、できるだけ同じ運用感を保つための dotfiles である。設定ファイルは `chezmoi` で管理し、開発ツールのバージョンは `mise` かツールごとの公式導入経路でそろえ、GitHub Copilot CLI 向けの指示・フック・スキルも同じリポジトリで管理する。
 
 ## このリポジトリが扱うもの
 
 - **設定ファイルの配布**: `chezmoi` テンプレートで OS ごとの差分を吸収する
-- **ツールバージョンの固定**: `mise` と lockfile で取得元と版をそろえる
+- **ツールバージョンの固定**: `mise` と lockfile、または公式導入経路と `home/.chezmoidata.toml` の宣言で取得元と版をそろえる
 - **Copilot CLI の共通設定**: カスタム指示、フック、スキルを管理する
 - **安全寄りの既定値**: `gitleaks` の pre-commit フックと Copilot Guard を組み込む
 
@@ -76,7 +76,7 @@ chezmoi init torumakabe
 winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"
 ```
 
-DSC は Copilot CLI を含む Windows パッケージを導入する。完了後は PowerShell を開き直し、`gh` と `mise` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は mise lockfile に従って残りのツールを導入する。
+DSC は Copilot CLI と GitHub CLI を含む Windows パッケージを導入する。完了後は PowerShell を開き直し、`gh` と `mise` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は mise lockfile と `home/.chezmoidata.toml` の宣言に従って残りのツールを導入する。
 
 ```powershell
 gh auth login
@@ -95,7 +95,7 @@ if (!(Select-String -Path $PROFILE -SimpleMatch $legacyLine -Quiet) -and
 }
 ```
 
-`copilot` は DSC 側で導入するため、Windows では `mise` の対象外である。
+`copilot` と `gh` は DSC 側で導入するため、Windows では `mise` の対象外である。
 
 ## 日常操作
 
@@ -108,11 +108,11 @@ chezmoi apply
 chezmoi update
 ```
 
-`mise` 管理ツールの更新や lockfile 再生成は [`docs/operations.md`](docs/operations.md) を参照。
+`mise` 管理ツールの更新や lockfile 再生成、`mise` の管理外にあるツール（GitHub CLI・jq・uv）の導入経路は [`docs/operations.md`](docs/operations.md) を参照。
 
 ## 詳細ドキュメント
 
-- [`docs/operations.md`](docs/operations.md): `mise` の更新、lockfile 再生成、pre-commit フック管理、`run_once_*` の再実行
+- [`docs/operations.md`](docs/operations.md): ツールの管理境界、`mise` の更新、lockfile 再生成、pre-commit フック管理、`run_once_*` の再実行
 - [`docs/architecture.md`](docs/architecture.md): ディレクトリ構造、設計判断、プラットフォーム分岐、Copilot Guard の構成
 - [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の管理対象、フック、`copilot-guardrails`、監査ログ
 - [`docs/troubleshooting.md`](docs/troubleshooting.md): よくある失敗と復旧手順

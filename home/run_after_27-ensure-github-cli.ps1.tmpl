@@ -1,0 +1,58 @@
+{{- if eq .chezmoi.os "windows" -}}
+# GitHub CLI — winget が所有する gh を解決できるか確認し、最小版を満たしているか検査する。
+#
+# ここでは gh を導入も更新もしない。バイナリを複製もしない。導入は
+# reference/windows/configuration.dsc.yaml の GitHub.cli が担当する。
+# winget の Links ディレクトリはユーザー PATH にあるため、~/.local/bin へ入口を作らない。
+$ErrorActionPreference = 'Stop'
+
+$minimumVersion = [version]'{{ .githubCli.minimumVersion }}'
+$binDir = Join-Path $HOME '.local\bin'
+$shimsDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
+
+# ~/.local/bin と mise shims を除外するのは、撤去済みの shim をベンダー実体と
+# 誤認しないためである。
+$excluded = @($binDir, $shimsDir) |
+    ForEach-Object { $_.Replace('\', '/').TrimEnd('/').ToLowerInvariant() }
+
+$vendorGh = Get-Command -All -CommandType Application -Name 'gh.exe' -ErrorAction SilentlyContinue |
+    Where-Object {
+        $directory = Split-Path -Parent $_.Source
+        $excluded -notcontains $directory.Replace('\', '/').TrimEnd('/').ToLowerInvariant()
+    } |
+    Select-Object -First 1
+
+if (-not $vendorGh) {
+    Write-Warning ("GitHub CLI was not found on PATH. Install it with: " +
+        "winget install --id GitHub.cli --source winget")
+    exit 0
+}
+
+# `gh --version` の 1 行目は "gh version 2.94.0 (2025-01-01)"。
+$versionText = $null
+try {
+    $versionOutput = & $vendorGh.Source --version 2>$null
+    if ($LASTEXITCODE -eq 0 -and $versionOutput) {
+        $versionText = (([string]($versionOutput | Select-Object -First 1)).Trim() -split '\s+')[2]
+    }
+}
+catch {
+    $versionText = $null
+}
+
+$installedVersion = $null
+if ($versionText) { [version]::TryParse($versionText, [ref]$installedVersion) | Out-Null }
+
+if (-not $installedVersion) {
+    Write-Warning ("Could not read the version of $($vendorGh.Source); " +
+        "skipping the GitHub CLI minimum version check.")
+    exit 0
+}
+
+if ($installedVersion -lt $minimumVersion) {
+    Write-Warning ("GitHub CLI $installedVersion at $($vendorGh.Source) is older than the " +
+        "required $minimumVersion. gh skill list / gh skill install need $minimumVersion or " +
+        "later, so gh-stack setup stays incomplete. Upgrade it with: " +
+        "winget upgrade --id GitHub.cli --source winget")
+}
+{{- end -}}

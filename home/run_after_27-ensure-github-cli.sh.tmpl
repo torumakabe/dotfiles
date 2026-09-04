@@ -1,0 +1,118 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# GitHub CLI — ベンダーのパッケージマネージャーが所有する gh を、~/.local/bin から
+# 安定した名前で解決できるようにし、最小版を満たしているか検査する。
+#
+# ここでは gh を導入も更新もしない。バイナリを複製もしない。導入は
+# run_once_before_10-install-packages (apt / brew) と reference/windows/configuration.dsc.yaml
+# (winget) が担当する。
+#
+# macOS の GUI 由来プロセス (GitHub Desktop の Copilot SDK など) は固定 PATH で子 shell を
+# 起動し、そこに含まれるユーザーディレクトリは ~/.local/bin だけである。symlink を置くのは
+# その経路から vendor 版 gh を解決させるためであり、実体の所有はベンダーのままにする。
+
+set -uo pipefail
+
+minimum_version='{{ .githubCli.minimumVersion }}'
+bin_dir="${HOME}/.local/bin"
+link="${bin_dir}/gh"
+
+{{ if eq .chezmoi.os "darwin" -}}
+install_hint="brew install gh"
+upgrade_hint="brew upgrade gh"
+{{ else -}}
+install_hint="chezmoi state delete-bucket --bucket=scriptState && chezmoi apply"
+upgrade_hint="sudo apt-get update && sudo apt-get install --only-upgrade gh"
+{{ end -}}
+
+# >>> gh-resolution: tests/test_direct_tool_installs.py がこの区間を抽出して実行する
+# 除外ディレクトリと探索対象の PATH は呼び出し側が引数で渡す。テストが偽の値を渡せる一方、
+# 実行時に環境変数で対象を差し替えられないようにするためである。
+gh_is_vendor_dir() {
+  local dir=$1
+  local excluded=$2
+
+  case "${dir}" in
+    "" | "${excluded}" | "${excluded}/") return 1 ;;
+    */mise/shims | */mise/shims/) return 1 ;;
+  esac
+  return 0
+}
+
+# ~/.local/bin と mise shims を除外するのは、自分が作った symlink や撤去済みの shim を
+# ベンダー実体と誤認しないためである。
+resolve_vendor_gh() {
+  local excluded=$1
+  local rest=$2
+  local dir
+
+  while [ -n "${rest}" ]; do
+    dir="${rest%%:*}"
+    case "${rest}" in
+      *:*) rest="${rest#*:}" ;;
+      *) rest="" ;;
+    esac
+    if gh_is_vendor_dir "${dir}" "${excluded}" && [ -x "${dir}/gh" ]; then
+      printf '%s\n' "${dir}/gh"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ドット区切りの数値だけを比較する。gh の安定版は pre-release 識別子を持たない。
+version_ge() {
+  local left="${1%%[-+]*}" right="${2%%[-+]*}"
+  local index left_field right_field
+  local -a left_parts right_parts
+
+  IFS='.' read -r -a left_parts <<<"${left}"
+  IFS='.' read -r -a right_parts <<<"${right}"
+  for index in 0 1 2; do
+    left_field=$((10#${left_parts[index]:-0}))
+    right_field=$((10#${right_parts[index]:-0}))
+    if [ "${left_field}" -gt "${right_field}" ]; then
+      return 0
+    fi
+    if [ "${left_field}" -lt "${right_field}" ]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+# `gh --version` の 1 行目は "gh version 2.94.0 (2025-01-01)"。
+gh_version() {
+  "$1" --version 2>/dev/null | awk 'NR == 1 { print $3 }'
+}
+# <<< gh-resolution
+
+if ! vendor_gh="$(resolve_vendor_gh "${bin_dir}" "${PATH}")"; then
+  echo "Warning: GitHub CLI was not found outside ${bin_dir}. Install it with: ${install_hint}" >&2
+  exit 0
+fi
+
+installed_version="$(gh_version "${vendor_gh}")"
+if [ -z "${installed_version}" ]; then
+  echo "Warning: could not read the version of ${vendor_gh}; skipping the GitHub CLI minimum version check." >&2
+elif ! version_ge "${installed_version}" "${minimum_version}"; then
+  echo "Warning: GitHub CLI ${installed_version} at ${vendor_gh} is older than the required ${minimum_version}." >&2
+  echo "         gh skill list / gh skill install need ${minimum_version} or later, so gh-stack setup stays incomplete." >&2
+  echo "         Upgrade it with: ${upgrade_hint}" >&2
+fi
+
+mkdir -p "${bin_dir}"
+
+# 実体ファイルや利用者が張った別の symlink は触らない。
+if [ -e "${link}" ] && [ ! -L "${link}" ]; then
+  echo "Skip: ${link} already exists as a regular file (user-managed); leaving alone" >&2
+  exit 0
+fi
+
+if [ -L "${link}" ] && [ "$(readlink "${link}")" = "${vendor_gh}" ]; then
+  exit 0
+fi
+
+ln -sfn "${vendor_gh}" "${link}"
+echo "Linked ${link} -> ${vendor_gh}"
+{{- end -}}

@@ -11,8 +11,23 @@
 | Codespaces / Dev Container | ベースイメージ / Feature + `mise` | コンテナ基盤側ツール、開発ツール |
 | Windows | `winget` (DSC) + `mise` | GUI/CLI アプリ、Azure CLI、開発ツール |
 | 全環境共通 | `rustup` | Rust toolchain |
-| 全環境共通 | `uv` | Python スクリプト実行 |
 | 全環境共通 | `gh extension` + `gh skill` | `gh-stack` extension と Copilot skill |
+
+### mise の管理外にあるツール
+
+GitHub CLI・jq・uv は mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）。望ましい版・最小版・公式 asset は `home/.chezmoidata.toml` を正本とする。導入スクリプトはこのファイルを書き換えない。
+
+| ツール | 導入経路 | 更新の起点 |
+|--------|---------|-----------|
+| GitHub CLI | OS/ベンダーのパッケージマネージャー（Linux: `apt` / macOS: `brew` / Windows: `winget`） | ベンダーの更新コマンド |
+| jq | 公式リリースの検証済みバイナリを `~/.local/bin` へ直接配置 | `home/.chezmoidata.toml` の `jq.version` と asset の SHA-256 |
+| uv | 版を含む固定 URL の公式インストーラー | `home/.chezmoidata.toml` の `uv.version` とインストーラーの SHA-256 |
+
+GitHub CLI は、未導入か `githubCli.minimumVersion` 未満のときだけ導入・更新する。最小版以上は更新しない。最小版は `gh skill list` / `gh skill install` の対応版であり、下回ると `gh-stack` のセットアップが完了しない。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を検査して不足時に更新コマンドを案内する。Codespaces ではベースイメージ側が gh を所有するため、同じ検査を行い、不足していても直接バイナリを置かない。
+
+jq と uv は毎回の適用で走り、導入済みの版が宣言と一致すればネットワークへ出ない。取得物は `~/.local/bin` 配下の staging へ置き、SHA-256 と版を確認してから最終パスへ移す。checksum または版の検証に失敗した場合は既存のバイナリを残す。版を更新するときは、上流の公式リリースで版と SHA-256 を確認してから `home/.chezmoidata.toml` を編集し、`uv run -m unittest tests.test_direct_tool_installs -v` を実行する。
+
+jq の asset は `"<chezmoi.os>-<chezmoi.arch>"` ごとに固定する。宣言に無い OS/CPU では、別 CPU 向けの asset へフォールバックせず警告して何もしない。
 
 ## 定期チェック対象の制約
 
@@ -28,7 +43,7 @@ TypeScript language server の除外を撤去するときは、`home/dot_config/
 
 ## gh-stack の更新
 
-セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
+セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である（`home/.chezmoidata.toml` の `githubCli.minimumVersion` を正本とする）。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
 
 更新前には、skill と extension の候補を確認する。
 
@@ -200,12 +215,13 @@ GITHUB_TOKEN=$(gh auth token) mise install
 | `home/run_once_before_10-install-packages.sh.tmpl` | `COPILOT_VERSION`、`AZD_VERSION`、`RUSTUP_VERSION` と各プラットフォーム別 SHA-256、Microsoft 署名鍵の primary-key fingerprint |
 | `home/run_once_after_30-install-tools.sh.tmpl` | `DRAWIO_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_after_10-setup-shell.sh.tmpl` | `OH_MY_ZSH_COMMIT`、zsh-completions の更新確認用 `ZSH_COMPLETIONS_TAG` と取得を強制する `ZSH_COMPLETIONS_COMMIT` |
+| `home/.chezmoidata.toml` | `jq.version` と OS/CPU 別 asset の SHA-256、`uv.version` とインストーラー別 SHA-256、`githubCli.minimumVersion` |
 
 成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。現在の draw.io 配布フローには公式 checksum がないため、更新担当者が対象リリース asset の SHA-256 を計算し、上流リリースの出所と asset を確認してから pin を更新する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
 
-`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。macOS の Homebrew formula から公式バイナリへの移行だけは例外であり、解決される mise が formula の実体である場合、または mise が未解決の場合に移行処理を実行する。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
+`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。`home/.chezmoidata.toml` で宣言する jq と uv だけは例外であり、`run_after_26-install-jq` と `run_after_25-install-uv` が毎回の適用で宣言との一致を確認し、違う場合だけ入れ直す。macOS の Homebrew formula から公式バイナリへの移行も例外であり、解決される mise が formula の実体である場合、または mise が未解決の場合に移行処理を実行する。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
 最低限の確認:
 
@@ -219,6 +235,16 @@ sed '/^[[:space:]]*{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
 sed '/^[[:space:]]*{{/d' home/run_once_after_30-install-tools.sh.tmpl | shellcheck -
 sed '/^[[:space:]]*{{/d' home/run_once_after_30-install-tools.sh.tmpl | bash -n
 ```
+
+`run_after_25-install-uv` / `run_after_26-install-jq` / `run_after_27-ensure-github-cli` は OS/CPU で本体が切り替わるため、テンプレート行を落とすのではなく展開結果を検査する。
+
+```bash
+chezmoi execute-template --source home \
+  --override-data '{"chezmoi":{"os":"linux","arch":"amd64"}}' \
+  --file home/run_after_26-install-jq.sh.tmpl | shellcheck -
+```
+
+`uv run -m unittest tests.test_direct_tool_installs -v` は対象プラットフォーム分の展開と、checksum・バージョン検証の失敗時に既存バイナリを残すことを検査する。
 
 ## このリポジトリを Dev Container で開発する
 

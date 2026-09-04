@@ -35,6 +35,58 @@ make_install_tmp_dir() {
   mktemp -d "${tmp_root}/run.XXXXXX"
 }
 
+# gh はベンダーのパッケージマネージャーが所有する。未導入か、本リポジトリが要求する
+# 最小版 (home/.chezmoidata.toml の githubCli.minimumVersion) 未満のときだけ導入・更新する。
+# 最小版以上は更新しない。
+GH_MINIMUM_VERSION="{{ .githubCli.minimumVersion }}"
+
+version_ge() {
+  local left="${1%%[-+]*}" right="${2%%[-+]*}"
+  local index left_field right_field
+  local -a left_parts right_parts
+
+  IFS='.' read -r -a left_parts <<<"${left}"
+  IFS='.' read -r -a right_parts <<<"${right}"
+  for index in 0 1 2; do
+    left_field=$((10#${left_parts[index]:-0}))
+    right_field=$((10#${right_parts[index]:-0}))
+    if [ "${left_field}" -gt "${right_field}" ]; then
+      return 0
+    fi
+    if [ "${left_field}" -lt "${right_field}" ]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+gh_meets_minimum() {
+  local binary=$1
+  local installed
+
+  [ -x "${binary}" ] || return 1
+  installed="$("${binary}" --version 2>/dev/null | awk 'NR == 1 { print $3 }')"
+  [ -n "${installed}" ] || return 1
+  version_ge "${installed}" "${GH_MINIMUM_VERSION}"
+}
+
+apt_gh_path() {
+  local binary
+
+  dpkg-query -W -f='${db:Status-Abbrev}' gh 2>/dev/null | grep -q '^ii ' || return 1
+  binary="$(dpkg-query -L gh 2>/dev/null | awk '/\/bin\/gh$/ { print; exit }')"
+  [ -x "${binary}" ] || return 1
+  printf '%s\n' "${binary}"
+}
+
+homebrew_gh_path() {
+  local prefix
+
+  prefix="$(brew --prefix gh 2>/dev/null)" || return 1
+  [ -x "${prefix}/bin/gh" ] || return 1
+  printf '%s\n' "${prefix}/bin/gh"
+}
+
 primary_key_fingerprints() {
   local key_file=$1
 
@@ -184,10 +236,12 @@ fi
 
 {{ if not .codespaces -}}
 # GitHub CLI — mise install 前にトークン取得手段を確保する
-# Codespaces はベースイメージに gh 同梱 + GITHUB_TOKEN 自動設定のため対象外
-# mise install 後は mise 版 gh が shim で shadow する
-if ! command -v gh >/dev/null 2>&1; then
-  echo "Installing GitHub CLI via apt..."
+# Codespaces はベースイメージに gh 同梱 + GITHUB_TOKEN 自動設定のため対象外。
+# 同梱版が最小版未満のときは run_after_27-ensure-github-cli が警告する
+# （Codespaces ではベースイメージ側の責務であり、直接バイナリを置かない）。
+vendor_gh="$(apt_gh_path || true)"
+if ! gh_meets_minimum "${vendor_gh}"; then
+  echo "Installing GitHub CLI ${GH_MINIMUM_VERSION} or later via apt..."
   sudo mkdir -p -m 755 /etc/apt/keyrings
   if ! curl --proto '=https' --tlsv1.2 -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | \
     sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null; then
@@ -316,7 +370,6 @@ brew update --quiet
 # brew trust は冪等。古い brew に未実装でも全体を止めないよう失敗は警告に留める。
 brew trust --formula azure/azd/azd \
   || echo "Warning: 'brew trust' unavailable or failed; azd install may be skipped under tap-trust enforcement." >&2
-# gh: mise install 前にトークン取得手段を確保する（mise 版 gh が shim で shadow する）
 # azure-cli / azd / copilot-cli: GUI アプリや github: バックエンド都合を避けるため
 # macOS では brew で管理
 # git: Apple Git は 2.50 系で停滞しており、設定ベースフック (git >= 2.54) を
@@ -327,12 +380,26 @@ brew install \
   azure-cli \
   azure/azd/azd \
   copilot-cli \
-  gh \
   git \
   poppler \
   watch \
   zsh-completions
 brew install --cask libreoffice
+
+# gh: mise install 前にトークン取得手段を確保する。導入と更新は Homebrew が所有し、
+# 未導入か最小版未満のときだけ操作する。最小版以上の版は更新しない。
+vendor_gh="$(homebrew_gh_path || true)"
+if ! gh_meets_minimum "${vendor_gh}"; then
+  if [ -n "${vendor_gh}" ]; then
+    echo "Upgrading GitHub CLI to ${GH_MINIMUM_VERSION} or later via brew..."
+    brew upgrade gh \
+      || echo "Warning: failed to upgrade GitHub CLI via Homebrew. Retry manually with 'brew upgrade gh'." >&2
+  else
+    echo "Installing GitHub CLI ${GH_MINIMUM_VERSION} or later via brew..."
+    brew install gh \
+      || echo "Warning: failed to install GitHub CLI via Homebrew. Retry manually with 'brew install gh'." >&2
+  fi
+fi
 
 {{ end -}}
 

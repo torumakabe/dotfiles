@@ -257,7 +257,7 @@ npm config set registry '<管理者指定の registry URL>'
 
 - **Unix**: `chezmoi apply` で `~/.profile` 系が配置されているか確認。新規 login シェル（新しい Terminal タブ）で有効化
 - **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）
-- **Windows**: `run_once_after_05-setup-mise-shims-path.ps1` を再実行
+- **Windows**: `run_once_after_05-setup-user-path.ps1` を再実行
 
 それでも反映されないときは state を消して再実行:
 
@@ -269,14 +269,44 @@ chezmoi apply
 確認コマンド:
 
 ```bash
-echo "$PATH" | tr ':' '\n'   # ~/.local/share/mise/shims, ~/.local/bin, ~/go/bin が含まれること
-command -v copilot uv
+echo "$PATH" | tr ':' '\n'   # ~/.local/bin が ~/.local/share/mise/shims より前にあること
+command -v copilot uv jq gh
 ```
 
 ```powershell
 (Get-Command uv).Source
-[Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-String 'mise\\shims'
+[Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-Object -First 2
 ```
+
+`uv` / `jq` / `gh` が mise shims の側に解決される場合は、`~/.local/bin` が先に来ていない。上の state 削除と `chezmoi apply` で並びを入れ直す。
+
+## `uv` / `jq` の導入が checksum またはバージョン検証で失敗する
+
+症状: `chezmoi apply` が `error: checksum verification failed for ...` または `error: expected jq <version> but ...` / `error: expected uv <version> but ...` で停止する。
+
+`~/.local/bin` 配下の staging で検証しているため、既存の `uv` / `uvx` / `jq` はそのまま残っている。取得物を信頼できないので、スクリプトは異常終了する。
+
+1. `home/.chezmoidata.toml` の `jq.version` / `uv.version` と、対応する SHA-256 が上流の公式リリースと一致するか確認する
+2. jq は各リリースの `sha256sum.txt`、uv はリリース asset の `uv-installer.sh` / `uv-installer.ps1` を正本とする
+3. 一致していれば、ネットワーク経路（プロキシや企業 TLS 検査）が成果物を書き換えていないか確認する
+4. 宣言を直したら `chezmoi apply` を実行する。`run_once` の state 削除は不要である
+
+版の検証で失敗した場合は、宣言した版と実際に取得された版がずれている。asset のファイル名と SHA-256 が同じ版を指しているか確認する。
+
+## Windows で `uv.exe` / `jq.exe` を置き換えられない
+
+症状: `chezmoi apply` が `uv.exe を置き換えられません。実行中のプロセスが掴んでいる可能性があります。` で停止する。
+
+Windows は実行中の `.exe` を置き換えられない。既存のバイナリは変更していない。
+
+1. `uv` / `jq` を使っているプロセスを終了する。Copilot CLI の command hook は `uv run` で起動するため、Copilot CLI のセッションも閉じる
+2. 掴んでいるプロセスを探す
+
+    ```powershell
+    Get-Process | Where-Object { $_.Path -like "$HOME\.local\bin\*" } | Format-Table Name, Id, Path
+    ```
+
+3. `chezmoi apply` を再実行する
 
 ## Windows で `cargo build` / `cargo check` がリンクエラーになる (`link.exe` が見つからない/引数エラー)
 
@@ -407,6 +437,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
 
-本リポジトリの command hook は `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象を `uv` に限定する。`uv` の未導入版は自動導入されるが、dotnet など他ツールの missing 状態は hook 起動時に解決しない。標準エラーに他ツールのインストールログが出る場合は、`~/.copilot/hooks/hooks.json` が最新か確認し、`chezmoi apply` で配り直す。
+本リポジトリの command hook は `~/.local/bin/uv` の `uv run` で起動する。`uv` は mise の管理外にあり、shim もバージョン解決も挟まない。標準エラーに mise のインストールログが出る場合は、`~/.copilot/hooks/hooks.json` と PATH の並びが最新か確認し、`chezmoi apply` で配り直す。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

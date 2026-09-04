@@ -1,4 +1,4 @@
-"""Verify Copilot hooks isolate mise resolution to uv on every shell."""
+"""Verify Copilot hooks run through the directly installed uv on every shell."""
 
 import json
 import os
@@ -11,8 +11,7 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json"
-EXPECTED_BASH_PREFIX = "MISE_ENABLE_TOOLS=uv uv run "
-EXPECTED_POWERSHELL_PREFIX = "$env:MISE_ENABLE_TOOLS='uv'; uv run "
+EXPECTED_PREFIX = "uv run "
 
 
 def _commands() -> list[dict[str, object]]:
@@ -21,16 +20,21 @@ def _commands() -> list[dict[str, object]]:
 
 
 class CopilotHooksConfigTests(unittest.TestCase):
-    def test_all_commands_limit_mise_to_uv(self) -> None:
+    def test_all_commands_start_with_uv_run(self) -> None:
         commands = _commands()
         self.assertEqual(len(commands), 5)
 
         for command in commands:
             with self.subTest(command=command):
-                self.assertTrue(command["bash"].startswith(EXPECTED_BASH_PREFIX))
-                self.assertTrue(
-                    command["powershell"].startswith(EXPECTED_POWERSHELL_PREFIX)
-                )
+                self.assertTrue(command["bash"].startswith(EXPECTED_PREFIX))
+                self.assertTrue(command["powershell"].startswith(EXPECTED_PREFIX))
+
+    def test_no_command_forces_mise_resolution(self) -> None:
+        """uv は mise の管理外になったため、解決対象を絞る env は不要である。"""
+        for command in _commands():
+            with self.subTest(command=command):
+                self.assertNotIn("MISE_ENABLE_TOOLS", command["bash"])
+                self.assertNotIn("MISE_ENABLE_TOOLS", command["powershell"])
 
     def test_all_commands_run_from_repository_root(self) -> None:
         for command in _commands():
@@ -39,7 +43,7 @@ class CopilotHooksConfigTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("bash"), "bash is required")
     @unittest.skipIf(os.name == "nt", "the POSIX stub requires a POSIX shell")
-    def test_bash_exports_uv_allowlist_to_hook_process(self) -> None:
+    def test_bash_invokes_the_uv_on_path_without_extra_environment(self) -> None:
         command = _commands()[0]["bash"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -47,12 +51,13 @@ class CopilotHooksConfigTests(unittest.TestCase):
             capture = root / "capture.txt"
             stub = root / "uv"
             stub.write_text(
-                '#!/bin/sh\nprintf "%s" "$MISE_ENABLE_TOOLS" > "$HOOK_ENV_CAPTURE"\n',
+                '#!/bin/sh\nprintf "%s" "$*" > "$HOOK_ARGS_CAPTURE"\n',
                 encoding="utf-8",
             )
             stub.chmod(0o755)
             env = dict(os.environ)
-            env["HOOK_ENV_CAPTURE"] = str(capture)
+            env["HOOK_ARGS_CAPTURE"] = str(capture)
+            env["HOME"] = str(root)
             env["PATH"] = f"{root}{os.pathsep}{env['PATH']}"
 
             result = subprocess.run(
@@ -68,10 +73,13 @@ class CopilotHooksConfigTests(unittest.TestCase):
                 0,
                 msg=f"stdout={result.stdout!r} stderr={result.stderr!r}",
             )
-            self.assertEqual(capture.read_text(encoding="utf-8"), "uv")
+            self.assertEqual(
+                capture.read_text(encoding="utf-8"),
+                f"run {root}/.copilot/hooks/scripts/copilot-guard.py",
+            )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
-    def test_powershell_exports_uv_allowlist_to_hook_process(self) -> None:
+    def test_powershell_invokes_the_uv_on_path_without_extra_environment(self) -> None:
         command = _commands()[0]["powershell"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -80,11 +88,12 @@ class CopilotHooksConfigTests(unittest.TestCase):
             stub = root / "uv.ps1"
             stub.write_text(
                 "Set-Content -NoNewline -LiteralPath "
-                "$env:HOOK_ENV_CAPTURE -Value $env:MISE_ENABLE_TOOLS\n",
+                "$env:HOOK_ARGS_CAPTURE -Value ($args -join ' ')\n",
                 encoding="utf-8",
             )
             env = dict(os.environ)
-            env["HOOK_ENV_CAPTURE"] = str(capture)
+            env["HOOK_ARGS_CAPTURE"] = str(capture)
+            env["HOME"] = str(root)
             env["PATH"] = f"{root}{os.pathsep}{env['PATH']}"
 
             result = subprocess.run(
@@ -100,4 +109,6 @@ class CopilotHooksConfigTests(unittest.TestCase):
                 0,
                 msg=f"stdout={result.stdout!r} stderr={result.stderr!r}",
             )
-            self.assertEqual(capture.read_text(encoding="utf-8"), "uv")
+            captured = capture.read_text(encoding="utf-8")
+            self.assertTrue(captured.startswith("run "), captured)
+            self.assertIn("copilot-guard.py", captured)

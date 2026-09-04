@@ -116,7 +116,7 @@ class CopilotCliInstallTests(unittest.TestCase):
         )
         install_block = self.bootstrap[
             self.bootstrap.index("if ! download_file", self.bootstrap.index("COPILOT_VERSION")):
-            self.bootstrap.index("# GitHub CLI")
+            self.bootstrap.index("# GitHub CLI — mise install 前に")
         ]
         self.assertLess(
             install_block.index("Warning: failed to download GitHub Copilot CLI"),

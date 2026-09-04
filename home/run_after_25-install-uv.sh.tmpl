@@ -1,0 +1,146 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# uv — upstream 公式インストーラーを版固定で実行し、~/.local/bin へ配置する。
+# 実行順序:
+# - run_once_after_30-install-tools より前。あちらは `uv tool install` に uv を要求する。
+# - Copilot CLI の command hook も `uv run` を使うため、mise には依存させない。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ展開し、
+# 版の確認まで終えてから最終パスへ移す。途中で失敗した場合は既存の uv を残す。
+
+set -euo pipefail
+
+uv_version='{{ .uv.version }}'
+installer_url='{{ .uv.installerBaseUrl }}/{{ .uv.version }}/uv-installer.sh'
+installer_sha256='{{ .uv.shInstallerSha256 }}'
+bin_dir="${HOME}/.local/bin"
+
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify the uv installer" >&2
+    exit 1
+  fi
+}
+
+# `uv --version` は "uv 0.12.9 (<commit> <date>)" を出力する。
+installed_uv_version() {
+  local binary=$1
+
+  [ -x "${binary}" ] || return 1
+  "${binary}" --version 2>/dev/null | awk 'NR == 1 { print $2 }'
+}
+
+if [ "$(installed_uv_version "${bin_dir}/uv" || true)" = "${uv_version}" ] &&
+  [ "$(installed_uv_version "${bin_dir}/uvx" || true)" = "${uv_version}" ]; then
+  exit 0
+fi
+
+mkdir -p "${bin_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${bin_dir}/.uv-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+
+rollback_uv_pair() {
+  local name
+  local failed=0
+
+  for name in uv uvx; do
+    if [ -e "${stage_dir}/previous-${name}" ]; then
+      if ! rm -f "${bin_dir}/${name}" ||
+        ! mv "${stage_dir}/previous-${name}" "${bin_dir}/${name}"; then
+        failed=1
+      fi
+    elif [ ! -e "${stage_dir}/${name}" ]; then
+      if ! rm -f "${bin_dir}/${name}"; then
+        failed=1
+      fi
+    fi
+  done
+  return "${failed}"
+}
+
+cleanup_uv_install() {
+  local status=$?
+
+  trap - EXIT
+  if [ "${transaction_started}" -eq 1 ] && [ "${transaction_committed}" -eq 0 ]; then
+    if ! rollback_uv_pair; then
+      echo "error: uv rollback could not complete; recovery files remain in ${stage_dir}" >&2
+      exit 1
+    fi
+  fi
+  rm -rf "${stage_dir}"
+  exit "${status}"
+}
+
+trap cleanup_uv_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+installer="${stage_dir}/uv-installer.sh"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${installer}" "${installer_url}"; then
+  echo "Warning: failed to download the uv ${uv_version} installer; keeping the current uv." >&2
+  exit 0
+fi
+
+actual_sha256="$(sha256_file "${installer}")"
+if [ "${actual_sha256}" != "${installer_sha256}" ]; then
+  echo "error: checksum verification failed for the uv ${uv_version} installer" >&2
+  exit 1
+fi
+
+echo "Installing uv ${uv_version}..."
+if ! env \
+  UV_INSTALL_DIR="${stage_dir}" \
+  UV_NO_MODIFY_PATH=1 \
+  INSTALLER_NO_MODIFY_PATH=1 \
+  sh "${installer}" >/dev/null; then
+  echo "Warning: the uv ${uv_version} installer did not complete; keeping the current uv." >&2
+  exit 0
+fi
+
+for name in uv uvx; do
+  if [ ! -x "${stage_dir}/${name}" ]; then
+    echo "error: the uv installer did not produce ${name}" >&2
+    exit 1
+  fi
+done
+
+for name in uv uvx; do
+  staged_version="$(installed_uv_version "${stage_dir}/${name}" || true)"
+  if [ "${staged_version}" != "${uv_version}" ]; then
+    echo "error: expected ${name} ${uv_version} but the installer produced ${staged_version:-unknown}" >&2
+    exit 1
+  fi
+done
+
+# 既存の 2 実体を先に staging へ退避する。置換中の失敗や signal は EXIT trap が
+# 両方を元へ戻し、復旧に失敗した場合は backup を staging に残す。
+transaction_started=1
+for name in uv uvx; do
+  if [ -e "${bin_dir}/${name}" ]; then
+    if ! mv "${bin_dir}/${name}" "${stage_dir}/previous-${name}"; then
+      echo "error: could not stage the existing ${name}; keeping the current uv installation" >&2
+      exit 1
+    fi
+  fi
+done
+
+for name in uv uvx; do
+  if ! mv "${stage_dir}/${name}" "${bin_dir}/${name}"; then
+    echo "error: could not replace ${name}; restoring the previous uv installation" >&2
+    exit 1
+  fi
+done
+transaction_committed=1
+{{- end -}}

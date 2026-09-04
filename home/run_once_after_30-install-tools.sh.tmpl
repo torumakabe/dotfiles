@@ -9,7 +9,9 @@ set -euo pipefail
 # - When changing the skip conditions, confirm Dev Containers / Codespaces still rely on
 #   their base image or Features instead of this script.
 export DEBIAN_FRONTEND=noninteractive
-export PATH="${HOME}/.local/share/mise/shims:${HOME}/.local/bin:${GOPATH:-${HOME}/go}/bin:${PATH}"
+# ~/.local/bin を mise shims より前に置く。uv / jq は公式インストーラーが
+# ~/.local/bin へ置いた実体を使う（run_after_25 / run_after_26）。
+export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:${GOPATH:-${HOME}/go}/bin:${PATH}"
 
 sha256_file() {
   local file=$1

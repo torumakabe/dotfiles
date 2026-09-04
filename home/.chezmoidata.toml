@@ -3,3 +3,53 @@ version = "6.0.3"
 
 [specKit]
 version = "1.0.1"
+
+# 以下は「こうあってほしい状態」の宣言だけを置く。インストーラーはこのファイルを
+# 書き換えない。値を更新するときは、上流の公式リリースで版と SHA-256 を確認する。
+
+# GitHub CLI は OS/ベンダーのパッケージマネージャーが所有する。ここでは本リポジトリの
+# 挙動が要求する最小版だけを宣言する。最小版以上なら更新しない。
+# gh skill list / gh skill install は 2.94.0 以降でのみ利用できる。
+[githubCli]
+minimumVersion = "2.94.0"
+
+# jq は公式リリースの検証済みバイナリを直接導入する。
+[jq]
+version = "1.8.2"
+releaseBaseUrl = "https://github.com/jqlang/jq/releases/download"
+
+# assets のキーは "<chezmoi.os>-<chezmoi.arch>"。ここに無い組み合わせは非対応であり、
+# 別 CPU 向けの asset へ暗黙にフォールバックしない。
+# SHA-256 の出所は各リリースの sha256sum.txt。
+[jq.assets.linux-amd64]
+file = "jq-linux-amd64"
+sha256 = "b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f"
+
+[jq.assets.linux-arm64]
+file = "jq-linux-arm64"
+sha256 = "8b85c817833814ddca00a144c33705546355afccf0cf39b188f3cdb48b852309"
+
+[jq.assets.darwin-amd64]
+file = "jq-macos-amd64"
+sha256 = "e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0"
+
+[jq.assets.darwin-arm64]
+file = "jq-macos-arm64"
+sha256 = "2d75340ba57a4b4b4c8708a21c2dc8e958a48aaa8bba13b27f77f6e4c0eca07e"
+
+[jq.assets.windows-amd64]
+file = "jq-windows-amd64.exe"
+sha256 = "a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627"
+
+[jq.assets.windows-arm64]
+file = "jq-windows-arm64.exe"
+sha256 = "083b5377392bc57cf27052b6d20a2d927770683bca844632901ff38b4b7b0ac7"
+
+# uv は upstream 推奨の公式インストーラーを、版を含む固定 URL で取得して実行する。
+# astral.sh/uv/<version>/install.{sh,ps1} は同じ成果物へのリダイレクトであり、
+# リダイレクト先を固定するためリリース asset の URL を直接指定する。
+[uv]
+version = "0.12.9"
+installerBaseUrl = "https://github.com/astral-sh/uv/releases/download"
+shInstallerSha256 = "222e006c0fe4a0d793031833e469b21df72311f4e3526ffecca0e19e6dfabc32"
+ps1InstallerSha256 = "69de475bf929f1ac248efb5a85189177a45517e2346cd68762bde453fec10a6b"

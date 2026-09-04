@@ -12,7 +12,7 @@
 {{ end -}}
 {{ if ne .chezmoi.os "windows" -}}
 PowerShell_profile.ps1
-05-setup-mise-shims-path.ps1
+05-setup-user-path.ps1
 31-install-gh-stack.ps1
 {{ end -}}
 # Windows では POSIX shell の rc を管理しない。過去に誤配布した .zshrc だけは

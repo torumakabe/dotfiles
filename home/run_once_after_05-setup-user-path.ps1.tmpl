@@ -1,0 +1,57 @@
+{{ if eq .chezmoi.os "windows" -}}
+# 非対話シェル用にユーザー PATH の先頭を固定する（対話シェルの mise activate とは共存可）。
+# ~/.local/bin には公式インストーラーが置いた実体（uv / uvx / jq）が入るため、
+# 撤去済みツールの stale な mise shim が残っていても実体が勝つ順序にする。
+$ErrorActionPreference = 'Stop'
+
+$localBinDir = Join-Path $HOME '.local\bin'
+$shimsDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
+
+# >>> user-path-normalization: tests/test_direct_tool_installs.py がこの区間を抽出して実行する
+# Windows の PATH は区切りとケースの揺れがあるため、比較前に \ を / へ正規化し、
+# 末尾の区切りを落として小文字化する。
+function ConvertTo-ComparablePath {
+    param([string]$Path)
+
+    if (-not $Path) { return '' }
+    return $Path.Replace('\', '/').TrimEnd('/').ToLowerInvariant()
+}
+
+# $Leading を先頭へこの順で置き、残りは元の順序を保ったまま重複を畳む。
+function Get-OrderedPathEntries {
+    param(
+        [string[]]$Leading,
+        [string[]]$Existing
+    )
+
+    $ordered = @()
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]'
+    foreach ($entry in @($Leading) + @($Existing)) {
+        if (-not $entry) { continue }
+        $key = ConvertTo-ComparablePath $entry
+        if (-not $key) { continue }
+        if (-not $seen.Add($key)) { continue }
+        $ordered += $entry
+    }
+    return ,$ordered
+}
+# <<< user-path-normalization
+
+New-Item -ItemType Directory -Force -Path $localBinDir | Out-Null
+
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+$existing = if ($userPath) { $userPath -split ';' } else { @() }
+$newPath = (Get-OrderedPathEntries -Leading @($localBinDir, $shimsDir) -Existing $existing) -join ';'
+
+if ($newPath -ne $userPath) {
+    Write-Host "Setting user PATH order: $localBinDir, then $shimsDir"
+    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+}
+else {
+    Write-Host "User PATH already starts with $localBinDir and $shimsDir"
+}
+
+# 現在のプロセスにも同じ先頭順序を反映する（このあとの run_after_ スクリプトが使う）。
+$processEntries = if ($env:Path) { $env:Path -split ';' } else { @() }
+$env:Path = (Get-OrderedPathEntries -Leading @($localBinDir, $shimsDir) -Existing $processEntries) -join ';'
+{{ end -}}

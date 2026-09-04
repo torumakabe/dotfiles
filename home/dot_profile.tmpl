@@ -39,28 +39,47 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
 {{ end }}
   export GOPATH="${HOME}/go"
 
-  # Prepend a user-local tool directory to PATH only if it exists and is not
-  # already present. Missing directories are intentionally skipped silently:
-  # Go/cargo/Python user-bin dirs are created on first install of their
-  # respective toolchains, so a fresh machine legitimately lacks them.
-  # Any command not found at runtime will surface the actual problem.
+  # Prepend a user-local tool directory to PATH only if it exists. Missing
+  # directories are intentionally skipped silently: Go/cargo/Python user-bin
+  # dirs are created on first install of their respective toolchains, so a
+  # fresh machine legitimately lacks them. Any command not found at runtime
+  # will surface the actual problem.
+  #
+  # An existing occurrence is removed before prepending so the resulting order
+  # is deterministic even when a system profile already added the directory.
   #
   # Ordering (last prepend wins the leftmost slot):
   #   1. ~/go/bin
   #   2. ~/.cargo/bin
-  #   3. ~/.local/bin
-  #   4. ~/.local/share/mise/shims  (mise-managed tools take precedence)
+  #   3. ~/.local/share/mise/shims
+  #   4. ~/.local/bin  (公式インストーラーが置いた実体を mise shims より優先する)
   __add_path() {
-    case ":${PATH}:" in
-      *":$1:"*) ;;
-      *) [ -d "$1" ] && PATH="$1:${PATH}" ;;
-    esac
+    [ -d "$1" ] || return 0
+    __path_kept=""
+    __path_rest="${PATH}"
+    while [ -n "${__path_rest}" ]; do
+      case "${__path_rest}" in
+        *:*)
+          __path_head="${__path_rest%%:*}"
+          __path_rest="${__path_rest#*:}"
+          ;;
+        *)
+          __path_head="${__path_rest}"
+          __path_rest=""
+          ;;
+      esac
+      if [ -n "${__path_head}" ] && [ "${__path_head}" != "$1" ]; then
+        __path_kept="${__path_kept:+${__path_kept}:}${__path_head}"
+      fi
+    done
+    PATH="$1${__path_kept:+:${__path_kept}}"
   }
   __add_path "${HOME}/go/bin"
   __add_path "${HOME}/.cargo/bin"
-  __add_path "${HOME}/.local/bin"
   __add_path "${HOME}/.local/share/mise/shims"
+  __add_path "${HOME}/.local/bin"
   unset -f __add_path
+  unset __path_kept __path_rest __path_head
 
   export PATH
 fi

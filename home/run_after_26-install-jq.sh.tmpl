@@ -1,0 +1,77 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+#!/usr/bin/env bash
+# jq — 公式リリースの検証済みバイナリを ~/.local/bin へ直接配置する。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ置き、
+# checksum と版の確認まで終えてから最終パスへ移す。失敗した場合は既存の jq を残す。
+
+set -euo pipefail
+
+jq_version='{{ .jq.version }}'
+{{ if not (hasKey .jq.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+echo "Warning: jq ${jq_version} has no official asset for {{ $platform }}; skipping installation." >&2
+exit 0
+{{ else }}
+{{- $asset := index .jq.assets $platform }}
+bin_dir="${HOME}/.local/bin"
+asset_file='{{ $asset.file }}'
+asset_sha256='{{ $asset.sha256 }}'
+asset_url='{{ $.jq.releaseBaseUrl }}/jq-{{ $.jq.version }}/{{ $asset.file }}'
+
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify ${asset_file}" >&2
+    exit 1
+  fi
+}
+
+# `jq --version` は "jq-1.8.2" を出力する。
+installed_jq_version() {
+  local binary=$1
+
+  [ -x "${binary}" ] || return 1
+  "${binary}" --version 2>/dev/null | awk 'NR == 1 { sub(/^jq-/, ""); print }'
+}
+
+if [ "$(installed_jq_version "${bin_dir}/jq" || true)" = "${jq_version}" ]; then
+  exit 0
+fi
+
+mkdir -p "${bin_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${bin_dir}/.jq-install.XXXXXX")"
+trap 'rm -rf "${stage_dir}"' EXIT
+chmod 700 "${stage_dir}"
+
+staged_jq="${stage_dir}/jq"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${staged_jq}" "${asset_url}"; then
+  echo "Warning: failed to download ${asset_file}; keeping the current jq." >&2
+  exit 0
+fi
+
+actual_sha256="$(sha256_file "${staged_jq}")"
+if [ "${actual_sha256}" != "${asset_sha256}" ]; then
+  echo "error: checksum verification failed for ${asset_file}" >&2
+  exit 1
+fi
+
+chmod 755 "${staged_jq}"
+staged_version="$(installed_jq_version "${staged_jq}" || true)"
+if [ "${staged_version}" != "${jq_version}" ]; then
+  echo "error: expected jq ${jq_version} but ${asset_file} reported ${staged_version:-unknown}" >&2
+  exit 1
+fi
+
+echo "Installing jq ${jq_version}..."
+mv -f "${staged_jq}" "${bin_dir}/jq"
+{{ end }}
+{{- end -}}

@@ -6,6 +6,7 @@
 # Note: Most CLI tool versions are managed by mise (~/.config/mise/config.toml).
 # DSC contains only: OS settings, GUI/CLI apps not managed by mise, and
 # bootstrap tooling (mise itself).
+# GitHub CLI, jq, uv are outside mise; see docs/operations.md「ツールの管理境界」.
 properties:
   resources:
     - resource: Microsoft.Windows.Developer/DeveloperMode
@@ -44,6 +45,9 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
+        # 未導入なら導入する。導入済みの版は更新しない。
+        # 本リポジトリが要求する最小版は home/.chezmoidata.toml の githubCli.minimumVersion で
+        # 宣言し、run_after_27-ensure-github-cli.ps1 が満たしているか検査する。
         description: "Install GitHub CLI"
         allowPrerelease: false
       settings:
