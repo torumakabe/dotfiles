@@ -23,7 +23,7 @@ GitHub CLI・jq・uv は mise の `[tools]` にも lockfile にも載せず、�
 | jq | 公式リリースの検証済みバイナリを `~/.local/bin` へ直接配置 | `home/.chezmoidata.toml` の `jq.version` と asset の SHA-256 |
 | uv | 版を含む固定 URL の公式インストーラー | `home/.chezmoidata.toml` の `uv.version` とインストーラーの SHA-256 |
 
-GitHub CLI は、未導入か `githubCli.minimumVersion` 未満のときだけ導入・更新する。最小版以上は更新しない。最小版は `gh skill list` / `gh skill install` の対応版であり、下回ると `gh-stack` のセットアップが完了しない。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を検査して不足時に更新コマンドを案内する。Codespaces ではベースイメージ側が gh を所有するため、同じ検査を行い、不足していても直接バイナリを置かない。
+GitHub CLI は、未導入か `githubCli.minimumVersion` 未満のときだけ導入・更新する。最小版以上は更新しない。最小版は `gh skill list` / `gh skill install` の対応版であり、下回ると `gh-stack` のセットアップが完了しない。Linux、WSL、Dev Container、Codespaces は `apt`、macOS は Homebrew、Windows は WinGet を使う。Codespaces のカスタム Dev Containerには gh が含まれない場合があるため、ベースイメージへの同梱を前提にしない。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を検査して不足時に更新コマンドを案内する。
 
 jq と uv は毎回の適用で走り、導入済みの版が宣言と一致すればネットワークへ出ない。取得物は `~/.local/bin` 配下の staging へ置き、SHA-256 と版を確認してから最終パスへ移す。checksum または版の検証に失敗した場合は既存のバイナリを残す。版を更新するときは、上流の公式リリースで版と SHA-256 を確認してから `home/.chezmoidata.toml` を編集し、`uv run -m unittest tests.test_direct_tool_installs -v` を実行する。
 

@@ -75,7 +75,9 @@ def _load_data() -> dict:
     return tomllib.loads(DATA_PATH.read_text(encoding="utf-8"))
 
 
-def _render(path: pathlib.Path, os_name: str, arch: str) -> str:
+def _render(
+    path: pathlib.Path, os_name: str, arch: str, **context: bool | str
+) -> str:
     override = {
         "chezmoi": {"os": os_name, "arch": arch},
         "codespaces": False,
@@ -84,6 +86,7 @@ def _render(path: pathlib.Path, os_name: str, arch: str) -> str:
         "windowsUser": "",
         "corpUser": "",
     }
+    override.update(context)
     result = subprocess.run(
         [
             "chezmoi",
@@ -360,6 +363,19 @@ class InstallerRenderingTests(unittest.TestCase):
         self.assertIn('gh_meets_minimum "${vendor_gh}"', brew_block)
         self.assertNotIn("command -v gh", apt_block)
         self.assertNotIn("command -v gh", brew_block)
+
+    def test_codespaces_installs_github_cli_through_apt_when_needed(self) -> None:
+        rendered = _render(
+            PACKAGE_INSTALL_SH,
+            "linux",
+            "amd64",
+            codespaces=True,
+            devcontainer=True,
+        )
+
+        self.assertIn('vendor_gh="$(apt_gh_path || true)"', rendered)
+        self.assertIn("sudo apt-get install -y -qq gh", rendered)
+        self.assertNotIn("ベースイメージ側の責務", rendered)
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")

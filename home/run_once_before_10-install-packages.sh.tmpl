@@ -234,11 +234,9 @@ if [ ! -x "${HOME}/.local/bin/copilot" ]; then
   )
 fi
 
-{{ if not .codespaces -}}
 # GitHub CLI — mise install 前にトークン取得手段を確保する
-# Codespaces はベースイメージに gh 同梱 + GITHUB_TOKEN 自動設定のため対象外。
-# 同梱版が最小版未満のときは run_after_27-ensure-github-cli が警告する
-# （Codespaces ではベースイメージ側の責務であり、直接バイナリを置かない）。
+# Codespaces もカスタム Dev Container のベースイメージに gh がない場合があるため、
+# 他の Linux 環境と同じ apt 経路を使う。既存の apt 版が最小版以上なら更新しない。
 vendor_gh="$(apt_gh_path || true)"
 if ! gh_meets_minimum "${vendor_gh}"; then
   echo "Installing GitHub CLI ${GH_MINIMUM_VERSION} or later via apt..."
@@ -257,7 +255,6 @@ if ! gh_meets_minimum "${vendor_gh}"; then
     fi
   fi
 fi
-{{ end -}}
 
 {{ if and (not .codespaces) (not .devcontainer) -}}
 # Azure CLI — Microsoft 署名付き apt リポジトリから導入する
