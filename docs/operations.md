@@ -28,7 +28,7 @@ TypeScript language server の除外を撤去するときは、`home/dot_config/
 
 ## gh-stack の更新
 
-セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
+セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
 
 更新前には、skill と extension の候補を確認する。
 

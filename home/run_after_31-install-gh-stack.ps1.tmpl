@@ -22,7 +22,7 @@ if ($LASTEXITCODE -ne 0) {
 
 $skillList = & gh skill list --agent github-copilot --scope user --json skillName 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Warning "Could not inspect GitHub Copilot skills. GitHub CLI 2.90 or later is required. The next 'chezmoi apply' will retry."
+    Write-Warning "Could not inspect GitHub Copilot skills. GitHub CLI 2.94 or later is required. The next 'chezmoi apply' will retry."
     exit 0
 }
 

@@ -31,7 +31,7 @@ if ! installed_skill="$(
     --jq '.[] | select(.skillName == "gh-stack") | .skillName' \
     2>/dev/null
 )"; then
-  echo "Warning: could not inspect GitHub Copilot skills. GitHub CLI 2.90 or later is required. The next 'chezmoi apply' will retry." >&2
+  echo "Warning: could not inspect GitHub Copilot skills. GitHub CLI 2.94 or later is required. The next 'chezmoi apply' will retry." >&2
   exit 0
 fi
 
