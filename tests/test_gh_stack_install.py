@@ -77,6 +77,14 @@ class GhStackInstallTests(unittest.TestCase):
         )
         self.assertIn("if ($skill) { exit 0 }", powershell)
 
+    def test_installers_require_skill_inventory_support(self) -> None:
+        for name, source in (
+            ("shell", self.shell),
+            ("powershell", self.powershell),
+        ):
+            with self.subTest(installer=name):
+                self.assertIn("GitHub CLI 2.94 or later is required", source)
+
     def test_missing_gh_warns_and_exits_successfully(self) -> None:
         self.assertIn("if ! command -v gh", self.shell)
         self.assertRegex(
