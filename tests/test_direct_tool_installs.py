@@ -134,7 +134,7 @@ def _extract_block(source: str, marker: str) -> str:
 
 
 def _write_executable(path: pathlib.Path, body: str) -> None:
-    path.write_text(body, encoding="utf-8")
+    path.write_bytes(body.encode("utf-8"))
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
@@ -485,6 +485,7 @@ class GithubCliResolutionTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 @unittest.skipUnless(BASH, "bash is required")
+@unittest.skipIf(os.name == "nt", "POSIX installer behavior requires POSIX semantics")
 class DirectInstallBehaviourTests(unittest.TestCase):
     """レンダリング済みスクリプトを stub 環境で実行する。通信もインストールもしない。"""
 
