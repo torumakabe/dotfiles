@@ -71,6 +71,26 @@ cat "$STUB_CURL_BODY" > "$output"
 """
 
 
+def _find_bash() -> str | None:
+    if os.name == "nt":
+        program_files = os.environ.get("ProgramFiles")
+        if not program_files:
+            return None
+        bash = pathlib.Path(program_files) / "Git/bin/bash.exe"
+        return str(bash) if bash.is_file() else None
+    return shutil.which("bash")
+
+
+def _shell_path(path: pathlib.Path) -> str:
+    value = path.as_posix()
+    if os.name == "nt" and path.drive:
+        return f"/{path.drive[0].lower()}{value[len(path.drive):]}"
+    return value
+
+
+BASH = _find_bash()
+
+
 def _load_data() -> dict:
     return tomllib.loads(DATA_PATH.read_text(encoding="utf-8"))
 
@@ -390,7 +410,7 @@ class InstallerRenderingTests(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
-@unittest.skipUnless(shutil.which("bash"), "bash is required")
+@unittest.skipUnless(BASH, "bash is required")
 class GithubCliResolutionTests(unittest.TestCase):
     """~/.local/bin と mise shims を除いて vendor 実体を選ぶ。"""
 
@@ -399,11 +419,15 @@ class GithubCliResolutionTests(unittest.TestCase):
         cls.block = _extract_block(_render(GH_SH, "linux", "amd64"), "gh-resolution")
 
     def _run(self, snippet: str) -> subprocess.CompletedProcess[str]:
+        env = dict(os.environ)
+        if os.name == "nt":
+            env["MSYS_NO_PATHCONV"] = "1"
         return subprocess.run(
-            ["bash", "-c", f"{self.block}\n{snippet}"],
+            [BASH, "-c", f"{self.block}\n{snippet}"],
             check=False,
             capture_output=True,
             text=True,
+            env=env,
         )
 
     def test_resolution_skips_local_bin_and_mise_shims(self) -> None:
@@ -416,13 +440,13 @@ class GithubCliResolutionTests(unittest.TestCase):
                 directory.mkdir(parents=True)
                 _write_executable(directory / "gh", "#!/bin/sh\n")
 
-            search_path = f"{local_bin}:{shims}:{vendor}"
             result = self._run(
-                f'resolve_vendor_gh "{local_bin}" "{search_path}"'
+                f'resolve_vendor_gh "{_shell_path(local_bin)}" '
+                f'"{":".join(_shell_path(path) for path in (local_bin, shims, vendor))}"'
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.strip(), str(vendor / "gh"))
+            self.assertEqual(result.stdout.strip(), _shell_path(vendor / "gh"))
 
     def test_resolution_fails_when_only_managed_directories_have_gh(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -434,7 +458,8 @@ class GithubCliResolutionTests(unittest.TestCase):
                 _write_executable(directory / "gh", "#!/bin/sh\n")
 
             result = self._run(
-                f'resolve_vendor_gh "{local_bin}" "{local_bin}:{shims}"'
+                f'resolve_vendor_gh "{_shell_path(local_bin)}" '
+                f'"{_shell_path(local_bin)}:{_shell_path(shims)}"'
             )
 
             self.assertNotEqual(result.returncode, 0)
@@ -459,7 +484,7 @@ class GithubCliResolutionTests(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
-@unittest.skipUnless(shutil.which("bash"), "bash is required")
+@unittest.skipUnless(BASH, "bash is required")
 class DirectInstallBehaviourTests(unittest.TestCase):
     """レンダリング済みスクリプトを stub 環境で実行する。通信もインストールもしない。"""
 
@@ -476,11 +501,16 @@ class DirectInstallBehaviourTests(unittest.TestCase):
         calls = root / "curl-calls.txt"
 
         env = dict(os.environ)
-        env["HOME"] = str(root)
-        env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
-        env["STUB_CURL_CALLS"] = str(calls)
+        env["HOME"] = _shell_path(root)
+        if os.name == "nt":
+            env["PATH"] = f"{_shell_path(stub_dir)}:/usr/bin:/bin"
+        else:
+            env["PATH"] = f"{stub_dir}{os.pathsep}{env['PATH']}"
+        if os.name == "nt":
+            env["MSYS_NO_PATHCONV"] = "1"
+        env["STUB_CURL_CALLS"] = _shell_path(calls)
         if body is not None:
-            env["STUB_CURL_BODY"] = str(body)
+            env["STUB_CURL_BODY"] = _shell_path(body)
         else:
             env.pop("STUB_CURL_BODY", None)
         return env, calls
@@ -491,7 +521,7 @@ class DirectInstallBehaviourTests(unittest.TestCase):
         script = root / "rendered-installer.sh"
         script.write_text(source, encoding="utf-8")
         return subprocess.run(
-            [shutil.which("bash"), str(script)],
+            [BASH, _shell_path(script)],
             check=False,
             capture_output=True,
             text=True,
@@ -750,7 +780,7 @@ class DirectInstallBehaviourTests(unittest.TestCase):
                 'case "$1:$2" in\n'
                 '  */.uv-install.*/uvx:*/.local/bin/uvx) exit 1 ;;\n'
                 "esac\n"
-                f'exec "{real_mv}" "$@"\n',
+                f'exec "{_shell_path(pathlib.Path(real_mv))}" "$@"\n',
             )
 
             source = _render(UV_SH, "linux", "amd64").replace(
@@ -806,11 +836,13 @@ class DirectInstallBehaviourTests(unittest.TestCase):
             stale.symlink_to(shims / "gh")
 
             env, _ = self._environment(root, None)
-            env["PATH"] = f"{bin_dir}:{shims}:{vendor}:{env['PATH']}"
+            env["PATH"] = ":".join(
+                _shell_path(path) for path in (bin_dir, shims, vendor)
+            ) + f":{env['PATH']}"
             result = self._run_script(_render(GH_SH, "linux", "amd64"), root, env)
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(os.readlink(stale), str(vendor / "gh"))
+            self.assertEqual(os.readlink(stale), _shell_path(vendor / "gh"))
             self.assertNotIn("older than the required", result.stderr)
 
     def test_github_cli_below_minimum_warns_without_installing(self) -> None:
@@ -826,7 +858,9 @@ class DirectInstallBehaviourTests(unittest.TestCase):
             )
 
             env, calls = self._environment(root, None)
-            env["PATH"] = f"{bin_dir}:{vendor}:{env['PATH']}"
+            env["PATH"] = (
+                f"{_shell_path(bin_dir)}:{_shell_path(vendor)}:{env['PATH']}"
+            )
             result = self._run_script(_render(GH_SH, "linux", "amd64"), root, env)
 
             self.assertEqual(result.returncode, 0, result.stdout)
@@ -835,7 +869,9 @@ class DirectInstallBehaviourTests(unittest.TestCase):
             self.assertFalse(calls.exists(), "the check contacted the network")
             # 実体を複製せず、vendor 実体への symlink だけを置く。
             self.assertTrue((bin_dir / "gh").is_symlink())
-            self.assertEqual(os.readlink(bin_dir / "gh"), str(vendor / "gh"))
+            self.assertEqual(
+                os.readlink(bin_dir / "gh"), _shell_path(vendor / "gh")
+            )
 
     def test_github_cli_leaves_a_user_managed_regular_file_alone(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -852,7 +888,9 @@ class DirectInstallBehaviourTests(unittest.TestCase):
             original = user_managed.read_text(encoding="utf-8")
 
             env, _ = self._environment(root, None)
-            env["PATH"] = f"{bin_dir}:{vendor}:{env['PATH']}"
+            env["PATH"] = (
+                f"{_shell_path(bin_dir)}:{_shell_path(vendor)}:{env['PATH']}"
+            )
             result = self._run_script(_render(GH_SH, "linux", "amd64"), root, env)
 
             self.assertEqual(result.returncode, 0, result.stdout)
@@ -866,7 +904,7 @@ class DirectInstallBehaviourTests(unittest.TestCase):
             bin_dir.mkdir(parents=True)
 
             env, _ = self._environment(root, None)
-            env["PATH"] = str(bin_dir)
+            env["PATH"] = _shell_path(bin_dir)
             result = self._run_script(_render(GH_SH, "linux", "amd64"), root, env)
 
             self.assertEqual(result.returncode, 0, result.stdout)
