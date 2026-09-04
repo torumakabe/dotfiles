@@ -596,7 +596,10 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                         settings["sandbox"]["userPolicy"]["filesystem"][
                             "readonlyPaths"
                         ],
-                        [str(home / ".config/mise/config.toml")],
+                        [
+                            *FILESYSTEM_PATHS["readonlyPaths"],
+                            str(home / ".config/mise/config.toml"),
+                        ],
                     )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
