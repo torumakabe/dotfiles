@@ -184,7 +184,12 @@ def _run_powershell_script(
     script_path.write_text(_render(POWERSHELL_SCRIPT_PATH, "windows"), encoding="utf-8")
     return subprocess.run(
         ["pwsh", "-NoLogo", "-NoProfile", "-File", str(script_path)],
-        env={**os.environ, "COPILOT_HOME": str(settings_path.parent)},
+        env={
+            **os.environ,
+            "COPILOT_HOME": str(settings_path.parent),
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+        },
         check=False,
         capture_output=True,
         encoding="utf-8",
@@ -269,7 +274,9 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 class CopilotSandboxMergeTests(unittest.TestCase):
-    def _assert_settings(self, settings: dict, expected_enabled: bool = True) -> None:
+    def _assert_settings(
+        self, settings: dict, home: pathlib.Path, expected_enabled: bool = True
+    ) -> None:
         self.assertEqual(settings["unrelated"], {"keep": True})
         self.assertEqual(settings["deepUnknown"], DEEP_UNKNOWN)
         self.assertTrue(settings["experimental"])
@@ -301,9 +308,16 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         policy = sandbox["userPolicy"]
         self.assertEqual(policy["keep"], UNKNOWN_SETTINGS["userPolicy"]["keep"])
         self.assertNotIn("version", policy)
+        expected_paths = {
+            **FILESYSTEM_PATHS,
+            "readonlyPaths": [
+                *FILESYSTEM_PATHS["readonlyPaths"],
+                str(home / ".config/mise/config.toml"),
+            ],
+        }
         self.assertEqual(
             {name: policy["filesystem"][name] for name in FILESYSTEM_PATHS},
-            FILESYSTEM_PATHS,
+            expected_paths,
         )
         self.assertEqual(
             policy["filesystem"]["keep"],
@@ -341,8 +355,54 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                         )
                         self.assertEqual(
                             merged["sandbox"]["userPolicy"]["filesystem"][path_name],
-                            [],
+                            (
+                                [str(home / ".config/mise/config.toml")]
+                                if path_name == "readonlyPaths"
+                                else []
+                            ),
                         )
+
+    def _assert_mise_config_path_is_idempotent(self, run_script) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+
+            first = run_script(home, settings_path)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            second = run_script(home, settings_path)
+            self.assertEqual(second.returncode, 0, second.stderr)
+
+            settings = json.loads(settings_path.read_text(encoding="utf-8-sig"))
+            readonly_paths = settings["sandbox"]["userPolicy"]["filesystem"][
+                "readonlyPaths"
+            ]
+            self.assertEqual(
+                readonly_paths,
+                [
+                    *FILESYSTEM_PATHS["readonlyPaths"],
+                    str(home / ".config/mise/config.toml"),
+                ],
+            )
+
+    def _assert_preserves_existing_mise_config_path_position(self, run_script) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            mise_config_path = str(home / ".config/mise/config.toml")
+            settings["sandbox"]["userPolicy"]["filesystem"]["readonlyPaths"] = [
+                mise_config_path,
+                *FILESYSTEM_PATHS["readonlyPaths"],
+            ]
+            settings_path.write_text(json.dumps(settings), encoding="utf-8")
+
+            result = run_script(home, settings_path)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            merged = json.loads(settings_path.read_text(encoding="utf-8-sig"))
+            self.assertEqual(
+                merged["sandbox"]["userPolicy"]["filesystem"]["readonlyPaths"],
+                [mise_config_path, *FILESYSTEM_PATHS["readonlyPaths"]],
+            )
 
     def _assert_rejects_invalid_filesystem_paths(self, run_script) -> None:
         invalid_cases = (
@@ -384,7 +444,9 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             settings_path = _seed_settings(home)
             result = _run_posix_script(home, settings_path)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self._assert_settings(json.loads(settings_path.read_text(encoding="utf-8")))
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8")), home
+            )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_merge_preserves_paths_and_removes_stale_network_keys(self) -> None:
@@ -394,8 +456,28 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             result = _run_powershell_script(home, settings_path)
             self.assertEqual(result.returncode, 0, result.stderr)
             self._assert_settings(
-                json.loads(settings_path.read_text(encoding="utf-8-sig"))
+                json.loads(settings_path.read_text(encoding="utf-8-sig")), home
             )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_mise_config_path_is_idempotent(self) -> None:
+        self._assert_mise_config_path_is_idempotent(_run_posix_script)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_mise_config_path_is_idempotent(self) -> None:
+        self._assert_mise_config_path_is_idempotent(_run_powershell_script)
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_preserves_existing_mise_config_path_position(self) -> None:
+        self._assert_preserves_existing_mise_config_path_position(_run_posix_script)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_preserves_existing_mise_config_path_position(self) -> None:
+        self._assert_preserves_existing_mise_config_path_position(
+            _run_powershell_script
+        )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
@@ -463,6 +545,12 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                     settings = json.loads(settings_path.read_text(encoding="utf-8"))
                     self.assertIs(settings["sandbox"]["enabled"], expected)
                     self.assertEqual(
+                        settings["sandbox"]["userPolicy"]["filesystem"][
+                            "readonlyPaths"
+                        ],
+                        [str(home / ".config/mise/config.toml")],
+                    )
+                    self.assertEqual(
                         stat.S_IMODE(settings_path.stat().st_mode),
                         0o600,
                     )
@@ -504,6 +592,12 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                         settings_path.read_text(encoding="utf-8-sig")
                     )
                     self.assertIs(settings["sandbox"]["enabled"], expected)
+                    self.assertEqual(
+                        settings["sandbox"]["userPolicy"]["filesystem"][
+                            "readonlyPaths"
+                        ],
+                        [str(home / ".config/mise/config.toml")],
+                    )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")

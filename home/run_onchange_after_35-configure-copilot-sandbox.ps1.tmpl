@@ -1,13 +1,16 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 3
+# Copilot sandbox policy version: 4
 
 $ErrorActionPreference = 'Stop'
 
 $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
 $settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
+# mise shims need the global config when nested sandbox commands omit versioned install paths.
+$miseConfigDir = Join-Path (Join-Path $HOME '.config') 'mise'
+$miseConfigPath = Join-Path $miseConfigDir 'config.toml'
 New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
 
 $desiredSettings = @'
@@ -141,7 +144,11 @@ $filesystem = if ($null -ne $existingFilesystem) { $existingFilesystem } else { 
 $network = if ($null -ne $existingNetwork) { $existingNetwork } else { [pscustomobject]@{} }
 
 Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths'))
-Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
+$readonlyPaths = Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths')
+if ($readonlyPaths -notcontains $miseConfigPath) {
+  $readonlyPaths += $miseConfigPath
+}
+Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value $readonlyPaths
 Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
 Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
 

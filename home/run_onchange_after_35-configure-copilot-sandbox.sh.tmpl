@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # Copilot CLI local sandbox 設定 (Linux/macOS)
 #
-# Copilot sandbox policy version: 3
+# Copilot sandbox policy version: 4
 
 set -euo pipefail
 
@@ -16,6 +16,8 @@ fi
 copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
 settings_path="${copilot_home}/settings.json"
 settings_dir="$(dirname "${settings_path}")"
+# mise shims need the global config when nested sandbox commands omit versioned install paths.
+mise_config_path="${HOME}/.config/mise/config.toml"
 mkdir -p "${settings_dir}"
 
 tmp_dir="$(mktemp -d)"
@@ -79,7 +81,7 @@ for path_name in readwritePaths readonlyPaths deniedPaths; do
   esac
 done
 
-jq --slurpfile desired "${desired}" '
+jq --slurpfile desired "${desired}" --arg mise_config_path "${mise_config_path}" '
   . * $desired[0]
   | .sandbox = (
     (.sandbox // {})
@@ -89,7 +91,14 @@ jq --slurpfile desired "${desired}" '
       | .filesystem = (
         (.filesystem // {})
         | .readwritePaths = (.readwritePaths // [])
-        | .readonlyPaths = (.readonlyPaths // [])
+        | .readonlyPaths = (
+          (.readonlyPaths // []) as $paths
+          | if ($paths | index($mise_config_path)) == null then
+              $paths + [$mise_config_path]
+            else
+              $paths
+            end
+        )
         | .deniedPaths = (.deniedPaths // [])
         | .clearPolicyOnExit = false
       )

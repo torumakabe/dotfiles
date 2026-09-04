@@ -302,6 +302,8 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 
 失敗時は、実行コマンド、終了コード、標準エラー、`/sandbox` の各画面の表示を残す。認証情報や機密性のある環境変数の値は記録へ含めない。
 
+mise の shim を使うツールについては、通常の shell と `uv run` 配下で `command -v`、`mise current`、`mise which`、version コマンドを個別に記録する。`uv run` 配下だけで shim が選択される場合は、`~/.config/mise/config.toml` の可読性も確認する。可読である場合は動作条件だけでなく、sandbox が設定内容を開示する範囲として扱う。設定内容と環境変数全体は記録しない。
+
 ## 検証記録
 
 変化しやすい実測値は、この表へ追記する。環境内の対話確認を実施していない結果は、dotfiles 契約の合格として扱わない。
@@ -313,3 +315,6 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 | 2026-08-16 | Codespaces、commit `1ec7eee`で隔離した設定ディレクトリを使用 | Linux 6.8.0-1052-azure、x86_64 | 実体の配置を確認。version取得は未完了 | 2.72.0 | miseとuvが未導入のため未実施 | 未導入 | `CODESPACES=true`を検出し、初期値`false`、ファイルモード`600`、既存boolean値の維持を確認した。`~/.copilot/settings.json`は未作成で、`/sandbox`と自動テストは未実施 |
 | 2026-08-16 | WSL2、対話ターミナルと自動テスト | Ubuntu 22.04.5、x86_64、kernel 6.18.35.2-microsoft-standard-WSL2 | version未記録 | version未記録 | 未記録 | 0.6.1、probe成功 | 対象33テストが成功し、4テストをskip。全363テストが成功し、18テストをskip。隔離した設定同期、`chezmoi apply`、手動enableとdisableの値が再起動後と再適用後も維持されることを確認した。backend名の表示はなかった |
 | 2026-08-16 | Windows native | Windows build 26200、architecture 未記録 | 1.0.81-0 | 未記録 | 未確認 | N/A | 単体テストと WinGet Configuration 構文は成功。対話的な enable、disable は未実施 |
+| 2026-09-04 | WSL2、利用者によるsandbox内の個別shell command | OS、architecture未記録 | 1.0.83-4、Bubblewrap | 未記録 | 2026.9.1、jq 1.8.2は導入済み | version未記録 | `allowDevToolAccess=true`。通常のshellではjq実体を選択したが、uv配下ではmise shimだけがPATHに残った。sandboxがmise設定を自動許可せず、`mise current jq`とshim経由のjqが失敗した。同じcommandでmise設定の絶対パスを参照すると成功した |
+| 2026-09-04 | macOS、アプリ管理下のCopilot CLIセッションと隔離した単体CLIプロセス | macOS 26.6.2、arm64 | 1.0.83-4、Seatbelt | 未記録 | 2026.9.1、jq 1.8.2 | N/A | 現在のCopilot CLIセッションのshell実行では、uv 0.12.9の`uv run`配下でもjq実体がmise shimより先にあり、`mise current jq`、`mise which jq`、`jq --version`が成功した。設定パスをtool callへ含めないスクリプトからもmise設定を読み取れた。一方、`allowDevToolAccess=true`と空のfilesystem追加設定を持つ隔離CLIでは、同じ読取を拒否し、`uv run`は管理Pythonディレクトリの読取拒否でjq実行前に失敗した。どちらもCopilot CLIの実行だが、child environmentまたは呼び出し元から渡されるgrantの差は未特定である |
+| 2026-09-04 | WSL2、ケースごとに外側のWSL端末から新規CLIプロセスを起動 | OS、architecture未記録。TUN moduleを一時ロード | 1.0.83-5、Bubblewrap | 未記録 | mise version未記録、jq 1.8.2 | version未記録 | `ls`なし、`ls`あり、`ls`先行、再実行の全ケースが終了コード1で、warm state差はなかった。`allowBypass=false`でも同じで、bypass要求、承認、sandbox外rerunはなく、各shell commandは1回だけ実行された。mount namespaceは`mnt:[4026532239]`。grantなしではmise設定が不可視となりshimがversionを解決できなかった。`~/.config/mise/config.toml`だけをreadonly許可すると`mise current jq`、`mise which jq`、`jq --version`が成功した。jq実体、mise state、lockfileの追加grantは不要。設定ファイルは通常ファイル。debug logにpolicy hashは出力されなかった |

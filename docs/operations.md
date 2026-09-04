@@ -43,7 +43,7 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を保持する。文字列、数値、真偽値、オブジェクトなどの非配列値は、設定ファイルを書き換える前にエラーとして拒否する。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は配列へ正規化し、既存の要素と順序を保持する。mise shim がsandbox内でversionを解決できるように、`~/.config/mise/config.toml`の絶対パスを`readonlyPaths`の末尾へ重複なく追加する。文字列、数値、真偽値、オブジェクトなどの非配列値は、設定ファイルを書き換える前にエラーとして拒否する。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 

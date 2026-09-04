@@ -16,7 +16,7 @@ ADR-025 は全環境で local sandbox を初回から有効にした。しかし
 
 MCP と LSP を local sandbox の対象外とする ADR-025 の判断も継承し、`sandboxMcpServers=false` と `sandboxLspServers=false` を維持する。設定値の実装は `home/.chezmoitemplates/copilot-user-settings.json` を正本とする。
 
-設定同期は、リポジトリが管理する sandbox policy だけを更新し、管理対象外のキーを階層にかかわらず保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を維持する。配列以外の値は意図を推測して変換せず、設定ファイルを書き換える前にエラーとして拒否する。
+設定同期は、リポジトリが管理する sandbox policy だけを更新し、管理対象外のキーを階層にかかわらず保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は配列へ正規化し、既存の要素を削除または並べ替えずに維持する。リポジトリが必要とする readonly path は、同じ要素がない場合だけ末尾へ追加できる。配列以外の値は意図を推測して変換せず、設定ファイルを書き換える前にエラーとして拒否する。
 
 `sandbox.userPolicy.version` は、ADR-015 が採用した Windows AppContainer schema の版を示すためにリポジトリが追加していた値であり、現在のクロスプラットフォームポリシーの利用者設定ではないため削除する。旧ネットワーク制御の `allowedHosts` と `blockedHosts` も、現行の outbound network policy と競合する残存キーとして削除する。
 
