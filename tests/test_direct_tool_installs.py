@@ -342,6 +342,15 @@ class InstallerRenderingTests(unittest.TestCase):
                 for hint in hints:
                     self.assertIn(hint, rendered)
 
+    def test_macos_github_cli_uses_only_the_homebrew_owned_binary(self) -> None:
+        rendered = _render(GH_SH, "darwin", "arm64")
+
+        self.assertIn("brew --prefix gh", rendered)
+        self.assertIn('vendor_gh="$(resolve_homebrew_gh)"', rendered)
+        self.assertNotIn(
+            'vendor_gh="$(resolve_vendor_gh "${bin_dir}" "${PATH}")', rendered
+        )
+
     def test_package_install_checks_the_vendor_owned_github_cli(self) -> None:
         source = PACKAGE_INSTALL_SH.read_text(encoding="utf-8")
         apt_block = source[source.index("vendor_gh=\"$(apt_gh_path"):source.index("{{ end -}}", source.index("vendor_gh=\"$(apt_gh_path"))]

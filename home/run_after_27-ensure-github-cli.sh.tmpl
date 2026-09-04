@@ -60,6 +60,15 @@ resolve_vendor_gh() {
   return 1
 }
 
+resolve_homebrew_gh() {
+  local prefix
+
+  command -v brew >/dev/null 2>&1 || return 1
+  prefix="$(brew --prefix gh 2>/dev/null)" || return 1
+  [ -x "${prefix}/bin/gh" ] || return 1
+  printf '%s\n' "${prefix}/bin/gh"
+}
+
 # ドット区切りの数値だけを比較する。gh の安定版は pre-release 識別子を持たない。
 version_ge() {
   local left="${1%%[-+]*}" right="${2%%[-+]*}"
@@ -87,7 +96,11 @@ gh_version() {
 }
 # <<< gh-resolution
 
+{{ if eq .chezmoi.os "darwin" -}}
+if ! vendor_gh="$(resolve_homebrew_gh)"; then
+{{ else -}}
 if ! vendor_gh="$(resolve_vendor_gh "${bin_dir}" "${PATH}")"; then
+{{ end -}}
   echo "Warning: GitHub CLI was not found outside ${bin_dir}. Install it with: ${install_hint}" >&2
   exit 0
 fi
