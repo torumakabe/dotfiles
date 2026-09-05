@@ -76,7 +76,7 @@ chezmoi init torumakabe
 winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"
 ```
 
-DSC は Copilot CLI と GitHub CLI を含む Windows パッケージを導入する。完了後は PowerShell を開き直し、`gh` と `mise` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は mise lockfile と `home/.chezmoidata.toml` の宣言に従って残りのツールを導入する。
+DSC は Copilot CLI と GitHub CLI を含む Windows パッケージを導入する。完了後は PowerShell を開き直し、`gh` と `mise` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は mise lockfile と `home/.chezmoidata.toml` の宣言に従って残りのツールを導入し、直接導入したランタイムの専用ディレクトリをユーザー `Path` へ登録する。既存プロセスは変更前の `Path` を保持するため、適用後に PowerShell を開き直す。GUI アプリへ反映されない場合は、サインアウトまたは OS の再起動後に確認する。
 
 ```powershell
 gh auth login
@@ -108,7 +108,7 @@ chezmoi apply
 chezmoi update
 ```
 
-`mise` 管理ツールの更新や lockfile 再生成、`mise` の管理外にあるツール（GitHub CLI・jq・uv）の導入経路は [`docs/operations.md`](docs/operations.md) を参照。
+`mise` 管理ツールの更新や lockfile 再生成、`mise` の管理外にあるツール（GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・typescript-language-server）の導入経路は [`docs/operations.md`](docs/operations.md) を参照。
 
 ## 詳細ドキュメント
 

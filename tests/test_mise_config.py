@@ -37,12 +37,10 @@ CARGO_MAKE_UPSTREAM_ISSUE = "https://github.com/sagiegurari/cargo-make/issues/54
 
 # aube の trustPolicy=no-downgrade 除外。プロキシが証跡を落とす版だけを明記し、
 # パッケージ名だけの除外へ広げない（将来版の検査を残すため）。
-TRUST_POLICY_EXCLUDES = {
-    "npm:typescript-language-server": (
-        "typescript-language-server@5.3.0",
-        "typescript-language-server@>=6 <7",
-    ),
-}
+# npm:typescript-language-server は P1 で mise から直接導入へ移行し、mise 設定
+# から trust_policy_excludes ごと除去した。現時点でこの除外を必要とする mise
+# 管理下ツールは無い。
+TRUST_POLICY_EXCLUDES: dict[str, tuple[str, ...]] = {}
 LSP_TYPESCRIPT_VERSION = "6.0.3"
 LSP_CONFIG_PATH = REPO_ROOT / "home/private_dot_copilot/lsp-config.json.tmpl"
 LSP_VERSION_PATH = REPO_ROOT / "home/.chezmoidata.toml"
@@ -103,16 +101,6 @@ WARNING_CASES = (
         False,
     ),
 )
-
-
-def _tool_alias(config: str, tool: str) -> str:
-    match = re.search(
-        rf"(?ms)^\[tool_alias\]\s*$.*?^{re.escape(tool)}\s*=\s*\"([^\"]+)\"\s*$",
-        config,
-    )
-    if match is None:
-        raise AssertionError(f"Missing [tool_alias] entry for {tool}")
-    return match.group(1)
 
 
 def _config_toml(config: str) -> dict:
@@ -379,28 +367,36 @@ class MiseConfigTests(unittest.TestCase):
         )
 
     def test_dotnet_alias_matches_lock_backend(self) -> None:
+        # dotnet は ADR-028 により mise ではなく home/run_after_17-install-dotnet
+        # が導入する。「他が所有する .NET SDK」との衝突を避けるため、専用 root は
+        # DOTNET_ROOT を設定せず自身の sdk/ だけを見る (home/.chezmoidata.toml の
+        # [dotnet] 参照)。よって mise 設定/lock 側に dotnet の記述があってはならない。
         config = CONFIG_PATH.read_text(encoding="utf-8")
         lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
 
-        dotnet_entries = lock["tools"]["dotnet"]
-        self.assertEqual(len(dotnet_entries), 1)
-        self.assertEqual(_tool_alias(config, "dotnet"), dotnet_entries[0]["backend"])
+        self.assertNotIn("dotnet", lock["tools"])
+        self.assertNotIn("[tool_alias]", config)
+        self.assertNotRegex(config, r"(?m)^\[tools\.dotnet\]")
 
     def test_windows_dotnet_verification_uses_mise_root(self) -> None:
+        # ADR-028 により dotnet は mise 管理下から外れているため、mise 共有
+        # dotnet root を指す install_env ブロックが mise 設定に残っていないことを
+        # 確認する。
         config = CONFIG_PATH.read_text(encoding="utf-8")
 
-        self.assertIn('[tools.dotnet]\nversion = "latest"', config)
-        self.assertIn('{{ if eq .chezmoi.os "windows" -}}', config)
-        self.assertIn("install_env = { DOTNET_ROOT =", config)
-        self.assertIn(r"\mise\dotnet-root;$PATH", config)
+        self.assertNotIn("install_env = { DOTNET_ROOT =", config)
+        self.assertNotIn(r"\mise\dotnet-root;$PATH", config)
 
     def test_typescript_language_server_uses_stable_typescript_path(self) -> None:
+        # npm:typescript / npm:typescript-language-server は ADR-028 により
+        # home/run_after_21, run_after_23 が導入する (mise では管理しない)。
+        # 専用 LSP root (typescript-lsp) だけは tsserver.js 提供のため TS 6.0.3 に
+        # 固定して残す。
         config = CONFIG_PATH.read_text(encoding="utf-8")
         tools = _config_toml(config)["tools"]
-        language_server = tools["npm:typescript-language-server"]
 
-        self.assertEqual(tools["npm:typescript"], "latest")
-        self.assertNotIn("postinstall", language_server)
+        self.assertNotIn("npm:typescript", tools)
+        self.assertNotIn("npm:typescript-language-server", tools)
         self.assertEqual(
             tomllib.loads(LSP_VERSION_PATH.read_text(encoding="utf-8"))[
                 "typescriptLsp"
@@ -956,6 +952,11 @@ $result = @{{
         self.assertIn(CARGO_MAKE_UPSTREAM_ISSUE, instructions)
 
     def test_trust_policy_excludes_stay_version_scoped(self) -> None:
+        # P1 (ADR-028) で npm:typescript-language-server が mise から離れたため、
+        # trust_policy_excludes を宣言する mise ツールは現状ゼロになった。
+        # troubleshooting.md の汎用手順 (将来 mise 管理下の npm ツールで再発した
+        # 場合の対処) だけは残し、ツール固有の bullet は instructions/operations
+        # から消えていることを確認する。
         config = CONFIG_PATH.read_text(encoding="utf-8")
         instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
         operations = OPERATIONS_PATH.read_text(encoding="utf-8")
@@ -969,18 +970,15 @@ $result = @{{
         }
         self.assertEqual(configured, TRUST_POLICY_EXCLUDES)
 
+        self.assertNotIn("trust_policy_excludes", instructions)
+        self.assertNotIn("trust_policy_excludes", operations)
+        self.assertIn("trust_policy_excludes", troubleshooting)
+
         for name, patterns in configured.items():
             with self.subTest(tool=name):
                 # パッケージ名だけの除外は将来版の downgrade 検査も無効化する。
                 for pattern in patterns:
                     self.assertIn("@", pattern)
-                for path, document in (
-                    (INSTRUCTIONS_PATH, instructions),
-                    (OPERATIONS_PATH, operations),
-                    (TROUBLESHOOTING_PATH, troubleshooting),
-                ):
-                    with self.subTest(path=path):
-                        self.assertIn("trust_policy_excludes", document)
                 self.assertIn(
                     "home/dot_config/mise/config.toml.tmpl", instructions
                 )

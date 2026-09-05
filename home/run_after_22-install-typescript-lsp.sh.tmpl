@@ -1,60 +1,282 @@
 {{- if ne .chezmoi.os "windows" -}}
-#!/usr/bin/env sh
+#!/usr/bin/env bash
+# TypeScript 言語サーバー用の TypeScript 本体 (tsserver.js のみを参照する
+# 専用導入。tsc/tsserver コマンドを提供するグローバル CLI ([typescriptCli])
+# とは別管理で、TS7 系は tsserver を同梱しないため [typescriptLsp] は固定で
+# {{ .typescriptLsp.version }} を保つ)。直接導入した Node/npm を使い、専用
+# npm prefix (グローバルインストールではない) へ導入する。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得は staging の
+# npm prefix へ行い、package.json の版と tsserver.js の存在を確認してから
+# 最終パス (固定・無版数の root) へ置き換える。途中で失敗した場合は既存の
+# TypeScript LSP 依存を残す。
 
-set -eu
+set -euo pipefail
 
 typescript_version='{{ .typescriptLsp.version }}'
-install_root="$HOME/.local/share/chezmoi-dotfiles/typescript-lsp"
-typescript_package_root="$install_root/node_modules/typescript"
-package_path="$install_root/node_modules/typescript/package.json"
-tsserver_path="$install_root/node_modules/typescript/lib/tsserver.js"
+share_dir="${HOME}/.local/share/chezmoi-dotfiles"
+node_root="${share_dir}/node"
+node_exe="${node_root}/bin/node"
+npm_cli_js="${node_root}/lib/node_modules/npm/bin/npm-cli.js"
+final_root="${share_dir}/typescript-lsp"
+package_path="${final_root}/node_modules/typescript/package.json"
+tsserver_path="${final_root}/node_modules/typescript/lib/tsserver.js"
+tsserver_bin_path="${final_root}/node_modules/.bin/tsserver"
+bin_dir="${HOME}/.local/bin"
+mise_shims_dir="${HOME}/.local/share/mise/shims"
 
-PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
-export PATH
-
-if ! command -v mise >/dev/null 2>&1; then
-  echo 'mise was not found; skipping TypeScript LSP dependency installation.' >&2
-  exit 0
+if [ ! -x "${node_exe}" ]; then
+  echo 'error: directly-installed Node was not found; cannot install TypeScript LSP dependency.' >&2
+  exit 1
+fi
+if [ ! -f "${npm_cli_js}" ]; then
+  echo "error: directly-installed npm CLI was not found at ${npm_cli_js}; cannot install TypeScript LSP dependency." >&2
+  exit 1
 fi
 
-if ! node_exe="$(mise which node 2>/dev/null)"; then
-  echo 'mise-managed node was not found; run mise install and apply chezmoi again.' >&2
-  exit 0
-fi
+# ~/.local/bin へ tsserver の native symlink を transaction として発行する。
+# npm が typescript の
+# package.json bin フィールドから生成した起動スクリプトをそのまま指す。
+# TS7 系はこの bin を同梱しないため、tsserver コマンドは専用の TS6.0.3 側
+# からのみ提供する)。自分の固定 target と同名の旧 mise shim だけを
+# 管理対象とみなす。
+typescript_lsp_entrypoint_stage_dir=""
+typescript_lsp_entrypoint_started=0
+typescript_lsp_entrypoint_committed=0
 
-if [ -f "$package_path" ] && [ -f "$tsserver_path" ]; then
-  installed_version="$("$node_exe" -p "require(process.argv[1]).version" "$package_path" 2>/dev/null || true)"
-  if [ "$installed_version" = "$typescript_version" ]; then
+preflight_typescript_lsp_entrypoint() {
+  local name=tsserver target="${tsserver_bin_path}"
+  local link="${bin_dir}/${name}"
+
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} already points elsewhere (${current}); refusing to replace it." >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} exists and is not managed by this installer; refusing to replace it." >&2
+    return 1
+  fi
+
+  if ! mkdir -p "${bin_dir}"; then
+    echo "error: could not create ${bin_dir}" >&2
+    return 1
+  fi
+  if ! typescript_lsp_entrypoint_stage_dir="$(mktemp -d "${bin_dir}/.typescript-lsp-entrypoint.XXXXXX")"; then
+    echo "error: could not create private entrypoint staging in ${bin_dir}" >&2
+    return 1
+  fi
+  if ! chmod 700 "${typescript_lsp_entrypoint_stage_dir}"; then
+    rm -rf "${typescript_lsp_entrypoint_stage_dir}"
+    typescript_lsp_entrypoint_stage_dir=""
+    return 1
+  fi
+  if ! ln -s "${target}" "${typescript_lsp_entrypoint_stage_dir}/${name}"; then
+    echo "error: could not stage entrypoint link for ${name}" >&2
+    rm -rf "${typescript_lsp_entrypoint_stage_dir}"
+    typescript_lsp_entrypoint_stage_dir=""
+    return 1
+  fi
+}
+
+publish_typescript_lsp_entrypoint() {
+  [ -n "${typescript_lsp_entrypoint_stage_dir}" ] || return 0
+
+  local name=tsserver target="${tsserver_bin_path}" link="${bin_dir}/tsserver"
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} changed after preflight; refusing to replace it." >&2
+      return 1
+    fi
+    typescript_lsp_entrypoint_started=1
+    if ! mv "${link}" "${typescript_lsp_entrypoint_stage_dir}/previous-${name}"; then
+      echo "error: could not preserve the existing ${name} entrypoint" >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} changed after preflight; refusing to replace it." >&2
+    return 1
+  else
+    typescript_lsp_entrypoint_started=1
+  fi
+
+  if ! mv "${typescript_lsp_entrypoint_stage_dir}/${name}" "${link}"; then
+    echo "error: could not publish entrypoint link for ${name}" >&2
+    return 1
+  fi
+}
+
+rollback_typescript_lsp_entrypoint() {
+  [ "${typescript_lsp_entrypoint_started}" -eq 1 ] || return 0
+  [ "${typescript_lsp_entrypoint_committed}" -eq 0 ] || return 0
+
+  local link="${bin_dir}/tsserver" current
+  if [ -e "${typescript_lsp_entrypoint_stage_dir}/previous-tsserver" ] \
+    || [ -L "${typescript_lsp_entrypoint_stage_dir}/previous-tsserver" ]; then
+    if [ -e "${link}" ] || [ -L "${link}" ]; then
+      [ -L "${link}" ] || return 1
+      current="$(readlink "${link}")"
+      [ "${current}" = "${tsserver_bin_path}" ] || return 1
+      rm -f "${link}" || return 1
+    fi
+    mv "${typescript_lsp_entrypoint_stage_dir}/previous-tsserver" "${link}" || return 1
+  elif [ ! -L "${typescript_lsp_entrypoint_stage_dir}/tsserver" ]; then
+    [ -L "${link}" ] || return 1
+    current="$(readlink "${link}")"
+    [ "${current}" = "${tsserver_bin_path}" ] || return 1
+    rm -f "${link}" || return 1
+  fi
+}
+
+ensure_typescript_lsp_entrypoints() {
+  if [ ! -e "${tsserver_bin_path}" ]; then
+    echo "error: cannot link tsserver: ${tsserver_bin_path} does not exist" >&2
+    return 1
+  fi
+  if ! preflight_typescript_lsp_entrypoint; then
+    return 1
+  fi
+  if ! publish_typescript_lsp_entrypoint; then
+    if ! rollback_typescript_lsp_entrypoint; then
+      echo "error: TypeScript LSP entrypoint rollback could not complete; recovery files remain in ${typescript_lsp_entrypoint_stage_dir}" >&2
+      return 1
+    fi
+    rm -rf "${typescript_lsp_entrypoint_stage_dir}"
+    typescript_lsp_entrypoint_stage_dir=""
+    return 1
+  fi
+  typescript_lsp_entrypoint_committed=1
+  if [ -n "${typescript_lsp_entrypoint_stage_dir}" ]; then
+    rm -rf "${typescript_lsp_entrypoint_stage_dir}"
+    typescript_lsp_entrypoint_stage_dir=""
+  fi
+}
+
+installed_typescript_version() {
+  local pkg=$1
+
+  [ -f "${pkg}" ] || return 1
+  "${node_exe}" -p "require(process.argv[1]).version" "${pkg}" 2>/dev/null
+}
+
+if [ -f "${package_path}" ] && [ -f "${tsserver_path}" ]; then
+  if [ "$(installed_typescript_version "${package_path}" || true)" = "${typescript_version}" ]; then
+    if ! ensure_typescript_lsp_entrypoints; then
+      exit 1
+    fi
     exit 0
   fi
 fi
 
-if [ -e "$typescript_package_root" ]; then
-  rm -rf -- "$typescript_package_root"
-fi
+mkdir -p "${share_dir}"
 
-node_bin="$(dirname "$node_exe")"
-npm_cli="$node_bin/npm"
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${share_dir}/.typescript-lsp-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+payload_published=0
 
-if [ ! -x "$node_exe" ]; then
-  echo 'mise-managed node executable was not found.' >&2
+rollback_typescript_lsp_install() {
+  local failed=0
+  if ! rollback_typescript_lsp_entrypoint; then
+    failed=1
+  fi
+  if [ "${transaction_started}" -ne 1 ] || [ "${transaction_committed}" -eq 1 ]; then
+    return "${failed}"
+  fi
+  if [ -e "${stage_dir}/previous-typescript-lsp" ]; then
+    if [ "${payload_published}" -eq 1 ]; then
+      rm -rf "${final_root}" || failed=1
+    fi
+    if [ ! -e "${final_root}" ]; then
+      mv "${stage_dir}/previous-typescript-lsp" "${final_root}" || failed=1
+    fi
+  elif [ "${payload_published}" -eq 1 ]; then
+    rm -rf "${final_root}" || failed=1
+  fi
+  return "${failed}"
+}
+
+cleanup_typescript_lsp_install() {
+  local status=$?
+
+  trap - EXIT
+  if ! rollback_typescript_lsp_install; then
+    echo "error: TypeScript LSP rollback could not complete; recovery files remain in ${stage_dir}${typescript_lsp_entrypoint_stage_dir:+ and ${typescript_lsp_entrypoint_stage_dir}}" >&2
+    exit 1
+  fi
+  rm -rf "${stage_dir}"
+  if [ -n "${typescript_lsp_entrypoint_stage_dir}" ]; then
+    rm -rf "${typescript_lsp_entrypoint_stage_dir}"
+  fi
+  exit "${status}"
+}
+
+trap cleanup_typescript_lsp_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+staged_root="${stage_dir}/new"
+mkdir -p "${staged_root}"
+
+if ! "${node_exe}" "${npm_cli_js}" install --prefix "${staged_root}" --no-save --package-lock=false "typescript@${typescript_version}"; then
+  echo "error: failed to install typescript@${typescript_version}; keeping the current TypeScript LSP dependency." >&2
   exit 1
 fi
-if [ ! -x "$npm_cli" ]; then
-  echo "npm was not found beside mise-managed node: $npm_cli" >&2
+
+staged_package_path="${staged_root}/node_modules/typescript/package.json"
+staged_tsserver_path="${staged_root}/node_modules/typescript/lib/tsserver.js"
+staged_tsserver_bin_path="${staged_root}/node_modules/.bin/tsserver"
+if [ ! -f "${staged_package_path}" ] || [ ! -f "${staged_tsserver_path}" ]; then
+  echo 'error: TypeScript LSP dependency installation did not produce package.json and tsserver.js.' >&2
+  exit 1
+fi
+if [ ! -x "${staged_tsserver_bin_path}" ]; then
+  echo 'error: TypeScript LSP dependency installation did not produce a tsserver launcher.' >&2
   exit 1
 fi
 
-"$npm_cli" install --prefix "$install_root" --no-save --package-lock=false "typescript@$typescript_version"
-
-if [ ! -f "$package_path" ] || [ ! -f "$tsserver_path" ]; then
-  echo 'TypeScript LSP dependency installation did not produce package.json and tsserver.js.' >&2
+staged_version="$(installed_typescript_version "${staged_package_path}" || true)"
+if [ "${staged_version}" != "${typescript_version}" ]; then
+  echo "error: expected TypeScript ${typescript_version} but found ${staged_version:-unknown}." >&2
   exit 1
 fi
 
-installed_version="$("$node_exe" -p "require(process.argv[1]).version" "$package_path")"
-if [ "$installed_version" != "$typescript_version" ]; then
-  echo "Expected TypeScript $typescript_version but found $installed_version." >&2
+if ! preflight_typescript_lsp_entrypoint; then
   exit 1
 fi
+
+echo "Installing TypeScript LSP dependency ${typescript_version}..."
+transaction_started=1
+if [ -e "${final_root}" ]; then
+  if ! mv "${final_root}" "${stage_dir}/previous-typescript-lsp"; then
+    echo "error: could not stage the existing TypeScript LSP dependency; keeping the current installation" >&2
+    exit 1
+  fi
+fi
+
+if ! mv "${staged_root}" "${final_root}"; then
+  echo "error: could not install TypeScript LSP dependency; restoring the previous installation" >&2
+  exit 1
+fi
+payload_published=1
+
+if ! publish_typescript_lsp_entrypoint; then
+  echo "error: could not publish tsserver entrypoint; restoring the previous installation" >&2
+  exit 1
+fi
+typescript_lsp_entrypoint_committed=1
+transaction_committed=1
 {{- end -}}

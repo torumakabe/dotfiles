@@ -1,12 +1,8 @@
 [tools]
-go = "latest"
 terraform = "latest"
 kubectl = "latest"
 helm = "latest"
 trivy = "latest"
-node = "lts"
-# Node 25 で corepack の同梱が廃止されたため、pnpm は mise で直接管理する
-pnpm = "latest"
 fzf = "latest"
 1password = "latest"
 cue = "latest"
@@ -23,24 +19,9 @@ bat = "latest"
 shellcheck = "latest"
 gitleaks = "latest"
 lefthook = "latest"
-bun = "latest"
-"npm:typescript" = "latest"
-# 利用中の npm レジストリプロキシが trusted publisher の証跡を落とすため、
-# aube の trustPolicy=no-downgrade が install を止める。上流は OIDC 権限付きの
-# release workflow から npm publish しており、欠落はプロキシ側で起きている。
-# 5.3.0 と 6.x を除外し、7.x 以降では検査を再開する。
-"npm:typescript-language-server" = { version = "latest", trust_policy_excludes = ["typescript-language-server@5.3.0", "typescript-language-server@>=6 <7"] }
 {{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
 # プリビルドバイナリが linux/arm64 未提供のためスキップ
 cargo-make = "latest"
-{{ end -}}
-
-[tools.dotnet]
-version = "latest"
-{{ if eq .chezmoi.os "windows" -}}
-# core:dotnet の install-time verification が system dotnet を拾わないよう、
-# mise の共有 root を検証コマンドの PATH 先頭へ置く。
-install_env = { DOTNET_ROOT = '{{ env "LOCALAPPDATA" }}\mise\dotnet-root', PATH = '{{ env "LOCALAPPDATA" }}\mise\dotnet-root;$PATH' }
 {{ end -}}
 
 [settings]
@@ -52,6 +33,3 @@ lockfile = true
 # 実行中のプラットフォームは、この配列に無くても必ず対象へ加わる。
 lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", "windows-arm64"]
 fetch_remote_versions_timeout = "60s"
-
-[tool_alias]
-dotnet = "core:dotnet"

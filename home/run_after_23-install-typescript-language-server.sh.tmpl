@@ -1,0 +1,288 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# typescript-language-server (LSP 実行体) — 直接導入した Node/npm を使い、
+# 専用 npm prefix (グローバルインストールではない) へ導入する。initialization
+# Options.tsserver.path 経由で [typescriptLsp] の tsserver.js を参照するため、
+# 自身は typescript を依存として持たない。利用中のミラーレジストリは
+# dist.integrity (SHA-512) を提供しないため、実在しない検証を主張しない。
+# npm 自身の dist.shasum (SHA-1) 検証に委ねる。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得は staging の
+# npm prefix へ行い、package.json の版と起動スクリプトの存在を確認してから
+# 最終パス (固定・無版数の root) へ置き換える。途中で失敗した場合は既存の
+# typescript-language-server を残す。
+
+set -euo pipefail
+
+tsls_version='{{ .typescriptLanguageServer.version }}'
+share_dir="${HOME}/.local/share/chezmoi-dotfiles"
+node_root="${share_dir}/node"
+node_exe="${node_root}/bin/node"
+npm_cli_js="${node_root}/lib/node_modules/npm/bin/npm-cli.js"
+final_root="${share_dir}/typescript-language-server"
+package_path="${final_root}/node_modules/typescript-language-server/package.json"
+bin_path="${final_root}/node_modules/.bin/typescript-language-server"
+bin_dir="${HOME}/.local/bin"
+mise_shims_dir="${HOME}/.local/share/mise/shims"
+
+if [ ! -x "${node_exe}" ]; then
+  echo 'error: directly-installed Node was not found; cannot install typescript-language-server.' >&2
+  exit 1
+fi
+if [ ! -f "${npm_cli_js}" ]; then
+  echo "error: directly-installed npm CLI was not found at ${npm_cli_js}; cannot install typescript-language-server." >&2
+  exit 1
+fi
+
+# ~/.local/bin へ typescript-language-server の native symlink を transaction
+# として発行する。npm が生成した起動スクリプトをそのまま指し、自分の固定
+# target と同名の旧 mise shim だけを管理対象とみなす。
+tsls_entrypoint_stage_dir=""
+tsls_entrypoint_started=0
+tsls_entrypoint_committed=0
+
+preflight_tsls_entrypoint() {
+  local name=typescript-language-server target="${bin_path}"
+  local link="${bin_dir}/${name}"
+
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} already points elsewhere (${current}); refusing to replace it." >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} exists and is not managed by this installer; refusing to replace it." >&2
+    return 1
+  fi
+
+  if ! mkdir -p "${bin_dir}"; then
+    echo "error: could not create ${bin_dir}" >&2
+    return 1
+  fi
+  if ! tsls_entrypoint_stage_dir="$(mktemp -d "${bin_dir}/.typescript-language-server-entrypoint.XXXXXX")"; then
+    echo "error: could not create private entrypoint staging in ${bin_dir}" >&2
+    return 1
+  fi
+  if ! chmod 700 "${tsls_entrypoint_stage_dir}"; then
+    rm -rf "${tsls_entrypoint_stage_dir}"
+    tsls_entrypoint_stage_dir=""
+    return 1
+  fi
+  if ! ln -s "${target}" "${tsls_entrypoint_stage_dir}/${name}"; then
+    echo "error: could not stage entrypoint link for ${name}" >&2
+    rm -rf "${tsls_entrypoint_stage_dir}"
+    tsls_entrypoint_stage_dir=""
+    return 1
+  fi
+}
+
+publish_tsls_entrypoint() {
+  [ -n "${tsls_entrypoint_stage_dir}" ] || return 0
+
+  local name=typescript-language-server target="${bin_path}"
+  local link="${bin_dir}/${name}"
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} changed after preflight; refusing to replace it." >&2
+      return 1
+    fi
+    tsls_entrypoint_started=1
+    if ! mv "${link}" "${tsls_entrypoint_stage_dir}/previous-${name}"; then
+      echo "error: could not preserve the existing ${name} entrypoint" >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} changed after preflight; refusing to replace it." >&2
+    return 1
+  else
+    tsls_entrypoint_started=1
+  fi
+
+  if ! mv "${tsls_entrypoint_stage_dir}/${name}" "${link}"; then
+    echo "error: could not publish entrypoint link for ${name}" >&2
+    return 1
+  fi
+}
+
+rollback_tsls_entrypoint() {
+  [ "${tsls_entrypoint_started}" -eq 1 ] || return 0
+  [ "${tsls_entrypoint_committed}" -eq 0 ] || return 0
+
+  local name=typescript-language-server
+  local link="${bin_dir}/${name}" current
+  if [ -e "${tsls_entrypoint_stage_dir}/previous-${name}" ] \
+    || [ -L "${tsls_entrypoint_stage_dir}/previous-${name}" ]; then
+    if [ -e "${link}" ] || [ -L "${link}" ]; then
+      [ -L "${link}" ] || return 1
+      current="$(readlink "${link}")"
+      [ "${current}" = "${bin_path}" ] || return 1
+      rm -f "${link}" || return 1
+    fi
+    mv "${tsls_entrypoint_stage_dir}/previous-${name}" "${link}" || return 1
+  elif [ ! -L "${tsls_entrypoint_stage_dir}/${name}" ]; then
+    [ -L "${link}" ] || return 1
+    current="$(readlink "${link}")"
+    [ "${current}" = "${bin_path}" ] || return 1
+    rm -f "${link}" || return 1
+  fi
+}
+
+ensure_tsls_entrypoints() {
+  if ! preflight_tsls_entrypoint; then
+    return 1
+  fi
+  if ! publish_tsls_entrypoint; then
+    if ! rollback_tsls_entrypoint; then
+      echo "error: typescript-language-server entrypoint rollback could not complete; recovery files remain in ${tsls_entrypoint_stage_dir}" >&2
+      return 1
+    fi
+    rm -rf "${tsls_entrypoint_stage_dir}"
+    tsls_entrypoint_stage_dir=""
+    return 1
+  fi
+  tsls_entrypoint_committed=1
+  if [ -n "${tsls_entrypoint_stage_dir}" ]; then
+    rm -rf "${tsls_entrypoint_stage_dir}"
+    tsls_entrypoint_stage_dir=""
+  fi
+}
+
+installed_tsls_version() {
+  local pkg=$1
+
+  [ -f "${pkg}" ] || return 1
+  "${node_exe}" -p "require(process.argv[1]).version" "${pkg}" 2>/dev/null
+}
+
+tsls_command_version() {
+  local launcher=$1
+
+  [ -x "${launcher}" ] || return 1
+  (
+    cd /
+    PATH="${node_root}/bin" "${launcher}" --version 2>/dev/null
+  ) | awk 'NR == 1 { print $1 }'
+}
+
+if [ -x "${bin_path}" ]; then
+  if [ "$(installed_tsls_version "${package_path}" || true)" = "${tsls_version}" ] \
+    && [ "$(tsls_command_version "${bin_path}" || true)" = "${tsls_version}" ]; then
+    if ! ensure_tsls_entrypoints; then
+      exit 1
+    fi
+    exit 0
+  fi
+fi
+
+mkdir -p "${share_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${share_dir}/.typescript-language-server-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+payload_published=0
+
+rollback_tsls_install() {
+  local failed=0
+  if ! rollback_tsls_entrypoint; then
+    failed=1
+  fi
+  if [ "${transaction_started}" -ne 1 ] || [ "${transaction_committed}" -eq 1 ]; then
+    return "${failed}"
+  fi
+  if [ -e "${stage_dir}/previous-typescript-language-server" ]; then
+    if [ "${payload_published}" -eq 1 ]; then
+      rm -rf "${final_root}" || failed=1
+    fi
+    if [ ! -e "${final_root}" ]; then
+      mv "${stage_dir}/previous-typescript-language-server" "${final_root}" || failed=1
+    fi
+  elif [ "${payload_published}" -eq 1 ]; then
+    rm -rf "${final_root}" || failed=1
+  fi
+  return "${failed}"
+}
+
+cleanup_tsls_install() {
+  local status=$?
+
+  trap - EXIT
+  if ! rollback_tsls_install; then
+    echo "error: typescript-language-server rollback could not complete; recovery files remain in ${stage_dir}${tsls_entrypoint_stage_dir:+ and ${tsls_entrypoint_stage_dir}}" >&2
+    exit 1
+  fi
+  rm -rf "${stage_dir}"
+  if [ -n "${tsls_entrypoint_stage_dir}" ]; then
+    rm -rf "${tsls_entrypoint_stage_dir}"
+  fi
+  exit "${status}"
+}
+
+trap cleanup_tsls_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+staged_root="${stage_dir}/new"
+mkdir -p "${staged_root}"
+
+if ! "${node_exe}" "${npm_cli_js}" install --prefix "${staged_root}" --no-save --package-lock=false "typescript-language-server@${tsls_version}"; then
+  echo "error: failed to install typescript-language-server@${tsls_version}; keeping the current installation." >&2
+  exit 1
+fi
+
+staged_package_path="${staged_root}/node_modules/typescript-language-server/package.json"
+staged_bin_path="${staged_root}/node_modules/.bin/typescript-language-server"
+if [ ! -x "${staged_bin_path}" ]; then
+  echo "error: typescript-language-server installation did not produce a launcher" >&2
+  exit 1
+fi
+
+staged_version="$(installed_tsls_version "${staged_package_path}" || true)"
+if [ "${staged_version}" != "${tsls_version}" ]; then
+  echo "error: expected typescript-language-server ${tsls_version} but found ${staged_version:-unknown}" >&2
+  exit 1
+fi
+staged_command_version="$(tsls_command_version "${staged_bin_path}" || true)"
+if [ "${staged_command_version}" != "${tsls_version}" ]; then
+  echo "error: staged typescript-language-server launcher did not report ${tsls_version} (reported ${staged_command_version:-unknown})" >&2
+  exit 1
+fi
+
+if ! preflight_tsls_entrypoint; then
+  exit 1
+fi
+
+echo "Installing typescript-language-server ${tsls_version}..."
+transaction_started=1
+if [ -e "${final_root}" ]; then
+  if ! mv "${final_root}" "${stage_dir}/previous-typescript-language-server"; then
+    echo "error: could not stage the existing typescript-language-server installation; keeping the current installation" >&2
+    exit 1
+  fi
+fi
+
+if ! mv "${staged_root}" "${final_root}"; then
+  echo "error: could not install typescript-language-server; restoring the previous installation" >&2
+  exit 1
+fi
+payload_published=1
+
+if ! publish_tsls_entrypoint; then
+  echo "error: could not publish typescript-language-server entrypoint; restoring the previous installation" >&2
+  exit 1
+fi
+tsls_entrypoint_committed=1
+transaction_committed=1
+{{- end -}}

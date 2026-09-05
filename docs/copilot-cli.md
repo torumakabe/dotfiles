@@ -29,7 +29,7 @@ Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilo
 
 ## LSP サーバー
 
-`~/.copilot/lsp-config.json` (chezmoi 管理) で設定する。Python 向け `ty` (Astral) は mise バックエンドがないため `uv tool install ty`（`run_once` で自動化）、TypeScript 等の npm パッケージは mise の `npm:` バックエンドで管理する。
+`~/.copilot/lsp-config.json` (chezmoi 管理) で設定する。Python 向け `ty` (Astral) は mise バックエンドがないため `uv tool install ty`（`run_once` で自動化）。TypeScript 向けの `tsc`、`typescript-language-server`、`tsserver.js` は、直接導入した Node/npm を使う三つの専用 npm prefix で管理する。TypeScript 6.0.3 の prefix は、`tsserver.js` と npm が生成する `tsserver` launcher を提供する（ADR-028、[`docs/operations.md`](operations.md#mise-の管理外にあるツール)）。
 
 ## プラグインとスキル
 

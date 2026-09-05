@@ -1,0 +1,157 @@
+{{- if eq .chezmoi.os "windows" -}}
+# TypeScript グローバル CLI (tsc/tsserver) — 直接導入した Node/npm を使い、
+# 専用 npm prefix (グローバルインストールではない) へ導入する。利用中のミラー
+# レジストリは dist.integrity (SHA-512) を提供しないため、実在しない検証を
+# 主張しない。npm 自身の dist.shasum (SHA-1) 検証に委ねる。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。package.json と
+# tsc --version の両方を確認する。取得は staging の npm prefix へ行い、
+# 同じ検証を終えてから最終パス (固定・無版数の root) へ置き換える。
+# 途中で失敗した場合は既存の TypeScript CLI を残す。
+$ErrorActionPreference = 'Stop'
+
+$typescriptVersion = '{{ .typescriptCli.version }}'
+$shareDir = Join-Path $HOME '.local\share\chezmoi-dotfiles'
+$nodeRoot = Join-Path $shareDir 'node'
+$nodeExe = Join-Path $nodeRoot 'node.exe'
+$npmCmd = Join-Path $nodeRoot 'npm.cmd'
+$finalRoot = Join-Path $shareDir 'typescript-cli'
+$packagePath = Join-Path $finalRoot 'node_modules\typescript\package.json'
+$binPath = Join-Path $finalRoot 'node_modules\.bin\tsc.cmd'
+
+if (-not (Test-Path -LiteralPath $nodeExe -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $npmCmd -PathType Leaf)) {
+    throw 'Directly-installed Node was not found; cannot install TypeScript CLI.'
+}
+
+# package.json の version を直接 Node で読む (typescript 自体に副作用のある
+# 初回実行/テレメトリは無いため、pnpm 同様に実行して確認してよい)。
+function Get-InstalledTypeScriptVersion {
+    param([string]$PackagePath)
+
+    if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) { return $null }
+    try {
+        return (Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json).version
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-TypeScriptCliVersion {
+    param([string]$LauncherPath)
+
+    if (-not (Test-Path -LiteralPath $LauncherPath -PathType Leaf)) { return $null }
+    $previousPath = $env:Path
+    try {
+        $env:Path = if ($previousPath) { "$nodeRoot;$previousPath" } else { $nodeRoot }
+        $output = & $LauncherPath --version 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $output) { return $null }
+        $line = ([string]($output | Select-Object -First 1)).Trim()
+        if ($line -notmatch '^Version\s+(\d+\.\d+\.\d+)$') { return $null }
+        return $Matches[1]
+    }
+    catch {
+        return $null
+    }
+    finally {
+        $env:Path = $previousPath
+    }
+}
+
+# 実行中の tsc.cmd 等は置き換えられない。root ごと入れ替える前に排他で開けるか確認する。
+function Assert-BinaryReplaceable {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw ("TypeScript CLI を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "tsc/tsserver を使っているプロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "既存の TypeScript CLI インストールは変更していません。")
+    }
+}
+
+if ((Test-Path -LiteralPath $binPath -PathType Leaf) -and
+    ((Get-InstalledTypeScriptVersion -PackagePath $packagePath) -eq $typescriptVersion) -and
+    ((Get-TypeScriptCliVersion -LauncherPath $binPath) -eq $typescriptVersion)) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $shareDir | Out-Null
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $shareDir (".typescript-cli-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+$cleanupStageDir = $true
+try {
+    $stagedRoot = Join-Path $stageDir 'new'
+    New-Item -ItemType Directory -Force -Path $stagedRoot | Out-Null
+
+    & $npmCmd install --prefix $stagedRoot --no-save --package-lock=false "typescript@$typescriptVersion"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install typescript@$typescriptVersion; keeping the current TypeScript CLI."
+    }
+
+    $stagedPackagePath = Join-Path $stagedRoot 'node_modules\typescript\package.json'
+    $stagedBinPath = Join-Path $stagedRoot 'node_modules\.bin\tsc.cmd'
+    if (-not (Test-Path -LiteralPath $stagedBinPath -PathType Leaf)) {
+        throw 'TypeScript CLI installation did not produce a tsc launcher'
+    }
+
+    $stagedVersion = Get-InstalledTypeScriptVersion -PackagePath $stagedPackagePath
+    if ($stagedVersion -ne $typescriptVersion) {
+        $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+        throw "expected TypeScript $typescriptVersion but found $found"
+    }
+
+    $stagedCliVersion = Get-TypeScriptCliVersion -LauncherPath $stagedBinPath
+    if ($stagedCliVersion -ne $typescriptVersion) {
+        $found = if ($stagedCliVersion) { $stagedCliVersion } else { 'unknown' }
+        throw "expected tsc $typescriptVersion but staged launcher reported $found"
+    }
+
+    Assert-BinaryReplaceable -Path $binPath
+
+    Write-Host "Installing TypeScript CLI $typescriptVersion..."
+    $backupRoot = Join-Path $stageDir 'previous-typescript-cli'
+    try {
+        if (Test-Path -LiteralPath $finalRoot) {
+            Move-Item -LiteralPath $finalRoot -Destination $backupRoot
+        }
+        Move-Item -LiteralPath $stagedRoot -Destination $finalRoot
+    }
+    catch {
+        $replacementError = $_
+        try {
+            if (Test-Path -LiteralPath $backupRoot) {
+                Remove-Item -LiteralPath $finalRoot -Recurse -Force -ErrorAction SilentlyContinue
+                Move-Item -LiteralPath $backupRoot -Destination $finalRoot -Force
+            }
+        }
+        catch {
+            $cleanupStageDir = $false
+            throw ("TypeScript CLI の復旧を完了できませんでした。復旧用ファイルは $stageDir に残しています。" +
+                "実行中の tsc/tsserver 関連プロセスを終了し、同ディレクトリの previous-typescript-cli を" +
+                "確認してください。置換原因: $($replacementError.Exception.Message); " +
+                "復旧原因: $($_.Exception.Message)")
+        }
+        throw ("TypeScript CLI の置き換えに失敗したため、以前のインストールへ戻しました。" +
+            "実行中の tsc/tsserver 関連プロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "原因: $($replacementError.Exception.Message)")
+    }
+}
+finally {
+    if ($cleanupStageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+{{- end -}}

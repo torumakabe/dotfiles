@@ -1,0 +1,286 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# TypeScript グローバル CLI (tsc/tsserver) — 直接導入した Node/npm を使い、
+# 専用 npm prefix (グローバルインストールではない) へ導入する。利用中のミラー
+# レジストリは dist.integrity (SHA-512) を提供しないため、実在しない検証を
+# 主張しない。npm 自身の dist.shasum (SHA-1) 検証に委ねる。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得は staging の
+# npm prefix へ行い、package.json の版と tsc 起動スクリプトの存在を確認して
+# から最終パス (固定・無版数の root) へ置き換える。途中で失敗した場合は
+# 既存の TypeScript CLI を残す。
+
+set -euo pipefail
+
+typescript_version='{{ .typescriptCli.version }}'
+share_dir="${HOME}/.local/share/chezmoi-dotfiles"
+node_root="${share_dir}/node"
+node_exe="${node_root}/bin/node"
+npm_cli_js="${node_root}/lib/node_modules/npm/bin/npm-cli.js"
+final_root="${share_dir}/typescript-cli"
+package_path="${final_root}/node_modules/typescript/package.json"
+bin_path="${final_root}/node_modules/.bin/tsc"
+bin_dir="${HOME}/.local/bin"
+mise_shims_dir="${HOME}/.local/share/mise/shims"
+
+if [ ! -x "${node_exe}" ]; then
+  echo 'error: directly-installed Node was not found; cannot install TypeScript CLI.' >&2
+  exit 1
+fi
+if [ ! -f "${npm_cli_js}" ]; then
+  echo "error: directly-installed npm CLI was not found at ${npm_cli_js}; cannot install TypeScript CLI." >&2
+  exit 1
+fi
+
+# ~/.local/bin へ tsc の native symlink を transaction として発行する。
+# npm が生成した起動スクリプトをそのまま指し、自分の固定 target と同名の
+# 旧 mise shim だけを管理対象とみなす。
+typescript_cli_entrypoint_stage_dir=""
+typescript_cli_entrypoint_started=0
+typescript_cli_entrypoint_committed=0
+
+preflight_typescript_cli_entrypoint() {
+  local name=tsc target="${bin_path}"
+  local link="${bin_dir}/${name}"
+
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} already points elsewhere (${current}); refusing to replace it." >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} exists and is not managed by this installer; refusing to replace it." >&2
+    return 1
+  fi
+
+  if ! mkdir -p "${bin_dir}"; then
+    echo "error: could not create ${bin_dir}" >&2
+    return 1
+  fi
+  if ! typescript_cli_entrypoint_stage_dir="$(mktemp -d "${bin_dir}/.typescript-cli-entrypoint.XXXXXX")"; then
+    echo "error: could not create private entrypoint staging in ${bin_dir}" >&2
+    return 1
+  fi
+  if ! chmod 700 "${typescript_cli_entrypoint_stage_dir}"; then
+    rm -rf "${typescript_cli_entrypoint_stage_dir}"
+    typescript_cli_entrypoint_stage_dir=""
+    return 1
+  fi
+  if ! ln -s "${target}" "${typescript_cli_entrypoint_stage_dir}/${name}"; then
+    echo "error: could not stage entrypoint link for ${name}" >&2
+    rm -rf "${typescript_cli_entrypoint_stage_dir}"
+    typescript_cli_entrypoint_stage_dir=""
+    return 1
+  fi
+}
+
+publish_typescript_cli_entrypoint() {
+  [ -n "${typescript_cli_entrypoint_stage_dir}" ] || return 0
+
+  local name=tsc target="${bin_path}" link="${bin_dir}/tsc"
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} changed after preflight; refusing to replace it." >&2
+      return 1
+    fi
+    typescript_cli_entrypoint_started=1
+    if ! mv "${link}" "${typescript_cli_entrypoint_stage_dir}/previous-${name}"; then
+      echo "error: could not preserve the existing ${name} entrypoint" >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} changed after preflight; refusing to replace it." >&2
+    return 1
+  else
+    typescript_cli_entrypoint_started=1
+  fi
+
+  if ! mv "${typescript_cli_entrypoint_stage_dir}/${name}" "${link}"; then
+    echo "error: could not publish entrypoint link for ${name}" >&2
+    return 1
+  fi
+}
+
+rollback_typescript_cli_entrypoint() {
+  [ "${typescript_cli_entrypoint_started}" -eq 1 ] || return 0
+  [ "${typescript_cli_entrypoint_committed}" -eq 0 ] || return 0
+
+  local link="${bin_dir}/tsc" current
+  if [ -e "${typescript_cli_entrypoint_stage_dir}/previous-tsc" ] \
+    || [ -L "${typescript_cli_entrypoint_stage_dir}/previous-tsc" ]; then
+    if [ -e "${link}" ] || [ -L "${link}" ]; then
+      [ -L "${link}" ] || return 1
+      current="$(readlink "${link}")"
+      [ "${current}" = "${bin_path}" ] || return 1
+      rm -f "${link}" || return 1
+    fi
+    mv "${typescript_cli_entrypoint_stage_dir}/previous-tsc" "${link}" || return 1
+  elif [ ! -L "${typescript_cli_entrypoint_stage_dir}/tsc" ]; then
+    [ -L "${link}" ] || return 1
+    current="$(readlink "${link}")"
+    [ "${current}" = "${bin_path}" ] || return 1
+    rm -f "${link}" || return 1
+  fi
+}
+
+ensure_typescript_cli_entrypoints() {
+  if ! preflight_typescript_cli_entrypoint; then
+    return 1
+  fi
+  if ! publish_typescript_cli_entrypoint; then
+    if ! rollback_typescript_cli_entrypoint; then
+      echo "error: TypeScript CLI entrypoint rollback could not complete; recovery files remain in ${typescript_cli_entrypoint_stage_dir}" >&2
+      return 1
+    fi
+    rm -rf "${typescript_cli_entrypoint_stage_dir}"
+    typescript_cli_entrypoint_stage_dir=""
+    return 1
+  fi
+  typescript_cli_entrypoint_committed=1
+  if [ -n "${typescript_cli_entrypoint_stage_dir}" ]; then
+    rm -rf "${typescript_cli_entrypoint_stage_dir}"
+    typescript_cli_entrypoint_stage_dir=""
+  fi
+}
+
+# package.json の version を直接 Node で読む (typescript 自体に副作用のある
+# 初回実行/テレメトリは無いため、pnpm 同様に実行して確認してよい)。
+installed_typescript_version() {
+  local pkg=$1
+
+  [ -f "${pkg}" ] || return 1
+  "${node_exe}" -p "require(process.argv[1]).version" "${pkg}" 2>/dev/null
+}
+
+typescript_cli_command_version() {
+  local launcher=$1
+
+  [ -x "${launcher}" ] || return 1
+  (
+    cd /
+    PATH="${node_root}/bin" "${launcher}" --version 2>/dev/null
+  ) | awk 'NR == 1 && $1 == "Version" { print $2 }'
+}
+
+if [ -x "${bin_path}" ]; then
+  if [ "$(installed_typescript_version "${package_path}" || true)" = "${typescript_version}" ] \
+    && [ "$(typescript_cli_command_version "${bin_path}" || true)" = "${typescript_version}" ]; then
+    if ! ensure_typescript_cli_entrypoints; then
+      exit 1
+    fi
+    exit 0
+  fi
+fi
+
+mkdir -p "${share_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${share_dir}/.typescript-cli-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+payload_published=0
+
+rollback_typescript_cli_install() {
+  local failed=0
+  if ! rollback_typescript_cli_entrypoint; then
+    failed=1
+  fi
+  if [ "${transaction_started}" -ne 1 ] || [ "${transaction_committed}" -eq 1 ]; then
+    return "${failed}"
+  fi
+  if [ -e "${stage_dir}/previous-typescript-cli" ]; then
+    if [ "${payload_published}" -eq 1 ]; then
+      rm -rf "${final_root}" || failed=1
+    fi
+    if [ ! -e "${final_root}" ]; then
+      mv "${stage_dir}/previous-typescript-cli" "${final_root}" || failed=1
+    fi
+  elif [ "${payload_published}" -eq 1 ]; then
+    rm -rf "${final_root}" || failed=1
+  fi
+  return "${failed}"
+}
+
+cleanup_typescript_cli_install() {
+  local status=$?
+
+  trap - EXIT
+  if ! rollback_typescript_cli_install; then
+    echo "error: TypeScript CLI rollback could not complete; recovery files remain in ${stage_dir}${typescript_cli_entrypoint_stage_dir:+ and ${typescript_cli_entrypoint_stage_dir}}" >&2
+    exit 1
+  fi
+  rm -rf "${stage_dir}"
+  if [ -n "${typescript_cli_entrypoint_stage_dir}" ]; then
+    rm -rf "${typescript_cli_entrypoint_stage_dir}"
+  fi
+  exit "${status}"
+}
+
+trap cleanup_typescript_cli_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+staged_root="${stage_dir}/new"
+mkdir -p "${staged_root}"
+
+if ! "${node_exe}" "${npm_cli_js}" install --prefix "${staged_root}" --no-save --package-lock=false "typescript@${typescript_version}"; then
+  echo "error: failed to install typescript@${typescript_version}; keeping the current TypeScript CLI." >&2
+  exit 1
+fi
+
+staged_package_path="${staged_root}/node_modules/typescript/package.json"
+staged_bin_path="${staged_root}/node_modules/.bin/tsc"
+if [ ! -x "${staged_bin_path}" ]; then
+  echo "error: TypeScript CLI installation did not produce a tsc launcher" >&2
+  exit 1
+fi
+
+staged_version="$(installed_typescript_version "${staged_package_path}" || true)"
+if [ "${staged_version}" != "${typescript_version}" ]; then
+  echo "error: expected TypeScript ${typescript_version} but found ${staged_version:-unknown}" >&2
+  exit 1
+fi
+staged_command_version="$(typescript_cli_command_version "${staged_bin_path}" || true)"
+if [ "${staged_command_version}" != "${typescript_version}" ]; then
+  echo "error: staged tsc launcher did not report TypeScript ${typescript_version} (reported ${staged_command_version:-unknown})" >&2
+  exit 1
+fi
+
+if ! preflight_typescript_cli_entrypoint; then
+  exit 1
+fi
+
+echo "Installing TypeScript CLI ${typescript_version}..."
+transaction_started=1
+if [ -e "${final_root}" ]; then
+  if ! mv "${final_root}" "${stage_dir}/previous-typescript-cli"; then
+    echo "error: could not stage the existing TypeScript CLI installation; keeping the current installation" >&2
+    exit 1
+  fi
+fi
+
+if ! mv "${staged_root}" "${final_root}"; then
+  echo "error: could not install TypeScript CLI; restoring the previous installation" >&2
+  exit 1
+fi
+payload_published=1
+
+if ! publish_typescript_cli_entrypoint; then
+  echo "error: could not publish tsc entrypoint; restoring the previous installation" >&2
+  exit 1
+fi
+typescript_cli_entrypoint_committed=1
+transaction_committed=1
+{{- end -}}

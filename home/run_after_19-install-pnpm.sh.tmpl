@@ -1,0 +1,308 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+#!/usr/bin/env bash
+# pnpm — 公式アーカイブ (github.com/pnpm/pnpm releases) を直接導入する。
+# asset には単一実行ファイルの他に node-gyp 連携用の dist/ が同梱されており、
+# 標準配布構成を保つため両方を保持する (final_root 直下の内容をそのまま維持)。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ展開し、
+# checksum と版の確認まで終えてから最終パス (固定・無版数の root) へ置き換える。
+# 途中で失敗した場合は既存の pnpm を残す。
+
+set -euo pipefail
+
+pnpm_version='{{ .pnpm.version }}'
+{{ if not (hasKey .pnpm.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+echo "Warning: pnpm ${pnpm_version} has no official asset for {{ $platform }}; skipping installation." >&2
+exit 0
+{{ else }}
+{{- $asset := index .pnpm.assets $platform }}
+share_dir="${HOME}/.local/share/chezmoi-dotfiles"
+final_root="${share_dir}/pnpm"
+entrypoint="${final_root}/{{ $asset.entrypoint }}"
+asset_file='{{ $asset.file }}'
+asset_sha256='{{ $asset.sha256 }}'
+asset_url='{{ $.pnpm.releaseBaseUrl }}/{{ $.pnpm.releaseTag }}/{{ $asset.file }}'
+bin_dir="${HOME}/.local/bin"
+mise_shims_dir="${HOME}/.local/share/mise/shims"
+
+# ~/.local/bin へ pnpm の native symlink を transaction として発行する。
+# 自分の固定 target と、同名の旧 mise shim だけを管理対象とみなす。
+pnpm_entrypoint_stage_dir=""
+pnpm_entrypoint_started=0
+pnpm_entrypoint_committed=0
+
+preflight_pnpm_entrypoint() {
+  local name=pnpm target="${entrypoint}"
+  local link="${bin_dir}/${name}"
+
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} already points elsewhere (${current}); refusing to replace it." >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} exists and is not managed by this installer; refusing to replace it." >&2
+    return 1
+  fi
+
+  if ! mkdir -p "${bin_dir}"; then
+    echo "error: could not create ${bin_dir}" >&2
+    return 1
+  fi
+  if ! pnpm_entrypoint_stage_dir="$(mktemp -d "${bin_dir}/.pnpm-entrypoint.XXXXXX")"; then
+    echo "error: could not create private entrypoint staging in ${bin_dir}" >&2
+    return 1
+  fi
+  if ! chmod 700 "${pnpm_entrypoint_stage_dir}"; then
+    rm -rf "${pnpm_entrypoint_stage_dir}"
+    pnpm_entrypoint_stage_dir=""
+    return 1
+  fi
+  if ! ln -s "${target}" "${pnpm_entrypoint_stage_dir}/${name}"; then
+    echo "error: could not stage entrypoint link for ${name}" >&2
+    rm -rf "${pnpm_entrypoint_stage_dir}"
+    pnpm_entrypoint_stage_dir=""
+    return 1
+  fi
+}
+
+publish_pnpm_entrypoint() {
+  [ -n "${pnpm_entrypoint_stage_dir}" ] || return 0
+
+  local name=pnpm target="${entrypoint}" link="${bin_dir}/pnpm"
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} changed after preflight; refusing to replace it." >&2
+      return 1
+    fi
+    pnpm_entrypoint_started=1
+    if ! mv "${link}" "${pnpm_entrypoint_stage_dir}/previous-${name}"; then
+      echo "error: could not preserve the existing ${name} entrypoint" >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} changed after preflight; refusing to replace it." >&2
+    return 1
+  else
+    pnpm_entrypoint_started=1
+  fi
+
+  if ! mv "${pnpm_entrypoint_stage_dir}/${name}" "${link}"; then
+    echo "error: could not publish entrypoint link for ${name}" >&2
+    return 1
+  fi
+}
+
+rollback_pnpm_entrypoint() {
+  [ "${pnpm_entrypoint_started}" -eq 1 ] || return 0
+  [ "${pnpm_entrypoint_committed}" -eq 0 ] || return 0
+
+  local link="${bin_dir}/pnpm" current
+  if [ -e "${pnpm_entrypoint_stage_dir}/previous-pnpm" ] \
+    || [ -L "${pnpm_entrypoint_stage_dir}/previous-pnpm" ]; then
+    if [ -e "${link}" ] || [ -L "${link}" ]; then
+      [ -L "${link}" ] || return 1
+      current="$(readlink "${link}")"
+      [ "${current}" = "${entrypoint}" ] || return 1
+      rm -f "${link}" || return 1
+    fi
+    mv "${pnpm_entrypoint_stage_dir}/previous-pnpm" "${link}" || return 1
+  elif [ ! -L "${pnpm_entrypoint_stage_dir}/pnpm" ]; then
+    [ -L "${link}" ] || return 1
+    current="$(readlink "${link}")"
+    [ "${current}" = "${entrypoint}" ] || return 1
+    rm -f "${link}" || return 1
+  fi
+}
+
+ensure_pnpm_entrypoints() {
+  if ! preflight_pnpm_entrypoint; then
+    return 1
+  fi
+  if ! publish_pnpm_entrypoint; then
+    if ! rollback_pnpm_entrypoint; then
+      echo "error: pnpm entrypoint rollback could not complete; recovery files remain in ${pnpm_entrypoint_stage_dir}" >&2
+      return 1
+    fi
+    rm -rf "${pnpm_entrypoint_stage_dir}"
+    pnpm_entrypoint_stage_dir=""
+    return 1
+  fi
+  pnpm_entrypoint_committed=1
+  if [ -n "${pnpm_entrypoint_stage_dir}" ]; then
+    rm -rf "${pnpm_entrypoint_stage_dir}"
+    pnpm_entrypoint_stage_dir=""
+  fi
+}
+
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify ${asset_file}" >&2
+    exit 1
+  fi
+}
+
+# `pnpm --version` は "11.25.0" を出力する。
+installed_pnpm_version() {
+  local binary=$1
+
+  [ -x "${binary}" ] || return 1
+  (
+    cd /
+    PNPM_CONFIG_PM_ON_FAIL=ignore "${binary}" --version 2>/dev/null
+  ) | awk 'NR == 1 { print $1 }'
+}
+
+# バージョン文字列の一致だけでは、単一実行ファイルに同梱される補助アセット
+# (dist/pnpm.mjs: 実際のバンドル本体、dist/worker.js: worker_threads 用) を
+# 欠いた不完全な導入を見逃す。
+pnpm_payload_complete() {
+  local root=$1
+
+  [ -f "${root}/dist/pnpm.mjs" ] && [ -f "${root}/dist/worker.js" ]
+}
+
+if [ "$(installed_pnpm_version "${entrypoint}" || true)" = "${pnpm_version}" ] \
+  && pnpm_payload_complete "${final_root}"; then
+  if ! ensure_pnpm_entrypoints; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if ! command -v tar >/dev/null 2>&1; then
+  echo "error: tar required to extract ${asset_file}" >&2
+  exit 1
+fi
+
+mkdir -p "${share_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${share_dir}/.pnpm-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+payload_published=0
+
+rollback_pnpm_install() {
+  local failed=0
+  if ! rollback_pnpm_entrypoint; then
+    failed=1
+  fi
+  if [ "${transaction_started}" -ne 1 ] || [ "${transaction_committed}" -eq 1 ]; then
+    return "${failed}"
+  fi
+  if [ -e "${stage_dir}/previous-pnpm" ]; then
+    if [ "${payload_published}" -eq 1 ]; then
+      rm -rf "${final_root}" || failed=1
+    fi
+    if [ ! -e "${final_root}" ]; then
+      mv "${stage_dir}/previous-pnpm" "${final_root}" || failed=1
+    fi
+  elif [ "${payload_published}" -eq 1 ]; then
+    rm -rf "${final_root}" || failed=1
+  fi
+  return "${failed}"
+}
+
+cleanup_pnpm_install() {
+  local status=$?
+
+  trap - EXIT
+  if ! rollback_pnpm_install; then
+    echo "error: pnpm rollback could not complete; recovery files remain in ${stage_dir}${pnpm_entrypoint_stage_dir:+ and ${pnpm_entrypoint_stage_dir}}" >&2
+    exit 1
+  fi
+  rm -rf "${stage_dir}"
+  if [ -n "${pnpm_entrypoint_stage_dir}" ]; then
+    rm -rf "${pnpm_entrypoint_stage_dir}"
+  fi
+  exit "${status}"
+}
+
+trap cleanup_pnpm_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+archive="${stage_dir}/${asset_file}"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${archive}" "${asset_url}"; then
+  echo "error: failed to download ${asset_file}; keeping the current pnpm." >&2
+  exit 1
+fi
+
+actual_sha256="$(sha256_file "${archive}")"
+if [ "${actual_sha256}" != "${asset_sha256}" ]; then
+  echo "error: checksum verification failed for ${asset_file}" >&2
+  exit 1
+fi
+
+# 公式アーカイブはフラット (実行ファイルと dist/ が頂点直下、頂点ディレクトリ無し)。
+mkdir "${stage_dir}/extracted"
+if ! tar -xzf "${archive}" -C "${stage_dir}/extracted"; then
+  echo "error: failed to extract ${asset_file}" >&2
+  exit 1
+fi
+
+staged_entrypoint="${stage_dir}/extracted/{{ $asset.entrypoint }}"
+if [ ! -x "${staged_entrypoint}" ]; then
+  echo "error: expected entrypoint {{ $asset.entrypoint }} missing from ${asset_file}" >&2
+  exit 1
+fi
+
+if ! pnpm_payload_complete "${stage_dir}/extracted"; then
+  echo "error: expected dist/pnpm.mjs and dist/worker.js missing from ${asset_file}" >&2
+  exit 1
+fi
+
+staged_version="$(installed_pnpm_version "${staged_entrypoint}" || true)"
+if [ "${staged_version}" != "${pnpm_version}" ]; then
+  echo "error: expected pnpm ${pnpm_version} but ${asset_file} reported ${staged_version:-unknown}" >&2
+  exit 1
+fi
+
+if ! preflight_pnpm_entrypoint; then
+  exit 1
+fi
+
+echo "Installing pnpm ${pnpm_version}..."
+transaction_started=1
+if [ -e "${final_root}" ]; then
+  if ! mv "${final_root}" "${stage_dir}/previous-pnpm"; then
+    echo "error: could not stage the existing pnpm installation; keeping the current pnpm installation" >&2
+    exit 1
+  fi
+fi
+
+if ! mv "${stage_dir}/extracted" "${final_root}"; then
+  echo "error: could not install pnpm; restoring the previous installation" >&2
+  exit 1
+fi
+payload_published=1
+
+if ! publish_pnpm_entrypoint; then
+  echo "error: could not publish pnpm entrypoint; restoring the previous installation" >&2
+  exit 1
+fi
+pnpm_entrypoint_committed=1
+transaction_committed=1
+{{ end }}
+{{- end -}}

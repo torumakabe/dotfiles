@@ -1,0 +1,176 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# .NET SDK — 公式アーカイブ (builds.dotnet.microsoft.com) を直接導入する。
+#
+# 「他が所有する .NET SDK」と衝突しないよう、DOTNET_ROOT は設定しない。専用 root 内の
+# dotnet 実体は自分に同梱された sdk\ だけを解決対象にするため、システムや他ツールが
+# 導入した .NET とは独立に共存する。
+#
+# global.json による SDK 選択を避けるため、版はプロジェクト外で確認する。
+$ErrorActionPreference = 'Stop'
+
+$dotnetVersion = '{{ .dotnet.version }}'
+{{ if not (hasKey .dotnet.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+Write-Warning ".NET SDK $dotnetVersion has no official asset for {{ $platform }}; skipping installation."
+exit 0
+{{ else }}
+{{- $asset := index .dotnet.assets $platform }}
+$shareDir = Join-Path $HOME '.local\share\chezmoi-dotfiles'
+$finalRoot = Join-Path $shareDir 'dotnet'
+$entrypoint = Join-Path $finalRoot 'dotnet.exe'
+$dnxEntrypoint = Join-Path $finalRoot 'dnx.cmd'
+$assetFile = '{{ $asset.file }}'
+$assetSha512 = '{{ $asset.sha512 }}'
+$assetUrl = '{{ $.dotnet.downloadBaseUrl }}/{{ $.dotnet.version }}/{{ $asset.file }}'
+
+# sdk\<version>\dotnet.dll と Sdks\Microsoft.NET.Sdk\Sdk\Sdk.props の実在まで
+# 見る。sdk\<version> ディレクトリの存在だけ (空ディレクトリマーカーのような
+# もの) では、壊れた展開や部分的な導入を見逃す。
+function Test-DotnetSdkPresent {
+    param([string]$Root, [string]$Version)
+
+    $exe = Join-Path $Root 'dotnet.exe'
+    $dnx = Join-Path $Root 'dnx.cmd'
+    $sdkDir = Join-Path $Root "sdk\$Version"
+    $dll = Join-Path $sdkDir 'dotnet.dll'
+    $sdkProps = Join-Path $sdkDir 'Sdks\Microsoft.NET.Sdk\Sdk\Sdk.props'
+    return (Test-Path -LiteralPath $exe -PathType Leaf) -and (Test-Path -LiteralPath $sdkDir -PathType Container) `
+        -and (Test-Path -LiteralPath $dnx -PathType Leaf) `
+        -and (Test-Path -LiteralPath $dll -PathType Leaf) -and (Test-Path -LiteralPath $sdkProps -PathType Leaf)
+}
+
+# `dotnet.exe --version` をプロジェクトファイルの無い中立な作業ディレクトリから、
+# テレメトリ通知/初回セットアップを抑止する環境変数付きで実行し、実体が実際に
+# 起動して版を報告できることまで確認する (ファイルの実在だけでは壊れたバイナリ
+# や依存アセンブリ欠損を見逃す)。DOTNET_ROOT やその他ルーティングには触れない。
+function Get-InstalledDotnetVersion {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $probeDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Force -Path $probeDir | Out-Null
+    $previousLocation = Get-Location
+    $previousOptOut = $env:DOTNET_CLI_TELEMETRY_OPTOUT
+    $previousNoLogo = $env:DOTNET_NOLOGO
+    $previousSkipFte = $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE
+    $previousMultilevel = $env:DOTNET_MULTILEVEL_LOOKUP
+    try {
+        Set-Location -LiteralPath $probeDir
+        $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+        $env:DOTNET_NOLOGO = '1'
+        $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
+        $env:DOTNET_MULTILEVEL_LOOKUP = '0'
+        $output = & $Path --version 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $output) { return $null }
+        return ([string]($output | Select-Object -Last 1)).Trim()
+    }
+    catch {
+        return $null
+    }
+    finally {
+        Set-Location -LiteralPath $previousLocation
+        $env:DOTNET_CLI_TELEMETRY_OPTOUT = $previousOptOut
+        $env:DOTNET_NOLOGO = $previousNoLogo
+        $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = $previousSkipFte
+        $env:DOTNET_MULTILEVEL_LOOKUP = $previousMultilevel
+        Remove-Item -LiteralPath $probeDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# 実行中の dotnet.exe は置き換えられない。root ごと入れ替える前に排他で開けるか確認する。
+function Assert-BinaryReplaceable {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw ("$(Split-Path -Leaf $Path) を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "dotnet を使っているプロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "既存の .NET SDK インストールは変更していません。")
+    }
+}
+
+if ((Test-DotnetSdkPresent -Root $finalRoot -Version $dotnetVersion) -and
+    ((Get-InstalledDotnetVersion -Path $entrypoint) -eq $dotnetVersion)) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $shareDir | Out-Null
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $shareDir (".dotnet-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+$cleanupStageDir = $true
+try {
+    $archive = Join-Path $stageDir $assetFile
+    try {
+        Invoke-WebRequest -Uri $assetUrl -OutFile $archive -UseBasicParsing
+    }
+    catch {
+        throw "failed to download $assetFile; keeping the current .NET SDK installation. ($($_.Exception.Message))"
+    }
+
+    $actualSha512 = (Get-FileHash -LiteralPath $archive -Algorithm SHA512).Hash.ToLowerInvariant()
+    if ($actualSha512 -ne $assetSha512) {
+        throw "checksum verification failed for $assetFile"
+    }
+
+    # 公式アーカイブはフラット (dotnet.exe が頂点直下、頂点ディレクトリ無し)。
+    $extractedRoot = Join-Path $stageDir 'extracted'
+    Expand-Archive -LiteralPath $archive -DestinationPath $extractedRoot -Force
+    if (-not (Test-DotnetSdkPresent -Root $extractedRoot -Version $dotnetVersion)) {
+        throw "expected dotnet.exe, dnx.cmd, sdk\$dotnetVersion\dotnet.dll, and sdk\$dotnetVersion\Sdks\Microsoft.NET.Sdk\Sdk\Sdk.props missing from $assetFile"
+    }
+
+    $stagedVersion = Get-InstalledDotnetVersion -Path (Join-Path $extractedRoot 'dotnet.exe')
+    if ($stagedVersion -ne $dotnetVersion) {
+        $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+        throw "expected dotnet $dotnetVersion but $assetFile reported $found"
+    }
+
+    Assert-BinaryReplaceable -Path $entrypoint
+    Assert-BinaryReplaceable -Path $dnxEntrypoint
+
+    Write-Host "Installing .NET SDK $dotnetVersion..."
+    $backupRoot = Join-Path $stageDir 'previous-dotnet'
+    try {
+        if (Test-Path -LiteralPath $finalRoot) {
+            Move-Item -LiteralPath $finalRoot -Destination $backupRoot
+        }
+        Move-Item -LiteralPath $extractedRoot -Destination $finalRoot
+    }
+    catch {
+        $replacementError = $_
+        try {
+            if (Test-Path -LiteralPath $backupRoot) {
+                Remove-Item -LiteralPath $finalRoot -Recurse -Force -ErrorAction SilentlyContinue
+                Move-Item -LiteralPath $backupRoot -Destination $finalRoot -Force
+            }
+        }
+        catch {
+            $cleanupStageDir = $false
+            throw (".NET SDK の復旧を完了できませんでした。復旧用ファイルは $stageDir に残しています。" +
+                "実行中の dotnet 関連プロセスを終了し、同ディレクトリの previous-dotnet を確認してください。" +
+                "置換原因: $($replacementError.Exception.Message); 復旧原因: $($_.Exception.Message)")
+        }
+        throw (".NET SDK の置き換えに失敗したため、以前のインストールへ戻しました。" +
+            "実行中の dotnet 関連プロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "原因: $($replacementError.Exception.Message)")
+    }
+}
+finally {
+    if ($cleanupStageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+{{ end }}
+{{- end -}}

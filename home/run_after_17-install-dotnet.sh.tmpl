@@ -1,0 +1,349 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+#!/usr/bin/env bash
+# .NET SDK — 公式アーカイブ (builds.dotnet.microsoft.com) を直接導入する。
+#
+# 「他が所有する .NET SDK」と衝突しないよう、DOTNET_ROOT は設定しない。専用 root 内の
+# dotnet 実体は自分に同梱された sdk/ だけを解決対象にするため、システムや他ツールが
+# 導入した .NET とは独立に共存する。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。版の確認は dotnet を実行せず、
+# sdk/<version> ディレクトリの存在で行う (初回実行時のテレメトリ通知や CLI 初期化を
+# 避けるため)。取得物は staging へ展開し、checksum と版の確認まで終えてから最終パス
+# (固定・無版数の root) へ置き換える。途中で失敗した場合は既存の .NET SDK を残す。
+
+set -euo pipefail
+
+dotnet_version='{{ .dotnet.version }}'
+{{ if not (hasKey .dotnet.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+echo "Warning: .NET SDK ${dotnet_version} has no official asset for {{ $platform }}; skipping installation." >&2
+exit 0
+{{ else }}
+{{- $asset := index .dotnet.assets $platform }}
+share_dir="${HOME}/.local/share/chezmoi-dotfiles"
+final_root="${share_dir}/dotnet"
+entrypoint="${final_root}/dotnet"
+dnx_entrypoint="${final_root}/dnx"
+asset_file='{{ $asset.file }}'
+asset_sha512='{{ $asset.sha512 }}'
+asset_url='{{ $.dotnet.downloadBaseUrl }}/{{ $.dotnet.version }}/{{ $asset.file }}'
+bin_dir="${HOME}/.local/bin"
+mise_shims_dir="${HOME}/.local/share/mise/shims"
+
+# ~/.local/bin へ dotnet/dnx の native symlink を transaction として発行する。
+# 自分の固定 target と、同名の旧 mise shim だけを管理対象とみなす。
+dotnet_entrypoint_names=()
+dotnet_entrypoint_targets=()
+dotnet_entrypoint_stage_dir=""
+dotnet_entrypoints_started=0
+dotnet_entrypoints_committed=0
+
+preflight_dotnet_entrypoint_link() {
+  local name=$1 target=$2
+  local link="${bin_dir}/${name}"
+
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} already points elsewhere (${current}); refusing to replace it." >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} exists and is not managed by this installer; refusing to replace it." >&2
+    return 1
+  fi
+
+  dotnet_entrypoint_names+=("${name}")
+  dotnet_entrypoint_targets+=("${target}")
+}
+
+prepare_dotnet_entrypoints() {
+  dotnet_entrypoint_names=()
+  dotnet_entrypoint_targets=()
+  if ! preflight_dotnet_entrypoint_link dotnet "${entrypoint}" \
+    || ! preflight_dotnet_entrypoint_link dnx "${dnx_entrypoint}"; then
+    return 1
+  fi
+  [ "${#dotnet_entrypoint_names[@]}" -gt 0 ] || return 0
+
+  if ! mkdir -p "${bin_dir}"; then
+    echo "error: could not create ${bin_dir}" >&2
+    return 1
+  fi
+  if ! dotnet_entrypoint_stage_dir="$(mktemp -d "${bin_dir}/.dotnet-entrypoints.XXXXXX")"; then
+    echo "error: could not create private entrypoint staging in ${bin_dir}" >&2
+    return 1
+  fi
+  if ! chmod 700 "${dotnet_entrypoint_stage_dir}"; then
+    rm -rf "${dotnet_entrypoint_stage_dir}"
+    dotnet_entrypoint_stage_dir=""
+    return 1
+  fi
+  local i
+  for i in "${!dotnet_entrypoint_names[@]}"; do
+    if ! ln -s "${dotnet_entrypoint_targets[$i]}" \
+      "${dotnet_entrypoint_stage_dir}/${dotnet_entrypoint_names[$i]}"; then
+      echo "error: could not stage entrypoint link for ${dotnet_entrypoint_names[$i]}" >&2
+      rm -rf "${dotnet_entrypoint_stage_dir}"
+      dotnet_entrypoint_stage_dir=""
+      return 1
+    fi
+  done
+}
+
+publish_dotnet_entrypoints() {
+  [ -n "${dotnet_entrypoint_stage_dir}" ] || return 0
+
+  local i name target link current
+  for i in "${!dotnet_entrypoint_names[@]}"; do
+    name="${dotnet_entrypoint_names[$i]}"
+    target="${dotnet_entrypoint_targets[$i]}"
+    link="${bin_dir}/${name}"
+    if [ -L "${link}" ]; then
+      current="$(readlink "${link}")"
+      if [ "${current}" = "${target}" ]; then
+        continue
+      fi
+      if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+        echo "error: ${link} changed after preflight; refusing to replace it." >&2
+        return 1
+      fi
+      dotnet_entrypoints_started=1
+      if ! mv "${link}" "${dotnet_entrypoint_stage_dir}/previous-${name}"; then
+        echo "error: could not preserve the existing ${name} entrypoint" >&2
+        return 1
+      fi
+    elif [ -e "${link}" ]; then
+      echo "error: ${link} changed after preflight; refusing to replace it." >&2
+      return 1
+    else
+      dotnet_entrypoints_started=1
+    fi
+    if ! mv "${dotnet_entrypoint_stage_dir}/${name}" "${link}"; then
+      echo "error: could not publish entrypoint link for ${name}" >&2
+      return 1
+    fi
+  done
+}
+
+rollback_dotnet_entrypoints() {
+  [ "${dotnet_entrypoints_started}" -eq 1 ] || return 0
+  [ "${dotnet_entrypoints_committed}" -eq 0 ] || return 0
+
+  local i name target link current
+  for ((i=${#dotnet_entrypoint_names[@]} - 1; i >= 0; i--)); do
+    name="${dotnet_entrypoint_names[$i]}"
+    target="${dotnet_entrypoint_targets[$i]}"
+    link="${bin_dir}/${name}"
+    if [ -e "${dotnet_entrypoint_stage_dir}/previous-${name}" ] \
+      || [ -L "${dotnet_entrypoint_stage_dir}/previous-${name}" ]; then
+      if [ -e "${link}" ] || [ -L "${link}" ]; then
+        [ -L "${link}" ] || return 1
+        current="$(readlink "${link}")"
+        [ "${current}" = "${target}" ] || return 1
+        rm -f "${link}" || return 1
+      fi
+      mv "${dotnet_entrypoint_stage_dir}/previous-${name}" "${link}" || return 1
+    elif [ ! -L "${dotnet_entrypoint_stage_dir}/${name}" ]; then
+      [ -L "${link}" ] || return 1
+      current="$(readlink "${link}")"
+      [ "${current}" = "${target}" ] || return 1
+      rm -f "${link}" || return 1
+    fi
+  done
+}
+
+ensure_dotnet_entrypoints() {
+  if ! prepare_dotnet_entrypoints; then
+    return 1
+  fi
+  if ! publish_dotnet_entrypoints; then
+    if ! rollback_dotnet_entrypoints; then
+      echo "error: .NET SDK entrypoint rollback could not complete; recovery files remain in ${dotnet_entrypoint_stage_dir}" >&2
+      return 1
+    fi
+    rm -rf "${dotnet_entrypoint_stage_dir}"
+    dotnet_entrypoint_stage_dir=""
+    return 1
+  fi
+  dotnet_entrypoints_committed=1
+  if [ -n "${dotnet_entrypoint_stage_dir}" ]; then
+    rm -rf "${dotnet_entrypoint_stage_dir}"
+    dotnet_entrypoint_stage_dir=""
+  fi
+}
+
+sha512_file() {
+  local file=$1
+
+  if command -v sha512sum >/dev/null 2>&1; then
+    sha512sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 512 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha512sum or shasum required to verify ${asset_file}" >&2
+    exit 1
+  fi
+}
+
+# root の dnx と sdk/<version>/dotnet.dll、Sdks/Microsoft.NET.Sdk/Sdk/Sdk.props
+# の実在まで
+# 見る。sdk/<version> ディレクトリの存在だけ (空ディレクトリマーカーのような
+# もの) では、壊れた展開や部分的な導入を見逃す。
+dotnet_sdk_present() {
+  local root=$1
+  local version=$2
+  local sdk_dir="${root}/sdk/${version}"
+
+  [ -x "${root}/dotnet" ] && [ -x "${root}/dnx" ] \
+    && [ -f "${sdk_dir}/dotnet.dll" ] \
+    && [ -f "${sdk_dir}/Sdks/Microsoft.NET.Sdk/Sdk/Sdk.props" ]
+}
+
+# `dotnet --version` をプロジェクトファイルの無い中立な作業ディレクトリから、
+# テレメトリ通知/初回セットアップを抑止する環境変数付きで実行し、実体が
+# 実際に起動して版を報告できることまで確認する (ファイルの実在だけでは
+# 壊れたバイナリや依存アセンブリ欠損を見逃す)。
+installed_dotnet_version() {
+  local binary=$1
+  local probe_dir
+
+  [ -x "${binary}" ] || return 1
+  probe_dir="$(mktemp -d "${share_dir}/.dotnet-probe.XXXXXX")" || return 1
+  local output status
+  output="$(
+    cd "${probe_dir}" \
+      && DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
+        DOTNET_MULTILEVEL_LOOKUP=0 "${binary}" --version 2>/dev/null
+  )"
+  status=$?
+  rm -rf "${probe_dir}"
+  [ "${status}" -eq 0 ] || return 1
+  printf '%s\n' "${output}" | tail -n1
+}
+
+if dotnet_sdk_present "${final_root}" "${dotnet_version}" \
+  && [ "$(installed_dotnet_version "${entrypoint}" || true)" = "${dotnet_version}" ]; then
+  if ! ensure_dotnet_entrypoints; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if ! command -v tar >/dev/null 2>&1; then
+  echo "error: tar required to extract ${asset_file}" >&2
+  exit 1
+fi
+
+mkdir -p "${share_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${share_dir}/.dotnet-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+payload_published=0
+
+rollback_dotnet_install() {
+  local failed=0
+  if ! rollback_dotnet_entrypoints; then
+    failed=1
+  fi
+  if [ "${transaction_started}" -ne 1 ] || [ "${transaction_committed}" -eq 1 ]; then
+    return "${failed}"
+  fi
+  if [ -e "${stage_dir}/previous-dotnet" ]; then
+    if [ "${payload_published}" -eq 1 ]; then
+      rm -rf "${final_root}" || failed=1
+    fi
+    if [ ! -e "${final_root}" ]; then
+      mv "${stage_dir}/previous-dotnet" "${final_root}" || failed=1
+    fi
+  elif [ "${payload_published}" -eq 1 ]; then
+    rm -rf "${final_root}" || failed=1
+  fi
+  return "${failed}"
+}
+
+cleanup_dotnet_install() {
+  local status=$?
+
+  trap - EXIT
+  if ! rollback_dotnet_install; then
+    echo "error: .NET SDK rollback could not complete; recovery files remain in ${stage_dir}${dotnet_entrypoint_stage_dir:+ and ${dotnet_entrypoint_stage_dir}}" >&2
+    exit 1
+  fi
+  rm -rf "${stage_dir}"
+  if [ -n "${dotnet_entrypoint_stage_dir}" ]; then
+    rm -rf "${dotnet_entrypoint_stage_dir}"
+  fi
+  exit "${status}"
+}
+
+trap cleanup_dotnet_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+archive="${stage_dir}/${asset_file}"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${archive}" "${asset_url}"; then
+  echo "error: failed to download ${asset_file}; keeping the current .NET SDK installation." >&2
+  exit 1
+fi
+
+actual_sha512="$(sha512_file "${archive}")"
+if [ "${actual_sha512}" != "${asset_sha512}" ]; then
+  echo "error: checksum verification failed for ${asset_file}" >&2
+  exit 1
+fi
+
+# 公式アーカイブはフラット (dotnet 実体が頂点直下、頂点ディレクトリ無し)。
+mkdir "${stage_dir}/extracted"
+if ! tar -xzf "${archive}" -C "${stage_dir}/extracted"; then
+  echo "error: failed to extract ${asset_file}" >&2
+  exit 1
+fi
+
+if ! dotnet_sdk_present "${stage_dir}/extracted" "${dotnet_version}"; then
+  echo "error: expected dotnet, dnx, sdk/${dotnet_version}/dotnet.dll, and sdk/${dotnet_version}/Sdks/Microsoft.NET.Sdk/Sdk/Sdk.props missing from ${asset_file}" >&2
+  exit 1
+fi
+
+staged_version="$(installed_dotnet_version "${stage_dir}/extracted/dotnet" || true)"
+if [ "${staged_version}" != "${dotnet_version}" ]; then
+  echo "error: expected dotnet ${dotnet_version} but ${asset_file} reported ${staged_version:-unknown}" >&2
+  exit 1
+fi
+
+if ! prepare_dotnet_entrypoints; then
+  exit 1
+fi
+
+echo "Installing .NET SDK ${dotnet_version}..."
+transaction_started=1
+if [ -e "${final_root}" ]; then
+  if ! mv "${final_root}" "${stage_dir}/previous-dotnet"; then
+    echo "error: could not stage the existing .NET SDK installation; keeping the current .NET SDK installation" >&2
+    exit 1
+  fi
+fi
+
+if ! mv "${stage_dir}/extracted" "${final_root}"; then
+  echo "error: could not install .NET SDK; restoring the previous installation" >&2
+  exit 1
+fi
+payload_published=1
+
+if ! publish_dotnet_entrypoints; then
+  echo "error: could not publish dotnet/dnx entrypoints; restoring the previous installation" >&2
+  exit 1
+fi
+dotnet_entrypoints_committed=1
+transaction_committed=1
+{{ end }}
+{{- end -}}

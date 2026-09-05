@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Deprecated
+
+pnpm の mise 管理を撤去したため廃止。導入方針は [ADR-028](028-remove-mise-use-official-per-tool-install-paths.md) を参照。
 
 ## Context
 

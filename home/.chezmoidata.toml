@@ -53,3 +53,173 @@ version = "0.12.9"
 installerBaseUrl = "https://github.com/astral-sh/uv/releases/download"
 shInstallerSha256 = "222e006c0fe4a0d793031833e469b21df72311f4e3526ffecca0e19e6dfabc32"
 ps1InstallerSha256 = "69de475bf929f1ac248efb5a85189177a45517e2346cd68762bde453fec10a6b"
+
+# 以下のランタイムは、ツールごとの公式配布物を専用スクリプトで導入する。
+# 対応 OS/CPU は linux-x64、linux-arm64、macos-arm64、windows-x64、
+# windows-arm64 の 5 組だけ。assets のキーは
+# jq と同じく "<chezmoi.os>-<chezmoi.arch>"。ここに無い組み合わせは非対応であり、
+# 別 CPU 向けの asset へ暗黙にフォールバックしない。
+
+# Go は公式アーカイブ (go.dev/dl) を直接導入する。SHA-256 の出所は
+# https://go.dev/dl/?mode=json&include=all の該当 version エントリ。
+[go]
+version = "1.27.1"
+downloadBaseUrl = "https://dl.google.com/go"
+
+[go.assets.linux-amd64]
+file = "go1.27.1.linux-amd64.tar.gz"
+sha256 = "63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445"
+
+[go.assets.linux-arm64]
+file = "go1.27.1.linux-arm64.tar.gz"
+sha256 = "3450b45a3f9ee8568792736a5c5e70a1f2e9b36c35a8f74958c03e51d7d92bec"
+
+[go.assets.darwin-arm64]
+file = "go1.27.1.darwin-arm64.tar.gz"
+sha256 = "ee215d57e0ec269c60cc9ceca68e6bda321ba9ee5afe24f4b0988703c2d87d12"
+
+[go.assets.windows-amd64]
+file = "go1.27.1.windows-amd64.zip"
+sha256 = "a3911b5e0e1b1053f25ed0675f4c1c6aad1e2bfcf253df2b9be4caabd2edd95d"
+
+[go.assets.windows-arm64]
+file = "go1.27.1.windows-arm64.zip"
+sha256 = "13b69b87bb0e83f96bc68560a8cace7f0343b1e03469f1110ea18d17e3234069"
+
+# Node.js は公式アーカイブ (nodejs.org/dist) を直接導入する。SHA-256 の出所は
+# https://nodejs.org/dist/v<version>/SHASUMS256.txt。
+[node]
+version = "24.20.0"
+downloadBaseUrl = "https://nodejs.org/dist"
+
+[node.assets.linux-amd64]
+file = "node-v24.20.0-linux-x64.tar.gz"
+sha256 = "855d581f8a4eb1a8117e3426de25fe02770592febcfb31369aee1ffbfee9e8ec"
+
+[node.assets.linux-arm64]
+file = "node-v24.20.0-linux-arm64.tar.gz"
+sha256 = "3515603e2487879a39bc75716f1a2affd027500c64ba50e845cf72cb33219013"
+
+[node.assets.darwin-arm64]
+file = "node-v24.20.0-darwin-arm64.tar.gz"
+sha256 = "40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8"
+
+[node.assets.windows-amd64]
+file = "node-v24.20.0-win-x64.zip"
+# Windows 版アーカイブの頂点ディレクトリ名。中身は直下がフラット (bin/ が無い)。
+innerDir = "node-v24.20.0-win-x64"
+sha256 = "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba"
+
+[node.assets.windows-arm64]
+file = "node-v24.20.0-win-arm64.zip"
+innerDir = "node-v24.20.0-win-arm64"
+sha256 = "31c6799744de8a54601643098040c68c3697e56c94e407d61d0e5fa5f34191d7"
+
+# .NET SDK は公式アーカイブ (builds.dotnet.microsoft.com) を直接導入する。
+# 版と実体は release-metadata の SHA-512 (`hash` フィールド) で検証する。
+# 出所: https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json
+# 「他が所有する .NET SDK」と衝突しないよう、DOTNET_ROOT は設定せず、専用
+# root 内の dotnet 実体が自分の sdk/ だけを見る形で共存させる。
+[dotnet]
+version = "10.0.400"
+downloadBaseUrl = "https://builds.dotnet.microsoft.com/dotnet/Sdk"
+
+[dotnet.assets.linux-amd64]
+file = "dotnet-sdk-10.0.400-linux-x64.tar.gz"
+sha512 = "1033977dd837150e0814cf0c5d5b17ceb63925fda7ba2158b47258a4bd7c048cf82eac3bc1166f3146f53124a3f5fba09db1de1260d2ce96399860303b404b48"
+
+[dotnet.assets.linux-arm64]
+file = "dotnet-sdk-10.0.400-linux-arm64.tar.gz"
+sha512 = "a1b45da58e5591fff909a6126ac6bfc1ef9c12bc72c0625f7815e83a82be1a902317ee96926cbbf81324a45c6abf2ed8102a216d0507879cc166159af78d1b77"
+
+[dotnet.assets.darwin-arm64]
+file = "dotnet-sdk-10.0.400-osx-arm64.tar.gz"
+sha512 = "e440e9a58d4ff7741c8342ac3e086fa9ee2dadc25e01c0449a88317a74cfbd63625b8092c3b2a131ae14b16ab3401e9cc470e578e4c65a72a0b5786bd2308cde"
+
+[dotnet.assets.windows-amd64]
+file = "dotnet-sdk-10.0.400-win-x64.zip"
+sha512 = "9b8b88590e4da131bfd0da7aa089d0fc04d5418d5f8607ec13d55dc5a17b4399afd54d496c12657fa05c6c6546dc5eab930f26ac6c50f2d3a7712c0fb378c366"
+
+[dotnet.assets.windows-arm64]
+file = "dotnet-sdk-10.0.400-win-arm64.zip"
+sha512 = "9d4ecd7439f15c7797d6f46d368cb7aa6513755c5fc3d6de7621bc4878a1805f6b8ffb60ffb9d3e72a049cca87edb252f7c8c03023b643e333544c4606509d7f"
+
+# Bun は公式リリース (github.com/oven-sh/bun) の単一実行ファイル asset を
+# ~/.local/bin へ直接配置する（jq と同じ配置方針）。タグは "bun-v<version>"。
+# SHA-256 の出所は各リリースの SHASUMS256.txt。
+[bun]
+version = "1.4.0"
+releaseTag = "bun-v1.4.0"
+releaseBaseUrl = "https://github.com/oven-sh/bun/releases/download"
+
+[bun.assets.linux-amd64]
+file = "bun-linux-x64.zip"
+innerFile = "bun-linux-x64/bun"
+sha256 = "2d03fb5fb83ac8b567aca0a281b2ce1a1a19d488f56c2968d88c3f25e92fe452"
+
+[bun.assets.linux-arm64]
+file = "bun-linux-aarch64.zip"
+innerFile = "bun-linux-aarch64/bun"
+sha256 = "4b1a332ee861983eb93bcfe6f770fff94e3e31b2c388bdaea3c8ed35e58eed0e"
+
+[bun.assets.darwin-arm64]
+file = "bun-darwin-aarch64.zip"
+innerFile = "bun-darwin-aarch64/bun"
+sha256 = "c669e97f6164e1c96e0701748db98dfa77492908cbd8394c7557134a735de381"
+
+[bun.assets.windows-amd64]
+file = "bun-windows-x64.zip"
+innerFile = "bun-windows-x64/bun.exe"
+sha256 = "e6f093d39da486b20262ca8cdd5ed6a9e8bc9c2f275b78e6d3a0c5b28cc95901"
+
+[bun.assets.windows-arm64]
+file = "bun-windows-aarch64.zip"
+innerFile = "bun-windows-aarch64/bun.exe"
+sha256 = "f473bfe2df73ee770548c93dd5d380aea7120c218ec2aa1afdd0bbba7bf18c47"
+
+# pnpm は公式リリース (github.com/pnpm/pnpm) のアーカイブをそのまま展開する。
+# asset には単一実行ファイルの他に node-gyp 連携用の dist/ が同梱されており、
+# 標準配布構成を保つため両方を保持する。タグは "v<version>"。SHA-256 の出所は
+# 各リリース asset の GitHub 計算済み digest (`gh api .../releases/tags/<tag>`
+# の `assets[].digest`)。
+[pnpm]
+version = "11.25.0"
+releaseTag = "v11.25.0"
+releaseBaseUrl = "https://github.com/pnpm/pnpm/releases/download"
+
+[pnpm.assets.linux-amd64]
+file = "pnpm-linux-x64.tar.gz"
+entrypoint = "pnpm"
+sha256 = "11caeed8b581d460638f836f10f6ead19cbf08d774a5b8e502628b20ebf3ac43"
+
+[pnpm.assets.linux-arm64]
+file = "pnpm-linux-arm64.tar.gz"
+entrypoint = "pnpm"
+sha256 = "6d62b433b7a77b77e814dfaca8032bae57bb79c1a5ad50442e688c4f7fed3c8a"
+
+[pnpm.assets.darwin-arm64]
+file = "pnpm-darwin-arm64.tar.gz"
+entrypoint = "pnpm"
+sha256 = "cdcf7130ed2e7aa324c7c76ab597de66db0529b6b1e0db9e489bde538fdc0d04"
+
+[pnpm.assets.windows-amd64]
+file = "pnpm-win32-x64.zip"
+entrypoint = "pnpm.exe"
+sha256 = "2d0203af85fc6fbb40f786a2671f175e9119a7c6dfcc4f30b1fa17e0f072c301"
+
+[pnpm.assets.windows-arm64]
+file = "pnpm-win32-arm64.zip"
+entrypoint = "pnpm.exe"
+sha256 = "07244c16ae5c6a38c4c1b24798d4d587f0f5492f603504fd608a5916890ec427"
+
+# TypeScript グローバル CLI (tsc/tsserver コマンド)。専用 npm prefix へ導入する。
+# 利用中のミラーレジストリは dist.integrity (SHA-512) を提供しないため、
+# 実在しない検証を主張しない。npm 自身が dist.shasum (SHA-1) で検証する。
+# 専用 LSP 用の TypeScript ([typescriptLsp], tsserver.js 参照専用) とは別管理。
+[typescriptCli]
+version = "7.0.2"
+
+# typescript-language-server (LSP 実行体)。専用 npm prefix へ導入する。
+# initializationOptions.tsserver.path で [typescriptLsp] の tsserver.js を指す。
+[typescriptLanguageServer]
+version = "6.0.0"

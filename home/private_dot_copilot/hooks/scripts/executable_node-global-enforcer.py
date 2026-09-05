@@ -4,8 +4,11 @@
 """Node Global Install Enforcer — preToolUse hook that blocks global installs.
 
 Prevents npm/yarn/pnpm/bun from installing packages globally, keeping the
-host Node.js environment clean.  One-off execution via npx/bunx/pnpm dlx
-and tool management via mise are the intended alternatives.
+host Node.js environment clean.  One-off execution via npx/bunx/pnpm dlx,
+adding the package as a project devDependency, or (for tools mise still
+owns) managing it with mise are the intended alternatives. node/npm/pnpm/
+bun/TypeScript themselves are installed directly, not via mise; see
+home/.chezmoidata.toml.
 
 Reads a JSON tool-call from stdin and emits a JSON permission decision on stdout.
 
@@ -113,24 +116,32 @@ def tokenize_command(segment: str) -> list[str]:
 DENY_MESSAGES: dict[str, str] = {
     "npm": (
         "Global npm install is blocked. "
-        "Use 'npx <cmd>' for one-off execution, or manage tools with mise."
+        "Use 'npx <cmd>' for one-off execution, add it as a project "
+        "devDependency, or manage it with mise if it is one of the "
+        "remaining mise-owned tools."
     ),
     "yarn": (
         "Global yarn install is blocked. "
-        "Use 'npx <cmd>' for one-off execution, or manage tools with mise."
+        "Use 'npx <cmd>' for one-off execution, add it as a project "
+        "devDependency, or manage it with mise if it is one of the "
+        "remaining mise-owned tools."
     ),
     "pnpm": (
         "Global pnpm install is blocked. "
         "Use 'pnpm dlx <cmd>' or 'npx <cmd>' for one-off execution, "
-        "or manage tools with mise."
+        "or add it as a project devDependency. pnpm/bun themselves are "
+        "installed directly (not via mise); see home/.chezmoidata.toml."
     ),
     "bun": (
         "Global bun install is blocked. "
-        "Use 'bunx <cmd>' for one-off execution, or manage tools with mise."
+        "Use 'bunx <cmd>' for one-off execution, or add it as a project "
+        "devDependency. bun itself is installed directly (not via mise); "
+        "see home/.chezmoidata.toml."
     ),
     "npm_link": (
         "npm link modifies the global node_modules. "
-        "Use 'npx <cmd>' for one-off execution, or manage tools with mise."
+        "Use 'npx <cmd>' for one-off execution, or add it as a project "
+        "devDependency."
     ),
 }
 

@@ -1,0 +1,343 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+#!/usr/bin/env bash
+# Go — 公式アーカイブ (go.dev/dl) を直接導入する。
+# 実行順序: run_once_after_30-install-tools より前。あちらの `command -v go`
+# 検出はここが作る ~/.local/share/chezmoi-dotfiles/go/bin を前提にする。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ展開し、
+# checksum と版の確認まで終えてから最終パス (固定・無版数の root) へ置き換える。
+# 途中で失敗した場合は既存の Go を残す。
+
+set -euo pipefail
+
+go_version='{{ .go.version }}'
+{{ if not (hasKey .go.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+echo "Warning: Go ${go_version} has no official asset for {{ $platform }}; skipping installation." >&2
+exit 0
+{{ else }}
+{{- $asset := index .go.assets $platform }}
+share_dir="${HOME}/.local/share/chezmoi-dotfiles"
+final_root="${share_dir}/go"
+entrypoint="${final_root}/bin/go"
+gofmt_entrypoint="${final_root}/bin/gofmt"
+go_os_arch="{{ .chezmoi.os }}_{{ .chezmoi.arch }}"
+asset_file='{{ $asset.file }}'
+asset_sha256='{{ $asset.sha256 }}'
+asset_url='{{ $.go.downloadBaseUrl }}/{{ $asset.file }}'
+bin_dir="${HOME}/.local/bin"
+mise_shims_dir="${HOME}/.local/share/mise/shims"
+
+# ~/.local/bin へ go/gofmt の native symlink を transaction として発行する。
+# 自分の固定 target と、同名の旧 mise shim だけを管理対象とみなす。
+go_entrypoint_names=()
+go_entrypoint_targets=()
+go_entrypoint_stage_dir=""
+go_entrypoints_started=0
+go_entrypoints_committed=0
+
+preflight_go_entrypoint_link() {
+  local name=$1 target=$2
+  local link="${bin_dir}/${name}"
+
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} already points elsewhere (${current}); refusing to replace it." >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} exists and is not managed by this installer; refusing to replace it." >&2
+    return 1
+  fi
+
+  go_entrypoint_names+=("${name}")
+  go_entrypoint_targets+=("${target}")
+}
+
+prepare_go_entrypoints() {
+  go_entrypoint_names=()
+  go_entrypoint_targets=()
+  if ! preflight_go_entrypoint_link go "${entrypoint}" \
+    || ! preflight_go_entrypoint_link gofmt "${gofmt_entrypoint}"; then
+    return 1
+  fi
+  [ "${#go_entrypoint_names[@]}" -gt 0 ] || return 0
+
+  if ! mkdir -p "${bin_dir}"; then
+    echo "error: could not create ${bin_dir}" >&2
+    return 1
+  fi
+  if ! go_entrypoint_stage_dir="$(mktemp -d "${bin_dir}/.go-entrypoints.XXXXXX")"; then
+    echo "error: could not create private entrypoint staging in ${bin_dir}" >&2
+    return 1
+  fi
+  if ! chmod 700 "${go_entrypoint_stage_dir}"; then
+    rm -rf "${go_entrypoint_stage_dir}"
+    go_entrypoint_stage_dir=""
+    return 1
+  fi
+  local i
+  for i in "${!go_entrypoint_names[@]}"; do
+    if ! ln -s "${go_entrypoint_targets[$i]}" \
+      "${go_entrypoint_stage_dir}/${go_entrypoint_names[$i]}"; then
+      echo "error: could not stage entrypoint link for ${go_entrypoint_names[$i]}" >&2
+      rm -rf "${go_entrypoint_stage_dir}"
+      go_entrypoint_stage_dir=""
+      return 1
+    fi
+  done
+}
+
+publish_go_entrypoints() {
+  [ -n "${go_entrypoint_stage_dir}" ] || return 0
+
+  local i name target link current
+  for i in "${!go_entrypoint_names[@]}"; do
+    name="${go_entrypoint_names[$i]}"
+    target="${go_entrypoint_targets[$i]}"
+    link="${bin_dir}/${name}"
+    if [ -L "${link}" ]; then
+      current="$(readlink "${link}")"
+      if [ "${current}" = "${target}" ]; then
+        continue
+      fi
+      if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+        echo "error: ${link} changed after preflight; refusing to replace it." >&2
+        return 1
+      fi
+      go_entrypoints_started=1
+      if ! mv "${link}" "${go_entrypoint_stage_dir}/previous-${name}"; then
+        echo "error: could not preserve the existing ${name} entrypoint" >&2
+        return 1
+      fi
+    elif [ -e "${link}" ]; then
+      echo "error: ${link} changed after preflight; refusing to replace it." >&2
+      return 1
+    else
+      go_entrypoints_started=1
+    fi
+    if ! mv "${go_entrypoint_stage_dir}/${name}" "${link}"; then
+      echo "error: could not publish entrypoint link for ${name}" >&2
+      return 1
+    fi
+  done
+}
+
+rollback_go_entrypoints() {
+  [ "${go_entrypoints_started}" -eq 1 ] || return 0
+  [ "${go_entrypoints_committed}" -eq 0 ] || return 0
+
+  local i name target link current
+  for ((i=${#go_entrypoint_names[@]} - 1; i >= 0; i--)); do
+    name="${go_entrypoint_names[$i]}"
+    target="${go_entrypoint_targets[$i]}"
+    link="${bin_dir}/${name}"
+    if [ -e "${go_entrypoint_stage_dir}/previous-${name}" ] \
+      || [ -L "${go_entrypoint_stage_dir}/previous-${name}" ]; then
+      if [ -e "${link}" ] || [ -L "${link}" ]; then
+        [ -L "${link}" ] || return 1
+        current="$(readlink "${link}")"
+        [ "${current}" = "${target}" ] || return 1
+        rm -f "${link}" || return 1
+      fi
+      mv "${go_entrypoint_stage_dir}/previous-${name}" "${link}" || return 1
+    elif [ ! -L "${go_entrypoint_stage_dir}/${name}" ]; then
+      [ -L "${link}" ] || return 1
+      current="$(readlink "${link}")"
+      [ "${current}" = "${target}" ] || return 1
+      rm -f "${link}" || return 1
+    fi
+  done
+}
+
+ensure_go_entrypoints() {
+  if ! prepare_go_entrypoints; then
+    return 1
+  fi
+  if ! publish_go_entrypoints; then
+    if ! rollback_go_entrypoints; then
+      echo "error: Go entrypoint rollback could not complete; recovery files remain in ${go_entrypoint_stage_dir}" >&2
+      return 1
+    fi
+    rm -rf "${go_entrypoint_stage_dir}"
+    go_entrypoint_stage_dir=""
+    return 1
+  fi
+  go_entrypoints_committed=1
+  if [ -n "${go_entrypoint_stage_dir}" ]; then
+    rm -rf "${go_entrypoint_stage_dir}"
+    go_entrypoint_stage_dir=""
+  fi
+}
+
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify ${asset_file}" >&2
+    exit 1
+  fi
+}
+
+# `go version` は "go version go1.27.1 linux/amd64" を出力する。
+installed_go_version() {
+  local binary=$1
+
+  [ -x "${binary}" ] || return 1
+  (
+    cd /
+    GOTOOLCHAIN=local GOWORK=off "${binary}" version 2>/dev/null
+  ) | awk '{ sub(/^go/, "", $3); print $3 }'
+}
+
+# バージョン文字列の一致だけでは、コンパイラ本体を欠いた不完全な導入
+# (空ディレクトリマーカーのようなもの) を見逃す。bin/gofmt と実際の
+# コンパイラツールチェイン (pkg/tool/<os>_<arch>/compile) の実在も見る。
+go_payload_complete() {
+  local root=$1
+
+  [ -x "${root}/bin/gofmt" ] && [ -f "${root}/pkg/tool/${go_os_arch}/compile" ]
+}
+
+if [ "$(installed_go_version "${entrypoint}" || true)" = "${go_version}" ] \
+  && go_payload_complete "${final_root}"; then
+  if ! ensure_go_entrypoints; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if ! command -v tar >/dev/null 2>&1; then
+  echo "error: tar required to extract ${asset_file}" >&2
+  exit 1
+fi
+
+mkdir -p "${share_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${share_dir}/.go-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+payload_published=0
+
+rollback_go_install() {
+  local failed=0
+  if ! rollback_go_entrypoints; then
+    failed=1
+  fi
+  if [ "${transaction_started}" -ne 1 ] || [ "${transaction_committed}" -eq 1 ]; then
+    return "${failed}"
+  fi
+  if [ -e "${stage_dir}/previous-go" ]; then
+    if [ "${payload_published}" -eq 1 ]; then
+      rm -rf "${final_root}" || failed=1
+    fi
+    if [ ! -e "${final_root}" ]; then
+      mv "${stage_dir}/previous-go" "${final_root}" || failed=1
+    fi
+  elif [ "${payload_published}" -eq 1 ]; then
+    rm -rf "${final_root}" || failed=1
+  fi
+  return "${failed}"
+}
+
+cleanup_go_install() {
+  local status=$?
+
+  trap - EXIT
+  if ! rollback_go_install; then
+    echo "error: Go rollback could not complete; recovery files remain in ${stage_dir}${go_entrypoint_stage_dir:+ and ${go_entrypoint_stage_dir}}" >&2
+    exit 1
+  fi
+  rm -rf "${stage_dir}"
+  if [ -n "${go_entrypoint_stage_dir}" ]; then
+    rm -rf "${go_entrypoint_stage_dir}"
+  fi
+  exit "${status}"
+}
+
+trap cleanup_go_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+archive="${stage_dir}/${asset_file}"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${archive}" "${asset_url}"; then
+  echo "error: failed to download ${asset_file}; keeping the current Go installation." >&2
+  exit 1
+fi
+
+actual_sha256="$(sha256_file "${archive}")"
+if [ "${actual_sha256}" != "${asset_sha256}" ]; then
+  echo "error: checksum verification failed for ${asset_file}" >&2
+  exit 1
+fi
+
+# 公式アーカイブは常に go/ という単一の頂点ディレクトリを持つ。それを剥がして
+# 直下を final_root にする。
+mkdir "${stage_dir}/extracted"
+if ! tar -xzf "${archive}" -C "${stage_dir}/extracted" --strip-components=1; then
+  echo "error: failed to extract ${asset_file}" >&2
+  exit 1
+fi
+
+staged_entrypoint="${stage_dir}/extracted/bin/go"
+if [ ! -x "${staged_entrypoint}" ]; then
+  echo "error: expected entrypoint bin/go missing from ${asset_file}" >&2
+  exit 1
+fi
+
+if [ ! -x "${stage_dir}/extracted/bin/gofmt" ]; then
+  echo "error: expected entrypoint bin/gofmt missing from ${asset_file}" >&2
+  exit 1
+fi
+
+if [ ! -f "${stage_dir}/extracted/pkg/tool/${go_os_arch}/compile" ]; then
+  echo "error: expected compiler toolchain pkg/tool/${go_os_arch}/compile missing from ${asset_file}" >&2
+  exit 1
+fi
+
+staged_version="$(installed_go_version "${staged_entrypoint}" || true)"
+if [ "${staged_version}" != "${go_version}" ]; then
+  echo "error: expected go ${go_version} but ${asset_file} reported ${staged_version:-unknown}" >&2
+  exit 1
+fi
+
+if ! prepare_go_entrypoints; then
+  exit 1
+fi
+
+echo "Installing Go ${go_version}..."
+transaction_started=1
+if [ -e "${final_root}" ]; then
+  if ! mv "${final_root}" "${stage_dir}/previous-go"; then
+    echo "error: could not stage the existing Go installation; keeping the current Go installation" >&2
+    exit 1
+  fi
+fi
+
+if ! mv "${stage_dir}/extracted" "${final_root}"; then
+  echo "error: could not install Go; restoring the previous installation" >&2
+  exit 1
+fi
+payload_published=1
+
+if ! publish_go_entrypoints; then
+  echo "error: could not publish go/gofmt entrypoints; restoring the previous installation" >&2
+  exit 1
+fi
+go_entrypoints_committed=1
+transaction_committed=1
+{{ end }}
+{{- end -}}

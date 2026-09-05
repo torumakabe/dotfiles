@@ -17,9 +17,18 @@ STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-lin
 
 # ~/.local/bin を優先するアプリケーションが意図しない版を使わないようにする。
 # Rust は ADR-016 により mise の管理外であり、cargo / rust の除外は不要。
+# Go/Node.js(npm/npx)/.NET SDK(dnx 含む)/pnpm/Bun/TypeScript CLI/
+# typescript-language-server は ADR-028 で mise から離れ、専用 root への公式
+# 直接導入へ移行した。mise shims ディレクトリに同名の古い shim が残っていて
+# も、ここでは symlink 対象にしない (残存 shim を誤って `~/.local/bin` へ
+# 復活させると、GUI 起動プロセスから見えるツールが古い mise 管理版のまま
+# 固定されてしまうため)。
 EXCLUDE_EXACT=(
+  go gofmt
   node npm npx pnpm
   dotnet dnx
+  bun bunx
+  tsc tsserver typescript-language-server
 )
 
 # glob パターン。*.bat/*.ps1/*.sh/*.zst/*.txt/*-darwin-* は shim ではない付随ファイル。

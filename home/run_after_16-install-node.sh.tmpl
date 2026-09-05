@@ -1,0 +1,343 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+#!/usr/bin/env bash
+# Node.js — 公式アーカイブ (nodejs.org/dist) を直接導入する。
+# 実行順序: TypeScript CLI / typescript-language-server / typescript-lsp の各導入
+# スクリプトより前 (run_after_15 に続く番号)。それらは npm 解決にここの node/npm を使う。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ展開し、
+# checksum と版の確認まで終えてから最終パス (固定・無版数の root) へ置き換える。
+# 途中で失敗した場合は既存の Node.js を残す。
+
+set -euo pipefail
+
+node_version='{{ .node.version }}'
+{{ if not (hasKey .node.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+echo "Warning: Node.js ${node_version} has no official asset for {{ $platform }}; skipping installation." >&2
+exit 0
+{{ else }}
+{{- $asset := index .node.assets $platform }}
+share_dir="${HOME}/.local/share/chezmoi-dotfiles"
+final_root="${share_dir}/node"
+entrypoint="${final_root}/bin/node"
+npm_cli="${final_root}/bin/npm"
+npx_cli="${final_root}/bin/npx"
+asset_file='{{ $asset.file }}'
+asset_sha256='{{ $asset.sha256 }}'
+asset_url='{{ $.node.downloadBaseUrl }}/v{{ $.node.version }}/{{ $asset.file }}'
+bin_dir="${HOME}/.local/bin"
+mise_shims_dir="${HOME}/.local/share/mise/shims"
+
+# ~/.local/bin へ node/npm/npx の native symlink を transaction として発行する。
+# npm/npx はアーカイブ内で既に
+# lib/node_modules/npm/bin/{npm,npx}-cli.js への symlink であり、ここで
+# 作るのはその公式ランチャーへの追加 symlink に過ぎない (独自プロキシではない)。
+# 自分の固定 target と、同名の旧 mise shim だけを管理対象とみなす。
+node_entrypoint_names=()
+node_entrypoint_targets=()
+node_entrypoint_stage_dir=""
+node_entrypoints_started=0
+node_entrypoints_committed=0
+
+preflight_node_entrypoint_link() {
+  local name=$1 target=$2
+  local link="${bin_dir}/${name}"
+
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "${target}" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+      echo "error: ${link} already points elsewhere (${current}); refusing to replace it." >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} exists and is not managed by this installer; refusing to replace it." >&2
+    return 1
+  fi
+
+  node_entrypoint_names+=("${name}")
+  node_entrypoint_targets+=("${target}")
+}
+
+prepare_node_entrypoints() {
+  node_entrypoint_names=()
+  node_entrypoint_targets=()
+  if ! preflight_node_entrypoint_link node "${entrypoint}" \
+    || ! preflight_node_entrypoint_link npm "${npm_cli}" \
+    || ! preflight_node_entrypoint_link npx "${npx_cli}"; then
+    return 1
+  fi
+  [ "${#node_entrypoint_names[@]}" -gt 0 ] || return 0
+
+  if ! mkdir -p "${bin_dir}"; then
+    echo "error: could not create ${bin_dir}" >&2
+    return 1
+  fi
+  if ! node_entrypoint_stage_dir="$(mktemp -d "${bin_dir}/.node-entrypoints.XXXXXX")"; then
+    echo "error: could not create private entrypoint staging in ${bin_dir}" >&2
+    return 1
+  fi
+  if ! chmod 700 "${node_entrypoint_stage_dir}"; then
+    rm -rf "${node_entrypoint_stage_dir}"
+    node_entrypoint_stage_dir=""
+    return 1
+  fi
+  local i
+  for i in "${!node_entrypoint_names[@]}"; do
+    if ! ln -s "${node_entrypoint_targets[$i]}" \
+      "${node_entrypoint_stage_dir}/${node_entrypoint_names[$i]}"; then
+      echo "error: could not stage entrypoint link for ${node_entrypoint_names[$i]}" >&2
+      rm -rf "${node_entrypoint_stage_dir}"
+      node_entrypoint_stage_dir=""
+      return 1
+    fi
+  done
+}
+
+publish_node_entrypoints() {
+  [ -n "${node_entrypoint_stage_dir}" ] || return 0
+
+  local i name target link current
+  for i in "${!node_entrypoint_names[@]}"; do
+    name="${node_entrypoint_names[$i]}"
+    target="${node_entrypoint_targets[$i]}"
+    link="${bin_dir}/${name}"
+    if [ -L "${link}" ]; then
+      current="$(readlink "${link}")"
+      if [ "${current}" = "${target}" ]; then
+        continue
+      fi
+      if [ "${current}" != "${mise_shims_dir}/${name}" ]; then
+        echo "error: ${link} changed after preflight; refusing to replace it." >&2
+        return 1
+      fi
+      node_entrypoints_started=1
+      if ! mv "${link}" "${node_entrypoint_stage_dir}/previous-${name}"; then
+        echo "error: could not preserve the existing ${name} entrypoint" >&2
+        return 1
+      fi
+    elif [ -e "${link}" ]; then
+      echo "error: ${link} changed after preflight; refusing to replace it." >&2
+      return 1
+    else
+      node_entrypoints_started=1
+    fi
+    if ! mv "${node_entrypoint_stage_dir}/${name}" "${link}"; then
+      echo "error: could not publish entrypoint link for ${name}" >&2
+      return 1
+    fi
+  done
+}
+
+rollback_node_entrypoints() {
+  [ "${node_entrypoints_started}" -eq 1 ] || return 0
+  [ "${node_entrypoints_committed}" -eq 0 ] || return 0
+
+  local i name target link current
+  for ((i=${#node_entrypoint_names[@]} - 1; i >= 0; i--)); do
+    name="${node_entrypoint_names[$i]}"
+    target="${node_entrypoint_targets[$i]}"
+    link="${bin_dir}/${name}"
+    if [ -e "${node_entrypoint_stage_dir}/previous-${name}" ] \
+      || [ -L "${node_entrypoint_stage_dir}/previous-${name}" ]; then
+      if [ -e "${link}" ] || [ -L "${link}" ]; then
+        [ -L "${link}" ] || return 1
+        current="$(readlink "${link}")"
+        [ "${current}" = "${target}" ] || return 1
+        rm -f "${link}" || return 1
+      fi
+      mv "${node_entrypoint_stage_dir}/previous-${name}" "${link}" || return 1
+    elif [ ! -L "${node_entrypoint_stage_dir}/${name}" ]; then
+      [ -L "${link}" ] || return 1
+      current="$(readlink "${link}")"
+      [ "${current}" = "${target}" ] || return 1
+      rm -f "${link}" || return 1
+    fi
+  done
+}
+
+ensure_node_entrypoints() {
+  if ! prepare_node_entrypoints; then
+    return 1
+  fi
+  if ! publish_node_entrypoints; then
+    if ! rollback_node_entrypoints; then
+      echo "error: Node.js entrypoint rollback could not complete; recovery files remain in ${node_entrypoint_stage_dir}" >&2
+      return 1
+    fi
+    rm -rf "${node_entrypoint_stage_dir}"
+    node_entrypoint_stage_dir=""
+    return 1
+  fi
+  node_entrypoints_committed=1
+  if [ -n "${node_entrypoint_stage_dir}" ]; then
+    rm -rf "${node_entrypoint_stage_dir}"
+    node_entrypoint_stage_dir=""
+  fi
+}
+
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify ${asset_file}" >&2
+    exit 1
+  fi
+}
+
+# `node --version` は "v24.20.0" を出力する。
+installed_node_version() {
+  local binary=$1
+
+  [ -x "${binary}" ] || return 1
+  "${binary}" --version 2>/dev/null | awk 'NR == 1 { sub(/^v/, ""); print }'
+}
+
+# バージョン文字列の一致だけでは、npm/npx の実体を欠いた不完全な導入
+# (空ディレクトリマーカーのようなもの) を見逃す。bin/npm・bin/npx と、
+# それらが指す npm 本体一式 (npm-cli.js・npx-cli.js・package.json) の
+# 実在も見る。
+node_payload_complete() {
+  local root=$1
+
+  [ -e "${root}/bin/npm" ] && [ -e "${root}/bin/npx" ] \
+    && [ -e "${root}/lib/node_modules/npm/bin/npm-cli.js" ] \
+    && [ -e "${root}/lib/node_modules/npm/bin/npx-cli.js" ] \
+    && [ -f "${root}/lib/node_modules/npm/package.json" ]
+}
+
+if [ "$(installed_node_version "${entrypoint}" || true)" = "${node_version}" ] \
+  && node_payload_complete "${final_root}"; then
+  if ! ensure_node_entrypoints; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if ! command -v tar >/dev/null 2>&1; then
+  echo "error: tar required to extract ${asset_file}" >&2
+  exit 1
+fi
+
+mkdir -p "${share_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${share_dir}/.node-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+payload_published=0
+
+rollback_node_install() {
+  local failed=0
+  if ! rollback_node_entrypoints; then
+    failed=1
+  fi
+  if [ "${transaction_started}" -ne 1 ] || [ "${transaction_committed}" -eq 1 ]; then
+    return "${failed}"
+  fi
+  if [ -e "${stage_dir}/previous-node" ]; then
+    if [ "${payload_published}" -eq 1 ]; then
+      rm -rf "${final_root}" || failed=1
+    fi
+    if [ ! -e "${final_root}" ]; then
+      mv "${stage_dir}/previous-node" "${final_root}" || failed=1
+    fi
+  elif [ "${payload_published}" -eq 1 ]; then
+    rm -rf "${final_root}" || failed=1
+  fi
+  return "${failed}"
+}
+
+cleanup_node_install() {
+  local status=$?
+
+  trap - EXIT
+  if ! rollback_node_install; then
+    echo "error: Node.js rollback could not complete; recovery files remain in ${stage_dir}${node_entrypoint_stage_dir:+ and ${node_entrypoint_stage_dir}}" >&2
+    exit 1
+  fi
+  rm -rf "${stage_dir}"
+  if [ -n "${node_entrypoint_stage_dir}" ]; then
+    rm -rf "${node_entrypoint_stage_dir}"
+  fi
+  exit "${status}"
+}
+
+trap cleanup_node_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+archive="${stage_dir}/${asset_file}"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${archive}" "${asset_url}"; then
+  echo "error: failed to download ${asset_file}; keeping the current Node.js installation." >&2
+  exit 1
+fi
+
+actual_sha256="$(sha256_file "${archive}")"
+if [ "${actual_sha256}" != "${asset_sha256}" ]; then
+  echo "error: checksum verification failed for ${asset_file}" >&2
+  exit 1
+fi
+
+# 公式アーカイブは常に node-v<version>-<platform>/ という単一の頂点ディレクトリを
+# 持つ。それを剥がして直下を final_root にする。
+mkdir "${stage_dir}/extracted"
+if ! tar -xzf "${archive}" -C "${stage_dir}/extracted" --strip-components=1; then
+  echo "error: failed to extract ${asset_file}" >&2
+  exit 1
+fi
+
+staged_entrypoint="${stage_dir}/extracted/bin/node"
+if [ ! -x "${staged_entrypoint}" ]; then
+  echo "error: expected entrypoint bin/node missing from ${asset_file}" >&2
+  exit 1
+fi
+
+if ! node_payload_complete "${stage_dir}/extracted"; then
+  echo "error: expected npm/npx payload (bin/npm, bin/npx, lib/node_modules/npm/{npm-cli.js,npx-cli.js,package.json}) missing from ${asset_file}" >&2
+  exit 1
+fi
+
+staged_version="$(installed_node_version "${staged_entrypoint}" || true)"
+if [ "${staged_version}" != "${node_version}" ]; then
+  echo "error: expected node ${node_version} but ${asset_file} reported ${staged_version:-unknown}" >&2
+  exit 1
+fi
+
+if ! prepare_node_entrypoints; then
+  exit 1
+fi
+
+echo "Installing Node.js ${node_version}..."
+transaction_started=1
+if [ -e "${final_root}" ]; then
+  if ! mv "${final_root}" "${stage_dir}/previous-node"; then
+    echo "error: could not stage the existing Node.js installation; keeping the current Node.js installation" >&2
+    exit 1
+  fi
+fi
+
+if ! mv "${stage_dir}/extracted" "${final_root}"; then
+  echo "error: could not install Node.js; restoring the previous installation" >&2
+  exit 1
+fi
+payload_published=1
+
+if ! publish_node_entrypoints; then
+  echo "error: could not publish node/npm/npx entrypoints; restoring the previous installation" >&2
+  exit 1
+fi
+node_entrypoints_committed=1
+transaction_committed=1
+{{ end }}
+{{- end -}}

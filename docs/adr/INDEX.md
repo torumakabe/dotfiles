@@ -34,7 +34,7 @@
 | [019](019-cross-platform-parity-contract.md) | クロスプラットフォーム機能等価性はプラットフォーム契約と静的検査で担保する | Accepted |
 | [020](020-git-hooks-via-config.md) | gitleaks の pre-commit は Git の設定ベースフックで配る | Accepted |
 | [021](021-mise-lockfile-platforms.md) | lockfile の対象プラットフォームは lockfile_platforms で固定する | Accepted |
-| [022](022-pnpm-via-mise-not-corepack.md) | pnpm は corepack ではなく mise で直接管理する | Accepted |
+| [022](022-pnpm-via-mise-not-corepack.md) | pnpm は corepack ではなく mise で直接管理する | Deprecated |
 | [023](023-chezmoi-ps1-interpreter-noprofile.md) | chezmoi の ps1 実行系を固定しプロファイルを読ませない | Accepted |
 | [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension は公式 CLI で導入する | Accepted |
 | [025](025-copilot-cli-sandbox-user-level-default.md) | Copilot CLI local sandbox は user-level settings で既定有効にする | Superseded by ADR-026 |

@@ -237,11 +237,26 @@ class MiseOwnershipTests(unittest.TestCase):
                 self.assertNotIn(tool, lock["tools"])
 
     def test_mise_still_owns_the_remaining_tools(self) -> None:
+        # go/node/bun は P1 (ADR-028) で mise から直接導入へ移行済み。ここでは
+        # P1 が対象にしていない残存ツールだけを確認する。
         lock = tomllib.loads(MISE_LOCK_PATH.read_text(encoding="utf-8"))
 
-        for tool in ("go", "node", "kubectl", "lefthook", "bun"):
+        for tool in ("kubectl", "lefthook", "helm", "terraform"):
             with self.subTest(tool=tool):
                 self.assertIn(tool, lock["tools"])
+
+    def test_p1_tools_no_longer_appear_in_mise_config_or_lock(self) -> None:
+        """P1 (ADR-028) 第二弾で mise から直接導入へ移行した 7 ツール分。"""
+        config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
+        lock = tomllib.loads(MISE_LOCK_PATH.read_text(encoding="utf-8"))
+
+        for tool in ("go", "node", "dotnet", "bun", "pnpm"):
+            with self.subTest(tool=tool):
+                self.assertNotIn(tool, lock["tools"])
+        for tool in ("npm:typescript", "npm:typescript-language-server"):
+            with self.subTest(tool=tool):
+                self.assertNotIn(tool, lock["tools"])
+                self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
 
     def test_copilot_hooks_no_longer_force_mise_resolution(self) -> None:
         hooks = HOOKS_PATH.read_text(encoding="utf-8")
@@ -1012,6 +1027,31 @@ class PosixPathOrderTests(unittest.TestCase):
                     entries.index(str(local_bin)), entries.index(str(shims))
                 )
 
+    def test_direct_tool_payload_roots_are_not_added_to_path(self) -> None:
+        payload_roots = (
+            "go/bin",
+            "node/bin",
+            "dotnet",
+            "pnpm",
+            "typescript-cli/node_modules/.bin",
+            "typescript-lsp/node_modules/.bin",
+            "typescript-language-server/node_modules/.bin",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            local_bin = home / ".local/bin"
+            shims = home / ".local/share/mise/shims"
+            dotfiles_share = home / ".local/share/chezmoi-dotfiles"
+            roots = {name: dotfiles_share / name for name in payload_roots}
+            for directory in (local_bin, shims, *roots.values()):
+                directory.mkdir(parents=True)
+
+            entries = self._resolved_path("linux", "/usr/bin:/bin", home)
+
+            for name, root in roots.items():
+                with self.subTest(root=name):
+                    self.assertNotIn(str(root), entries)
+
     def test_an_existing_entry_is_moved_to_the_front(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             home = pathlib.Path(temp_dir)
@@ -1033,7 +1073,19 @@ class WindowsPathOrderTests(unittest.TestCase):
     def test_user_path_script_puts_local_bin_before_mise_shims(self) -> None:
         source = USER_PATH_PS1.read_text(encoding="utf-8")
 
-        self.assertIn("-Leading @($localBinDir, $shimsDir)", source)
+        self.assertIn(
+            "$leadingEntries = @(\n"
+            "    $localBinDir,\n"
+            "    $goBinDir,\n"
+            "    $nodeRootDir,\n"
+            "    $dotnetRootDir,\n"
+            "    $pnpmRootDir,\n"
+            "    $typescriptCliBinDir,\n"
+            "    $typescriptLspBinDir,\n"
+            "    $typescriptLanguageServerBinDir,\n"
+            "    $shimsDir",
+            source,
+        )
         self.assertLess(
             source.index("$localBinDir = Join-Path $HOME '.local\\bin'"),
             source.index("$shimsDir = Join-Path $env:LOCALAPPDATA 'mise\\shims'"),

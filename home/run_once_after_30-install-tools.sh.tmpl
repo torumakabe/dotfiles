@@ -4,14 +4,19 @@ set -euo pipefail
 
 # Additional tools — skipped in Codespaces/Dev Containers
 # Order dependency:
-# - Keep this after run_once_after_20-mise-install because it expects mise-installed
-#   runtimes/shims (for example `go`) to already be on PATH.
+# - Keep this after run_once_after_20-mise-install so mise-installed
+#   runtimes/shims that remain (uv tools 実行に使う mise 管理下ツールなど) are
+#   already on PATH.
+# - Keep this after run_after_15-install-go (mise から撤去済み。直接導入した
+#   Go を PATH へ通す必要があるため、下の PATH 設定にそのパスを含める).
 # - When changing the skip conditions, confirm Dev Containers / Codespaces still rely on
 #   their base image or Features instead of this script.
 export DEBIAN_FRONTEND=noninteractive
-# ~/.local/bin を mise shims より前に置く。uv / jq は公式インストーラーが
-# ~/.local/bin へ置いた実体を使う（run_after_25 / run_after_26）。
-export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:${GOPATH:-${HOME}/go}/bin:${PATH}"
+# ~/.local/bin と mise から撤去した Go の直接導入 root を mise shims より前に置く。
+# uv / jq は公式インストーラーが ~/.local/bin へ置いた実体を使う
+# (run_after_25 / run_after_26)。Go は run_after_15 が
+# ~/.local/share/chezmoi-dotfiles/go/bin へ置いた実体を使う。
+export PATH="${HOME}/.local/bin:${HOME}/.local/share/chezmoi-dotfiles/go/bin:${HOME}/.local/share/mise/shims:${GOPATH:-${HOME}/go}/bin:${PATH}"
 
 sha256_file() {
   local file=$1

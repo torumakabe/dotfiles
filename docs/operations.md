@@ -15,13 +15,21 @@
 
 ### mise の管理外にあるツール
 
-GitHub CLI・jq・uv は mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）。望ましい版・最小版・公式 asset は `home/.chezmoidata.toml` を正本とする。導入スクリプトはこのファイルを書き換えない。
+GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・typescript-language-server は mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）。望ましい版・最小版・公式 asset は `home/.chezmoidata.toml` を正本とする。導入スクリプトはこのファイルを書き換えない。
 
 | ツール | 導入経路 | 更新の起点 |
 |--------|---------|-----------|
 | GitHub CLI | OS/ベンダーのパッケージマネージャー（Linux: `apt` / macOS: `brew` / Windows: `winget`） | ベンダーの更新コマンド |
 | jq | 公式リリースの検証済みバイナリを `~/.local/bin` へ直接配置 | `home/.chezmoidata.toml` の `jq.version` と asset の SHA-256 |
 | uv | 版を含む固定 URL の公式インストーラー | `home/.chezmoidata.toml` の `uv.version` とインストーラーの SHA-256 |
+| Go | go.dev の公式アーカイブを `~/.local/share/chezmoi-dotfiles/go` へ展開 | `home/.chezmoidata.toml` の `[go]` の `version` と OS/CPU ごとの `sha256` |
+| Node.js | nodejs.org の公式アーカイブを `~/.local/share/chezmoi-dotfiles/node` へ展開 | `home/.chezmoidata.toml` の `[node]` の `version` と OS/CPU ごとの `sha256`（Node の SHASUMS256.txt 由来） |
+| .NET SDK | builds.dotnet.microsoft.com の公式アーカイブを `~/.local/share/chezmoi-dotfiles/dotnet` へ展開 | `home/.chezmoidata.toml` の `[dotnet]` の `version` と OS/CPU ごとの `sha512`（release-metadata JSON 由来） |
+| Bun | GitHub Releases の公式 zip から単一実行ファイルを取り出し `~/.local/bin/bun` へ直接配置。`bunx` は POSIX では `bun` への相対 symlink、Windows では `bun.exe` のファイルコピー（公式インストーラーと同じ方式） | `home/.chezmoidata.toml` の `[bun]` の `version` と OS/CPU ごとの `sha256` |
+| pnpm | GitHub Releases の公式アーカイブ（フラット構成）を `~/.local/share/chezmoi-dotfiles/pnpm` へ展開 | `home/.chezmoidata.toml` の `[pnpm]` の `version` と OS/CPU ごとの `sha256` |
+| TypeScript CLI | 直接導入した Node/npm で専用 prefix へ `npm install` | `home/.chezmoidata.toml` の `[typescriptCli]` の `version` |
+| TypeScript LSP 依存 | 同上（typescript-language-server が参照する `tsserver.js` と `tsserver` launcher を持つ専用 prefix） | `home/.chezmoidata.toml` の `[typescriptLsp]` の `version` |
+| typescript-language-server | 同上（専用 prefix、`typescript` 依存は持たない） | `home/.chezmoidata.toml` の `[typescriptLanguageServer]` の `version` |
 
 GitHub CLI は、未導入か `githubCli.minimumVersion` 未満のときだけ導入・更新する。最小版以上は更新しない。最小版は `gh skill list` / `gh skill install` の対応版であり、下回ると `gh-stack` のセットアップが完了しない。Linux、WSL、Dev Container、Codespaces は `apt`、macOS は Homebrew、Windows は WinGet を使う。Codespaces のカスタム Dev Containerには gh が含まれない場合があるため、ベースイメージへの同梱を前提にしない。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を検査して不足時に更新コマンドを案内する。
 
@@ -31,17 +39,36 @@ jq はダウンロードに失敗した場合も異常終了し、既存の jq �
 
 jq の asset は `"<chezmoi.os>-<chezmoi.arch>"` ごとに固定する。宣言に無い OS/CPU では、別 CPU 向けの asset へフォールバックせず警告して何もしない。
 
+Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・typescript-language-server も同じ方針で動く: 毎回の適用で走り、導入済みの版が宣言と一致すればネットワークへ出ない。取得物は最終パスと同じファイルシステムの staging へ展開し、checksum・版・エントリポイントの存在を確認してから最終パス（固定・無版数の root）へ入れ替える。途中で失敗した場合（checksum 不一致、展開失敗、版不一致、Windows でのロック中 exe の置き換え不能など）は既存のインストールを残し、具体的な失敗理由を標準エラーへ出す。asset は `"<chezmoi.os>-<chezmoi.arch>"` ごとに固定し、宣言に無い OS/CPU では別 CPU 向けの asset へフォールバックせず警告して何もしない（darwin-amd64 は Go/Node.js/.NET SDK/Bun/pnpm の宣言に無い）。npm ベースの 3 ツールは npm 標準の checksum 検証を使い、レジストリミラーが `dist.integrity` を欠いていても存在しない検証は発明しない。版を更新するときは、上流の公式ソース（Go: `https://go.dev/dl/?mode=json&include=all`、Node.js: `https://nodejs.org/dist/v<version>/SHASUMS256.txt`、.NET SDK: `https://builds.dotnet.microsoft.com/dotnet/release-metadata/<major.minor>/releases.json`、Bun/pnpm: GitHub Releases のリリースノート）で版と checksum を確認してから `home/.chezmoidata.toml` を編集し、`uv run -m unittest tests.test_direct_tool_installs_runtimes -v` を実行する。
+
+導入済みの判定では、宣言版だけでなく、各ツールの起動に必要なファイルも確認する。Node.js は npm/npx と付随モジュール、pnpm は同梱の `dist/`、.NET は SDK と公式 `dnx` launcher、Go は `gofmt` とコンパイラーを確認する。TypeScript CLI と typescript-language-server は、package.json の版に加えて launcher の `--version` が一致することを確認する。前提コマンド不足や npm install の失敗は非零終了とし、既存の導入を保持する。
+
+Go と pnpm の版は、プロジェクト指定による別版の自動取得を無効にし、プロジェクト外で確認する。この設定は確認プロセスだけに適用し、通常の Go/pnpm の設定は変更しない。.NET もプロジェクト外で版を確認し、`global.json` による SDK 選択の影響を除く。
+
+直接導入する各ランタイムは、専用 root への実体配置に加えて POSIX (macOS/Linux/WSL) では主要コマンドへの symlink を `~/.local/bin` へ張る（`go`/`gofmt`、`node`/`npm`/`npx`、`dotnet`/`dnx`、`pnpm`、`tsc`、`tsserver`（typescript-lsp の npm 生成 launcher）、`typescript-language-server`）。置き換えるのは自身の入口と同名の旧 mise shim へのリンクだけで、管理外のファイルやリンクと衝突した場合は上書きせずに失敗する。payload が完全なのに symlink だけが欠落している場合は、再ダウンロードせずに symlink だけを復旧する。POSIX の `PATH` には専用 root を追加せず、`~/.local/bin` を残存する mise shims より前に置く。
+
+Windows は symlink や独自の汎用プロキシを作らず、`run_once_after_05-setup-user-path.ps1` が次のディレクトリを、この順序でユーザー `Path` の先頭へ登録する。
+
+1. `%USERPROFILE%\.local\bin`
+2. `%USERPROFILE%\.local\share\chezmoi-dotfiles\go\bin`
+3. `%USERPROFILE%\.local\share\chezmoi-dotfiles\node`
+4. `%USERPROFILE%\.local\share\chezmoi-dotfiles\dotnet`
+5. `%USERPROFILE%\.local\share\chezmoi-dotfiles\pnpm`
+6. `%USERPROFILE%\.local\share\chezmoi-dotfiles\typescript-cli\node_modules\.bin`
+7. `%USERPROFILE%\.local\share\chezmoi-dotfiles\typescript-lsp\node_modules\.bin`
+8. `%USERPROFILE%\.local\share\chezmoi-dotfiles\typescript-language-server\node_modules\.bin`
+9. `%LOCALAPPDATA%\mise\shims`
+
+Go、Windows 版 Node.js、.NET SDK、pnpm と同梱の `dist`、各 npm prefix は公式配布構成のまま専用 root に保持する。Windows 版 Bun の `bunx.exe` は公式インストーラーと同じファイルコピーで提供する。ユーザー `Path` の変更は既存プロセスへ遡及しないため、新しいプロセスで確認する。GUI アプリが古い環境を保持している場合は、サインアウトまたは OS の再起動が必要になる。
+
 ## 定期チェック対象の制約
 
 `mise` 設定や導入元を見直すときに、次の制約が残っているか確認する。解消されていれば条件分岐やワークアラウンドを外せる。
 
 - **cargo-make**: linux/arm64 向け配布なし
-- **npm:typescript-language-server**: 利用中の npm レジストリプロキシが trusted publisher の証跡を保持しない版だけを `trust_policy_excludes` の対象とする。対象版は `home/dot_config/mise/config.toml.tmpl` を正本とする
 - **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式 `.deb`、更新は `azd update`）
 - **copilot-cli**: mise の `github:` バックエンドで更新遅延やバージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式リリースアーカイブ、更新は `copilot update`）
 - **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
-
-TypeScript language server の除外を撤去するときは、`home/dot_config/mise/config.toml.tmpl` の版限定エントリを削除し、`mise install --force npm:typescript-language-server` で既存導入済み版も再検証する。成功後に `uv run -m unittest tests.test_mise_config -v` を実行する。失敗時の確認は [`troubleshooting.md`](troubleshooting.md#mise-install-が-aube-install-failed-failed-to-resolve-dependencies-で止まる) を参照する。
 
 ## gh-stack の更新
 

@@ -1,66 +1,131 @@
 {{- if eq .chezmoi.os "windows" -}}
+# TypeScript 言語サーバー用の TypeScript 本体 (tsserver.js のみを参照する
+# 専用導入。tsc/tsserver コマンドを提供するグローバル CLI ([typescriptCli])
+# とは別管理で、TS7 系は tsserver を同梱しないため [typescriptLsp] は固定で
+# {{ .typescriptLsp.version }} を保つ)。直接導入した Node/npm を使い、専用
+# npm prefix (グローバルインストールではない) へ導入する。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得は staging の
+# npm prefix へ行い、package.json の版と tsserver.js の存在を確認してから
+# 最終パス (固定・無版数の root) へ置き換える。途中で失敗した場合は既存の
+# TypeScript LSP 依存を残す。
 $ErrorActionPreference = 'Stop'
 
 $typescriptVersion = '{{ .typescriptLsp.version }}'
-$installRoot = Join-Path $HOME '.local\share\chezmoi-dotfiles\typescript-lsp'
-$typescriptPackageRoot = Join-Path $installRoot 'node_modules\typescript'
-$packagePath = Join-Path $installRoot 'node_modules\typescript\package.json'
-$tsserverPath = Join-Path $installRoot 'node_modules\typescript\lib\tsserver.js'
+$shareDir = Join-Path $HOME '.local\share\chezmoi-dotfiles'
+$nodeRoot = Join-Path $shareDir 'node'
+$nodeExe = Join-Path $nodeRoot 'node.exe'
+$npmCmd = Join-Path $nodeRoot 'npm.cmd'
+$finalRoot = Join-Path $shareDir 'typescript-lsp'
+$packagePath = Join-Path $finalRoot 'node_modules\typescript\package.json'
+$tsserverPath = Join-Path $finalRoot 'node_modules\typescript\lib\tsserver.js'
+$binPath = Join-Path $finalRoot 'node_modules\.bin\tsserver.cmd'
 
-$miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
-  Select-Object -First 1).Source
-if (-not $miseExe) {
-  $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
-  if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
-}
-if (-not $miseExe -or -not (Test-Path -LiteralPath $miseExe)) {
-  Write-Warning 'mise.exe was not found; skipping TypeScript LSP dependency installation.'
-  exit 0
+if (-not (Test-Path -LiteralPath $nodeExe -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $npmCmd -PathType Leaf)) {
+    throw 'Directly-installed Node was not found; cannot install TypeScript LSP dependency.'
 }
 
-$nodeOutput = & $miseExe which node 2>$null
-if ($LASTEXITCODE -ne 0 -or -not $nodeOutput) {
-  Write-Warning 'mise-managed node was not found; run mise install and apply chezmoi again.'
-  exit 0
-}
-$nodeExe = ([string]$nodeOutput).Trim()
-if (-not (Test-Path -LiteralPath $nodeExe)) {
-  Write-Warning 'mise-managed node was not found; run mise install and apply chezmoi again.'
-  exit 0
+function Get-InstalledTypeScriptVersion {
+    param([string]$PackagePath)
+
+    if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) { return $null }
+    try {
+        return (Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json).version
+    }
+    catch {
+        return $null
+    }
 }
 
-if ((Test-Path -LiteralPath $packagePath) -and (Test-Path -LiteralPath $tsserverPath)) {
-  try {
-    $installedVersion = (Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json).version
-  }
-  catch {
-    $installedVersion = $null
-  }
-  if ($installedVersion -eq $typescriptVersion) {
+function Assert-BinaryReplaceable {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw ("tsserver を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "tsserver を使っているプロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "既存の TypeScript LSP 依存は変更していません。")
+    }
+}
+
+if ((Test-Path -LiteralPath $packagePath -PathType Leaf) -and
+    (Test-Path -LiteralPath $tsserverPath -PathType Leaf) -and
+    (Test-Path -LiteralPath $binPath -PathType Leaf) -and
+    ((Get-InstalledTypeScriptVersion -PackagePath $packagePath) -eq $typescriptVersion)) {
     exit 0
-  }
 }
 
-if (Test-Path -LiteralPath $typescriptPackageRoot) {
-  Remove-Item -LiteralPath $typescriptPackageRoot -Recurse -Force
-}
+New-Item -ItemType Directory -Force -Path $shareDir | Out-Null
 
-$npmCmd = Join-Path (Split-Path -Parent $nodeExe) 'npm.cmd'
-if (-not (Test-Path -LiteralPath $npmCmd)) {
-  throw "npm.cmd was not found beside mise-managed node: $npmCmd"
-}
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $shareDir (".typescript-lsp-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+$cleanupStageDir = $true
+try {
+    $stagedRoot = Join-Path $stageDir 'new'
+    New-Item -ItemType Directory -Force -Path $stagedRoot | Out-Null
 
-& $npmCmd install --prefix $installRoot --no-save --package-lock=false "typescript@$typescriptVersion"
-if ($LASTEXITCODE -ne 0) {
-  throw "TypeScript LSP dependency installation failed with exit code $LASTEXITCODE."
-}
+    & $npmCmd install --prefix $stagedRoot --no-save --package-lock=false "typescript@$typescriptVersion"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install typescript@$typescriptVersion; keeping the current TypeScript LSP dependency."
+    }
 
-if (-not (Test-Path -LiteralPath $packagePath) -or -not (Test-Path -LiteralPath $tsserverPath)) {
-  throw 'TypeScript LSP dependency installation did not produce package.json and tsserver.js.'
-}
+    $stagedPackagePath = Join-Path $stagedRoot 'node_modules\typescript\package.json'
+    $stagedTsserverPath = Join-Path $stagedRoot 'node_modules\typescript\lib\tsserver.js'
+    $stagedBinPath = Join-Path $stagedRoot 'node_modules\.bin\tsserver.cmd'
+    if (-not (Test-Path -LiteralPath $stagedPackagePath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $stagedTsserverPath -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $stagedBinPath -PathType Leaf)) {
+        throw 'TypeScript LSP dependency installation did not produce package.json, tsserver.js, and tsserver.cmd.'
+    }
 
-$installedVersion = (Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json).version
-if ($installedVersion -ne $typescriptVersion) {
-  throw "Expected TypeScript $typescriptVersion but found $installedVersion."
+    $stagedVersion = Get-InstalledTypeScriptVersion -PackagePath $stagedPackagePath
+    if ($stagedVersion -ne $typescriptVersion) {
+        $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+        throw "expected TypeScript $typescriptVersion but found $found."
+    }
+
+    Assert-BinaryReplaceable -Path $binPath
+
+    Write-Host "Installing TypeScript LSP dependency $typescriptVersion..."
+    $backupRoot = Join-Path $stageDir 'previous-typescript-lsp'
+    try {
+        if (Test-Path -LiteralPath $finalRoot) {
+            Move-Item -LiteralPath $finalRoot -Destination $backupRoot
+        }
+        Move-Item -LiteralPath $stagedRoot -Destination $finalRoot
+    }
+    catch {
+        $replacementError = $_
+        try {
+            if (Test-Path -LiteralPath $backupRoot) {
+                Remove-Item -LiteralPath $finalRoot -Recurse -Force -ErrorAction SilentlyContinue
+                Move-Item -LiteralPath $backupRoot -Destination $finalRoot -Force
+            }
+        }
+        catch {
+            $cleanupStageDir = $false
+            throw ("TypeScript LSP 依存の復旧を完了できませんでした。復旧用ファイルは $stageDir に" +
+                "残しています。同ディレクトリの previous-typescript-lsp を確認してください。" +
+                "置換原因: $($replacementError.Exception.Message); 復旧原因: $($_.Exception.Message)")
+        }
+        throw ("TypeScript LSP 依存の置き換えに失敗したため、以前のインストールへ戻しました。" +
+            "原因: $($replacementError.Exception.Message)")
+    }
+}
+finally {
+    if ($cleanupStageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 {{- end -}}

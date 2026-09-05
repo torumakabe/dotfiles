@@ -1,0 +1,171 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# Bun — 公式リリースの検証済みアーカイブから単一実行ファイルを取り出し、
+# ~/.local/bin へ直接配置する (jq と同じ配置方針)。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ置き、
+# checksum と版の確認まで終えてから最終パスへ移す。失敗した場合は既存の bun を残す。
+$ErrorActionPreference = 'Stop'
+
+$bunVersion = '{{ .bun.version }}'
+{{ if not (hasKey .bun.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+Write-Warning "Bun $bunVersion has no official asset for {{ $platform }}; skipping installation."
+exit 0
+{{ else }}
+{{- $asset := index .bun.assets $platform }}
+$binDir = Join-Path $HOME '.local\bin'
+$assetFile = '{{ $asset.file }}'
+$assetInnerFile = '{{ $asset.innerFile }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+$assetUrl = '{{ $.bun.releaseBaseUrl }}/{{ $.bun.releaseTag }}/{{ $asset.file }}'
+
+# `bun --version` は "1.4.0" を出力する。
+function Get-InstalledBunVersion {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    try {
+        $output = & $Path --version 2>$null
+    }
+    catch {
+        return $null
+    }
+    if ($LASTEXITCODE -ne 0 -or -not $output) { return $null }
+    return ([string]($output | Select-Object -First 1)).Trim()
+}
+
+# bunx は公式には bun.exe 自身のコピーとして提供される (公式インストーラ
+# install.ps1 も Copy-Item で bunx.exe を作る; symlink は権限昇格を要するため
+# 使わない)。バージョン一致だけでは、古い版の bunx.exe が取り残された状態を
+# 見逃すため、bun.exe と bunx.exe のハッシュが一致する (同一バイナリの複製で
+# ある) ことまで確認する。
+function Test-BunxIsCurrentCopy {
+    param([string]$BunPath, [string]$BunxPath)
+
+    if (-not (Test-Path -LiteralPath $BunxPath -PathType Leaf)) { return $false }
+    if (-not (Test-Path -LiteralPath $BunPath -PathType Leaf)) { return $false }
+    $bunHash = (Get-FileHash -LiteralPath $BunPath -Algorithm SHA256).Hash
+    $bunxHash = (Get-FileHash -LiteralPath $BunxPath -Algorithm SHA256).Hash
+    return $bunHash -eq $bunxHash
+}
+
+function Assert-BinaryReplaceable {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "$Path exists but is not a file; refusing to replace it."
+    }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw ("bun/bunx を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "bun を使っているプロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "既存の bun/bunx は変更していません。")
+    }
+}
+
+$targetBun = Join-Path $binDir 'bun.exe'
+$targetBunx = Join-Path $binDir 'bunx.exe'
+if (((Get-InstalledBunVersion -Path $targetBun) -eq $bunVersion) -and
+    (Test-BunxIsCurrentCopy -BunPath $targetBun -BunxPath $targetBunx)) {
+    exit 0
+}
+if (((Get-InstalledBunVersion -Path $targetBun) -eq $bunVersion) -and
+    (Test-Path -LiteralPath $targetBun -PathType Leaf)) {
+    # bun 本体は正しい版だが bunx.exe が欠落/不整合。再ダウンロードせず複製だけ直す。
+    Assert-BinaryReplaceable -Path $targetBunx
+    Copy-Item -LiteralPath $targetBun -Destination $targetBunx -Force
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $binDir (".bun-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+try {
+    $archive = Join-Path $stageDir $assetFile
+    try {
+        Invoke-WebRequest -Uri $assetUrl -OutFile $archive -UseBasicParsing
+    }
+    catch {
+        throw "failed to download $assetFile; keeping the current bun. ($($_.Exception.Message))"
+    }
+
+    $actualSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $assetSha256) {
+        throw "checksum verification failed for $assetFile"
+    }
+
+    $extractedParent = Join-Path $stageDir 'extracted'
+    Expand-Archive -LiteralPath $archive -DestinationPath $extractedParent -Force
+    $stagedBun = Join-Path $extractedParent $assetInnerFile
+    if (-not (Test-Path -LiteralPath $stagedBun -PathType Leaf)) {
+        throw "expected $assetInnerFile missing from $assetFile"
+    }
+
+    # ダウンロードした実行ファイルの mark-of-the-web を、公式の SHA-256 と一致することを
+    # 確認した後にだけ解除する。
+    Unblock-File -LiteralPath $stagedBun
+
+    $stagedVersion = Get-InstalledBunVersion -Path $stagedBun
+    if ($stagedVersion -ne $bunVersion) {
+        $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+        throw "expected bun $bunVersion but $assetFile reported $found"
+    }
+
+    Assert-BinaryReplaceable -Path $targetBun
+    Assert-BinaryReplaceable -Path $targetBunx
+
+    Write-Host "Installing bun $bunVersion..."
+    $backupBun = Join-Path $stageDir 'previous-bun.exe'
+    $backupBunx = Join-Path $stageDir 'previous-bunx.exe'
+    $hadPreviousBun = Test-Path -LiteralPath $targetBun
+    $hadPreviousBunx = Test-Path -LiteralPath $targetBunx
+    try {
+        if ($hadPreviousBun) {
+            Move-Item -LiteralPath $targetBun -Destination $backupBun -Force
+        }
+        if ($hadPreviousBunx) {
+            Move-Item -LiteralPath $targetBunx -Destination $backupBunx -Force
+        }
+        Move-Item -LiteralPath $stagedBun -Destination $targetBun -Force
+        Copy-Item -LiteralPath $targetBun -Destination $targetBunx -Force
+    }
+    catch {
+        $replacementError = $_
+        try {
+            Remove-Item -LiteralPath $targetBun -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $targetBunx -Force -ErrorAction SilentlyContinue
+            if ($hadPreviousBun) {
+                Move-Item -LiteralPath $backupBun -Destination $targetBun -Force
+            }
+            if ($hadPreviousBunx) {
+                Move-Item -LiteralPath $backupBunx -Destination $targetBunx -Force
+            }
+        }
+        catch {
+            throw ("bun/bunx の復旧を完了できませんでした。復旧用ファイルは $stageDir に残しています。" +
+                "実行中の bun 関連プロセスを終了し、同ディレクトリの previous-bun.exe/previous-bunx.exe を確認してください。" +
+                "置換原因: $($replacementError.Exception.Message); 復旧原因: $($_.Exception.Message)")
+        }
+        # 実行中の bun.exe/bunx.exe は置き換えられない場合がある。既存のバイナリへ戻した。
+        throw ("bun/bunx の置き換えに失敗したため、以前のインストールへ戻しました。" +
+            "実行中の bun 関連プロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "原因: $($replacementError.Exception.Message)")
+    }
+}
+finally {
+    Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+{{ end }}
+{{- end -}}

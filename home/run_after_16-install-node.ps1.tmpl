@@ -1,0 +1,162 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# Node.js — 公式アーカイブ (nodejs.org/dist) を直接導入する。
+# 実行順序: TypeScript CLI / typescript-language-server / typescript-lsp の各導入
+# スクリプトより前 (run_after_15 に続く番号)。それらは npm 解決にここの node/npm を使う。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ展開し、
+# checksum と版の確認まで終えてから最終パス (固定・無版数の root) へ置き換える。
+# 途中で失敗した場合は既存の Node.js を残す。
+$ErrorActionPreference = 'Stop'
+
+$nodeVersion = '{{ .node.version }}'
+{{ if not (hasKey .node.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+Write-Warning "Node.js $nodeVersion has no official asset for {{ $platform }}; skipping installation."
+exit 0
+{{ else }}
+{{- $asset := index .node.assets $platform }}
+$shareDir = Join-Path $HOME '.local\share\chezmoi-dotfiles'
+$finalRoot = Join-Path $shareDir 'node'
+# Windows 版アーカイブは直下がフラット (bin\ が無い)。node.exe は root 直下。
+$entrypoint = Join-Path $finalRoot 'node.exe'
+$assetFile = '{{ $asset.file }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+$assetUrl = '{{ $.node.downloadBaseUrl }}/v{{ $.node.version }}/{{ $asset.file }}'
+$innerDir = '{{ $asset.innerDir }}'
+
+# バージョン文字列の一致だけでは、npm/npx の実体を欠いた不完全な導入
+# (空ディレクトリマーカーのようなもの) を見逃す。Windows 版アーカイブは
+# root 直下に npm.cmd/npx.cmd (公式生成ランチャー) を持ち、それらが指す
+# node_modules\npm 本体一式の実在も見る。
+function Test-NodePayloadComplete {
+    param([string]$Root)
+
+    $npmCmd = Join-Path $Root 'npm.cmd'
+    $npxCmd = Join-Path $Root 'npx.cmd'
+    $npmCli = Join-Path $Root 'node_modules\npm\bin\npm-cli.js'
+    $npxCli = Join-Path $Root 'node_modules\npm\bin\npx-cli.js'
+    $npmPkg = Join-Path $Root 'node_modules\npm\package.json'
+    return (Test-Path -LiteralPath $npmCmd -PathType Leaf) `
+        -and (Test-Path -LiteralPath $npxCmd -PathType Leaf) `
+        -and (Test-Path -LiteralPath $npmCli -PathType Leaf) `
+        -and (Test-Path -LiteralPath $npxCli -PathType Leaf) `
+        -and (Test-Path -LiteralPath $npmPkg -PathType Leaf)
+}
+
+# `node --version` は "v24.20.0" を出力する。
+function Get-InstalledNodeVersion {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    try {
+        $output = & $Path --version 2>$null
+    }
+    catch {
+        return $null
+    }
+    if ($LASTEXITCODE -ne 0 -or -not $output) { return $null }
+    return (([string]($output | Select-Object -First 1)).Trim() -replace '^v', '')
+}
+
+# 実行中の node.exe は置き換えられない。root ごと入れ替える前に排他で開けるか確認する。
+function Assert-BinaryReplaceable {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw ("node.exe を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "node を使っているプロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "既存の Node.js インストールは変更していません。")
+    }
+}
+
+if ((Get-InstalledNodeVersion -Path $entrypoint) -eq $nodeVersion -and (Test-NodePayloadComplete -Root $finalRoot)) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $shareDir | Out-Null
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $shareDir (".node-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+$cleanupStageDir = $true
+try {
+    $archive = Join-Path $stageDir $assetFile
+    try {
+        Invoke-WebRequest -Uri $assetUrl -OutFile $archive -UseBasicParsing
+    }
+    catch {
+        throw "failed to download $assetFile; keeping the current Node.js installation. ($($_.Exception.Message))"
+    }
+
+    $actualSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $assetSha256) {
+        throw "checksum verification failed for $assetFile"
+    }
+
+    # 公式アーカイブは常に node-v<version>-win-<arch>\ という単一の頂点ディレクトリを
+    # 持つ。それを剥がして直下を final_root にする。
+    $extractedParent = Join-Path $stageDir 'extracted'
+    Expand-Archive -LiteralPath $archive -DestinationPath $extractedParent -Force
+    $extractedNode = Join-Path $extractedParent $innerDir
+    $stagedEntrypoint = Join-Path $extractedNode 'node.exe'
+    if (-not (Test-Path -LiteralPath $stagedEntrypoint -PathType Leaf)) {
+        throw "expected entrypoint node.exe missing from $assetFile"
+    }
+
+    if (-not (Test-NodePayloadComplete -Root $extractedNode)) {
+        throw "expected npm/npx payload (npm.cmd, npx.cmd, node_modules\npm\bin\{npm-cli.js,npx-cli.js}, node_modules\npm\package.json) missing from $assetFile"
+    }
+
+    $stagedVersion = Get-InstalledNodeVersion -Path $stagedEntrypoint
+    if ($stagedVersion -ne $nodeVersion) {
+        $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+        throw "expected node $nodeVersion but $assetFile reported $found"
+    }
+
+    Assert-BinaryReplaceable -Path $entrypoint
+
+    Write-Host "Installing Node.js $nodeVersion..."
+    $backupRoot = Join-Path $stageDir 'previous-node'
+    try {
+        if (Test-Path -LiteralPath $finalRoot) {
+            Move-Item -LiteralPath $finalRoot -Destination $backupRoot
+        }
+        Move-Item -LiteralPath $extractedNode -Destination $finalRoot
+    }
+    catch {
+        $replacementError = $_
+        try {
+            if (Test-Path -LiteralPath $backupRoot) {
+                Remove-Item -LiteralPath $finalRoot -Recurse -Force -ErrorAction SilentlyContinue
+                Move-Item -LiteralPath $backupRoot -Destination $finalRoot -Force
+            }
+        }
+        catch {
+            $cleanupStageDir = $false
+            throw ("Node.js の復旧を完了できませんでした。復旧用ファイルは $stageDir に残しています。" +
+                "実行中の node 関連プロセスを終了し、同ディレクトリの previous-node を確認してください。" +
+                "置換原因: $($replacementError.Exception.Message); 復旧原因: $($_.Exception.Message)")
+        }
+        throw ("Node.js の置き換えに失敗したため、以前のインストールへ戻しました。" +
+            "実行中の node 関連プロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "原因: $($replacementError.Exception.Message)")
+    }
+}
+finally {
+    if ($cleanupStageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+{{ end }}
+{{- end -}}

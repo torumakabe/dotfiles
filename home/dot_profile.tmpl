@@ -49,10 +49,11 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
   # is deterministic even when a system profile already added the directory.
   #
   # Ordering (last prepend wins the leftmost slot):
-  #   1. ~/go/bin
+  #   1. ~/go/bin  (GOPATH/bin: `go install` が置くユーザーバイナリ)
   #   2. ~/.cargo/bin
   #   3. ~/.local/share/mise/shims
-  #   4. ~/.local/bin  (公式インストーラーが置いた実体を mise shims より優先する)
+  #   4. ~/.local/bin  (公式インストーラーが置いた実体と専用 payload root
+  #      へのコマンド symlink を mise shims より優先する)
   __add_path() {
     [ -d "$1" ] || return 0
     __path_kept=""

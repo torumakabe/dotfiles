@@ -27,7 +27,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 ## 主要な決定事項
 
 - 設定配布 `chezmoi` / 汎用ツール版管理 `mise` / Python 実行 `uv`
-- GitHub CLI・jq・uv は mise の管理外で、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）
+- GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・typescript-language-server は mise の管理外で、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
 - `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` でネットワーク以外の危険操作を抑止、`postToolUse` で監査ログ
 - Copilot CLI local sandbox は環境別の初期値を user-level settings へ設定し、OS 別 backend で shell と filesystem policy を適用
@@ -96,16 +96,16 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 ## PATH 管理（非対話シェル対応）
 
-非対話シェル（Copilot CLI エージェント、IDE、スクリプト）では `.zshrc` / `$PROFILE` が読まれず、mise / brew 管理ツールが PATH から欠落する。対策として **POSIX 互換の `~/.profile` に共通 env を集約**し、各シェル起動ファイルから source する。
+POSIX の非対話シェル（Copilot CLI エージェント、IDE、スクリプト）では `.zshrc` が読まれず、mise / brew 管理ツールが PATH から欠落する。対策として **POSIX 互換の `~/.profile` に共通 env を集約**し、各シェル起動ファイルから source する。
 
-`~/.local/bin` は全プラットフォームで mise shims より前に置く。公式インストーラーが置いた実体（`uv` / `uvx` / `jq`）とベンダー実体への入口（`gh`）がここにあり、mise から外したツールの shim が端末に残っていても実体が勝つ必要があるためである。
+`~/.local/bin` は全プラットフォームで残存する mise shims より前に置く。POSIX では、公式インストーラーが置いた実体（`uv` / `uvx` / `jq` / `bun`）、ベンダー実体への入口（`gh`）、専用 payload root にある公開コマンドへの symlink を `~/.local/bin` に集約する。Go、Node.js、.NET SDK、pnpm、TypeScript CLI、typescript-lsp、typescript-language-server の専用 root は POSIX の `PATH` へ追加しない。
 
 | OS | 仕込み先 | 内容 |
 |----|---------|------|
 | Unix 共通 | `~/.profile` | brew shellenv、`GOPATH`、`~/go/bin` / `~/.cargo/bin` / mise shims / `~/.local/bin` をこの順で先頭へ移す（最後が最優先）。`__DOTFILES_PROFILE_LOADED` で再実行抑止 |
 | Unix 共通 | `~/.zprofile` / `~/.zshenv` / `~/.bash_profile` / `~/.bashrc` | いずれも `~/.profile` を source（login / 非login / 対話 bash を網羅） |
 | macOS のみ | `~/.local/bin/<tool>` への mise shim symlink | `run_onchange_after_21-link-mise-shims.sh` が自動生成 |
-| Windows | ユーザー環境変数 `Path` | `run_once_after_05-setup-user-path` が `%USERPROFILE%\.local\bin`、`%LOCALAPPDATA%\mise\shims` の順に先頭へ置き、比較時は `\` を `/` へ正規化して大小文字を無視し重複を畳む |
+| Windows | ユーザー環境変数 `Path` | `run_once_after_05-setup-user-path` が `%USERPROFILE%\.local\bin`、`%USERPROFILE%\.local\share\chezmoi-dotfiles` 配下の `go\bin`、`node`、`dotnet`、`pnpm`、三つの TypeScript 用 `node_modules\.bin`、`%LOCALAPPDATA%\mise\shims` の順に先頭へ置く。比較時は `\` を `/` へ正規化して大小文字を無視し、重複を畳む。完全な一覧は [`operations.md`](operations.md#mise-の管理外にあるツール) に示す |
 
 ### 各シェルの読み込み経路
 
@@ -117,22 +117,31 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 ### macOS GUI アプリ経由の PATH 注入
 
-Dock / Spotlight / GitHub Desktop から起動された子プロセスは launchd 既定 PATH しか継承しない。特に **GitHub Desktop の Copilot SDK は `bash --norc --noprofile` で bash を spawn し、親が独自の hardcoded PATH を組む**ため、`.bashrc` / `BASH_ENV` / `launchctl setenv` では PATH 注入不可。唯一 **`~/.local/bin` だけは確実に含まれる**ため、mise 管理ツールは `run_onchange_after_21-link-mise-shims.sh` がそこへ symlink し、mise の管理外のツールは各導入スクリプトが実体か vendor 実体への symlink をそこへ置く。
+Dock / Spotlight / GitHub Desktop から起動された子プロセスは launchd 既定 PATH しか継承しない。特に **GitHub Desktop の Copilot SDK は `bash --norc --noprofile` で bash を spawn し、親が独自の hardcoded PATH を組む**ため、`.bashrc` / `BASH_ENV` / `launchctl setenv` では PATH 注入不可。唯一 **`~/.local/bin` だけは確実に含まれる**ため、mise 管理ツールは `run_onchange_after_21-link-mise-shims.sh` がそこへ symlink し、mise の管理外でも `~/.local/bin` に実体/symlink を置くツール（`uv` / `uvx` / `jq` / `gh` / `bun`）はここから解決できる。
 
-- 言語ランタイム本体と実行可能な補助ファイルは除外する。対象はスクリプト内の `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` を正本とする。Rust は mise の管理外であり、`cargo` / `rust` の shim は除外対象に含めない（ADR-016）
+- 言語ランタイム本体と実行可能な補助ファイルは除外する。対象はスクリプト内の `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` を正本とする。Rust は mise の管理外であり、`cargo` / `rust` の shim は除外対象に含めない（ADR-016）。Go、Node.js、.NET SDK、pnpm、TypeScript CLI、typescript-lsp、typescript-language-server は各導入スクリプトが `~/.local/bin` へ公開コマンドの symlink を張るため、mise shim link の対象にしない
 - 作成 symlink は state file (`${XDG_STATE_HOME}/chezmoi-dotfiles/mise-shim-links`) に記録され、管理対象だった symlink のみ自動掃除。手動で作ったものには触れない
-- `~/.local/bin` に置く実体（`uv` / `uvx` / `jq`）と `gh` の symlink は各導入スクリプトが所有する。shim symlink とは名前が重ならず、重なった場合はスクリプトが既存を尊重して何もしない
-- darwin 限定。Linux は `~/.profile` 経由、Windows は `run_once_after_05-setup-user-path` で解決済み
+- `~/.local/bin` に置く実体（`uv` / `uvx` / `jq` / `bun` / `bunx`）と `gh` の symlink は各導入スクリプトが所有する。shim symlink とは名前が重ならず、重なった場合はスクリプトが既存を尊重して何もしない
+- **POSIX (macOS/Linux/WSL)**: Go、Node.js、.NET SDK、pnpm、TypeScript CLI、typescript-lsp、typescript-language-server は専用 root (`~/.local/share/chezmoi-dotfiles/<tool>`) に payload を置き、各導入スクリプトが主要コマンド (`go`/`gofmt`、`node`/`npm`/`npx`、`dotnet`/`dnx`、`pnpm`、`tsc`、`tsserver`、`typescript-language-server`) への symlink を `~/.local/bin` へ張る。したがって `~/.profile` を経由しない GUI 起動プロセスからも `~/.local/bin` 経由で bare コマンド名のまま解決できる
+- **Windows**: symlink や独自の汎用プロキシは作らず、公式配布物の実行ファイルまたは npm が生成した launcher を含む専用ディレクトリをユーザー `Path` へ登録する。`pwsh -NoProfile` は PowerShell Profile を読まないが、親プロセスから継承したユーザー `Path` は削除しない。既存プロセスは変更前の環境を保持するため、新しいプロセスで確認する。GUI アプリが古い環境を保持している場合は、サインアウトまたは OS の再起動が必要になる
 
 ### mise の管理外にあるツール
 
-GitHub CLI・jq・uv は mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路で導入する（ADR-028）。導入経路と更新手順は [`operations.md`](operations.md#ツールの管理境界) を参照する。
+GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・typescript-language-server は mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路で導入する（ADR-028）。導入経路と更新手順は [`operations.md`](operations.md#ツールの管理境界) を参照する。
 
 - **GitHub CLI**: 導入と更新は OS/ベンダーのパッケージマネージャーが所有する。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を満たしているか検査して不足時に更新コマンドを案内する
 - **jq**: `run_after_26-install-jq` が公式リリース asset を OS/CPU ごとに固定し、SHA-256 を検証してから `~/.local/bin/jq` へ置く。宣言に無い OS/CPU では別 CPU の asset へフォールバックせず、警告して何もしない
 - **uv**: `run_after_25-install-uv` が版を含む固定 URL の公式インストーラーを取得し、SHA-256 を検証してから PATH 変更を無効化して実行する。展開先は `~/.local/bin` 配下の staging であり、版を確認してから `uv` と `uvx` を置き換える
+- **Go**: `run_after_15-install-go` が go.dev の公式アーカイブを OS/CPU ごとに固定し、SHA-256 を検証してから `~/.local/share/chezmoi-dotfiles/go` へ展開する。導入後に `go`/`gofmt` (`go/bin` 配下) への symlink を `~/.local/bin` へ張る (POSIX)
+- **Node.js**: `run_after_16-install-node` が nodejs.org の公式アーカイブを SHA-256 (SHASUMS256.txt 由来) で検証し、`~/.local/share/chezmoi-dotfiles/node` へ展開する。後続の TypeScript 関連ツールの導入も、この Node と同梱の npm を使う。POSIX では Node と npm の公式 CLI を絶対パスで呼び出し、親プロセスの PATH にある別の Node を使用しない。導入後に `node`/`npm`/`npx` への symlink を `~/.local/bin` へ張る (POSIX)
+- **.NET SDK**: `run_after_17-install-dotnet` が builds.dotnet.microsoft.com の公式アーカイブを SHA-512 (release-metadata JSON 由来) で検証し、`~/.local/share/chezmoi-dotfiles/dotnet` へ展開する。他が所有する .NET SDK と衝突しないよう `DOTNET_ROOT` は設定しない。SDK と公式 `dnx` launcher の実在に加え、テレメトリ計測を無効化した環境でプロジェクト外から `dotnet --version` を実行して版を確認する。POSIX では `dotnet`/`dnx` への symlink を `~/.local/bin` へ張り、Windows では `dotnet.exe` と `dnx.cmd` を含む専用 root をユーザー `Path` へ登録する
+- **Bun**: `run_after_18-install-bun` が GitHub Releases の公式 zip アーカイブを SHA-256 で検証し、単一の実行ファイルを取り出して `~/.local/bin/bun` へ置く（jq / uv と同じ配置方針）。`bunx` は公式のエイリアス関係を再現する形で追加する: POSIX では `bunx -> bun` の相対 symlink（`bun` の入れ替えに自動追従し、`bunx` 自体を再作成する必要が無い）、Windows では bun 公式インストーラーと同じ `Copy-Item` によるファイルコピー（NTFS symlink 権限を要求しない）とし、ハッシュ比較で複製の陳腐化も検出する
+- **pnpm**: `run_after_19-install-pnpm` が GitHub Releases の公式アーカイブ（フラット構成、頂点ディレクトリなし）を SHA-256 で検証し、`~/.local/share/chezmoi-dotfiles/pnpm` へ展開する。完全性確認は単一実行ファイルのバージョン一致だけでなく、同梱される `dist/pnpm.mjs` / `dist/worker.js` の実在も見る。導入後に `pnpm` への symlink を `~/.local/bin` へ張る (POSIX)
+- **TypeScript CLI**: `run_after_21-install-typescript-cli` が直接導入した Node/npm で `npm install --prefix <専用 root> --no-save --package-lock=false typescript@<version>` を実行する（グローバルインストールではない）。エントリポイントは `typescript-cli/node_modules/.bin/tsc`。POSIX では同じ launcher への symlink を `~/.local/bin/tsc` へ張る（npm 生成のスクリプトをそのまま指し、独自の汎用プロキシは作らない）
+- **typescript-language-server**: `run_after_23-install-typescript-language-server` が同様に専用 prefix へ `typescript-language-server` だけを導入する。`typescript` を自身の依存に持たず、tsserver.js は次段の typescript-lsp から参照する。POSIX では `~/.local/bin/typescript-language-server` へ同様に symlink する
+- **typescript-lsp** (`[typescriptLsp]`, TypeScript 6.0.3 固定): `run_after_22-install-typescript-lsp` は tsserver.js 参照専用だが、typescript@6.0.3 の package.json が宣言する `bin.tsserver` から npm が生成する launcher (`node_modules/.bin/tsserver`) が同時に手に入るため、POSIX では `~/.local/bin/tsserver` をそこへ symlink する（TS7 系はこの bin を持たないため、tsserver コマンドの供給元は専用 TS6.0.3 側に限られる）
 
-いずれも導入済みの版が宣言と一致すればネットワークへ出ない。checksum または版の検証に失敗した場合は既存のバイナリを残す。
+いずれも導入済みの版が宣言と一致すればネットワークへ出ない。checksum または版の検証に失敗した場合は既存のバイナリを残す。npm ベースの 3 つは `npm` 標準の checksum 検証を使い、レジストリミラーが `dist.integrity` を欠く場合でも存在しない検証を発明しない。
 
 ### mise shims の制約
 
@@ -140,9 +149,9 @@ mise は shims と `mise activate` を併用する。対話 zsh では `mise act
 
 ### TypeScript language server の依存配置
 
-mise の npm backend はパッケージごとにインストール先を分ける。`npm:typescript` の TypeScript 7.x は `tsc` の実行に使い、`npm:typescript-language-server` からは参照しない。language server が利用する `lib/tsserver.js` は、`run_after_22-install-typescript-lsp` が固定版の TypeScript 6.x を `~/.local/share/chezmoi-dotfiles/typescript-lsp` へ導入して提供する。スクリプトは mise 管理 Node と同じディレクトリの npm を使い、package version と `tsserver.js` が正しければ何もしない。不足または版違いの場合だけ再導入するため、初回適用で Node 導入を保留する Dev Container でも、`mise install` 後の次回適用で回復する。
+TypeScript CLI (`tsc`) と typescript-language-server は、どちらも直接導入した Node/npm を使い、専用 npm prefix （グローバルインストールではない）へ別々に導入する。TS7 系は `tsserver` を同梱しないため、language server が利用する `lib/tsserver.js` だけは別枠で固定版 TypeScript 6.0.3 を導入する専用ディレクトリ (`run_after_22-install-typescript-lsp`) が提供する。3 つのスクリプトはいずれも package version と成果物 (実行ファイル / `tsserver.js`) が既に正しければ何もせずネットワークへ出ない。
 
-Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、この安定 prefix 配下の `node_modules/typescript/lib/tsserver.js` を指定する。mise の language server インストール先とバージョンをパスに含めないため、language server の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` を正本とする。
+Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、`~/.local/share/chezmoi-dotfiles/typescript-lsp` 配下の `node_modules/typescript/lib/tsserver.js` を指定する。この prefix はバージョン番号を含まない固定パスであるため、TypeScript LSP 依存の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` の `[typescriptLsp]` を正本とする。
 
 ## MSVC リンカー解決 (Windows)
 
@@ -156,8 +165,8 @@ Windows で cargo が `windows-msvc` ターゲットをビルドするには MSV
 
 chezmoi は `run_*_before_*`、通常ファイル、`run_*_after_*` の順に適用し、同じフェーズではファイル名の番号順に実行する。全件一覧は変化しやすいため、gh-stack の導入と Git hook の確認を含む全実装は `home/run_*` を正本とする。
 
-mise 関連では、本体を導入する `run_once_before_20-install-mise`、lockfile 変更を同期する `run_onchange_after_15-mise-sync-tools`、通常適用時にツールを導入する `run_once_after_20-mise-install`、macOS の shim symlink を更新する `run_onchange_after_21-link-mise-shims`、LSP 用 TypeScript を確認する `run_after_22-install-typescript-lsp` の依存関係を保つ。変更時は、mise 本体と設定の配置前に `mise install` を実行しないこと、LSP 用 TypeScript の導入前に Node が利用可能であること、Codespaces と Dev Container の分岐を壊さないことを確認する。
+mise 関連では、本体を導入する `run_once_before_20-install-mise`、lockfile 変更を同期する `run_onchange_after_15-mise-sync-tools`、通常適用時にツールを導入する `run_once_after_20-mise-install`、macOS の shim symlink を更新する `run_onchange_after_21-link-mise-shims` の依存関係を保つ。変更時は、mise 本体と設定の配置前に `mise install` を実行しないこと、Codespaces と Dev Container の分岐を壊さないことを確認する。
 
-mise の管理外にある 3 つは `run_after_25-install-uv`、`run_after_26-install-jq`、`run_after_27-ensure-github-cli` が担当する。`uv` は `uv tool` を使う `run_once_after_30-install-tools` より前、`gh` の検査は `run_after_31-install-gh-stack` より前に置く。いずれも毎回の適用で走り、宣言と一致していれば何もしない。
+mise の管理外にあるツールは `run_after_15-install-go` から `run_after_27-ensure-github-cli` までの番号順で実行する（Go/Node.js を最初に置くのは TypeScript CLI・typescript-lsp・typescript-language-server が直接導入した Node/npm に依存するため）。`uv` は `uv tool` を使う `run_once_after_30-install-tools` より前、`gh` の検査は `run_after_31-install-gh-stack` より前に置く。いずれも毎回の適用で走り、宣言と一致していれば何もしない。Node の導入が失敗した回は、依存する TypeScript 系 3 スクリプトが Node の実行可能性を確認できず nonzero で終了する（既存のインストール済み成果物は変更しない）。Node が導入できた次回の適用で全体が回復する。
 
-`.ps1` スクリプトの実行系は `.chezmoi.toml.tmpl` の `[interpreters.ps1]` で `pwsh -NoLogo -NoProfile -File` に固定している（ADR-023）。プロファイルを読まないため、スクリプトは Machine+User の PATH に載るものだけに依存できる。プロファイル経由でしか PATH に入らないツールは使えない。
+`.ps1` スクリプトの実行系は `.chezmoi.toml.tmpl` の `[interpreters.ps1]` で `pwsh -NoLogo -NoProfile -File` に固定している（ADR-023）。`-NoProfile` は PowerShell Profile を読まないが、親プロセスから継承した Machine と User の `Path` は維持する。このため、スクリプトは Machine または User の `Path` に登録されたコマンドへ依存できる。ユーザー `Path` の更新後に起動済みの親プロセスは古い値を保持するため、新しいプロセスから実行する。

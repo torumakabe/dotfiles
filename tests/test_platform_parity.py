@@ -76,6 +76,17 @@ DIRECT_INSTALL_COMPONENT_PATHS = {
     "tool:uv": _paired_installer("run_after_25-install-uv"),
     "tool:jq": _paired_installer("run_after_26-install-jq"),
     "tool:github-cli": _paired_installer("run_after_27-ensure-github-cli"),
+    # P1 (ADR-028 第二弾) で mise から公式導入経路へ移した 7 つ。
+    "tool:go": _paired_installer("run_after_15-install-go"),
+    "tool:node": _paired_installer("run_after_16-install-node"),
+    "tool:dotnet": _paired_installer("run_after_17-install-dotnet"),
+    "tool:bun": _paired_installer("run_after_18-install-bun"),
+    "tool:pnpm": _paired_installer("run_after_19-install-pnpm"),
+    "tool:typescript-cli": _paired_installer("run_after_21-install-typescript-cli"),
+    "runtime:typescript-lsp": _paired_installer("run_after_22-install-typescript-lsp"),
+    "tool:typescript-language-server": _paired_installer(
+        "run_after_23-install-typescript-language-server"
+    ),
 }
 
 
@@ -146,6 +157,14 @@ PLATFORM_CONTRACT = {
     "tool:uv": _implemented_everywhere(),
     "tool:jq": _implemented_everywhere(),
     "tool:github-cli": _implemented_everywhere(),
+    "tool:go": _implemented_everywhere(),
+    "tool:node": _implemented_everywhere(),
+    "tool:dotnet": _implemented_everywhere(),
+    "tool:bun": _implemented_everywhere(),
+    "tool:pnpm": _implemented_everywhere(),
+    "tool:typescript-cli": _implemented_everywhere(),
+    "runtime:typescript-lsp": _implemented_everywhere(),
+    "tool:typescript-language-server": _implemented_everywhere(),
 }
 
 ZSH_INTERNAL_FUNCTIONS = {
@@ -308,11 +327,11 @@ def _powershell_cached_source_names(source: str) -> set[str]:
 
 def _installed_tools(source: str) -> set[str]:
     go_tools = re.findall(
-        r"(?m)^\s*(?:if\s+!\s+)?go install\s+(\S+@latest)\b",
+        r"(?m)^\s*(?:if\s+!\s+)?(?:go|& \$goExe) install\s+(\S+@latest)\b",
         source,
     )
     uv_tools = re.findall(
-        r"(?m)^\s*(?:if\s+!\s+)?uv tool install --quiet\s+(\S+)\b",
+        r"(?m)^\s*(?:if\s+!\s+)?(?:uv|& \$uvExe) tool install --quiet\s+(\S+)\b",
         source,
     )
     return set(go_tools) | {f"uv tool install --quiet {tool}" for tool in uv_tools}
@@ -371,11 +390,19 @@ class PlatformParityTests(unittest.TestCase):
                         )
 
     def test_direct_install_contract_components_exist_for_each_platform(self) -> None:
-        """mise から外した 3 つは、全プラットフォームに導入経路の実装を持つ。"""
+        """mise から外したツールと、専用 tsserver runtime の導入経路を固定する。"""
         anchors = {
             "tool:uv": "uv-installer",
             "tool:jq": "jq",
             "tool:github-cli": "githubCli.minimumVersion",
+            "tool:go": ".go.version",
+            "tool:node": ".node.version",
+            "tool:dotnet": ".dotnet.version",
+            "tool:bun": ".bun.version",
+            "tool:pnpm": ".pnpm.version",
+            "tool:typescript-cli": "typescriptCli.version",
+            "runtime:typescript-lsp": "typescriptLsp.version",
+            "tool:typescript-language-server": "typescriptLanguageServer.version",
         }
         for feature, paths in DIRECT_INSTALL_COMPONENT_PATHS.items():
             self.assertEqual(set(paths), PLATFORMS)
@@ -391,8 +418,12 @@ class PlatformParityTests(unittest.TestCase):
     def test_removed_mise_tools_have_no_mise_declaration_left(self) -> None:
         config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
 
-        for tool in ("uv", "jq", "github-cli"):
+        for tool in ("uv", "jq", "github-cli", "go", "node", "dotnet", "bun", "pnpm"):
             with self.subTest(tool=tool):
+                self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
+        for tool in ("npm:typescript", "npm:typescript-language-server"):
+            with self.subTest(tool=tool):
+                self.assertNotIn(f"[tools.{tool}]", config)
                 self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
 
     def test_exceptions_reference_relevant_existing_documentation(self) -> None:
@@ -492,7 +523,10 @@ class PlatformParityTests(unittest.TestCase):
         for installer_path in (INSTALL_SH_PATH, INSTALL_PS1_PATH):
             with self.subTest(installer=installer_path.name):
                 installer = installer_path.read_text(encoding="utf-8")
-                self.assertIn("uv tool install --quiet specify-cli", installer)
+                self.assertRegex(
+                    installer,
+                    r"(?:uv|& \$uvExe) tool install --quiet specify-cli",
+                )
                 self.assertIn(source, installer)
                 self.assertIn("mise uninstall --all 'ubi:github/spec-kit'", installer)
         mise_config = MISE_CONFIG_PATH.read_text(encoding="utf-8")

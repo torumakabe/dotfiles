@@ -1,11 +1,25 @@
 {{ if eq .chezmoi.os "windows" -}}
 # 非対話シェル用にユーザー PATH の先頭を固定する（対話シェルの mise activate とは共存可）。
-# ~/.local/bin には公式インストーラーが置いた実体（uv / uvx / jq）が入るため、
+# ~/.local/bin には公式インストーラーが置いた実体（uv / uvx / jq / bun）が入るため、
 # 撤去済みツールの stale な mise shim が残っていても実体が勝つ順序にする。
+#
+# mise から撤去した P1 ランタイム (Go/.NET SDK 本体, GOROOT\bin, dotnet, pnpm) と、
+# 直接導入した Node で npm --prefix 導入した TypeScript CLI、専用 tsserver、
+# typescript-language-server の node_modules\.bin も同じ理由で mise shims
+# より先に置く。Node の shim (.cmd) は自分の隣に node.exe が無ければ PATH
+# 上の `node` へフォールバックするため、Node の root もここに含める。
 $ErrorActionPreference = 'Stop'
 
 $localBinDir = Join-Path $HOME '.local\bin'
 $shimsDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
+$dotfilesShareDir = Join-Path $HOME '.local\share\chezmoi-dotfiles'
+$goBinDir = Join-Path $dotfilesShareDir 'go\bin'
+$nodeRootDir = Join-Path $dotfilesShareDir 'node'
+$dotnetRootDir = Join-Path $dotfilesShareDir 'dotnet'
+$pnpmRootDir = Join-Path $dotfilesShareDir 'pnpm'
+$typescriptCliBinDir = Join-Path $dotfilesShareDir 'typescript-cli\node_modules\.bin'
+$typescriptLspBinDir = Join-Path $dotfilesShareDir 'typescript-lsp\node_modules\.bin'
+$typescriptLanguageServerBinDir = Join-Path $dotfilesShareDir 'typescript-language-server\node_modules\.bin'
 
 # >>> user-path-normalization: tests/test_direct_tool_installs.py がこの区間を抽出して実行する
 # Windows の PATH は区切りとケースの揺れがあるため、比較前に \ を / へ正規化し、
@@ -41,17 +55,28 @@ New-Item -ItemType Directory -Force -Path $localBinDir | Out-Null
 
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $existing = if ($userPath) { $userPath -split ';' } else { @() }
-$newPath = (Get-OrderedPathEntries -Leading @($localBinDir, $shimsDir) -Existing $existing) -join ';'
+$leadingEntries = @(
+    $localBinDir,
+    $goBinDir,
+    $nodeRootDir,
+    $dotnetRootDir,
+    $pnpmRootDir,
+    $typescriptCliBinDir,
+    $typescriptLspBinDir,
+    $typescriptLanguageServerBinDir,
+    $shimsDir
+)
+$newPath = (Get-OrderedPathEntries -Leading $leadingEntries -Existing $existing) -join ';'
 
 if ($newPath -ne $userPath) {
-    Write-Host "Setting user PATH order: $localBinDir, then $shimsDir"
+    Write-Host "Setting user PATH order: $($leadingEntries -join ', ')"
     [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
 }
 else {
-    Write-Host "User PATH already starts with $localBinDir and $shimsDir"
+    Write-Host "User PATH already starts with $($leadingEntries -join ', ')"
 }
 
 # 現在のプロセスにも同じ先頭順序を反映する（このあとの run_after_ スクリプトが使う）。
 $processEntries = if ($env:Path) { $env:Path -split ';' } else { @() }
-$env:Path = (Get-OrderedPathEntries -Leading @($localBinDir, $shimsDir) -Existing $processEntries) -join ';'
+$env:Path = (Get-OrderedPathEntries -Leading $leadingEntries -Existing $processEntries) -join ';'
 {{ end -}}

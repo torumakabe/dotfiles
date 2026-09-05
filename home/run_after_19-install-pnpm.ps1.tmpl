@@ -1,0 +1,161 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# pnpm — 公式アーカイブ (github.com/pnpm/pnpm releases) を直接導入する。
+# asset には単一実行ファイルの他に node-gyp 連携用の dist\ が同梱されており、
+# 標準配布構成を保つため両方を保持する (final_root 直下の内容をそのまま維持)。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ展開し、
+# checksum と版の確認まで終えてから最終パス (固定・無版数の root) へ置き換える。
+# 版確認時は空の作業ディレクトリと PNPM_CONFIG_PM_ON_FAIL=ignore を使い、
+# プロジェクト指定版への切り替えを禁止する。途中で失敗した場合は既存の pnpm を残す。
+$ErrorActionPreference = 'Stop'
+
+$pnpmVersion = '{{ .pnpm.version }}'
+{{ if not (hasKey .pnpm.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+Write-Warning "pnpm $pnpmVersion has no official asset for {{ $platform }}; skipping installation."
+exit 0
+{{ else }}
+{{- $asset := index .pnpm.assets $platform }}
+$shareDir = Join-Path $HOME '.local\share\chezmoi-dotfiles'
+$finalRoot = Join-Path $shareDir 'pnpm'
+$entrypoint = Join-Path $finalRoot '{{ $asset.entrypoint }}'
+$assetFile = '{{ $asset.file }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+$assetUrl = '{{ $.pnpm.releaseBaseUrl }}/{{ $.pnpm.releaseTag }}/{{ $asset.file }}'
+
+# `pnpm --version` は "11.25.0" を出力する。
+function Get-InstalledPnpmVersion {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    $probeParent = Join-Path $HOME '.local\share\chezmoi-dotfiles'
+    $probeDir = Join-Path $probeParent (".pnpm-version-probe." + [System.IO.Path]::GetRandomFileName())
+    $previousLocation = Get-Location
+    $previousPmOnFail = $env:PNPM_CONFIG_PM_ON_FAIL
+    try {
+        New-Item -ItemType Directory -Force -Path $probeDir | Out-Null
+        Set-Location -LiteralPath $probeDir
+        $env:PNPM_CONFIG_PM_ON_FAIL = 'ignore'
+        $output = & $Path --version 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $output) { return $null }
+        return ([string]($output | Select-Object -First 1)).Trim()
+    }
+    catch {
+        return $null
+    }
+    finally {
+        Set-Location -LiteralPath $previousLocation
+        $env:PNPM_CONFIG_PM_ON_FAIL = $previousPmOnFail
+        Remove-Item -LiteralPath $probeDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# バージョン文字列の一致だけでは、単一実行ファイルに同梱される補助アセット
+# (dist\pnpm.mjs: 実際のバンドル本体、dist\worker.js: worker_threads 用) を
+# 欠いた不完全な導入を見逃す。
+function Test-PnpmPayloadComplete {
+    param([string]$Root)
+
+    (Test-Path -LiteralPath (Join-Path $Root 'dist\pnpm.mjs') -PathType Leaf) -and
+        (Test-Path -LiteralPath (Join-Path $Root 'dist\worker.js') -PathType Leaf)
+}
+
+# 実行中の pnpm.exe は置き換えられない。root ごと入れ替える前に排他で開けるか確認する。
+function Assert-BinaryReplaceable {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw ("pnpm.exe を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "pnpm を使っているプロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "既存の pnpm インストールは変更していません。")
+    }
+}
+
+if ((Get-InstalledPnpmVersion -Path $entrypoint) -eq $pnpmVersion -and (Test-PnpmPayloadComplete -Root $finalRoot)) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $shareDir | Out-Null
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $shareDir (".pnpm-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+$cleanupStageDir = $true
+try {
+    $archive = Join-Path $stageDir $assetFile
+    try {
+        Invoke-WebRequest -Uri $assetUrl -OutFile $archive -UseBasicParsing
+    }
+    catch {
+        throw "Failed to download $assetFile; keeping the current pnpm. $($_.Exception.Message)"
+    }
+
+    $actualSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $assetSha256) {
+        throw "checksum verification failed for $assetFile"
+    }
+
+    # 公式アーカイブはフラット (実行ファイルと dist\ が頂点直下、頂点ディレクトリ無し)。
+    $extractedRoot = Join-Path $stageDir 'extracted'
+    Expand-Archive -LiteralPath $archive -DestinationPath $extractedRoot -Force
+    $stagedEntrypoint = Join-Path $extractedRoot '{{ $asset.entrypoint }}'
+    if (-not (Test-Path -LiteralPath $stagedEntrypoint -PathType Leaf)) {
+        throw "expected entrypoint {{ $asset.entrypoint }} missing from $assetFile"
+    }
+    if (-not (Test-PnpmPayloadComplete -Root $extractedRoot)) {
+        throw "expected dist\pnpm.mjs and dist\worker.js missing from $assetFile"
+    }
+
+    $stagedVersion = Get-InstalledPnpmVersion -Path $stagedEntrypoint
+    if ($stagedVersion -ne $pnpmVersion) {
+        $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+        throw "expected pnpm $pnpmVersion but $assetFile reported $found"
+    }
+
+    Assert-BinaryReplaceable -Path $entrypoint
+
+    Write-Host "Installing pnpm $pnpmVersion..."
+    $backupRoot = Join-Path $stageDir 'previous-pnpm'
+    try {
+        if (Test-Path -LiteralPath $finalRoot) {
+            Move-Item -LiteralPath $finalRoot -Destination $backupRoot
+        }
+        Move-Item -LiteralPath $extractedRoot -Destination $finalRoot
+    }
+    catch {
+        $replacementError = $_
+        try {
+            if (Test-Path -LiteralPath $backupRoot) {
+                Remove-Item -LiteralPath $finalRoot -Recurse -Force -ErrorAction SilentlyContinue
+                Move-Item -LiteralPath $backupRoot -Destination $finalRoot -Force
+            }
+        }
+        catch {
+            $cleanupStageDir = $false
+            throw ("pnpm の復旧を完了できませんでした。復旧用ファイルは $stageDir に残しています。" +
+                "実行中の pnpm 関連プロセスを終了し、同ディレクトリの previous-pnpm を確認してください。" +
+                "置換原因: $($replacementError.Exception.Message); 復旧原因: $($_.Exception.Message)")
+        }
+        throw ("pnpm の置き換えに失敗したため、以前のインストールへ戻しました。" +
+            "実行中の pnpm 関連プロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "原因: $($replacementError.Exception.Message)")
+    }
+}
+finally {
+    if ($cleanupStageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+{{ end }}
+{{- end -}}

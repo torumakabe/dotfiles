@@ -1,0 +1,288 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+#!/usr/bin/env bash
+# Bun — 公式リリースの検証済みアーカイブから単一実行ファイルを取り出し、
+# ~/.local/bin へ直接配置する (jq と同じ配置方針)。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。取得物は staging へ置き、
+# checksum と版の確認まで終えてから最終パスへ移す。失敗した場合は既存の bun を残す。
+
+set -euo pipefail
+
+bun_version='{{ .bun.version }}'
+{{ if not (hasKey .bun.assets $platform) }}
+# 宣言に無い OS/CPU は非対応。別 CPU 向けの asset へフォールバックしない。
+echo "Warning: Bun ${bun_version} has no official asset for {{ $platform }}; skipping installation." >&2
+exit 0
+{{ else }}
+{{- $asset := index .bun.assets $platform }}
+bin_dir="${HOME}/.local/bin"
+asset_file='{{ $asset.file }}'
+asset_inner_file='{{ $asset.innerFile }}'
+asset_sha256='{{ $asset.sha256 }}'
+asset_url='{{ $.bun.releaseBaseUrl }}/{{ $.bun.releaseTag }}/{{ $asset.file }}'
+mise_shims_dir="${HOME}/.local/share/mise/shims"
+
+sha256_file() {
+  local file=$1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum required to verify ${asset_file}" >&2
+    exit 1
+  fi
+}
+
+# `bun --version` は "1.4.0" を出力する。
+installed_bun_version() {
+  local binary=$1
+
+  [ -x "${binary}" ] || return 1
+  "${binary}" --version 2>/dev/null | awk 'NR == 1 { print $1 }'
+}
+
+# bunx は公式には「bun x のエイリアス」(argv0/basename での実体分岐) であり、
+# 公式インストーラは bun 本体の completions サブコマンドを叩いて副作用的に
+# 生成する (shell completions もインストールしてしまうため、このリポジトリの
+# 管理外への書き込みが起きる)。同じ argv0 分岐に乗るのは bun への symlink
+# だけで十分なので、副作用の無い直接 symlink として作る。
+#
+# bin_dir 内の相対 symlink ("bun" というリンク先) にしているのは、bun 本体を
+# 入れ替えても symlink 自体を作り直す必要が無いようにするため (go/node の
+# final_root と同じ「安定パス」の考え方を、単一ディレクトリ内の相対参照で
+# 再現している)。symlink 先が既にこの相対名か、旧 mise shim (ADR-028 移行前
+# の残存) であれば安全に置き換える。同名の旧 mise shim 以外は管理対象外。
+bunx_stage_dir=""
+bunx_started=0
+bunx_committed=0
+
+preflight_bunx_link() {
+  local link="${bin_dir}/bunx"
+
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "bun" ] || [ "${current}" = "${bin_dir}/bun" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/bunx" ]; then
+      echo "error: ${link} already points elsewhere (${current}); refusing to replace it." >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} exists and is not managed by this installer; refusing to replace it." >&2
+    return 1
+  fi
+
+  if ! bunx_stage_dir="$(mktemp -d "${bin_dir}/.bunx-entrypoint.XXXXXX")"; then
+    echo "error: could not create private entrypoint staging in ${bin_dir}" >&2
+    return 1
+  fi
+  if ! chmod 700 "${bunx_stage_dir}"; then
+    rm -rf "${bunx_stage_dir}"
+    bunx_stage_dir=""
+    return 1
+  fi
+  if ! ln -s "bun" "${bunx_stage_dir}/bunx"; then
+    echo "error: could not stage entrypoint link for bunx" >&2
+    rm -rf "${bunx_stage_dir}"
+    bunx_stage_dir=""
+    return 1
+  fi
+}
+
+publish_bunx_link() {
+  [ -n "${bunx_stage_dir}" ] || return 0
+
+  local link="${bin_dir}/bunx"
+  if [ -L "${link}" ]; then
+    local current
+    current="$(readlink "${link}")"
+    if [ "${current}" = "bun" ] || [ "${current}" = "${bin_dir}/bun" ]; then
+      return 0
+    fi
+    if [ "${current}" != "${mise_shims_dir}/bunx" ]; then
+      echo "error: ${link} changed after preflight; refusing to replace it." >&2
+      return 1
+    fi
+    bunx_started=1
+    if ! mv "${link}" "${bunx_stage_dir}/previous-bunx"; then
+      echo "error: could not preserve the existing bunx entrypoint" >&2
+      return 1
+    fi
+  elif [ -e "${link}" ]; then
+    echo "error: ${link} changed after preflight; refusing to replace it." >&2
+    return 1
+  else
+    bunx_started=1
+  fi
+
+  if ! mv "${bunx_stage_dir}/bunx" "${link}"; then
+    echo "error: could not publish entrypoint link for bunx" >&2
+    return 1
+  fi
+}
+
+rollback_bunx_link() {
+  [ "${bunx_started}" -eq 1 ] || return 0
+  [ "${bunx_committed}" -eq 0 ] || return 0
+
+  local link="${bin_dir}/bunx" current
+  if [ -e "${bunx_stage_dir}/previous-bunx" ] \
+    || [ -L "${bunx_stage_dir}/previous-bunx" ]; then
+    if [ -e "${link}" ] || [ -L "${link}" ]; then
+      [ -L "${link}" ] || return 1
+      current="$(readlink "${link}")"
+      if [ "${current}" != "bun" ] && [ "${current}" != "${bin_dir}/bun" ]; then
+        return 1
+      fi
+      rm -f "${link}" || return 1
+    fi
+    mv "${bunx_stage_dir}/previous-bunx" "${link}" || return 1
+  elif [ ! -L "${bunx_stage_dir}/bunx" ]; then
+    [ -L "${link}" ] || return 1
+    current="$(readlink "${link}")"
+    if [ "${current}" != "bun" ] && [ "${current}" != "${bin_dir}/bun" ]; then
+      return 1
+    fi
+    rm -f "${link}" || return 1
+  fi
+}
+
+ensure_bunx_link() {
+  if ! preflight_bunx_link; then
+    return 1
+  fi
+  if ! publish_bunx_link; then
+    if ! rollback_bunx_link; then
+      echo "error: bunx rollback could not complete; recovery files remain in ${bunx_stage_dir}" >&2
+      return 1
+    fi
+    rm -rf "${bunx_stage_dir}"
+    bunx_stage_dir=""
+    return 1
+  fi
+  bunx_committed=1
+  if [ -n "${bunx_stage_dir}" ]; then
+    rm -rf "${bunx_stage_dir}"
+    bunx_stage_dir=""
+  fi
+}
+
+if [ "$(installed_bun_version "${bin_dir}/bun" || true)" = "${bun_version}" ]; then
+  if ! ensure_bunx_link; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if ! command -v unzip >/dev/null 2>&1; then
+  echo "error: unzip required to extract ${asset_file}" >&2
+  exit 1
+fi
+
+mkdir -p "${bin_dir}"
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+stage_dir="$(mktemp -d "${bin_dir}/.bun-install.XXXXXX")"
+chmod 700 "${stage_dir}"
+transaction_started=0
+transaction_committed=0
+payload_published=0
+
+rollback_bun_install() {
+  local failed=0
+  if ! rollback_bunx_link; then
+    failed=1
+  fi
+  if [ "${transaction_started}" -ne 1 ] || [ "${transaction_committed}" -eq 1 ]; then
+    return "${failed}"
+  fi
+  if [ -e "${stage_dir}/previous-bun" ]; then
+    if [ "${payload_published}" -eq 1 ]; then
+      rm -f "${bin_dir}/bun" || failed=1
+    fi
+    if [ ! -e "${bin_dir}/bun" ]; then
+      mv "${stage_dir}/previous-bun" "${bin_dir}/bun" || failed=1
+    fi
+  elif [ "${payload_published}" -eq 1 ]; then
+    rm -f "${bin_dir}/bun" || failed=1
+  fi
+  return "${failed}"
+}
+
+cleanup_bun_install() {
+  local status=$?
+
+  trap - EXIT
+  if ! rollback_bun_install; then
+    echo "error: bun rollback could not complete; recovery files remain in ${stage_dir}${bunx_stage_dir:+ and ${bunx_stage_dir}}" >&2
+    exit 1
+  fi
+  rm -rf "${stage_dir}"
+  if [ -n "${bunx_stage_dir}" ]; then
+    rm -rf "${bunx_stage_dir}"
+  fi
+  exit "${status}"
+}
+
+trap cleanup_bun_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+archive="${stage_dir}/${asset_file}"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${archive}" "${asset_url}"; then
+  echo "error: failed to download ${asset_file}; keeping the current bun." >&2
+  exit 1
+fi
+
+actual_sha256="$(sha256_file "${archive}")"
+if [ "${actual_sha256}" != "${asset_sha256}" ]; then
+  echo "error: checksum verification failed for ${asset_file}" >&2
+  exit 1
+fi
+
+staged_bun="${stage_dir}/bun"
+if ! unzip -p "${archive}" "${asset_inner_file}" > "${staged_bun}"; then
+  echo "error: failed to extract ${asset_inner_file} from ${asset_file}" >&2
+  exit 1
+fi
+
+chmod 755 "${staged_bun}"
+staged_version="$(installed_bun_version "${staged_bun}" || true)"
+if [ "${staged_version}" != "${bun_version}" ]; then
+  echo "error: expected bun ${bun_version} but ${asset_file} reported ${staged_version:-unknown}" >&2
+  exit 1
+fi
+
+if ! preflight_bunx_link; then
+  exit 1
+fi
+
+echo "Installing bun ${bun_version}..."
+transaction_started=1
+if [ -e "${bin_dir}/bun" ]; then
+  if ! mv "${bin_dir}/bun" "${stage_dir}/previous-bun"; then
+    echo "error: could not stage the existing bun installation; keeping the current bun" >&2
+    exit 1
+  fi
+fi
+
+if ! mv "${staged_bun}" "${bin_dir}/bun"; then
+  echo "error: could not install bun; restoring the previous installation" >&2
+  exit 1
+fi
+payload_published=1
+
+if ! publish_bunx_link; then
+  echo "error: could not publish bunx entrypoint; restoring the previous installation" >&2
+  exit 1
+fi
+bunx_committed=1
+transaction_committed=1
+{{ end }}
+{{- end -}}

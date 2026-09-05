@@ -1,0 +1,156 @@
+{{- if eq .chezmoi.os "windows" -}}
+# typescript-language-server (LSP 実行体) — 直接導入した Node/npm を使い、
+# 専用 npm prefix (グローバルインストールではない) へ導入する。initialization
+# Options.tsserver.path 経由で [typescriptLsp] の tsserver.js を参照するため、
+# 自身は typescript を依存として持たない。利用中のミラーレジストリは
+# dist.integrity (SHA-512) を提供しないため、実在しない検証を主張しない。
+# npm 自身の dist.shasum (SHA-1) 検証に委ねる。
+#
+# 導入済みの版が宣言と一致する場合はネットワークへ出ない。package.json と
+# typescript-language-server --version の両方を確認する。取得は staging の
+# npm prefix へ行い、同じ検証を終えてから最終パス (固定・無版数の root) へ
+# 置き換える。途中で失敗した場合は既存の typescript-language-server を残す。
+$ErrorActionPreference = 'Stop'
+
+$tslsVersion = '{{ .typescriptLanguageServer.version }}'
+$shareDir = Join-Path $HOME '.local\share\chezmoi-dotfiles'
+$nodeRoot = Join-Path $shareDir 'node'
+$nodeExe = Join-Path $nodeRoot 'node.exe'
+$npmCmd = Join-Path $nodeRoot 'npm.cmd'
+$finalRoot = Join-Path $shareDir 'typescript-language-server'
+$packagePath = Join-Path $finalRoot 'node_modules\typescript-language-server\package.json'
+$binPath = Join-Path $finalRoot 'node_modules\.bin\typescript-language-server.cmd'
+
+if (-not (Test-Path -LiteralPath $nodeExe -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $npmCmd -PathType Leaf)) {
+    throw 'Directly-installed Node was not found; cannot install typescript-language-server.'
+}
+
+function Get-InstalledTslsVersion {
+    param([string]$PackagePath)
+
+    if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) { return $null }
+    try {
+        return (Get-Content -LiteralPath $PackagePath -Raw | ConvertFrom-Json).version
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-TslsLauncherVersion {
+    param([string]$LauncherPath)
+
+    if (-not (Test-Path -LiteralPath $LauncherPath -PathType Leaf)) { return $null }
+    $previousPath = $env:Path
+    try {
+        $env:Path = if ($previousPath) { "$nodeRoot;$previousPath" } else { $nodeRoot }
+        $output = & $LauncherPath --version 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $output) { return $null }
+        return ([string]($output | Select-Object -First 1)).Trim()
+    }
+    catch {
+        return $null
+    }
+    finally {
+        $env:Path = $previousPath
+    }
+}
+
+# 実行中の typescript-language-server.cmd 等は置き換えられない。root ごと
+# 入れ替える前に排他で開けるか確認する。
+function Assert-BinaryReplaceable {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path,
+            [System.IO.FileMode]::Open,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw ("typescript-language-server を置き換えられません。実行中のプロセスが掴んでいる可能性があります。" +
+            "エディタの LSP プロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "既存のインストールは変更していません。")
+    }
+}
+
+if ((Test-Path -LiteralPath $binPath -PathType Leaf) -and
+    ((Get-InstalledTslsVersion -PackagePath $packagePath) -eq $tslsVersion) -and
+    ((Get-TslsLauncherVersion -LauncherPath $binPath) -eq $tslsVersion)) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $shareDir | Out-Null
+
+# staging を最終パスと同じファイルシステムへ置き、置き換えを rename で終わらせる。
+$stageDir = Join-Path $shareDir (".typescript-language-server-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+$cleanupStageDir = $true
+try {
+    $stagedRoot = Join-Path $stageDir 'new'
+    New-Item -ItemType Directory -Force -Path $stagedRoot | Out-Null
+
+    & $npmCmd install --prefix $stagedRoot --no-save --package-lock=false "typescript-language-server@$tslsVersion"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install typescript-language-server@$tslsVersion; keeping the current installation."
+    }
+
+    $stagedPackagePath = Join-Path $stagedRoot 'node_modules\typescript-language-server\package.json'
+    $stagedBinPath = Join-Path $stagedRoot 'node_modules\.bin\typescript-language-server.cmd'
+    if (-not (Test-Path -LiteralPath $stagedBinPath -PathType Leaf)) {
+        throw 'typescript-language-server installation did not produce a launcher'
+    }
+
+    $stagedVersion = Get-InstalledTslsVersion -PackagePath $stagedPackagePath
+    if ($stagedVersion -ne $tslsVersion) {
+        $found = if ($stagedVersion) { $stagedVersion } else { 'unknown' }
+        throw "expected typescript-language-server $tslsVersion but found $found"
+    }
+
+    $stagedLauncherVersion = Get-TslsLauncherVersion -LauncherPath $stagedBinPath
+    if ($stagedLauncherVersion -ne $tslsVersion) {
+        $found = if ($stagedLauncherVersion) { $stagedLauncherVersion } else { 'unknown' }
+        throw "expected typescript-language-server $tslsVersion but staged launcher reported $found"
+    }
+
+    Assert-BinaryReplaceable -Path $binPath
+
+    Write-Host "Installing typescript-language-server $tslsVersion..."
+    $backupRoot = Join-Path $stageDir 'previous-typescript-language-server'
+    try {
+        if (Test-Path -LiteralPath $finalRoot) {
+            Move-Item -LiteralPath $finalRoot -Destination $backupRoot
+        }
+        Move-Item -LiteralPath $stagedRoot -Destination $finalRoot
+    }
+    catch {
+        $replacementError = $_
+        try {
+            if (Test-Path -LiteralPath $backupRoot) {
+                Remove-Item -LiteralPath $finalRoot -Recurse -Force -ErrorAction SilentlyContinue
+                Move-Item -LiteralPath $backupRoot -Destination $finalRoot -Force
+            }
+        }
+        catch {
+            $cleanupStageDir = $false
+            throw ("typescript-language-server の復旧を完了できませんでした。復旧用ファイルは " +
+                "$stageDir に残しています。エディタの LSP プロセスを終了し、同ディレクトリの " +
+                "previous-typescript-language-server を確認してください。" +
+                "置換原因: $($replacementError.Exception.Message); 復旧原因: $($_.Exception.Message)")
+        }
+        throw ("typescript-language-server の置き換えに失敗したため、以前のインストールへ戻しました。" +
+            "エディタの LSP プロセスを終了してから 'chezmoi apply' を再実行してください。" +
+            "原因: $($replacementError.Exception.Message)")
+    }
+}
+finally {
+    if ($cleanupStageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+{{- end -}}

@@ -29,25 +29,47 @@ GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm6
 mise install
 ```
 
-### Windows で `core:dotnet` の検証に失敗する
+### 直接導入したランタイムの checksum 検証に失敗する
 
-症状は、インストールスクリプトが SDK を配置した後、`dotnet --list-sdks` が system 側の SDK だけを返し、次のエラーで終了することである。
+対象は Go / Node.js / .NET SDK / Bun / pnpm (`run_after_15` 〜 `run_after_19`)。
+症状は `checksum verification failed for <asset>` (.NET は SHA-512 の不一致) で
+止まることである。取得物は checksum 検証の前に既存の実体へは触れない設計の
+ため、既存のインストールは変更されない。
 
-```text
-dotnet SDK <version> was not found in `dotnet --list-sdks` output
-```
+まず `home/.chezmoidata.toml` の対象ツールの `sha256`/`sha512` を上流の公式
+ソース（Go: `go.dev/dl/?mode=json&include=all`、Node: `nodejs.org/dist/v<version>/SHASUMS256.txt`、
+.NET: `builds.dotnet.microsoft.com/dotnet/release-metadata/<major>.<minor>/releases.json`、
+Bun/pnpm: 各 GitHub リリースの `SHASUMS256.txt` / `digest`）と突き合わせる。
+値が一致していればネットワーク経路（プロキシ等）による破損を疑い、再実行
+(`chezmoi apply`) する。値が古ければ上流の最新リリースで版と checksum を
+取得し直し、`.chezmoidata.toml` を更新後 `uv run -m unittest tests.test_direct_tool_installs -v`
+を実行する。
 
-Windows 用の mise 設定は、インストール時だけ mise の共有 dotnet root を `DOTNET_ROOT` と PATH の先頭へ設定する。設定を配り直し、同じ backend とバージョンを強制的に再インストールする。
+### Windows で直接導入した実体を置き換えられない
 
-```powershell
-chezmoi apply "$HOME\.config\mise\config.toml"
-mise install --force dotnet
-mise ls dotnet
-mise which dotnet
-& (mise which dotnet) --version
-```
+症状は `<tool> を置き換えられません。実行中のプロセスが掴んでいる可能性が
+あります。` のようなエラーで `run_after_*.ps1` が失敗することである。対象の
+実行ファイル（go.exe / node.exe / dotnet.exe / pnpm.exe / tsc.cmd /
+typescript-language-server.cmd 等）を排他オープンできるか root の置き換え前
+に確認する設計であり、失敗時は既存のインストールを変更しない。該当プロセス
+（エディタの LSP、ターミナル上で動いている node/dotnet プロセスなど）を終了
+してから `chezmoi apply` を再実行する。
 
-`mise ls dotnet` に `(missing)` がなく、`mise which dotnet` が `%LOCALAPPDATA%\mise\dotnet-root\dotnet.exe` を返し、最後のコマンドが設定済み SDK のバージョンを表示すれば復旧している。
+### 版の不一致で直接導入が中断される
+
+症状は `expected <tool> <version> but found <found>` で止まることである。
+取得元が `home/.chezmoidata.toml` の宣言と異なる版を返している。宣言した版
+が上流でまだ配布されているか確認し、配布終了していれば version を新しい
+公式版へ更新して checksum を取得し直す。
+
+### 直接導入が途中失敗した後の再適用
+
+Go/Node/.NET SDK/Bun/pnpm/TypeScript CLI/typescript-language-server/
+typescript-lsp 依存はいずれも staging → checksum・版検証 → atomic swap の順
+で動くため、swap 前に失敗すれば既存の実体はそのまま残り、`chezmoi apply`
+の再実行だけで復旧する。swap 中の失敗 (稀) では `previous-<tool>` への復旧
+を自動で試み、それも失敗した場合はエラーメッセージが示す staging ディレク
+トリ内の `previous-<tool>` を手動で最終パスへ戻す。
 
 ## Copilot sandbox が Linux で起動しない
 
@@ -174,7 +196,7 @@ mise reshim
 
 Copilot CLI の起動ログに `Could not find a valid TypeScript installation` が出る場合、安定 prefix に LSP 用 TypeScript が導入されているか確認する。`tsc --version` の成功は、別の mise インストール先にあるコンパイラーを確認するだけであり、language server の依存解決を保証しない。
 
-設定と導入スクリプトを配布すると、`run_after_22-install-typescript-lsp` が mise 管理 Node に同梱された npm で LSP 用 TypeScript を確認し、不足または版違いの場合だけ導入する。
+設定と導入スクリプトを配布すると、`run_after_22-install-typescript-lsp` が直接導入した Node.js に同梱された npm で LSP 用 TypeScript を確認し、不足または版違いの場合だけ導入する。
 
 ```powershell
 chezmoi apply
@@ -251,13 +273,14 @@ npm config set registry '<管理者指定の registry URL>'
 
 ## 非対話シェルで PATH が通らない
 
-症状: Copilot CLI エージェント、IDE タスク、`bash script.sh` から `copilot` / `uv` / `node` / `kubectl` / `azd` が `command not found`。
+症状: Copilot CLI エージェント、IDE タスク、`bash script.sh` から `copilot` / `uv` / `kubectl` / `azd` が `command not found`。
 
 設計の全体像は [`docs/architecture.md`](architecture.md#path-管理非対話シェル対応) を参照。復旧は以下を試す:
 
 - **Unix**: `chezmoi apply` で `~/.profile` 系が配置されているか確認。新規 login シェル（新しい Terminal タブ）で有効化
-- **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）
-- **Windows**: `run_once_after_05-setup-user-path.ps1` を再実行
+- **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り、残っている mise 管理ツール（kubectl・lefthook・helm・terraform 等）の shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）。
+  - Go、Node.js、.NET SDK、Bun、pnpm、TypeScript CLI、typescript-language-server、typescript-lsp (`tsserver`) は shim-link の対象ではない。各導入スクリプトが主要コマンド (`go`/`gofmt`、`node`/`npm`/`npx`、`dotnet`/`dnx`、`bun`/`bunx`、`pnpm`、`tsc`、`typescript-language-server`、`tsserver`) への入口を `~/.local/bin` に置くため、POSIX (macOS/Linux/WSL) では `bash --norc --noprofile` のような非対話 shell からもコマンド名で解決できる。リンクだけが欠損し payload が完全な場合は、`chezmoi apply` の再実行で再ダウンロードせずに復旧する
+- **Windows**: `run_once_after_05-setup-user-path.ps1` は、`%USERPROFILE%\.local\bin`、Go、Node.js、.NET SDK、pnpm、三つの TypeScript 用ディレクトリ、残存する mise shims の順でユーザー環境変数 `Path` の先頭へ登録する。完全な一覧は [`operations.md`](operations.md#mise-の管理外にあるツール) を参照する。`chezmoi apply` を再実行して登録内容を直す。既存プロセスは変更前の環境変数を保持するため、ターミナルを開き直す。GUI アプリへ反映されない場合は、サインアウトまたは OS の再起動後に確認する。`pwsh -NoProfile` は PowerShell Profile を読まないが、親プロセスから継承したユーザー `Path` は削除しない
 
 それでも反映されないときは state を消して再実行:
 
@@ -275,7 +298,7 @@ command -v copilot uv jq gh
 
 ```powershell
 (Get-Command uv).Source
-[Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-Object -First 2
+[Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-Object -First 10
 ```
 
 `uv` / `jq` / `gh` が mise shims の側に解決される場合は、`~/.local/bin` が先に来ていない。上の state 削除と `chezmoi apply` で並びを入れ直す。
