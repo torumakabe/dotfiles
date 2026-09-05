@@ -223,3 +223,502 @@ version = "7.0.2"
 # initializationOptions.tsserver.path で [typescriptLsp] の tsserver.js を指す。
 [typescriptLanguageServer]
 version = "6.0.0"
+
+# 以下の CLI は、上流の公式配布物を完全な URL と SHA-256 で固定する。
+# assets のキーは "<chezmoi.os>-<chezmoi.arch>"。
+
+[azureKubelogin]
+version = "0.2.19"
+
+[azureKubelogin.assets.darwin-arm64]
+file = "kubelogin-darwin-arm64.zip"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-darwin-arm64.zip"
+sha256 = "dd46ad1d9bd9f7c55e4d7a353e648a194dced7fced85ca463b79dbede96af945"
+archive = "zip"
+entry = "bin/darwin_arm64/kubelogin"
+executableArch = "arm64"
+emulated = false
+
+[azureKubelogin.assets.linux-amd64]
+file = "kubelogin-linux-amd64.zip"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-linux-amd64.zip"
+sha256 = "ebaeff02aa899c5cae6a2b954b64fc02738185319df2570f7dc053451efa4b2f"
+archive = "zip"
+entry = "bin/linux_amd64/kubelogin"
+executableArch = "amd64"
+emulated = false
+
+[azureKubelogin.assets.linux-arm64]
+file = "kubelogin-linux-arm64.zip"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-linux-arm64.zip"
+sha256 = "aad7e7ca2a8e67db15b110e535123c1bc0f31ef488f5d3ab5b9ae7c9de6f48d3"
+archive = "zip"
+entry = "bin/linux_arm64/kubelogin"
+executableArch = "arm64"
+emulated = false
+
+[azureKubelogin.assets.windows-amd64]
+file = "kubelogin-win-amd64.zip"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-win-amd64.zip"
+sha256 = "0353ff15fa534e610d10b7a7c55d3f10d693bc2fab4d3ec7f7564db6efd22ae4"
+archive = "zip"
+entry = "bin/windows_amd64/kubelogin.exe"
+executableArch = "amd64"
+emulated = false
+
+[azureKubelogin.assets.windows-arm64]
+file = "kubelogin-win-arm64.zip"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.19/kubelogin-win-arm64.zip"
+sha256 = "55d862722bd755ede21e3f0ed7b3c863af3620b0fb417d17ef14299cbb7f21e9"
+archive = "zip"
+entry = "bin/windows_arm64/kubelogin.exe"
+executableArch = "arm64"
+emulated = false
+
+[cosign]
+version = "3.1.3"
+
+[cosign.assets.darwin-arm64]
+file = "cosign-darwin-arm64"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-darwin-arm64"
+sha256 = "5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false
+
+[cosign.assets.linux-amd64]
+file = "cosign-linux-amd64"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64"
+sha256 = "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"
+archive = "raw"
+entry = ""
+executableArch = "amd64"
+emulated = false
+
+[cosign.assets.linux-arm64]
+file = "cosign-linux-arm64"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-arm64"
+sha256 = "c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false
+
+[cosign.assets.windows-amd64]
+file = "cosign-windows-amd64.exe"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe"
+sha256 = "9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be"
+archive = "raw"
+entry = ""
+executableArch = "amd64"
+emulated = false
+
+# Windows arm64 では公式 amd64 版をエミュレーションで実行し、機能を削らない。
+[cosign.assets.windows-arm64]
+file = "cosign-windows-amd64.exe"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe"
+sha256 = "9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be"
+archive = "raw"
+entry = ""
+executableArch = "amd64"
+emulated = true
+
+[cue]
+version = "0.17.1"
+
+[cue.assets.darwin-arm64]
+file = "cue_v0.17.1_darwin_arm64.tar.gz"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_darwin_arm64.tar.gz"
+sha256 = "64921403f012a97f89494c03605db2fbf7d9daa77dc2631819ac4406cb2e8074"
+archive = "tar.gz"
+entry = "cue"
+executableArch = "arm64"
+emulated = false
+
+[cue.assets.linux-amd64]
+file = "cue_v0.17.1_linux_amd64.tar.gz"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_amd64.tar.gz"
+sha256 = "a39b0c97695069d95d276d99be0f5dbabb081d801bfdc9ba49b76efaf94e2369"
+archive = "tar.gz"
+entry = "cue"
+executableArch = "amd64"
+emulated = false
+
+[cue.assets.linux-arm64]
+file = "cue_v0.17.1_linux_arm64.tar.gz"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_arm64.tar.gz"
+sha256 = "0d729be30d52c952ca38fc9dcb692caa09d8463fa0b64df5781312779183fbcd"
+archive = "tar.gz"
+entry = "cue"
+executableArch = "arm64"
+emulated = false
+
+[cue.assets.windows-amd64]
+file = "cue_v0.17.1_windows_amd64.zip"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_windows_amd64.zip"
+sha256 = "9f15378dc52b9a1bb6fa1755adc0410c9f17f330a621b784a5b31fdbc91c6d7a"
+archive = "zip"
+entry = "cue.exe"
+executableArch = "amd64"
+emulated = false
+
+[cue.assets.windows-arm64]
+file = "cue_v0.17.1_windows_arm64.zip"
+url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_windows_arm64.zip"
+sha256 = "db88b2c302be1829e653e20ea87e3f1adc10ae2052d58fe87d21d0ed97102e51"
+archive = "zip"
+entry = "cue.exe"
+executableArch = "arm64"
+emulated = false
+
+[helm]
+version = "4.2.4"
+
+[helm.assets.darwin-arm64]
+file = "helm-v4.2.4-darwin-arm64.tar.gz"
+url = "https://get.helm.sh/helm-v4.2.4-darwin-arm64.tar.gz"
+sha256 = "d747eb4e28bd2727173d15b759fa0a17822291ec09db7ced3d55af290a3661a2"
+archive = "tar.gz"
+entry = "darwin-arm64/helm"
+executableArch = "arm64"
+emulated = false
+
+[helm.assets.linux-amd64]
+file = "helm-v4.2.4-linux-amd64.tar.gz"
+url = "https://get.helm.sh/helm-v4.2.4-linux-amd64.tar.gz"
+sha256 = "c306b46f719b0a4da32d0f78ee21bf90ce8d602f15b22ab753f0674d1670a7f3"
+archive = "tar.gz"
+entry = "linux-amd64/helm"
+executableArch = "amd64"
+emulated = false
+
+[helm.assets.linux-arm64]
+file = "helm-v4.2.4-linux-arm64.tar.gz"
+url = "https://get.helm.sh/helm-v4.2.4-linux-arm64.tar.gz"
+sha256 = "564de2191b881e9f71b5606b25345821ea1682f06ab90499d3ab22b530176da1"
+archive = "tar.gz"
+entry = "linux-arm64/helm"
+executableArch = "arm64"
+emulated = false
+
+[helm.assets.windows-amd64]
+file = "helm-v4.2.4-windows-amd64.zip"
+url = "https://get.helm.sh/helm-v4.2.4-windows-amd64.zip"
+sha256 = "e94d83a4706fd82078c98dade2079fa9d9680c1c2bfb93bfc304ee6bc2412a32"
+archive = "zip"
+entry = "windows-amd64/helm.exe"
+executableArch = "amd64"
+emulated = false
+
+[helm.assets.windows-arm64]
+file = "helm-v4.2.4-windows-arm64.zip"
+url = "https://get.helm.sh/helm-v4.2.4-windows-arm64.zip"
+sha256 = "dbe8b49ea9877abe3d77354a792efb01920da9f65a492fcb8b4fce4e08bbae8f"
+archive = "zip"
+entry = "windows-arm64/helm.exe"
+executableArch = "arm64"
+emulated = false
+
+[kubectl]
+version = "1.37.0"
+
+[kubectl.assets.darwin-arm64]
+file = "kubectl"
+url = "https://dl.k8s.io/release/v1.37.0/bin/darwin/arm64/kubectl"
+sha256 = "583beedaebe422e71d3f1a96acef8b1fef86ea2f09a45ad01aa6c9ce287c1380"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false
+
+[kubectl.assets.linux-amd64]
+file = "kubectl"
+url = "https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl"
+sha256 = "6129359f4e1f3848a5572ccb0b26cf28b8ca08cef38c95a765b2f64a2c961a2f"
+archive = "raw"
+entry = ""
+executableArch = "amd64"
+emulated = false
+
+[kubectl.assets.linux-arm64]
+file = "kubectl"
+url = "https://dl.k8s.io/release/v1.37.0/bin/linux/arm64/kubectl"
+sha256 = "922df28df248cc00a9e025f947704f1d1482de64ece54cfe57e61f19eaf1eef3"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false
+
+[kubectl.assets.windows-amd64]
+file = "kubectl.exe"
+url = "https://dl.k8s.io/release/v1.37.0/bin/windows/amd64/kubectl.exe"
+sha256 = "4721b614a67bb4932a0369e61f4a323d8c6ca00943d3a2ff14837c124da06f0e"
+archive = "raw"
+entry = ""
+executableArch = "amd64"
+emulated = false
+
+[kubectl.assets.windows-arm64]
+file = "kubectl.exe"
+url = "https://dl.k8s.io/release/v1.37.0/bin/windows/arm64/kubectl.exe"
+sha256 = "c72d866c4eae0f47aac5ca6b864cf2cee103ceb34fc1251663becc0aa7a84bdf"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false
+
+[kustomize]
+version = "5.8.1"
+
+[kustomize.assets.darwin-arm64]
+file = "kustomize_v5.8.1_darwin_arm64.tar.gz"
+url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_darwin_arm64.tar.gz"
+sha256 = "8886f8a78474e608cc81234f729fda188a9767da23e28925802f00ece2bab288"
+archive = "tar.gz"
+entry = "kustomize"
+executableArch = "arm64"
+emulated = false
+
+[kustomize.assets.linux-amd64]
+file = "kustomize_v5.8.1_linux_amd64.tar.gz"
+url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_linux_amd64.tar.gz"
+sha256 = "029a7f0f4e1932c52a0476cf02a0fd855c0bb85694b82c338fc648dcb53a819d"
+archive = "tar.gz"
+entry = "kustomize"
+executableArch = "amd64"
+emulated = false
+
+[kustomize.assets.linux-arm64]
+file = "kustomize_v5.8.1_linux_arm64.tar.gz"
+url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_linux_arm64.tar.gz"
+sha256 = "0953ea3e476f66d6ddfcd911d750f5167b9365aa9491b2326398e289fef2c142"
+archive = "tar.gz"
+entry = "kustomize"
+executableArch = "arm64"
+emulated = false
+
+[kustomize.assets.windows-amd64]
+file = "kustomize_v5.8.1_windows_amd64.zip"
+url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_windows_amd64.zip"
+sha256 = "8ec7f5e815e526d4622c06df0a7793d8cfb6eb1c74f816b46166097fef8b26c6"
+archive = "zip"
+entry = "kustomize.exe"
+executableArch = "amd64"
+emulated = false
+
+[kustomize.assets.windows-arm64]
+file = "kustomize_v5.8.1_windows_arm64.zip"
+url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_windows_arm64.zip"
+sha256 = "f6f5090c373965760a30a59af84c81853b80d2c7dbb3236424f440e47eed3f5a"
+archive = "zip"
+entry = "kustomize.exe"
+executableArch = "arm64"
+emulated = false
+
+[sqlc]
+version = "1.31.1"
+
+[sqlc.assets.darwin-arm64]
+file = "sqlc_1.31.1_darwin_arm64.tar.gz"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_darwin_arm64.tar.gz"
+sha256 = "21602158c99eb1f2bae197a66abfb1941d1e9e50b23125bb193349c6b1acc71e"
+archive = "tar.gz"
+entry = "sqlc"
+executableArch = "arm64"
+emulated = false
+
+[sqlc.assets.linux-amd64]
+file = "sqlc_1.31.1_linux_amd64.tar.gz"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz"
+sha256 = "497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354"
+archive = "tar.gz"
+entry = "sqlc"
+executableArch = "amd64"
+emulated = false
+
+[sqlc.assets.linux-arm64]
+file = "sqlc_1.31.1_linux_arm64.tar.gz"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_arm64.tar.gz"
+sha256 = "b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d"
+archive = "tar.gz"
+entry = "sqlc"
+executableArch = "arm64"
+emulated = false
+
+[sqlc.assets.windows-amd64]
+file = "sqlc_1.31.1_windows_amd64.zip"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_windows_amd64.zip"
+sha256 = "352711fa7dcb05dcdfefca0ad71b2c9a74fd090f8d7fc609419de4cbc725429f"
+archive = "zip"
+entry = "sqlc.exe"
+executableArch = "amd64"
+emulated = false
+
+[sqlc.assets.windows-arm64]
+file = "sqlc_1.31.1_windows_arm64.zip"
+url = "https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_windows_arm64.zip"
+sha256 = "b3d7a016c177923cb426f0d544d3ffbe2ff97306137bb77f668af709b5613692"
+archive = "zip"
+entry = "sqlc.exe"
+executableArch = "arm64"
+emulated = false
+
+[terraform]
+version = "1.16.1"
+
+[terraform.assets.darwin-arm64]
+file = "terraform_1.16.1_darwin_arm64.zip"
+url = "https://releases.hashicorp.com/terraform/1.16.1/terraform_1.16.1_darwin_arm64.zip"
+sha256 = "e22cba761ddbd4d218939b28715ab3af37aaf8a42efa41f7d75b2c3d73636060"
+archive = "zip"
+entry = "terraform"
+executableArch = "arm64"
+emulated = false
+
+[terraform.assets.linux-amd64]
+file = "terraform_1.16.1_linux_amd64.zip"
+url = "https://releases.hashicorp.com/terraform/1.16.1/terraform_1.16.1_linux_amd64.zip"
+sha256 = "745d33b4b02b7980c62a38ec1beea24ee084ea8caf3f503c200554bd9a0cbe49"
+archive = "zip"
+entry = "terraform"
+executableArch = "amd64"
+emulated = false
+
+[terraform.assets.linux-arm64]
+file = "terraform_1.16.1_linux_arm64.zip"
+url = "https://releases.hashicorp.com/terraform/1.16.1/terraform_1.16.1_linux_arm64.zip"
+sha256 = "423288a23ab024d42ac05c409972585f7ec0cf1be572b773ad952f9a1c41387d"
+archive = "zip"
+entry = "terraform"
+executableArch = "arm64"
+emulated = false
+
+[terraform.assets.windows-amd64]
+file = "terraform_1.16.1_windows_amd64.zip"
+url = "https://releases.hashicorp.com/terraform/1.16.1/terraform_1.16.1_windows_amd64.zip"
+sha256 = "5c6c6d8fedf56ce29c55f0c1fc91de3c259f42c2d220a28e827b5b60fd47bfa1"
+archive = "zip"
+entry = "terraform.exe"
+executableArch = "amd64"
+emulated = false
+
+[terraform.assets.windows-arm64]
+file = "terraform_1.16.1_windows_arm64.zip"
+url = "https://releases.hashicorp.com/terraform/1.16.1/terraform_1.16.1_windows_arm64.zip"
+sha256 = "a1777d9e6bce7764843c23a88afaaaa68c43745dcad76be7bef0cd184c4475d9"
+archive = "zip"
+entry = "terraform.exe"
+executableArch = "arm64"
+emulated = false
+
+[terraform.verification]
+checksumsUrl = "https://releases.hashicorp.com/terraform/1.16.1/terraform_1.16.1_SHA256SUMS"
+checksumsSha256 = "1a91605f622087cff05a200bfc3618c26dfb0528472620967842c0322f55bac0"
+signatureUrl = "https://releases.hashicorp.com/terraform/1.16.1/terraform_1.16.1_SHA256SUMS.sig"
+signatureSha256 = "d5629208adbe1453865ce75dcbacde915e6f96c832ad4dfdb40966d356c22109"
+publicKeySha256 = "c2f5bc1163bd8d15a711616b587bcede212d045a5b8b52df01c74095897cd065"
+primaryFingerprint = "C874011F0AB405110D02105534365D9472D7468F"
+signingFingerprint = "374EC75B485913604A831CC7C820C6D5CD27AB87"
+windowsArm64GpgArch = "amd64"
+windowsArm64GpgEmulated = true
+# 出所: https://www.hashicorp.com/.well-known/pgp-key.txt
+# Base64 は公開鍵の生バイトを LF/CRLF 変換から守り、可変 URL の実行時取得を不要にする。
+publicKeyBase64 = "LS0tLS1CRUdJTiBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCgptUUlOQkdCOSt4a0JFQUNhYllaT1dLbWdac0hUZFJEaXlQSnhoYnVVaUtYNjVHVVdreVJNSktpLzFkdmlWeE9YClBHNmhCUHRGNDhJRm5WZ3hLcEliN0c2TmpCb3VzQVYrQ3VMbHY1eXFGS3BPWkVHQzZzQlYrR3g4VnUxQ0lDcGwKWm0rSHBRUGNJendCcE4rQXI0bC9leENHL2YvTVpxL294R2dIK1R5UkYzWGNZRGpHOGRiSkNwSE81blE1Q3k5aApRSXAzL0JoMDlrRVQ2bGsrNFFsb2ZOZ0hLVlQyZXBWOGlLMWNYbGJRZTJ0WnRmQ1V0eGsrcHh2VTBVSFhwK0FCCjB4YzMvZ0loalpwL2RlUG1DT3lReUdQSmJwNWJwTzRVZUFKNmZycWhleG1ObGF3OVo4OTdsdFptUkxHcTFwNGEKUm5XTDhGUGtCejlTQ1NLWFM4dU55VjVvTU5WbjRHMW9iQ2tjMTA2aVd1S0JUaWJmZllRenE1VEc4RllWSktyaApSd1dCNnBpYWNFQjhobDIwSUlXU3hJTTNKOXRUN0NQU25rNVJZWUNUUkhnQTVPT3JxWmhDN0plZnVkclA4bitNCnB4a0RnTk9SRHU3R0NmQXVpc3JmN2RYWWpMc3hHNHR1MjJEQkpKQzBjL0lwUnBYRG5PdUpOMVE1ZS8zVlVLS1cKbXlwTnVtdVFwUDVsYzFaRkc2NFRSemIxSFI2b0lkSGZiclZRZmRpUVhwdmRjRngrRmw1N1d1VXJhWFJWNnFmYgo0Wm1LSFgxSkV3TS83dHUyMVFFNEYxZHowanJvTFNyaWNaeGZhQ1RISFdOZnZHSm9aMzAvTVpVcnBTQzBJZkIzCmlRdXR4Ylpyd0lsVEJ0K2ZHTHRtM3ZEdHdNRk5XTStSYjFsck94RVFkMmVpamR4aHZCT0h0bEljc3dBUkFRQUIKdEVSSVlYTm9hVU52Y25BZ1UyVmpkWEpwZEhrZ0tHaGhjMmhwWTI5eWNDNWpiMjB2YzJWamRYSnBkSGtwSUR4egpaV04xY21sMGVVQm9ZWE5vYVdOdmNuQXVZMjl0UG9rQ1ZBUVRBUW9BUGdJYkF3VUxDUWdIQWdZVkNna0lDd0lFCkZnSURBUUllQVFJWGdCWWhCTWgwQVI4S3RBVVJEUUlRVlRRMlhaUnkxMGFQQlFKcGxrZlFCUWtRck95M0FBb0oKRURRMlhaUnkxMGFQdzZnUC8zR1VFTVVhNm1DUnV1U09UOVVuemlQSXZYWWQ2M21jTjZBNkp3bXdqOEphQjJxdQpPQ2lqdkprdzU2VWJaSzN4MUZaSWJlMGhBNlZVQXdOU05tU0l4VkpraWxnd0lZWUZPMHRuTDc5WGhJZVA3allGCnlkWExaNHJUaTFGRGw4bGx0QXVqVE5BUmRZOFVHZzRoR2xjTTlPckVlWEVGTFd1Z0pOaUNoTDE1RlZveFpxSVMKamVkdWFFcXl4R2ZKbnlWd3k4ejNwWmZnT0RlRnI3eHMyTmtVSU1TZnVSZzI0VmNMNGFXOEZydDNqVzhQNDV5MwpvLzVmc2k2QXcydFowd0Q5TlNna1ZjOFZEMU5SVjllU1o5NUJ2K0F3ZjlJWGErQ241T0NqYzhKYytYRituTGZCCm9Qc3dPTzdFOGRMaXVCVXc2L0d6U0xNYlZzOHFmOEJOWEI5MmRPZTFWY2NWVHFqQ3hLMnNFcFZhSGg3ZStjbzgKZDhsREdCSVdNR2g3TlM2WGxHT1JwRmIvVDZneGpqT1lVVjNTS2Q0UURlYlVVRzhrTWtiNWp1TGxqT29xK1lPUAp2Z05MRFpMWnRlRnBtSCt6QjlEcE9ZMVl0SFpCL09EK0R0ekxNYVNsNlZQRjJMbjBqNWFRR3dORHQ3c2hleUFlCnNYYnUwcW4ySDVGeG9qU2Z2aFQwa1VES1owbWdnNXkzT2ZsZzQ5TWlBT2hqTEdZMEpvY0ZwQmVNSUx3MjdmYncKZnBJQlA3c2lRV0ZURkoxTytsMk5RaVdBd0MyeDVmWDJFYWt5Q0JKbXJrUFYyaHI0bkVvZ05xZzkvUkRza0lVcQpjcGNPT2QvMEJudGlYTXlVQ0NIMkFvQ3Q1YWNhVFEwV1U2Q0Fvc1pQb2pPWWh0R0dnT2dlUVNkZmxwTVN1UUlOCkJHQjkreGtCRUFDb2tsWXNmdldSQ2pPd1M4VE9LQlRmbDhteXVQOVY5dUJOYnlIdWZ6TkVUYmhZZVQzM0NqME0KR0NOZDlHZG9ha256QlFMYlFWU1FvZ0Erc3BxVnZRUHoxTU5EMThHSWR0bXIwQlhFTmlaRTdTUnZ1NzZqTnFMcApLeFlBTG9LMlBjM3lLMEpHRDMwSGNJSWd4K2xPb2ZyVlBBMmRmVlBUajF3WHZtMHJiU0dBNFdkNE5nM2QyQW9SCkcvd1pEQVE3c2RaaTFBOWhoZnVnVEZad2ZxUjNYQVlDaytQVWVvRnJrSjBPN3duZ2Fvbis2eDJHSlZlZFZQT3MKMngvWE9SNGw5eXRGUDNvKzVJTGhWbnNLK0VTVkQ5QVF6MmZoREVVNlJodnphcXRIZStzUWNjUjNvVkxvR2NhdAptYTVyYmZ6SDBGaGowSnRrYlA3V3JlUWY5dWRZZ1h4VkpLWExRRlFnZWwzNGVnRUdHK05sYkdTUEcrcUhPWnRZCjR1V2RsRFN2bW8rMVA5NVA0VkcvRUJ0ZXF5QmJEREdER2lNczZsQU1nMmNVTHJ3T3NieFdqc1drYTh5MklOM3oKMXN0bElKRnZXMmtnZ1UrYktuUStzTlFuY2xxM3d6Q0pqZURCZnVjUjNhNVdSb2pEdEdvSlA2RmMzbHVVdFM3Vgo1VEFkT3g0ZGhhTUZVOSswMU9vSDhaZFRSaUhaMUs3UkZlQUlzbFN5ZDRpQS94a2hPaEhxODlGNEVDUWYzQnQ0ClpoR3NYRFRhQS9WZ0htZjNBVUxickM5NE83SE5xT3ZUV3p3R2lXSExmY3hYUXNyK2lqSUVRdmg2ckhLbUpLOFIKOU5NSHFjM0wxOGVNTzZicXJ6RUhXMFhvaXU5VzhZaitXdUIzSUtkaGNsVDN3MHBPNFBqOGdRQVJBUUFCaVFJOApCQmdCQ2dBbUFoc01GaUVFeUhRQkh3cTBCUkVOQWhCVk5EWmRsSExYUm84RkFtbVdSKzBGQ1JDczdOUUFDZ2tRCk5EWmRsSExYUm8vUjBBLy9RVzFvcEJseldTbVd3dzFxOVF1SkEyV0NJSXM4dEpLUkRPc21nSlBzY05wendaRlUKTjFEZjB3V05qcWkxQkRSZWVpN2xaVEh3VWsrZWJCbjBia0kzQU5tbWdZZzdMQnVlQXQ1VVdTaW5nT2MrcnZLQQpOMzJCRHpCWWtNY2tSekpTUXNtZUM1aG0zSjN3TFN5OTB1YUlsckpKRTlHSlprZi9XMk9iKzRTUVpaK2RublJQCkpva0RkVzFEdVpTOVBieFNMSktENWVJV0hCeEpuRk0xQ21IZk9mcmpUSitNWXZWR001c3hTWThSN0UrR0FEajUKTC9pNE4rdFRGSkx1VE1ZQVJHZkE2ZCtLUEtjTUp0Z3BVUGpTTUFnOG5HVWh1a2N0cHVCczI3bU9LVzBDQnRtSgo4MlgvcVlST1RMMCt2R1R2VVlmbFlpdWNlVmxoWC9rdzBKWm5NYUc1Vi9tcEhxOFN3RDA3cENHT2Y2OWovbU5hCjVFTDMrK1BtemcwczBzdHczRWE1cENOMGNML25La29XY2hIQmZXMTVXNEpPbktBSXNweUQxdkg2NzBQNFdmZVYKRTlCOWQ2dGdLU2JNLzlKbFhvUVM1WmRHK2tiZG9zaWVFTGhtVldtdm9qeUs3SytSeTZDOXdnZCtVZm5XNWpYZAppTndLVzNLSHVhdXRRd2xGaEhSTk15RGcwOGMrcEk1ZW1UTVQzSVVReUdXbytHc2thM1RxR3VqRmNBQng3SXArCm1ITm1NckNrU0QrWEMyYnZ6dlJSN0ZjTTAvQjlmc2pMWC9XdHRtNXZSSjFkMm9Bb0VQdncySVpuSklYcE90MnoKem81NXNKVHp0TnU0bFdHZ0RWZ3RwOVNYTzVhMEU1WXZGSFFOWk41UUxlVlRURnU2STdxRytNRTFFL0s1QWcwRQpZSDMrSlFFUUFMaXZsbFRqTW9seFVXMk94clhiK2EyUHQ2dmpDQnNpSnpyVWowUGE2M1UrbFQ5amxkYkNDZmdQCndEcGNEdU8xTzA1UThrMU1vWVo2SGRkalducUtHN1MzZXFrVjVjM2N0M2FtQVhwNTEzUURLWlVmSUR5bE9taFUKcXZ4akVndkdqZFJqejZrRUNGR1lyNlZuai9wNkF3V3Y0L0ZCUkZscnE3Y25RZ1B5bmJJSDRocld2ZXdwM1RxdwpHVmdxbTVSUm9mdUF1Z2k4aVpRVmxBaVFaSm84OHlhenRBUS83VnNYQmlIVG42MXVnUThiS2RBc3I4dy9aWlU1CkhTY0hMcVJvbGNZZzBjS045MWMwRWJKcTlrMUxVQy8vQ2FrUEI5bWhpNSthVVZVR3VzSU04RUNTaFVFZ1NUQ2kKS1FpSlVQWjJDRmJiUEU5TDVvOXhvUEN4alhvWCtyN0wvV3lvQ1BUZW9TM1lSVU1FbldLdmM0Mll4ejNtZVJiKwpCbWFxZ2JoZU5tek9haDVuTXdQdXBKWW1IcmpXUGtYN295eUh4TFNGdzRkdG9QMmo2WjdHZFJYS2EyZFVZZGsyCngzSllLb2NyRG9QSGgzUTBUQVp1anRwZGpGaTFCUzhwYnhZRmIzaEhtR1Nkdno3VDdLY3FQN0NoQzdrMlJBS08KR2lHN1FRZTROWDNzU01nd2VZcGw0T3d2UU9uNzN0NUNWV1lwL2dJQk5aR3NVM1B0bzhnMjd2SGVXeUg5bUtyNApjU2VwRGh3Ky9YOEZHUk5keE5mcExLbTdWYzBTbTlTb2Y4VFJGckJUcVgrdklRdXBZSFJpNVFRQ3VZYVY2T1ZyCklUZWVnTkszU280bTM5ZDZhakNSOVF4UmJtam54OVVjblNZWURtSUI2ZnBCdXdUMG9nTnRBQkVCQUFHSkJISUUKR0FFS0FDWUNHd0lXSVFUSWRBRWZDclFGRVEwQ0VGVTBObDJVY3RkR2p3VUNZSDRiZ0FVSkFlRlEyd0pBd1hRZwpCQmtCQ2dBZEZpRUVzMnk2a2FMQWN3eERYOEtBc0xSQkNYYUZ0bllGQW1COS9pVUFDZ2tRc0xSQkNYYUZ0bllYCkJoQUFseGVqeUZYb1F3eUdvOVUrMmc5TjZMVWIvdE50SDI5UkhZeHk0QTMvWlVZN2QvRk1rQXJtaDQrZGZqZjAKcDlNSno5OFprcHMyMGthWVArMll6WW1haXpPNk9BNlJJZGRjRVhRRFJDUEhtTHRzMzA5N21KL3NreDlxTEFmNgpyaDlKN2pXZVNxV082Vlc2TWx4OGo5bTdzbTNBZTFPc2pPeC9tN2xHWk9oWTRVWWZZNjI3K0pmN1dRNTEwM1FzCmxnUTA5ZXMvdmhUQ3gwZzM0U1lFbU1XMTVUYzNlQ2pRMjFiMU1lSkQvVjI2bnBlYWtWOGlDWjFrSFpIYXdQcS8KYUNDdVlFY0NlUU9PdGVUV3ZsN0hYYUhNaEhJeDdqak9kOFhYOVYrVXhzR3oyV0NJeFgvajdFRUVjN0NBeHdBTgpuV3A5alhlTGZ4WWZqclVCN1hRWnNHQ2Q0RUhIelV5Q2Y3aVJKTDdPSjN0ejVaK3JPbE5qU2djaSt5Y0hFY2NMClllRkFFVitGeitzajdxNGNGQWZlcmtyN2ltWTFYRUkwSmk1UDhwL3VSWXcvbjh1VWY3THJMdzVUekhtWnNUU0MKVWFpTDRsbFJ6a0RDNmNWaFlmcVFXVVhEZC9yMzg1T2tFNG9hbE5ORStuK3R4TlJ4OTJycHZYV1o1cUZZZnY3RQo5NWZsdHZwWGMwaU91Z1BNenlvZjNsd28zWGk0V1pLYzFDQy9qRXZpS1RRaGZuM1dadWt1RjVsYnozVjFQUWZJCnhGc1llOVdZUW1wMjVYR2dlempYenA4OUMvT0ljWXNWQjFLSkFLaWhnYllkSHlVTjRmUkNtT3N6bU9Vd0VBS1IKM2s1ajRYOFY1YmswOHNBNjlOVlhQbjJvZnh5azNZWU9NWVdXOG91T2JuWG9TOFFKRURRMlhaUnkxMGFQTXBzUQpBSWJ3WDIxZXJWcVVETVBuMXVPTlA2bzROQkVxNE13RzdkK2ZUODVyYzFVMFJmZUtCd2p1Y0FFL2lTdFpEUW9NClpLV3ZHaEZSK3VveWcxTHJYTkt1U1BCODJ1bmgyYnB2ajR6RW5Kc0phZGl3dFNoVEtEc2lraHJmRkVLM2FDSzgKWnVocGl1M2p4TUZEaHBGemx4c1N3YUNjR0pxY2R3R2hXVXgwWkFWRDJYNzFVQ0ZvT1hQakY5Zk5ucHk4MFlOcApmbFBqajJSbk9aYkp5QklNMHNXSVZNZDhGNDRxa1RBU2Y4SzVRYjQ3V0ZONXRTcGVQcTdPQ203czh1K2xZWkdLCndSMThLN1ZsaXVuZFIrNWE4WEFPeVVYT0w1VXNEYVFDSzRMajRsUmFlRlh1blhsM0RKNEUrN0JLelpoUmVKTDYKRXVnVjVlYUdvbkE1MlRXdEZkQjhwKzc5d1BVZUkzS2NkUG1ROUxsNVppL2pCZW1ZNGJ6YXNtZ0t6TmVNdHdXUApmazZXZ3J2QndwdHFvaHc3MUhEeW1HeEZVblVQN1hZWWppYzJzVktodjlBZXZNR3ljVmd3V0JpV3JvRENROUphCmJ0S2Z4SGhJMnArZytyY3l3bUJvYldKYlpzdWpUTmpodG1lK2tObjFtaEpzRDNiS1BqS1FmQXhhVHNrQkxiMFYKd2dWMjE4OTFUUzFEcTlrZFBMd29TNFhOcFlnMkxMQjRwOWhtZUczZnU5K09tcXdZNW9LWHNIaVdjNDNkZWk5WQp5eFoxQUFVT0lhSWRQa3ErWUcvUGhsR0U0WWNRWjRSUHBsdEFyMEhmR2daaG1YV2lnYkdTKzY2cFVqK09qeXNjCmowSzV0Q1Z4VnUwZmhoRnBPbEh2MExXYXhDYm5rZ2tRSDlqZk1FSmtBV01PdVFJTkJHQ0FYQ1lCRUFEVzZSTnIKWlZHTlh2SFZCcVNpT1dheGwxWE9pRW9pSFB0NTBBaWp0MjV5WGJHKzBrSElGU29SKzFnNkxoMjBKVENDaGdmUQprR0dqelF2RXVHMUhUdzA3WWhzdkxjMHBrak5NZnU2Z0pxRm94L29nYzUzbXo2OU94WGF1elVRL1RaMjdHRFZwClVCdStFaERLdDFzM090QTZCanovY3NvcC9VbTdnVDAraXZIeXZKL2pHZG5QRVp2OHROdVNFL1VvK2huL1E5aGcKOFNidmVaem8zQytVNEtjYWJDRVNFRmw4R3E2YVJpOXZBZmE2NW94RDVqS2FJejdjeStwd2IwbGl6cWxXN0g5dApRbHIzZEJmZEljZHpnUjU1aFRGQzUvWHJjd0o2L25IVkgveEdza0Vhc25mQ1FYOFJZS011eTBVQURKeTcyVGtaCmJZYUN4K1hYSWNWQjhHVE9tSlZvQWhyVFNTVkxBWnNwZkNuanduU3hpc0RuM1p6c1lycTNjVjZzVThiK1FsSVgKN1ZBanVyRSs1Y1ppVmxheGdDanloS3FsR2dtb25uUmVXT0JhY0NnTC9VdnV3TW1NcDVUVExtaUxYTFQ3dXhlRwpvakV5b0NrNHNNcnFyVTFqZXZIeUdsREpIOVRhdXgxNUdJTER3bllGZkF2UEY5V0NpZDRVWjRPdXdqY2F4ZnlzCjNMeE5pWklsVXNYTkt3UzNtaGlNUkw0VFJzYnM0azRRRStMSU1Pc2F1SXZjdm04L2ZyeWR2US9rVXdJaFZUSDgKMFhHT0g5MDliWXRKdlkzZnVkSzdTaEl3bTdaRlRkdUJKVUc0NzNFL0ZuM1ZraFRtQlg2K1BqT0M1MEhSL0h5Ygp3YVJDemZEcnVNZTNUQWNFL3RTUDVDVU9iOUM3K1AraFB6UWNEd0FSQVFBQmlRUnlCQmdCQ2dBbUFoc0NGaUVFCnlIUUJId3EwQlJFTkFoQlZORFpkbEhMWFJvOEZBbW1XU0FvRkNSQ3FpK1FDUU1GMElBUVpBUW9BSFJZaEJEZE8KeDF0SVdSTmdTb01jeDhnZ3h0WE5KNnVIQlFKZ2dGd21BQW9KRU1nZ3h0WE5KNnVIUmZBUC8yQ0dkU3lnMEs3VQo2NlZ5Z2wwZHVneHJNbThPMy9PZTIxMUJLZFFzRlVTV0F6bk9UUlRLL3p2TVVITzRMSkFsWXZkdFo2eERhNFhICmw5RllROE1SOVpWME91T2xBWnZVNElKRExQVkNVMDlYL1V6WC9HRW9aTDBSNWVzdndQQVhvcE1hUkhDZlhKZUkKL2dFYUI5NFVoQWVZbHdwY1JuMGVTdWsxdnlaeDdHUkU2L2hvZzhEQ2Y0aG9UNDBkVzIwZ0dlNTh4Y3ZKK21SWQpsQzBscjE2V0gwOHd1VWNlZTYrZGd1KzRDZzZTRzYrenQ5Y015bDhWblRVTDVCSy9WM01lYm5ZWkpLMFJGRE5uCm5YRGh6U3RnT2Q1Z09lSUwreEJQWEhkMC9sZC9yRE03NFNGRXhwdVMraE5zeW8reE1RL0hKYXZhazIxTUZpbnUKbDlDT3dmR0VtbEFYVEdNWTMwTGYzUHQvZUFrYndnbUdjOTY2VlNvUm1PRkVYSlZsRHIreUpSNnJ1KzdqNTB6OApsQXY2THNvcDdzdW4xUXlzYm8wc3dmNlcxcWdQZjZWV2J4OTFOVEZMa3cwK2dEOGp4d3JVNVpNa2VTdW50WDlkCnBqdVpTMjlDZmxYWElSUGx2aHVpRFBpY3dUcFl1SVV4Mzd2SHZlQUg1Z25vd1pnMjQ3eDc4MFVycnN4OGR1VFgKOENJOU1BbnF6bTRkRkFpUmx3RThidkxrK2w5d2VraVhBOWdJTVppVk5xTmxkdVhJcXZBRzIxV2RncThxeWVYSwp5L1hXQ1ZLRFFPbUViRkFsdGZOYW04RTNLRXcwZmwxOTl4KzkzZDVja0RHY1B6VVlQYk5rQ3VJd25nQy9aTjk2CnBEYWZGM1oxMmZTTmZoWlVlMEM4dGQ4S0FzellhOTZHQ1JBME5sMlVjdGRHajFnS0QvNGpPR2hFR1RnODhWeXUKUFZqZUsremt3clRJWlN2SGRVSGZUdC8rclRMU05iL1JRaUJDVVF1RVp2YWZqNkZybnRTN2JBRWhjY0dxSDg5NApUM1N0NUswQVhXa3ZzTGQ2SytjYklRZGxuRkEyemI2Z2VKVUNrNnF4NU5nV3BSYzNpMERTN0NoZUd3bCtCd3U3CituOXBOak5qaUhWK3JZRGdxYlFYRzBkdEd5c0IwLzNxSVJnRURIRk8wSEp1L2RjdGU0b1hyUUlxclpycE93ZTgKV3hxRnFkVTkxOEpwU1VjYzhjb2lGcDlZdHdwZ3FRTnhHVlorcmhnblRHZFp6azFmL1loaGltaCsyQjBSZWFGdgprM1V6VkJqM0hROUM2K090M015REVoU2dkaGpyOWUyNVRtOVM1WWZod3RXbWdoUnc5UktQeUxNU1hTeG0vVWMwCm1LMU51Y0FwOFRRQndLcUt6TnBDazVJZHJCU1dSVWJqT29PRnl6eUNzWTZnUzI4NUdDcFNJekkzOWhUZiszZ2QKd1lQbEU2ZmorRjJUWnpkaHg2MkRQbnpCekJIbkJ5WVRWZEo2NDlieDBGRnA0USs1VGJJV3R4dS9BUWtSRHhtVwpOUWZFKzZHZ2VzaGxyaFhXc2g2K1BHRHp0KzJyYUc2elVUOTEzc2R6N0N0dzRmTGptc0tPVGRUejNYYTlwcjhsCnhmSS9KdXVrU2d0OW8vbjNHaXJoVEIzekUxdy9JL1h0Nms3b0FTaVAzelFTdUh0Qi9DWUtZSER0T0NXd2pvN0oKUEVHdGIvRmtyZUtOeHNrL3AyMGpubHJCOFdaeHhzd2RyMlZyaTlObUZleU1EVlg3cUYzV3FUKzhhQ1Y5R3RTMQpHQ0h4LzVuR0JkRHdveEVzWHFwSTNJVXFQYjZGRGc9PQo9d3RwKwotLS0tLUVORCBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCg=="
+
+[trivy]
+version = "0.74.0"
+
+[trivy.assets.darwin-arm64]
+file = "trivy_0.74.0_macOS-ARM64.tar.gz"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_macOS-ARM64.tar.gz"
+sha256 = "1caada5e0e2091909357c7525d3aa76f4b660b13821bc143b190c7483e31cc11"
+archive = "tar.gz"
+entry = "trivy"
+executableArch = "arm64"
+emulated = false
+
+[trivy.assets.linux-amd64]
+file = "trivy_0.74.0_Linux-64bit.tar.gz"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-64bit.tar.gz"
+sha256 = "2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a"
+archive = "tar.gz"
+entry = "trivy"
+executableArch = "amd64"
+emulated = false
+
+[trivy.assets.linux-arm64]
+file = "trivy_0.74.0_Linux-ARM64.tar.gz"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_Linux-ARM64.tar.gz"
+sha256 = "b94ce1976bbf3c15b514b605ee88be7c6d94a29be2302847ff01cb794d47aad5"
+archive = "tar.gz"
+entry = "trivy"
+executableArch = "arm64"
+emulated = false
+
+[trivy.assets.windows-amd64]
+file = "trivy_0.74.0_windows-64bit.zip"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_windows-64bit.zip"
+sha256 = "94c40e0696e4b907a74b7b2e1438d5d72ebaca83115817407f568a002d520842"
+archive = "zip"
+entry = "trivy.exe"
+executableArch = "amd64"
+emulated = false
+
+# Windows arm64 では公式 amd64 版をエミュレーションで実行する。
+[trivy.assets.windows-arm64]
+file = "trivy_0.74.0_windows-64bit.zip"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.74.0/trivy_0.74.0_windows-64bit.zip"
+sha256 = "94c40e0696e4b907a74b7b2e1438d5d72ebaca83115817407f568a002d520842"
+archive = "zip"
+entry = "trivy.exe"
+executableArch = "amd64"
+emulated = true
+
+[yq]
+version = "4.53.6"
+
+[yq.assets.darwin-arm64]
+file = "yq_darwin_arm64"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_darwin_arm64"
+sha256 = "cceb0b8d71ea5294334121f8429f33f92b920e7217d904a2f9f35443968ac424"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false
+
+[yq.assets.linux-amd64]
+file = "yq_linux_amd64"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64"
+sha256 = "c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385"
+archive = "raw"
+entry = ""
+executableArch = "amd64"
+emulated = false
+
+[yq.assets.linux-arm64]
+file = "yq_linux_arm64"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_arm64"
+sha256 = "88a1016bc1d657375a35864e4f44b6f333df8ff97b559f51bba0adcb2169df09"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false
+
+[yq.assets.windows-amd64]
+file = "yq_windows_amd64.exe"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_windows_amd64.exe"
+sha256 = "ece3dd8bb50d39f93610506273ea262feb91e5c486bbddbb10abf91b2a6c0f14"
+archive = "raw"
+entry = ""
+executableArch = "amd64"
+emulated = false
+
+[yq.assets.windows-arm64]
+file = "yq_windows_arm64.exe"
+url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_windows_arm64.exe"
+sha256 = "9a0ec8f648b0749d3d71286df96384f358c0eeca486bbcdec04e747307021d3a"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false

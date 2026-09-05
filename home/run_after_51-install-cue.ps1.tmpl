@@ -1,0 +1,227 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# CUE を公式アーカイブから ~/.local/bin へ直接導入する。
+$ErrorActionPreference = 'Stop'
+
+$toolName = 'cue'
+$toolVersion = '{{ .cue.version }}'
+{{ if not (hasKey .cue.assets $platform) }}
+throw "CUE $toolVersion has no asset for {{ $platform }}"
+{{ else }}
+{{- $asset := index .cue.assets $platform }}
+$binDir = Join-Path $HOME '.local\bin'
+$target = Join-Path $binDir 'cue.exe'
+$miseTarget = Join-Path $env:LOCALAPPDATA 'mise\shims\cue.exe'
+$platformArch = '{{ .chezmoi.arch }}'
+$executableArch = '{{ $asset.executableArch }}'
+$assetFile = '{{ $asset.file }}'
+$assetUrl = '{{ $asset.url }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+$assetEntry = '{{ $asset.entry }}'
+
+if ($executableArch -cne $platformArch) {
+    throw "declared executable architecture $executableArch does not match $platformArch"
+}
+
+function ConvertTo-NormalizedPath {
+    param([string]$Path, [string]$BasePath)
+    if (-not [System.IO.Path]::IsPathRooted($Path)) {
+        $Path = Join-Path $BasePath $Path
+    }
+    return [System.IO.Path]::GetFullPath($Path).Replace('\', '/').TrimEnd('/')
+}
+
+function Assert-TargetReplaceable {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return 'Missing' }
+    if ($item.PSIsContainer) {
+        throw "$target is a directory; refusing to replace it."
+    }
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        $linkTarget = [string]@($item.Target)[0]
+        if (-not [System.IO.Path]::IsPathRooted($linkTarget)) {
+            $linkTarget = Join-Path $item.DirectoryName $linkTarget
+        }
+        $current = ConvertTo-NormalizedPath -Path $linkTarget -BasePath $item.DirectoryName
+        $expected = ConvertTo-NormalizedPath -Path $miseTarget -BasePath $item.DirectoryName
+        if ($current -ine $expected) {
+            throw "$target is a foreign symlink; refusing to replace it."
+        }
+        return 'MiseLink'
+    }
+    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+        throw "$target is not a regular file; refusing to replace it."
+    }
+    return 'File'
+}
+
+function Test-BinaryArchitecture {
+    param([string]$Path)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        return $false
+    }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read,
+            [System.IO.FileShare]::ReadWrite
+        )
+        $reader = [System.IO.BinaryReader]::new($stream)
+        if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { return $false }
+        $stream.Position = 0x3c
+        $peOffset = $reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 6)) { return $false }
+        $stream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) { return $false }
+        $machine = $reader.ReadUInt16()
+        $expectedMachine = if ($platformArch -eq 'amd64') { 0x8664 } else { 0xAA64 }
+        return $machine -eq $expectedMachine
+    }
+    catch [System.IO.IOException] {
+        return $false
+    }
+    catch [System.UnauthorizedAccessException] {
+        return $false
+    }
+    catch [System.Security.SecurityException] {
+        return $false
+    }
+    finally {
+        if ($reader) { $reader.Dispose() }
+        elseif ($stream) { $stream.Dispose() }
+    }
+}
+
+function Test-ExpectedVersion {
+    param([string]$Path, [string]$WorkingDirectory)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $output = & $Path version 2>$null
+        if ($LASTEXITCODE -ne 0) { return $false }
+    }
+    catch [System.Management.Automation.CommandNotFoundException] {
+        return $false
+    }
+    catch [System.Management.Automation.ApplicationFailedException] {
+        return $false
+    }
+    catch [System.ComponentModel.Win32Exception] {
+        return $false
+    }
+    catch [System.IO.IOException] {
+        return $false
+    }
+    catch [System.UnauthorizedAccessException] {
+        return $false
+    }
+    finally {
+        Pop-Location
+    }
+    return @($output) -contains "cue version v$toolVersion"
+}
+
+function Assert-ZipEntriesSafe {
+    param([string]$Archive, [string]$Destination)
+    $destinationRoot = [System.IO.Path]::GetFullPath($Destination)
+    $destinationPrefix = $destinationRoot + [System.IO.Path]::DirectorySeparatorChar
+    $bundle = [System.IO.Compression.ZipFile]::OpenRead($Archive)
+    try {
+        foreach ($entry in $bundle.Entries) {
+            $relative = $entry.FullName -replace '\\', '/'
+            if ([System.IO.Path]::IsPathRooted($relative) -or
+                @($relative -split '/').Contains('..')) {
+                throw "unsafe archive entry $($entry.FullName)"
+            }
+            $entryPath = [System.IO.Path]::GetFullPath(
+                (Join-Path $Destination ($relative -replace '/', [System.IO.Path]::DirectorySeparatorChar))
+            )
+            if ($entryPath -ne $destinationRoot -and
+                -not $entryPath.StartsWith($destinationPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "archive entry escapes the staging directory: $($entry.FullName)"
+            }
+        }
+    }
+    finally {
+        $bundle.Dispose()
+    }
+}
+
+function Assert-Unlocked {
+    $state = Assert-TargetReplaceable
+    if ($state -ne 'File') { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $target, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw "$target cannot be replaced because it is locked; the existing file was not changed."
+    }
+}
+
+$targetState = Assert-TargetReplaceable
+if ($targetState -eq 'File' -and (Test-BinaryArchitecture -Path $target) -and
+    (Test-ExpectedVersion -Path $target -WorkingDirectory $binDir)) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$stageDir = Join-Path $binDir (".$toolName-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+try {
+    $archive = Join-Path $stageDir 'download.zip'
+    try {
+        Invoke-WebRequest -Uri $assetUrl -OutFile $archive -UseBasicParsing
+    }
+    catch {
+        throw "failed to download $assetFile; keeping the current $toolName. $($_.Exception.Message)"
+    }
+    $actualSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $assetSha256) {
+        throw "checksum verification failed for $assetFile"
+    }
+
+    if ([System.IO.Path]::IsPathRooted($assetEntry) -or $assetEntry.Split('/').Contains('..')) {
+        throw "unsafe archive entry $assetEntry"
+    }
+    $extractDir = Join-Path $stageDir 'extracted'
+    Assert-ZipEntriesSafe -Archive $archive -Destination $extractDir
+    Expand-Archive -LiteralPath $archive -DestinationPath $extractDir
+    $candidate = Join-Path $extractDir ($assetEntry -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    $candidateFull = [System.IO.Path]::GetFullPath($candidate)
+    $extractFull = [System.IO.Path]::GetFullPath($extractDir) + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $candidateFull.StartsWith($extractFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "archive entry escapes the staging directory: $assetEntry"
+    }
+    $candidateItem = Get-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    if (-not $candidateItem -or $candidateItem.PSIsContainer -or
+        ($candidateItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "$assetEntry is not a regular file in $assetFile"
+    }
+    Unblock-File -LiteralPath $candidate
+    if (-not (Test-BinaryArchitecture -Path $candidate)) {
+        throw "$assetFile does not contain a $platformArch Windows executable"
+    }
+    if (-not (Test-ExpectedVersion -Path $candidate -WorkingDirectory $stageDir)) {
+        throw "$assetFile did not report CUE $toolVersion"
+    }
+
+    Assert-Unlocked
+    Write-Host "Installing CUE $toolVersion..."
+    try {
+        [System.IO.File]::Move($candidate, $target, $true)
+    }
+    catch {
+        throw "could not publish $target; the previous file was kept. $($_.Exception.Message)"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable cleanupErrors
+    if ($cleanupErrors) { Write-Warning "could not remove staging directory ${stageDir}: $cleanupErrors" }
+}
+{{ end }}
+{{- end -}}

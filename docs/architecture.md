@@ -127,7 +127,7 @@ Dock / Spotlight / GitHub Desktop から起動された子プロセスは launch
 
 ### mise の管理外にあるツール
 
-GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・typescript-language-server は mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路で導入する（ADR-028）。導入経路と更新手順は [`operations.md`](operations.md#ツールの管理境界) を参照する。
+GitHub CLI、jq、uv、言語ランタイム、TypeScript関連ツール、クラウド関連CLIは mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路で導入する（ADR-028）。個別の対象、導入経路、更新手順は [`operations.md`](operations.md#ツールの管理境界) を参照する。
 
 - **GitHub CLI**: 導入と更新は OS/ベンダーのパッケージマネージャーが所有する。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を満たしているか検査して不足時に更新コマンドを案内する
 - **jq**: `run_after_26-install-jq` が公式リリース asset を OS/CPU ごとに固定し、SHA-256 を検証してから `~/.local/bin/jq` へ置く。宣言に無い OS/CPU では別 CPU の asset へフォールバックせず、警告して何もしない
@@ -140,8 +140,12 @@ GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・T
 - **TypeScript CLI**: `run_after_21-install-typescript-cli` が直接導入した Node/npm で `npm install --prefix <専用 root> --no-save --package-lock=false typescript@<version>` を実行する（グローバルインストールではない）。エントリポイントは `typescript-cli/node_modules/.bin/tsc`。POSIX では同じ launcher への symlink を `~/.local/bin/tsc` へ張る（npm 生成のスクリプトをそのまま指し、独自の汎用プロキシは作らない）
 - **typescript-language-server**: `run_after_23-install-typescript-language-server` が同様に専用 prefix へ `typescript-language-server` だけを導入する。`typescript` を自身の依存に持たず、tsserver.js は次段の typescript-lsp から参照する。POSIX では `~/.local/bin/typescript-language-server` へ同様に symlink する
 - **typescript-lsp** (`[typescriptLsp]`, TypeScript 6.0.3 固定): `run_after_22-install-typescript-lsp` は tsserver.js 参照専用だが、typescript@6.0.3 の package.json が宣言する `bin.tsserver` から npm が生成する launcher (`node_modules/.bin/tsserver`) が同時に手に入るため、POSIX では `~/.local/bin/tsserver` をそこへ symlink する（TS7 系はこの bin を持たないため、tsserver コマンドの供給元は専用 TS6.0.3 側に限られる）
+- **クラウド関連CLI**: Azure kubelogin、Cosign、CUE、Helm、kubectl、kustomize、sqlc、Terraform、Trivy、yqは公式配布物から実行ファイルを取り出し、全OSで `~/.local/bin` に置く。専用PATHやruntime proxyは使わず、mise shimのリンク対象からも除外する。OS/CPU、取得元、SHA-256、実行architectureは `home/.chezmoidata.toml` のasset宣言で固定する
+- **Terraformの信頼起点**: 宣言に保持した公開鍵とfingerprintを使い、独立したGPGでchecksum listの署名を確認する。GPGのkeyringは一時領域に限り、利用者のkeyringや鍵サーバーを使わない。Cosign本体の初期導入も自身の検証機能には依存せず、宣言した公式配布物のSHA-256を使う
 
 いずれも導入済みの版が宣言と一致すればネットワークへ出ない。checksum または版の検証に失敗した場合は既存のバイナリを残す。npm ベースの 3 つは `npm` 標準の checksum 検証を使い、レジストリミラーが `dist.integrity` を欠く場合でも存在しない検証を発明しない。
+
+Windows arm64での互換実行は明示した例外だけに限定する。例外の範囲と撤去条件は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)、現在のasset選択はdesired declarationが正本である。クラウド関連CLIは実行ファイルのヘッダーからCPU種別を確認し、宣言と一致しない候補を配置しない。配布物が見つからないことを理由に、別architectureへ自動的にフォールバックしない。
 
 ### mise shims の制約
 

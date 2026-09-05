@@ -13,6 +13,8 @@ import subprocess
 import tempfile
 import unittest
 
+from tests.chezmoi_test_helpers import execute_template
+
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "home"
@@ -70,21 +72,7 @@ def _render(path: pathlib.Path) -> str:
         "windowsUser": "",
         "corpUser": "",
     }
-    result = subprocess.run(
-        [
-            "chezmoi",
-            "execute-template",
-            "--source",
-            str(SOURCE_ROOT),
-            "--override-data",
-            json.dumps(override),
-            "--file",
-            str(path),
-        ],
-        check=False,
-        capture_output=True,
-        encoding="utf-8",
-    )
+    result = execute_template(path, override, SOURCE_ROOT)
     if result.returncode != 0:
         raise AssertionError(f"{path.name} failed to render: {result.stderr}")
     return result.stdout

@@ -5,7 +5,6 @@ per-tool official install paths. Every check here is static or runs a
 rendered script against stubs; nothing downloads or installs anything.
 """
 
-import json
 import os
 import pathlib
 import re
@@ -15,6 +14,8 @@ import subprocess
 import tempfile
 import tomllib
 import unittest
+
+from tests.chezmoi_test_helpers import execute_template
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -107,21 +108,7 @@ def _render(
         "corpUser": "",
     }
     override.update(context)
-    result = subprocess.run(
-        [
-            "chezmoi",
-            "execute-template",
-            "--source",
-            str(SOURCE_ROOT),
-            "--override-data",
-            json.dumps(override),
-            "--file",
-            str(path),
-        ],
-        check=False,
-        capture_output=True,
-        encoding="utf-8",
-    )
+    result = execute_template(path, override, SOURCE_ROOT)
     if result.returncode != 0:
         raise AssertionError(f"{path.name} failed to render: {result.stderr}")
     return result.stdout
@@ -237,11 +224,10 @@ class MiseOwnershipTests(unittest.TestCase):
                 self.assertNotIn(tool, lock["tools"])
 
     def test_mise_still_owns_the_remaining_tools(self) -> None:
-        # go/node/bun は P1 (ADR-028) で mise から直接導入へ移行済み。ここでは
-        # P1 が対象にしていない残存ツールだけを確認する。
+        # P2 までの移行対象外である残存ツールを代表して確認する。
         lock = tomllib.loads(MISE_LOCK_PATH.read_text(encoding="utf-8"))
 
-        for tool in ("kubectl", "lefthook", "helm", "terraform"):
+        for tool in ("lefthook",):
             with self.subTest(tool=tool):
                 self.assertIn(tool, lock["tools"])
 

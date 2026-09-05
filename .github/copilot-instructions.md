@@ -45,6 +45,7 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 ## ワークアラウンド（定期チェック対象）
 
+- **Windows arm64 の公式配布物不足**: Windows arm64 では、cosign と Trivy の公式 amd64 実行ファイルをエミュレーションで実行する。Terraform 本体は arm64 版を使うが、署名検証用の Git GPG ヘルパーには検証済みの amd64 版を使う。対象範囲は `home/.chezmoidata.toml` の `cosign.assets.windows-arm64.emulated`、`trivy.assets.windows-arm64.emulated`、`terraform.verification.windowsArm64GpgEmulated` が `true` の経路に限る。各対象について、宣言中のバージョンに対応する公式 Windows arm64 配布物、または検証済みの arm64 対応 Git GPG ヘルパーが利用可能になった時点で、その対象の例外と関連テストを撤去する
 - **Homebrew formula 版 mise の移行案内 (ADR-027)**: `home/run_once_before_20-install-mise.sh.tmpl` は macOS で Homebrew formula 版を検出し、検証済みの公式バイナリを配置する。既存の各シェルが Homebrew の絶対パスを含む activation hook を保持するためformulaは削除せず、対象シェルをすべて終了または公式activationへ更新し、案内した実体パスを確認してから手動削除するよう案内する。管理対象の macOS 端末で移行が完了し、`brew list --formula mise` が mise を返さないことを確認できたら、Homebrew の検出、既存バイナリとの調停、移行案内と関連テストを撤去する。公式バイナリの導入処理は残す
 - **azure-deploy のプロジェクト内 `.azure` 参照**: `home/private_dot_copilot/hooks/allowed-files.txt` は、`microsoft/azure-skills` の `azure-deploy` が直接読み書きする `.azure/deployment-plan.md` だけを Copilot Guard の拒否対象から除外する。ホームの `~/.azure` と、`azd` が内部管理する `.azure/<environment-name>/.env`、`.azure/config.json` は除外しない。PreToolUse がスキル識別子を提供し、呼び出し元を限定できるようになった場合、または上流スキルが `.azure/deployment-plan.md` を直接扱わなくなった場合は、この規則と関連テストを撤去する
 - **op-ssh-sign-wsl.exe CRLF (ADR-012)**: `home/dot_local/bin/executable_op-ssh-sign-wrapper.sh.tmpl` で stdout/stderr の CR を剥がしている。1Password が WSL バイナリの改行を LF に揃えた場合、または全対応 WSL 経路で Git 2.36 以上を保証できるようになった場合は、wrapper と `.gitconfig-linux` の `program` 切替を撤去する

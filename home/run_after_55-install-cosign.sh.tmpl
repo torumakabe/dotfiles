@@ -1,0 +1,169 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+#!/usr/bin/env bash
+# cosign — 公式リリースの検証済みバイナリを ~/.local/bin へ直接配置する。
+
+set -euo pipefail
+
+cosign_version='{{ .cosign.version }}'
+{{ if not (hasKey .cosign.assets $platform) }}
+echo "error: cosign ${cosign_version} has no declared asset for {{ $platform }}" >&2
+exit 1
+{{ else }}
+{{- $asset := index .cosign.assets $platform }}
+bin_dir="${HOME}/.local/bin"
+target="${bin_dir}/cosign"
+asset_file='{{ $asset.file }}'
+asset_url='{{ $asset.url }}'
+asset_sha256='{{ $asset.sha256 }}'
+asset_executable_arch='{{ $asset.executableArch }}'
+asset_emulated='{{ $asset.emulated }}'
+
+sha256_file() {
+  local file=$1
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${file}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${file}" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum is required to verify ${asset_file}" >&2
+    return 1
+  fi
+}
+
+# >>> executable-architecture
+binary_arch_of() {
+  local binary=$1 header
+  [ -f "${binary}" ] && [ ! -L "${binary}" ] || return 1
+  header="$(od -An -v -tx1 -N20 "${binary}" 2>/dev/null | tr -d '[:space:]')" || return 1
+{{ if eq .chezmoi.os "linux" -}}
+  [ "${header:0:12}" = "7f454c460201" ] || return 1
+  case "${header:36:4}" in
+    3e00) printf '%s\n' amd64 ;;
+    b700) printf '%s\n' arm64 ;;
+    *) return 1 ;;
+  esac
+{{ else if eq .chezmoi.os "darwin" -}}
+  [ "${header:0:8}" = "cffaedfe" ] || return 1
+  case "${header:8:8}" in
+    07000001) printf '%s\n' amd64 ;;
+    0c000001) printf '%s\n' arm64 ;;
+    *) return 1 ;;
+  esac
+{{ else -}}
+  return 1
+{{ end -}}
+}
+# <<< executable-architecture
+
+cosign_version_of() {
+  local binary=$1 output
+  [ -x "${binary}" ] && [ -f "${binary}" ] && [ ! -L "${binary}" ] || return 1
+  [ "$(binary_arch_of "${binary}" || true)" = "${asset_executable_arch}" ] || return 1
+  output="$("${binary}" version --json 2>/dev/null)" || return 1
+  [ -x "${HOME}/.local/bin/jq" ] || {
+    echo "error: ${HOME}/.local/bin/jq is required to validate cosign" >&2
+    return 1
+  }
+  printf '%s' "${output}" | "${HOME}/.local/bin/jq" -er '.gitVersion | strings' 2>/dev/null
+}
+
+classify_target() {
+  local link
+  if [ -L "${target}" ]; then
+    link="$(readlink "${target}")" || return 1
+    if [ "${link}" != "${HOME}/.local/share/mise/shims/cosign" ]; then
+      echo "error: refusing to replace foreign symlink ${target} -> ${link}" >&2
+      return 1
+    fi
+    if [ -d "${target}" ]; then
+      echo "error: refusing to replace mise symlink ${target} because it resolves to a directory" >&2
+      return 1
+    fi
+    return 0
+  elif [ -e "${target}" ] && [ ! -f "${target}" ]; then
+    echo "error: refusing to replace non-file target ${target}" >&2
+    return 1
+  fi
+}
+
+make_stage_dir() {
+  local index candidate
+  umask 077
+  for index in 1 2 3 4 5 6 7 8 9 10; do
+    candidate="${bin_dir}/.cosign-install.$$.$index"
+    if mkdir "${candidate}" 2>/dev/null; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+  echo "error: could not create a private cosign staging directory in ${bin_dir}" >&2
+  return 1
+}
+
+classify_target
+command -v od >/dev/null 2>&1 || { echo "error: od is required to validate cosign architecture" >&2; exit 1; }
+if [ "${asset_executable_arch}" != '{{ .chezmoi.arch }}' ] || [ "${asset_emulated}" != "false" ]; then
+  echo "error: cosign asset architecture declaration is inconsistent for {{ $platform }}" >&2
+  exit 1
+fi
+if [ ! -L "${target}" ]; then
+  installed_version="$(cosign_version_of "${target}" || true)"
+  if [ "${installed_version}" = "v${cosign_version}" ]; then
+    exit 0
+  fi
+fi
+
+[ -x "${HOME}/.local/bin/jq" ] || {
+  echo "error: ${HOME}/.local/bin/jq is required to validate cosign" >&2
+  exit 1
+}
+mkdir -p "${bin_dir}"
+stage_dir="$(make_stage_dir)"
+retain_stage=0
+cleanup() {
+  local status=$?
+  if [ "${retain_stage}" -eq 1 ]; then
+    echo "error: verified cosign recovery file remains in ${stage_dir}" >&2
+  elif ! rm -rf "${stage_dir}"; then
+    echo "warning: could not remove cosign staging directory ${stage_dir}" >&2
+  fi
+  return "${status}"
+}
+trap cleanup EXIT
+
+staged="${stage_dir}/cosign"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${staged}" "${asset_url}"; then
+  echo "error: failed to download ${asset_file}" >&2
+  exit 1
+fi
+[ "$(sha256_file "${staged}")" = "${asset_sha256}" ] || {
+  echo "error: checksum verification failed for ${asset_file}" >&2
+  exit 1
+}
+[ -f "${staged}" ] && [ ! -L "${staged}" ] || {
+  echo "error: downloaded cosign candidate is not a regular file" >&2
+  exit 1
+}
+staged_arch="$(binary_arch_of "${staged}" || true)"
+[ "${staged_arch}" = "${asset_executable_arch}" ] || {
+  echo "error: expected ${asset_executable_arch} cosign executable but ${asset_file} has ${staged_arch:-an invalid header}" >&2
+  exit 1
+}
+chmod 755 "${staged}"
+staged_version="$(cosign_version_of "${staged}" || true)"
+[ "${staged_version}" = "v${cosign_version}" ] || {
+  echo "error: expected cosign v${cosign_version} but ${asset_file} reported ${staged_version:-unknown}" >&2
+  exit 1
+}
+
+echo "Installing cosign ${cosign_version}..."
+classify_target
+retain_stage=1
+if ! mv -f "${staged}" "${target}"; then
+  echo "error: failed to publish cosign; the existing target was not intentionally removed" >&2
+  exit 1
+fi
+retain_stage=0
+{{ end }}
+{{- end -}}

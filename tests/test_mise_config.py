@@ -34,6 +34,19 @@ MISE_LOCK_PLATFORMS = (
 MISE_LOCK_PLATFORM_CSV = ",".join(MISE_LOCK_PLATFORMS)
 CARGO_MAKE_EXCLUDED_PLATFORM = ("linux", "arm64")
 CARGO_MAKE_UPSTREAM_ISSUE = "https://github.com/sagiegurari/cargo-make/issues/541"
+REMAINING_MISE_TOOLS = {
+    "1password",
+    "bat",
+    "cargo-make",
+    "fzf",
+    "ghq",
+    "gitleaks",
+    "golangci-lint",
+    "lefthook",
+    "ripgrep",
+    "shellcheck",
+    "zoxide",
+}
 
 # aube の trustPolicy=no-downgrade 除外。プロキシが証跡を落とす版だけを明記し、
 # パッケージ名だけの除外へ広げない（将来版の検査を残すため）。
@@ -133,6 +146,17 @@ def _powershell_mise_upgrade_function() -> str:
 
 
 class MiseConfigTests(unittest.TestCase):
+    def test_only_p3_tools_remain_in_mise_config_and_lock(self) -> None:
+        config_tools = set(
+            _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))["tools"]
+        )
+        lock_tools = set(
+            tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))["tools"]
+        )
+
+        self.assertEqual(config_tools, REMAINING_MISE_TOOLS)
+        self.assertEqual(lock_tools, REMAINING_MISE_TOOLS)
+
     def test_mise_bootstrap_excludes_known_vulnerable_release(self) -> None:
         bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
         version_match = re.search(

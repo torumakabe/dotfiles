@@ -361,6 +361,10 @@ fi
 {{ else if eq .chezmoi.os "darwin" -}}
 echo "Installing system packages via brew..."
 brew update --quiet
+# Terraform の署名検証に使う。既存の gpg があれば Homebrew 操作は行わない。
+if ! command -v gpg >/dev/null 2>&1; then
+  brew install gnupg
+fi
 # サードパーティ tap (azure/azd) の formula は HOMEBREW_REQUIRE_TAP_TRUST 強制後に
 # 未信頼だと黙ってスキップされるため、install 前に formula 単位で信頼しておく。
 # 強制は Homebrew 5.2.0 / 6.0.0 のいずれか早い方でデフォルト化予定。

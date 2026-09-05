@@ -15,7 +15,7 @@
 
 ### mise の管理外にあるツール
 
-GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・typescript-language-server は mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）。望ましい版・最小版・公式 asset は `home/.chezmoidata.toml` を正本とする。導入スクリプトはこのファイルを書き換えない。
+下表のCLIとランタイムは mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）。望ましい版、最小版、公式 asset は `home/.chezmoidata.toml` を正本とする。導入スクリプトはこのファイルを書き換えない。
 
 | ツール | 導入経路 | 更新の起点 |
 |--------|---------|-----------|
@@ -30,6 +30,16 @@ GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・T
 | TypeScript CLI | 直接導入した Node/npm で専用 prefix へ `npm install` | `home/.chezmoidata.toml` の `[typescriptCli]` の `version` |
 | TypeScript LSP 依存 | 同上（typescript-language-server が参照する `tsserver.js` と `tsserver` launcher を持つ専用 prefix） | `home/.chezmoidata.toml` の `[typescriptLsp]` の `version` |
 | typescript-language-server | 同上（専用 prefix、`typescript` 依存は持たない） | `home/.chezmoidata.toml` の `[typescriptLanguageServer]` の `version` |
+| Azure kubelogin | `Azure/kubelogin` の公式ZIPから `kubelogin` を配置 | `[azureKubelogin]` の `version` / `assets` |
+| Cosign | `sigstore/cosign` の公式バイナリ | `[cosign]` の `version` / `assets` |
+| CUE | `cue-lang/cue` の公式アーカイブから `cue` を配置 | `[cue]` の `version` / `assets` |
+| Helm | `get.helm.sh` の公式アーカイブから `helm` を配置 | `[helm]` の `version` / `assets` |
+| kubectl | `dl.k8s.io` の公式バイナリ | `[kubectl]` の `version` / `assets` |
+| kustomize | `kubernetes-sigs/kustomize` の公式アーカイブ | `[kustomize]` の `version` / `assets` |
+| sqlc | `sqlc-dev/sqlc` の公式アーカイブ | `[sqlc]` の `version` / `assets` |
+| Terraform | `releases.hashicorp.com` の公式ZIPと署名付きchecksum list | `[terraform]` の `version` / `assets` / `verification` |
+| Trivy | `aquasecurity/trivy` の公式アーカイブ | `[trivy]` の `version` / `assets` |
+| yq | `mikefarah/yq` の公式バイナリ | `[yq]` の `version` / `assets` |
 
 GitHub CLI は、未導入か `githubCli.minimumVersion` 未満のときだけ導入・更新する。最小版以上は更新しない。最小版は `gh skill list` / `gh skill install` の対応版であり、下回ると `gh-stack` のセットアップが完了しない。Linux、WSL、Dev Container、Codespaces は `apt`、macOS は Homebrew、Windows は WinGet を使う。Codespaces のカスタム Dev Containerには gh が含まれない場合があるため、ベースイメージへの同梱を前提にしない。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を検査して不足時に更新コマンドを案内する。
 
@@ -60,6 +70,18 @@ Windows は symlink や独自の汎用プロキシを作らず、`run_once_after
 9. `%LOCALAPPDATA%\mise\shims`
 
 Go、Windows 版 Node.js、.NET SDK、pnpm と同梱の `dist`、各 npm prefix は公式配布構成のまま専用 root に保持する。Windows 版 Bun の `bunx.exe` は公式インストーラーと同じファイルコピーで提供する。ユーザー `Path` の変更は既存プロセスへ遡及しないため、新しいプロセスで確認する。GUI アプリが古い環境を保持している場合は、サインアウトまたは OS の再起動が必要になる。
+
+### クラウド関連CLIの導入
+
+Azure kubeloginからyqまでの10ツールは、各 `run_after_50` から `run_after_59` が公式配布物を検証し、全OSで `~/.local/bin` へ実行ファイルを配置する。適合する実体があれば通信せず終了する。更新時は同じファイルシステムの一時ディレクトリでSHA-256、展開対象、実行ファイルのCPU種別、実際の版を確認し、成功後に既存の入口を置き換える。取得、検証、置換の失敗は非零終了とし、古い実体を先に削除しない。
+
+版確認では外部サービスへ接続しない。kubectlはclient-onlyで実行し、TerraformはCheckpointを無効にして空のCLI設定とプロジェクト外の作業ディレクトリを使う。Trivyも空のcacheと作業ディレクトリを使い、利用者のDBや `trivy.yaml` を参照しない。これらの設定は確認プロセスだけに適用する。
+
+Terraformでは、公開鍵、checksum list、detached signatureも検証する。公開鍵は `[terraform.verification]` に固定したBase64を一時ファイルへ復元し、isolated keyringへ取り込む。GPGの終了コードに加え、機械可読な `VALIDSIG` の署名subkeyとprimary fingerprintが宣言に一致することを要求する。選択したアーカイブのSHA-256は、署名を確認したlistとasset宣言の両方に一致しなければならない。鍵サーバーへの自動取得や署名確認の省略は行わない。
+
+署名確認用GPGはLinuxでは既存の `apt` の `gnupg`、macOSでは未導入時だけ追加するHomebrewの `gnupg`、WindowsではGit同梱の実体を使う。Windows arm64にはx64互換実行の例外がある。対象と撤去条件は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を正本とし、assetの `executableArch` / `emulated` とTerraformのGPG宣言で現在の構成を識別する。Terraform本体はWindows arm64でもnative版を使う。
+
+版を更新するときは、その版の公式配布物とchecksumを確認して `version` / `assets` を更新する。Terraformは対応する署名付きlistとsignatureの宣言も更新する。署名鍵が変わる場合は新しい鍵とfingerprintを確認し、取得したファイルのhashで機械的に宣言を上書きしない。変更後は `uv run python -m unittest tests.test_cloud_core_installs tests.test_cloud_security_installs tests.test_platform_parity` を実行する。
 
 ## 定期チェック対象の制約
 

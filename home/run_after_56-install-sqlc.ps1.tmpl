@@ -1,0 +1,186 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# sqlc — 公式 archive の期待する entry だけを検証・展開して ~/.local/bin へ配置する。
+$ErrorActionPreference = 'Stop'
+
+$sqlcVersion = '{{ .sqlc.version }}'
+{{ if not (hasKey .sqlc.assets $platform) }}
+throw "sqlc $sqlcVersion has no declared asset for {{ $platform }}"
+{{ else }}
+{{- $asset := index .sqlc.assets $platform }}
+$binDir = Join-Path $HOME '.local\bin'
+$target = Join-Path $binDir 'sqlc.exe'
+$assetFile = '{{ $asset.file }}'
+$assetUrl = '{{ $asset.url }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+$assetEntry = '{{ $asset.entry }}'
+$assetExecutableArch = '{{ $asset.executableArch }}'
+$assetEmulated = [Convert]::ToBoolean('{{ $asset.emulated }}')
+
+# >>> executable-architecture
+function Get-PeArchitecture {
+    param([string]$Path)
+    try {
+        $stream = [IO.File]::Open(
+            $Path, [IO.FileMode]::Open, [IO.FileAccess]::Read,
+            ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        $reader = [IO.BinaryReader]::new($stream)
+        try {
+            if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { return $null }
+            $stream.Position = 0x3C
+            $peOffset = $reader.ReadInt32()
+            if ($peOffset -lt 0 -or $peOffset -gt ($stream.Length - 6)) { return $null }
+            $stream.Position = $peOffset
+            if ($reader.ReadUInt32() -ne 0x00004550) { return $null }
+            switch ($reader.ReadUInt16()) {
+                0x8664 { return 'amd64' }
+                0xAA64 { return 'arm64' }
+                default { return $null }
+            }
+        }
+        finally { $reader.Dispose() }
+    }
+    catch [System.IO.IOException] { return $null }
+    catch [System.UnauthorizedAccessException] { return $null }
+    catch [System.Security.SecurityException] { return $null }
+    catch [System.ArgumentException] { return $null }
+}
+# <<< executable-architecture
+
+function Get-SqlcVersion {
+    param([string]$Path)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $null }
+    if ((Get-PeArchitecture -Path $Path) -ne $assetExecutableArch) { return $null }
+    try { $output = & $Path version 2>$null; $status = $LASTEXITCODE }
+    catch [System.Management.Automation.CommandNotFoundException] { return $null }
+    catch [System.Management.Automation.ApplicationFailedException] { return $null }
+    catch [System.ComponentModel.Win32Exception] { return $null }
+    catch [System.UnauthorizedAccessException] { return $null }
+    catch [System.IO.IOException] { return $null }
+    if ($status -ne 0 -or ([string]$output).Trim() -ne "v$sqlcVersion") { return $null }
+    return $sqlcVersion
+}
+
+# >>> target-guards
+function Test-KnownMiseShimLink {
+    param([System.IO.FileSystemInfo]$Item)
+    if (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -or
+        -not $env:LOCALAPPDATA) { return $false }
+    $linkTarget = [string]$Item.Target
+    try {
+        if (-not [IO.Path]::IsPathRooted($linkTarget)) {
+            $linkTarget = Join-Path $Item.DirectoryName $linkTarget
+        }
+        $normalized = [IO.Path]::GetFullPath($linkTarget).Replace('\', '/')
+        $knownShim = [IO.Path]::GetFullPath(
+            (Join-Path $env:LOCALAPPDATA 'mise\shims\sqlc.exe')).Replace('\', '/')
+    }
+    catch [System.ArgumentException] { return $false }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.Security.SecurityException] { return $false }
+    return [string]::Equals(
+        $normalized, $knownShim, [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-ManagedTarget {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        $linkTarget = [string]$item.Target
+        if (-not (Test-KnownMiseShimLink -Item $item)) {
+            throw "refusing to replace foreign symlink $target -> $linkTarget"
+        }
+        if ($item.PSIsContainer) {
+            throw "refusing to replace mise symlink $target because it resolves to a directory"
+        }
+        return
+    }
+    if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+}
+
+function Assert-BinaryReplaceable {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        if ((Test-KnownMiseShimLink -Item $item) -and -not $item.PSIsContainer) { return }
+        throw "refusing to replace changed symlink target $target"
+    }
+    if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+    try {
+        $stream = [IO.File]::Open($target, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $stream.Dispose()
+    }
+    catch {
+        throw "sqlc.exe を置き換えられません。実行中のプロセスを終了して再実行してください。既存の実体は変更していません。"
+    }
+}
+# <<< target-guards
+
+if ($assetExecutableArch -ne '{{ .chezmoi.arch }}' -or $assetEmulated) {
+    throw 'sqlc asset architecture declaration is inconsistent'
+}
+Assert-ManagedTarget
+$targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+if (-not $targetItem -or
+    (($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
+    if ((Get-SqlcVersion -Path $target) -eq $sqlcVersion) { exit 0 }
+}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$stageDir = Join-Path $binDir ('.sqlc-install.' + [IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+$retainStage = $false
+try {
+    $archive = Join-Path $stageDir $assetFile
+    try { Invoke-WebRequest -Uri $assetUrl -OutFile $archive -UseBasicParsing }
+    catch { throw "failed to download $assetFile`: $($_.Exception.Message)" }
+    $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $assetSha256) { throw "checksum verification failed for $assetFile" }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        $entries = @($zip.Entries | Where-Object { $_.FullName -eq $assetEntry })
+        if ($entries.Count -ne 1) { throw "archive must contain exactly one expected entry $assetEntry" }
+        $staged = Join-Path $stageDir 'sqlc.exe'
+        $inputStream = $entries[0].Open()
+        $outputStream = [IO.File]::Create($staged)
+        try { $inputStream.CopyTo($outputStream) }
+        finally { $outputStream.Dispose(); $inputStream.Dispose() }
+    }
+    finally { $zip.Dispose() }
+    $item = Get-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw 'extracted sqlc candidate is not a regular file'
+    }
+    $candidateArch = Get-PeArchitecture -Path $staged
+    if ($candidateArch -ne $assetExecutableArch) {
+        if (-not $candidateArch) { $candidateArch = 'an invalid header' }
+        throw "expected $assetExecutableArch sqlc executable but $assetFile has $candidateArch"
+    }
+    Unblock-File -LiteralPath $staged
+    if ((Get-SqlcVersion -Path $staged) -ne $sqlcVersion) {
+        throw "expected sqlc $sqlcVersion but $assetFile reported an unknown or different version"
+    }
+    Assert-ManagedTarget
+    Assert-BinaryReplaceable
+    Write-Host "Installing sqlc $sqlcVersion..."
+    $retainStage = $true
+    try { [IO.File]::Move($staged, $target, $true) }
+    catch {
+        throw "failed to publish sqlc; the verified candidate remains at $staged and the existing target was not intentionally removed"
+    }
+    $retainStage = $false
+}
+finally {
+    if ($retainStage) { Write-Error "verified sqlc recovery file remains in $stageDir" -ErrorAction Continue }
+    else {
+        try { Remove-Item -LiteralPath $stageDir -Recurse -Force }
+        catch { Write-Warning "could not remove sqlc staging directory $stageDir" }
+    }
+}
+{{ end }}
+{{- end -}}

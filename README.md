@@ -20,7 +20,7 @@ Linux / macOS / WSL / Windows / Codespaces / Dev Container で、できるだけ
 | Linux / macOS / WSL | [Linux / macOS / WSL](#linux--macos--wsl) | macOS は Apple Silicon のみ。WSL は初回 `windowsUser` 入力が必要 |
 | GitHub Codespaces | [GitHub Codespaces](#github-codespaces) | 非対話セットアップのため一部設定を省略 |
 | Dev Container (ローカル) | [Dev Container](#dev-container-ローカル) | `mise install --yes` は起動後に手動実行 |
-| Windows | [Windows](#windows) | `copilot` は DSC + winget で導入 |
+| Windows | [Windows](#windows) | `copilot` は DSC + winget で導入。ARM64の互換実行は[運用手順](docs/operations.md#クラウド関連cliの導入)を参照 |
 
 ## クイックスタート
 
@@ -108,7 +108,7 @@ chezmoi apply
 chezmoi update
 ```
 
-`mise` 管理ツールの更新や lockfile 再生成、`mise` の管理外にあるツール（GitHub CLI・jq・uv・Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・typescript-language-server）の導入経路は [`docs/operations.md`](docs/operations.md) を参照。
+`mise` 管理ツールの更新や lockfile 再生成、公式配布物で管理するランタイムとクラウド関連CLIの導入経路は [`docs/operations.md`](docs/operations.md) を参照。
 
 ## 詳細ドキュメント
 

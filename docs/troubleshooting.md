@@ -29,21 +29,19 @@ GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm6
 mise install
 ```
 
-### 直接導入したランタイムの checksum 検証に失敗する
+## 直接導入したツールの導入に失敗する
 
-対象は Go / Node.js / .NET SDK / Bun / pnpm (`run_after_15` 〜 `run_after_19`)。
-症状は `checksum verification failed for <asset>` (.NET は SHA-512 の不一致) で
-止まることである。取得物は checksum 検証の前に既存の実体へは触れない設計の
-ため、既存のインストールは変更されない。
+### checksum 検証に失敗する
 
-まず `home/.chezmoidata.toml` の対象ツールの `sha256`/`sha512` を上流の公式
-ソース（Go: `go.dev/dl/?mode=json&include=all`、Node: `nodejs.org/dist/v<version>/SHASUMS256.txt`、
-.NET: `builds.dotnet.microsoft.com/dotnet/release-metadata/<major>.<minor>/releases.json`、
-Bun/pnpm: 各 GitHub リリースの `SHASUMS256.txt` / `digest`）と突き合わせる。
-値が一致していればネットワーク経路（プロキシ等）による破損を疑い、再実行
-(`chezmoi apply`) する。値が古ければ上流の最新リリースで版と checksum を
-取得し直し、`.chezmoidata.toml` を更新後 `uv run -m unittest tests.test_direct_tool_installs -v`
-を実行する。
+`checksum verification failed` は、取得物が `home/.chezmoidata.toml` のasset宣言と一致しないことを示す。.NETはSHA-512、その他の直接取得する配布物はSHA-256で確認する。この段階では既存の実体を変更しない。
+
+宣言した版の公式checksumと `sha256` / `sha512` を照合する。一致していれば、通信経路による破損などを確認して `chezmoi apply` を再実行する。宣言が別の版の値を指していた場合は、版と取得元の対応を修正する。検証を省略したり、取得物から計算した値で宣言を上書きしたりしない。ツールごとの取得元は[運用手順](operations.md#mise-の管理外にあるツール)を参照する。
+
+### Terraformの署名を確認できない
+
+GPGが見つからない場合は、Linuxの `gnupg`、macOSのHomebrew `gnupg`、WindowsのGit同梱 `gpg.exe` の導入状態と実行パスを確認する。Windowsへ別のGnuPG packageを追加する構成にはしていない。
+
+署名検証の失敗では、宣言した版に対応するchecksum list、signature、公開鍵、fingerprintの組合せを確認する。`GOODSIG` や「正しい署名」という表示だけでは受け入れず、終了コードと `VALIDSIG` のfingerprintを確認する。認証できなかった配布物は配置せず、署名確認を無効にして続行しない。
 
 ### Windows で直接導入した実体を置き換えられない
 
@@ -55,21 +53,17 @@ typescript-language-server.cmd 等）を排他オープンできるか root の�
 （エディタの LSP、ターミナル上で動いている node/dotnet プロセスなど）を終了
 してから `chezmoi apply` を再実行する。
 
-### 版の不一致で直接導入が中断される
+### 版やCPU種別の不一致で直接導入が中断される
 
-症状は `expected <tool> <version> but found <found>` で止まることである。
-取得元が `home/.chezmoidata.toml` の宣言と異なる版を返している。宣言した版
-が上流でまだ配布されているか確認し、配布終了していれば version を新しい
-公式版へ更新して checksum を取得し直す。
+`expected <tool> <version>` のようなエラーは、候補の起動や版確認に失敗したことを示す。宣言した版、取得URL、アーカイブ内の選択対象、実際の終了コードを確認する。別版の混入や誤ったentrypointを修正し、検証を省略せず再適用する。
+
+クラウド関連CLIでCPU種別の検証に失敗した場合は、OS/CPUに対応するassetを選んでいるか確認する。Windows arm64でx64版が起動できても、明示した互換実行の対象以外は受け入れない。
 
 ### 直接導入が途中失敗した後の再適用
 
-Go/Node/.NET SDK/Bun/pnpm/TypeScript CLI/typescript-language-server/
-typescript-lsp 依存はいずれも staging → checksum・版検証 → atomic swap の順
-で動くため、swap 前に失敗すれば既存の実体はそのまま残り、`chezmoi apply`
-の再実行だけで復旧する。swap 中の失敗 (稀) では `previous-<tool>` への復旧
-を自動で試み、それも失敗した場合はエラーメッセージが示す staging ディレク
-トリ内の `previous-<tool>` を手動で最終パスへ戻す。
+取得物はstagingで検証してから配置する。単体CLIの置換に失敗した場合は、通信やロックなどの原因を解消して再適用する。
+
+SDKと複数entrypointの更新は一つの原子的操作ではない。途中失敗時はpayloadと入口の復旧を試み、復旧できなければエラーメッセージで回復用ファイルの場所を示す。回復用ディレクトリを先に削除せず、旧版を復旧してから再適用する。管理外の入口との衝突では既存ファイルを保持するため、その所有元を確認して配置方針を決める。
 
 ## Copilot sandbox が Linux で起動しない
 

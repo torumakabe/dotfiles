@@ -17,7 +17,11 @@ POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 INSTALL_PS1_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.ps1.tmpl"
 MISE_CONFIG_PATH = REPO_ROOT / "home/dot_config/mise/config.toml.tmpl"
+MISE_SHIM_LINK_PATH = (
+    REPO_ROOT / "home/run_onchange_after_21-link-mise-shims.sh.tmpl"
+)
 CHEZMOI_DATA_PATH = REPO_ROOT / "home/.chezmoidata.toml"
+INSTRUCTIONS_PATH = REPO_ROOT / ".github/copilot-instructions.md"
 WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-copilot-hooks.yml"
 POSIX_RC_TEMPLATE_PATHS = tuple(
     REPO_ROOT / "home" / name
@@ -87,7 +91,42 @@ DIRECT_INSTALL_COMPONENT_PATHS = {
     "tool:typescript-language-server": _paired_installer(
         "run_after_23-install-typescript-language-server"
     ),
+    "tool:azure-kubelogin": _paired_installer(
+        "run_after_50-install-azure-kubelogin"
+    ),
+    "tool:cue": _paired_installer("run_after_51-install-cue"),
+    "tool:helm": _paired_installer("run_after_52-install-helm"),
+    "tool:kubectl": _paired_installer("run_after_53-install-kubectl"),
+    "tool:kustomize": _paired_installer("run_after_54-install-kustomize"),
+    "tool:cosign": _paired_installer("run_after_55-install-cosign"),
+    "tool:sqlc": _paired_installer("run_after_56-install-sqlc"),
+    "tool:terraform": _paired_installer("run_after_57-install-terraform"),
+    "tool:trivy": _paired_installer("run_after_58-install-trivy"),
+    "tool:yq": _paired_installer("run_after_59-install-yq"),
 }
+
+P2_DATA_KEYS = {
+    "azure-kubelogin": "azureKubelogin",
+    "cosign": "cosign",
+    "cue": "cue",
+    "helm": "helm",
+    "kubectl": "kubectl",
+    "kustomize": "kustomize",
+    "sqlc": "sqlc",
+    "terraform": "terraform",
+    "trivy": "trivy",
+    "yq": "yq",
+}
+P2_PLATFORMS = frozenset(
+    {
+        "darwin-arm64",
+        "linux-amd64",
+        "linux-arm64",
+        "windows-amd64",
+        "windows-arm64",
+    }
+)
+P2_WINDOWS_ARM64_EMULATION = frozenset({"cosign", "trivy"})
 
 
 def _implemented_everywhere() -> dict[str, str]:
@@ -165,6 +204,16 @@ PLATFORM_CONTRACT = {
     "tool:typescript-cli": _implemented_everywhere(),
     "runtime:typescript-lsp": _implemented_everywhere(),
     "tool:typescript-language-server": _implemented_everywhere(),
+    "tool:azure-kubelogin": _implemented_everywhere(),
+    "tool:cosign": _implemented_everywhere(),
+    "tool:cue": _implemented_everywhere(),
+    "tool:helm": _implemented_everywhere(),
+    "tool:kubectl": _implemented_everywhere(),
+    "tool:kustomize": _implemented_everywhere(),
+    "tool:sqlc": _implemented_everywhere(),
+    "tool:terraform": _implemented_everywhere(),
+    "tool:trivy": _implemented_everywhere(),
+    "tool:yq": _implemented_everywhere(),
 }
 
 ZSH_INTERNAL_FUNCTIONS = {
@@ -403,6 +452,10 @@ class PlatformParityTests(unittest.TestCase):
             "tool:typescript-cli": "typescriptCli.version",
             "runtime:typescript-lsp": "typescriptLsp.version",
             "tool:typescript-language-server": "typescriptLanguageServer.version",
+            **{
+                f"tool:{tool}": f".{data_key}.version"
+                for tool, data_key in P2_DATA_KEYS.items()
+            },
         }
         for feature, paths in DIRECT_INSTALL_COMPONENT_PATHS.items():
             self.assertEqual(set(paths), PLATFORMS)
@@ -418,13 +471,98 @@ class PlatformParityTests(unittest.TestCase):
     def test_removed_mise_tools_have_no_mise_declaration_left(self) -> None:
         config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
 
-        for tool in ("uv", "jq", "github-cli", "go", "node", "dotnet", "bun", "pnpm"):
+        for tool in (
+            "uv",
+            "jq",
+            "github-cli",
+            "go",
+            "node",
+            "dotnet",
+            "bun",
+            "pnpm",
+            *P2_DATA_KEYS,
+        ):
             with self.subTest(tool=tool):
                 self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
         for tool in ("npm:typescript", "npm:typescript-language-server"):
             with self.subTest(tool=tool):
                 self.assertNotIn(f"[tools.{tool}]", config)
                 self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
+
+    def test_p2_asset_architecture_exceptions_are_explicitly_scoped(self) -> None:
+        data = tomllib.loads(CHEZMOI_DATA_PATH.read_text(encoding="utf-8"))
+
+        for tool, data_key in P2_DATA_KEYS.items():
+            assets = data[data_key]["assets"]
+            self.assertEqual(set(assets), P2_PLATFORMS)
+            for platform, asset in assets.items():
+                with self.subTest(tool=tool, platform=platform):
+                    expected_arch = platform.rsplit("-", maxsplit=1)[1]
+                    if (
+                        platform == "windows-arm64"
+                        and tool in P2_WINDOWS_ARM64_EMULATION
+                    ):
+                        self.assertTrue(asset["emulated"])
+                        self.assertEqual(asset["executableArch"], "amd64")
+                        x64_asset = assets["windows-amd64"]
+                        for key in ("file", "url", "sha256", "archive", "entry"):
+                            self.assertEqual(asset[key], x64_asset[key])
+                    else:
+                        self.assertFalse(asset["emulated"])
+                        self.assertEqual(asset["executableArch"], expected_arch)
+
+        terraform_verification = data["terraform"]["verification"]
+        self.assertEqual(terraform_verification["windowsArm64GpgArch"], "amd64")
+        self.assertTrue(terraform_verification["windowsArm64GpgEmulated"])
+
+    def test_p2_migrated_commands_are_excluded_from_mise_shim_links(self) -> None:
+        source = MISE_SHIM_LINK_PATH.read_text(encoding="utf-8")
+        match = re.search(r"EXCLUDE_EXACT=\((.*?)\)", source, re.DOTALL)
+        self.assertIsNotNone(match, "EXCLUDE_EXACT array not found")
+        excluded = set(match.group(1).split())
+
+        self.assertTrue(
+            {
+                "kubelogin",
+                "cosign",
+                "cue",
+                "helm",
+                "kubectl",
+                "kustomize",
+                "sqlc",
+                "terraform",
+                "trivy",
+                "yq",
+            }.issubset(excluded)
+        )
+
+    def test_p2_windows_arm64_workarounds_have_one_removal_condition(self) -> None:
+        instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
+        heading = "- **Windows arm64 の公式配布物不足**:"
+        self.assertEqual(instructions.count(heading), 1)
+        workaround = next(
+            line
+            for line in instructions.splitlines()
+            if line.startswith(heading)
+        )
+        data = tomllib.loads(CHEZMOI_DATA_PATH.read_text(encoding="utf-8"))
+
+        for identifier in (
+            "cosign",
+            "Trivy",
+            "Terraform",
+            "Git GPG",
+            "`home/.chezmoidata.toml`",
+            "`cosign.assets.windows-arm64.emulated`",
+            "`trivy.assets.windows-arm64.emulated`",
+            "`terraform.verification.windowsArm64GpgEmulated`",
+            "関連テストを撤去する",
+        ):
+            with self.subTest(identifier=identifier):
+                self.assertIn(identifier, workaround)
+        for data_key in ("cosign", "trivy", "terraform"):
+            with self.subTest(version=data_key):
+                self.assertNotIn(data[data_key]["version"], workaround)
 
     def test_exceptions_reference_relevant_existing_documentation(self) -> None:
         checked_features = set()

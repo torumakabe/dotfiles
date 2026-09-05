@@ -1,0 +1,193 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# kubectl を公式バイナリから ~/.local/bin へ直接導入する。
+$ErrorActionPreference = 'Stop'
+
+$toolName = 'kubectl'
+$toolVersion = '{{ .kubectl.version }}'
+{{ if not (hasKey .kubectl.assets $platform) }}
+throw "kubectl $toolVersion has no asset for {{ $platform }}"
+{{ else }}
+{{- $asset := index .kubectl.assets $platform }}
+$binDir = Join-Path $HOME '.local\bin'
+$target = Join-Path $binDir 'kubectl.exe'
+$miseTarget = Join-Path $env:LOCALAPPDATA 'mise\shims\kubectl.exe'
+$platformArch = '{{ .chezmoi.arch }}'
+$executableArch = '{{ $asset.executableArch }}'
+$assetFile = '{{ $asset.file }}'
+$assetUrl = '{{ $asset.url }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+
+if ($executableArch -cne $platformArch) {
+    throw "declared executable architecture $executableArch does not match $platformArch"
+}
+
+function ConvertTo-NormalizedPath {
+    param([string]$Path, [string]$BasePath)
+    if (-not [System.IO.Path]::IsPathRooted($Path)) {
+        $Path = Join-Path $BasePath $Path
+    }
+    return [System.IO.Path]::GetFullPath($Path).Replace('\', '/').TrimEnd('/')
+}
+
+function Assert-TargetReplaceable {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return 'Missing' }
+    if ($item.PSIsContainer) {
+        throw "$target is a directory; refusing to replace it."
+    }
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        $linkTarget = [string]@($item.Target)[0]
+        if (-not [System.IO.Path]::IsPathRooted($linkTarget)) {
+            $linkTarget = Join-Path $item.DirectoryName $linkTarget
+        }
+        $current = ConvertTo-NormalizedPath -Path $linkTarget -BasePath $item.DirectoryName
+        $expected = ConvertTo-NormalizedPath -Path $miseTarget -BasePath $item.DirectoryName
+        if ($current -ine $expected) {
+            throw "$target is a foreign symlink; refusing to replace it."
+        }
+        return 'MiseLink'
+    }
+    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+        throw "$target is not a regular file; refusing to replace it."
+    }
+    return 'File'
+}
+
+function Test-BinaryArchitecture {
+    param([string]$Path)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        return $false
+    }
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read,
+            [System.IO.FileShare]::ReadWrite
+        )
+        $reader = [System.IO.BinaryReader]::new($stream)
+        if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { return $false }
+        $stream.Position = 0x3c
+        $peOffset = $reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 6)) { return $false }
+        $stream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) { return $false }
+        $machine = $reader.ReadUInt16()
+        $expectedMachine = if ($platformArch -eq 'amd64') { 0x8664 } else { 0xAA64 }
+        return $machine -eq $expectedMachine
+    }
+    catch [System.IO.IOException] {
+        return $false
+    }
+    catch [System.UnauthorizedAccessException] {
+        return $false
+    }
+    catch [System.Security.SecurityException] {
+        return $false
+    }
+    finally {
+        if ($reader) { $reader.Dispose() }
+        elseif ($stream) { $stream.Dispose() }
+    }
+}
+
+function Test-ExpectedVersion {
+    param([string]$Path, [string]$WorkingDirectory)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $output = & $Path version --client=true --output=json 2>$null
+        if ($LASTEXITCODE -ne 0) { return $false }
+        $versionDocument = ([string]::Join([Environment]::NewLine, @($output))) |
+            ConvertFrom-Json -ErrorAction SilentlyContinue
+        if (-not $versionDocument) { return $false }
+        return $versionDocument.clientVersion.gitVersion -ceq "v$toolVersion"
+    }
+    catch [System.Management.Automation.CommandNotFoundException] {
+        return $false
+    }
+    catch [System.Management.Automation.ApplicationFailedException] {
+        return $false
+    }
+    catch [System.ComponentModel.Win32Exception] {
+        return $false
+    }
+    catch [System.IO.IOException] {
+        return $false
+    }
+    catch [System.UnauthorizedAccessException] {
+        return $false
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Assert-Unlocked {
+    $state = Assert-TargetReplaceable
+    if ($state -ne 'File') { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $target, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        $stream.Dispose()
+    }
+    catch {
+        throw "$target cannot be replaced because it is locked; the existing file was not changed."
+    }
+}
+
+$targetState = Assert-TargetReplaceable
+if ($targetState -eq 'File' -and (Test-BinaryArchitecture -Path $target) -and
+    (Test-ExpectedVersion -Path $target -WorkingDirectory $binDir)) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$stageDir = Join-Path $binDir (".$toolName-install." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+try {
+    $download = Join-Path $stageDir 'download'
+    try {
+        Invoke-WebRequest -Uri $assetUrl -OutFile $download -UseBasicParsing
+    }
+    catch {
+        throw "failed to download $assetFile; keeping the current $toolName. $($_.Exception.Message)"
+    }
+    $actualSha256 = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $assetSha256) {
+        throw "checksum verification failed for $assetFile"
+    }
+
+    $candidate = Join-Path $stageDir 'kubectl.exe'
+    Copy-Item -LiteralPath $download -Destination $candidate
+    $candidateItem = Get-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    if (-not $candidateItem -or $candidateItem.PSIsContainer -or
+        ($candidateItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "downloaded $assetFile is not a regular file"
+    }
+    Unblock-File -LiteralPath $candidate
+    if (-not (Test-BinaryArchitecture -Path $candidate)) {
+        throw "$assetFile does not contain a $platformArch Windows executable"
+    }
+    if (-not (Test-ExpectedVersion -Path $candidate -WorkingDirectory $stageDir)) {
+        throw "$assetFile did not report kubectl $toolVersion"
+    }
+
+    Assert-Unlocked
+    Write-Host "Installing kubectl $toolVersion..."
+    try {
+        [System.IO.File]::Move($candidate, $target, $true)
+    }
+    catch {
+        throw "could not publish $target; the previous file was kept. $($_.Exception.Message)"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable cleanupErrors
+    if ($cleanupErrors) { Write-Warning "could not remove staging directory ${stageDir}: $cleanupErrors" }
+}
+{{ end }}
+{{- end -}}

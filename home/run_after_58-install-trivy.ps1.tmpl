@@ -1,0 +1,219 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# Trivy — 公式 archive の期待する entry だけを検証・展開して ~/.local/bin へ配置する。
+$ErrorActionPreference = 'Stop'
+
+$trivyVersion = '{{ .trivy.version }}'
+{{ if not (hasKey .trivy.assets $platform) }}
+throw "Trivy $trivyVersion has no declared asset for {{ $platform }}"
+{{ else }}
+{{- $asset := index .trivy.assets $platform }}
+$binDir = Join-Path $HOME '.local\bin'
+$target = Join-Path $binDir 'trivy.exe'
+$assetFile = '{{ $asset.file }}'
+$assetUrl = '{{ $asset.url }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+$assetEntry = '{{ $asset.entry }}'
+$assetExecutableArch = '{{ $asset.executableArch }}'
+$assetEmulated = [Convert]::ToBoolean('{{ $asset.emulated }}')
+
+# >>> executable-architecture
+function Get-PeArchitecture {
+    param([string]$Path)
+    try {
+        $stream = [IO.File]::Open(
+            $Path, [IO.FileMode]::Open, [IO.FileAccess]::Read,
+            ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        $reader = [IO.BinaryReader]::new($stream)
+        try {
+            if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { return $null }
+            $stream.Position = 0x3C
+            $peOffset = $reader.ReadInt32()
+            if ($peOffset -lt 0 -or $peOffset -gt ($stream.Length - 6)) { return $null }
+            $stream.Position = $peOffset
+            if ($reader.ReadUInt32() -ne 0x00004550) { return $null }
+            switch ($reader.ReadUInt16()) {
+                0x8664 { return 'amd64' }
+                0xAA64 { return 'arm64' }
+                default { return $null }
+            }
+        }
+        finally { $reader.Dispose() }
+    }
+    catch [System.IO.IOException] { return $null }
+    catch [System.UnauthorizedAccessException] { return $null }
+    catch [System.Security.SecurityException] { return $null }
+    catch [System.ArgumentException] { return $null }
+}
+# <<< executable-architecture
+
+function Get-TrivyVersion {
+    param([string]$Path, [string]$WorkingDirectory, [string]$CacheDirectory)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $null }
+    if ((Get-PeArchitecture -Path $Path) -ne $assetExecutableArch) { return $null }
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $Path
+    $psi.ArgumentList.Add('--version')
+    $psi.ArgumentList.Add('--format')
+    $psi.ArgumentList.Add('json')
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.Environment['TRIVY_CACHE_DIR'] = $CacheDirectory
+    try {
+        $process = [Diagnostics.Process]::Start($psi)
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $process.StandardError.ReadToEnd() | Out-Null
+        $process.WaitForExit()
+    }
+    catch [System.ComponentModel.Win32Exception] { return $null }
+    catch [System.InvalidOperationException] { return $null }
+    catch [System.UnauthorizedAccessException] { return $null }
+    catch [System.IO.IOException] { return $null }
+    if ($process.ExitCode -ne 0) { return $null }
+    try {
+        $parsed = [string]$stdout | ConvertFrom-Json
+        if ($parsed.Version) { return [string]$parsed.Version }
+        return [string]$parsed.version
+    }
+    catch [System.ArgumentException] { return $null }
+    catch [System.Management.Automation.PSInvalidOperationException] { return $null }
+}
+
+# >>> target-guards
+function Test-KnownMiseShimLink {
+    param([System.IO.FileSystemInfo]$Item)
+    if (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -or
+        -not $env:LOCALAPPDATA) { return $false }
+    $linkTarget = [string]$Item.Target
+    try {
+        if (-not [IO.Path]::IsPathRooted($linkTarget)) {
+            $linkTarget = Join-Path $Item.DirectoryName $linkTarget
+        }
+        $normalized = [IO.Path]::GetFullPath($linkTarget).Replace('\', '/')
+        $knownShim = [IO.Path]::GetFullPath(
+            (Join-Path $env:LOCALAPPDATA 'mise\shims\trivy.exe')).Replace('\', '/')
+    }
+    catch [System.ArgumentException] { return $false }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.Security.SecurityException] { return $false }
+    return [string]::Equals(
+        $normalized, $knownShim, [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-ManagedTarget {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        $linkTarget = [string]$item.Target
+        if (-not (Test-KnownMiseShimLink -Item $item)) {
+            throw "refusing to replace foreign symlink $target -> $linkTarget"
+        }
+        if ($item.PSIsContainer) {
+            throw "refusing to replace mise symlink $target because it resolves to a directory"
+        }
+        return
+    }
+    if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+}
+
+function Assert-BinaryReplaceable {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        if ((Test-KnownMiseShimLink -Item $item) -and -not $item.PSIsContainer) { return }
+        throw "refusing to replace changed symlink target $target"
+    }
+    if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+    try {
+        $stream = [IO.File]::Open($target, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $stream.Dispose()
+    }
+    catch {
+        throw "trivy.exe を置き換えられません。実行中のプロセスを終了して再実行してください。既存の実体は変更していません。"
+    }
+}
+# <<< target-guards
+
+Assert-ManagedTarget
+{{ if eq .chezmoi.arch "arm64" }}
+if ($assetExecutableArch -ne 'amd64' -or -not $assetEmulated) {
+    throw 'Windows arm64 Trivy must use the explicitly approved official amd64 emulated asset'
+}
+{{ else }}
+if ($assetExecutableArch -ne '{{ .chezmoi.arch }}' -or $assetEmulated) {
+    throw 'Trivy asset architecture declaration is inconsistent'
+}
+{{ end }}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$stageDir = Join-Path $binDir ('.trivy-install.' + [IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+$retainStage = $false
+try {
+    $probeCache = Join-Path $stageDir 'cache'
+    New-Item -ItemType Directory -Path $probeCache | Out-Null
+    $targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $targetItem -or
+        (($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
+        if ((Get-TrivyVersion -Path $target -WorkingDirectory $stageDir -CacheDirectory $probeCache) -eq $trivyVersion) {
+            exit 0
+        }
+    }
+
+    $archive = Join-Path $stageDir $assetFile
+    try { Invoke-WebRequest -Uri $assetUrl -OutFile $archive -UseBasicParsing }
+    catch { throw "failed to download $assetFile`: $($_.Exception.Message)" }
+    $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $assetSha256) { throw "checksum verification failed for $assetFile" }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        $entries = @($zip.Entries | Where-Object { $_.FullName -eq $assetEntry })
+        if ($entries.Count -ne 1) { throw "archive must contain exactly one expected entry $assetEntry" }
+        $staged = Join-Path $stageDir 'trivy.exe'
+        $inputStream = $entries[0].Open()
+        $outputStream = [IO.File]::Create($staged)
+        try { $inputStream.CopyTo($outputStream) }
+        finally { $outputStream.Dispose(); $inputStream.Dispose() }
+    }
+    finally { $zip.Dispose() }
+    $item = Get-Item -LiteralPath $staged -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw 'extracted Trivy candidate is not a regular file'
+    }
+    $candidateArch = Get-PeArchitecture -Path $staged
+    if ($candidateArch -ne $assetExecutableArch) {
+        if (-not $candidateArch) { $candidateArch = 'an invalid header' }
+        throw "expected $assetExecutableArch Trivy executable but $assetFile has $candidateArch"
+    }
+    Unblock-File -LiteralPath $staged
+    $found = Get-TrivyVersion -Path $staged -WorkingDirectory $stageDir -CacheDirectory $probeCache
+    if ($found -ne $trivyVersion) {
+        if (-not $found) { $found = 'unknown' }
+        throw "expected Trivy $trivyVersion but $assetFile reported $found"
+    }
+    Assert-ManagedTarget
+    Assert-BinaryReplaceable
+    Write-Host "Installing Trivy $trivyVersion..."
+    $retainStage = $true
+    try { [IO.File]::Move($staged, $target, $true) }
+    catch {
+        throw "failed to publish Trivy; the verified candidate remains at $staged and the existing target was not intentionally removed"
+    }
+    $retainStage = $false
+}
+finally {
+    if ($retainStage) { Write-Error "verified Trivy recovery file remains in $stageDir" -ErrorAction Continue }
+    else {
+        try { Remove-Item -LiteralPath $stageDir -Recurse -Force }
+        catch { Write-Warning "could not remove Trivy staging directory $stageDir" }
+    }
+}
+{{ end }}
+{{- end -}}

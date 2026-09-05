@@ -1,0 +1,315 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# Terraform — embedded HashiCorp 公開鍵と署名済み checksum list の両方で検証する。
+$ErrorActionPreference = 'Stop'
+
+$terraformVersion = '{{ .terraform.version }}'
+{{ if not (hasKey .terraform.assets $platform) }}
+throw "Terraform $terraformVersion has no declared asset for {{ $platform }}"
+{{ else }}
+{{- $asset := index .terraform.assets $platform }}
+$binDir = Join-Path $HOME '.local\bin'
+$target = Join-Path $binDir 'terraform.exe'
+$assetFile = '{{ $asset.file }}'
+$assetUrl = '{{ $asset.url }}'
+$assetSha256 = '{{ $asset.sha256 }}'
+$assetEntry = '{{ $asset.entry }}'
+$assetExecutableArch = '{{ $asset.executableArch }}'
+$assetEmulated = [Convert]::ToBoolean('{{ $asset.emulated }}')
+$checksumsUrl = '{{ .terraform.verification.checksumsUrl }}'
+$checksumsSha256 = '{{ .terraform.verification.checksumsSha256 }}'
+$signatureUrl = '{{ .terraform.verification.signatureUrl }}'
+$signatureSha256 = '{{ .terraform.verification.signatureSha256 }}'
+$publicKeySha256 = '{{ .terraform.verification.publicKeySha256 }}'
+$primaryFingerprint = '{{ .terraform.verification.primaryFingerprint }}'
+$signingFingerprint = '{{ .terraform.verification.signingFingerprint }}'
+$publicKeyBase64 = '{{ .terraform.verification.publicKeyBase64 }}'
+{{ if eq .chezmoi.arch "arm64" }}
+$gpgExecutableArch = '{{ .terraform.verification.windowsArm64GpgArch }}'
+$gpgEmulated = [Convert]::ToBoolean('{{ .terraform.verification.windowsArm64GpgEmulated }}')
+{{ end }}
+
+# >>> executable-architecture
+function Get-PeArchitecture {
+    param([string]$Path)
+    try {
+        $stream = [IO.File]::Open(
+            $Path, [IO.FileMode]::Open, [IO.FileAccess]::Read,
+            ([IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete))
+        $reader = [IO.BinaryReader]::new($stream)
+        try {
+            if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { return $null }
+            $stream.Position = 0x3C
+            $peOffset = $reader.ReadInt32()
+            if ($peOffset -lt 0 -or $peOffset -gt ($stream.Length - 6)) { return $null }
+            $stream.Position = $peOffset
+            if ($reader.ReadUInt32() -ne 0x00004550) { return $null }
+            switch ($reader.ReadUInt16()) {
+                0x8664 { return 'amd64' }
+                0xAA64 { return 'arm64' }
+                default { return $null }
+            }
+        }
+        finally { $reader.Dispose() }
+    }
+    catch [System.IO.IOException] { return $null }
+    catch [System.UnauthorizedAccessException] { return $null }
+    catch [System.Security.SecurityException] { return $null }
+    catch [System.ArgumentException] { return $null }
+}
+# <<< executable-architecture
+
+function Get-TerraformVersion {
+    param([string]$Path, [string]$WorkingDirectory, [string]$ConfigFile)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $null }
+    if ((Get-PeArchitecture -Path $Path) -ne $assetExecutableArch) { return $null }
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $Path
+    $psi.ArgumentList.Add('version')
+    $psi.ArgumentList.Add('-json')
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.Environment['CHECKPOINT_DISABLE'] = '1'
+    $psi.Environment['TF_CLI_CONFIG_FILE'] = $ConfigFile
+    try {
+        $process = [Diagnostics.Process]::Start($psi)
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $process.StandardError.ReadToEnd() | Out-Null
+        $process.WaitForExit()
+    }
+    catch [System.ComponentModel.Win32Exception] { return $null }
+    catch [System.InvalidOperationException] { return $null }
+    catch [System.UnauthorizedAccessException] { return $null }
+    catch [System.IO.IOException] { return $null }
+    if ($process.ExitCode -ne 0) { return $null }
+    try { return ([string]$stdout | ConvertFrom-Json).terraform_version }
+    catch [System.ArgumentException] { return $null }
+    catch [System.Management.Automation.PSInvalidOperationException] { return $null }
+}
+
+# >>> target-guards
+function Test-KnownMiseShimLink {
+    param([System.IO.FileSystemInfo]$Item)
+    if (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0 -or
+        -not $env:LOCALAPPDATA) { return $false }
+    $linkTarget = [string]$Item.Target
+    try {
+        if (-not [IO.Path]::IsPathRooted($linkTarget)) {
+            $linkTarget = Join-Path $Item.DirectoryName $linkTarget
+        }
+        $normalized = [IO.Path]::GetFullPath($linkTarget).Replace('\', '/')
+        $knownShim = [IO.Path]::GetFullPath(
+            (Join-Path $env:LOCALAPPDATA 'mise\shims\terraform.exe')).Replace('\', '/')
+    }
+    catch [System.ArgumentException] { return $false }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.Security.SecurityException] { return $false }
+    return [string]::Equals(
+        $normalized, $knownShim, [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-ManagedTarget {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        $linkTarget = [string]$item.Target
+        if (-not (Test-KnownMiseShimLink -Item $item)) {
+            throw "refusing to replace foreign symlink $target -> $linkTarget"
+        }
+        if ($item.PSIsContainer) {
+            throw "refusing to replace mise symlink $target because it resolves to a directory"
+        }
+        return
+    }
+    if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+}
+
+function Assert-BinaryReplaceable {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        if ((Test-KnownMiseShimLink -Item $item) -and -not $item.PSIsContainer) { return }
+        throw "refusing to replace changed symlink target $target"
+    }
+    if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+    try {
+        $stream = [IO.File]::Open($target, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $stream.Dispose()
+    }
+    catch {
+        throw "terraform.exe を置き換えられません。実行中のプロセスを終了して再実行してください。既存の実体は変更していません。"
+    }
+}
+# <<< target-guards
+
+Assert-ManagedTarget
+if ($assetExecutableArch -ne '{{ .chezmoi.arch }}' -or $assetEmulated) {
+    throw 'Terraform asset architecture declaration is inconsistent'
+}
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$stageDir = Join-Path $binDir ('.terraform-install.' + [IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+$retainStage = $false
+try {
+    $probeConfig = Join-Path $stageDir 'terraform.rc'
+    New-Item -ItemType File -Path $probeConfig | Out-Null
+    $targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $targetItem -or
+        (($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
+        if ((Get-TerraformVersion -Path $target -WorkingDirectory $stageDir -ConfigFile $probeConfig) -eq $terraformVersion) {
+            exit 0
+        }
+    }
+
+    $gpg = if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Git\usr\bin\gpg.exe' } else { $null }
+    if (-not $gpg -or -not (Test-Path -LiteralPath $gpg -PathType Leaf)) {
+        throw 'Git for Windows bundled gpg.exe is required at %ProgramFiles%\Git\usr\bin\gpg.exe to verify Terraform'
+    }
+{{ if eq .chezmoi.arch "arm64" }}
+    if ($gpgExecutableArch -ne 'amd64' -or -not $gpgEmulated) {
+        throw 'Windows arm64 Terraform verification must use the explicitly approved Git-bundled amd64 gpg.exe'
+    }
+    $actualGpgArch = Get-PeArchitecture -Path $gpg
+    if ($actualGpgArch -ne $gpgExecutableArch) {
+        if (-not $actualGpgArch) { $actualGpgArch = 'an invalid header' }
+        throw "expected $gpgExecutableArch Git-bundled gpg.exe but found $actualGpgArch"
+    }
+{{ else }}
+    $actualGpgArch = Get-PeArchitecture -Path $gpg
+    if ($actualGpgArch -ne 'amd64') {
+        if (-not $actualGpgArch) { $actualGpgArch = 'an invalid header' }
+        throw "expected amd64 Git-bundled gpg.exe but found $actualGpgArch"
+    }
+{{ end }}
+
+    $archive = Join-Path $stageDir $assetFile
+    $checksums = Join-Path $stageDir 'terraform_SHA256SUMS'
+    $signature = Join-Path $stageDir 'terraform_SHA256SUMS.sig'
+    $publicKey = Join-Path $stageDir 'hashicorp.asc'
+    $keyring = Join-Path $stageDir 'hashicorp.gpg'
+    $gnupgHome = Join-Path $stageDir 'gnupg'
+    New-Item -ItemType Directory -Path $gnupgHome | Out-Null
+
+    foreach ($download in @(
+        @($assetUrl, $archive, $assetFile),
+        @($checksumsUrl, $checksums, 'Terraform checksum list'),
+        @($signatureUrl, $signature, 'Terraform checksum signature')
+    )) {
+        try { Invoke-WebRequest -Uri $download[0] -OutFile $download[1] -UseBasicParsing }
+        catch { throw "failed to download $($download[2])`: $($_.Exception.Message)" }
+    }
+    if ((Get-FileHash -LiteralPath $checksums -Algorithm SHA256).Hash.ToLowerInvariant() -ne $checksumsSha256) {
+        throw 'checksum verification failed for Terraform checksum list'
+    }
+    if ((Get-FileHash -LiteralPath $signature -Algorithm SHA256).Hash.ToLowerInvariant() -ne $signatureSha256) {
+        throw 'checksum verification failed for Terraform checksum signature'
+    }
+    try { [IO.File]::WriteAllBytes($publicKey, [Convert]::FromBase64String($publicKeyBase64)) }
+    catch { throw 'failed to decode embedded HashiCorp public key' }
+    if ((Get-FileHash -LiteralPath $publicKey -Algorithm SHA256).Hash.ToLowerInvariant() -ne $publicKeySha256) {
+        throw 'embedded HashiCorp public key checksum verification failed'
+    }
+
+    $gpgArgs = @('--no-options', '--homedir', $gnupgHome, '--batch', '--no-auto-key-retrieve', '--no-autostart')
+    $keyRecords = & $gpg @gpgArgs --with-colons --fingerprint --fingerprint --import-options show-only --import $publicKey 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'failed to inspect imported HashiCorp public key' }
+    $primaryValues = [Collections.Generic.List[string]]::new()
+    $allFingerprints = [Collections.Generic.List[string]]::new()
+    $waitingForPrimary = $false
+    foreach ($line in $keyRecords) {
+        $fields = ([string]$line).Split(':')
+        if ($fields[0] -eq 'pub') { $waitingForPrimary = $true; continue }
+        if ($fields[0] -eq 'fpr') {
+            $allFingerprints.Add($fields[9])
+            if ($waitingForPrimary) {
+                $primaryValues.Add($fields[9])
+                $waitingForPrimary = $false
+            }
+        }
+    }
+    if ($primaryValues.Count -ne 1 -or $primaryValues[0] -ne $primaryFingerprint -or
+        @($allFingerprints | Where-Object { $_ -eq $signingFingerprint }).Count -ne 1) {
+        throw 'imported HashiCorp key fingerprints do not match the pinned primary and signing fingerprints'
+    }
+    & $gpg --no-options --batch --yes --no-autostart --dearmor --output $keyring $publicKey 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'failed to import embedded HashiCorp public key into the isolated keyring'
+    }
+
+    $statusOutput = & $gpg @gpgArgs --no-default-keyring --keyring $keyring --status-fd 1 --verify $signature $checksums 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'Terraform checksum signature verification failed' }
+    $validMatches = @($statusOutput | Where-Object {
+        ([string]$_) -match "^\[GNUPG:\] VALIDSIG $signingFingerprint .+ $primaryFingerprint$"
+    })
+    if ($validMatches.Count -ne 1) {
+        throw 'Terraform checksum signature did not contain the pinned VALIDSIG identity'
+    }
+
+    $signedRows = [Collections.Generic.List[string]]::new()
+    foreach ($line in Get-Content -LiteralPath $checksums) {
+        if ($line -match '^([0-9A-Fa-f]{64})\s+\*?(.+)$' -and $Matches[2] -eq $assetFile) {
+            $signedRows.Add($Matches[1].ToLowerInvariant())
+        }
+    }
+    if ($signedRows.Count -ne 1) {
+        throw "signed Terraform checksum list must contain exactly one row for $assetFile"
+    }
+    if ($signedRows[0] -ne $assetSha256) {
+        throw 'signed Terraform checksum disagrees with the declared asset checksum'
+    }
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $assetSha256) {
+        throw "checksum verification failed for $assetFile"
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+    try {
+        $entries = @($zip.Entries | Where-Object { $_.FullName -eq $assetEntry })
+        if ($entries.Count -ne 1) { throw "archive must contain exactly one expected entry $assetEntry" }
+        $staged = Join-Path $stageDir 'terraform.exe'
+        $inputStream = $entries[0].Open()
+        $outputStream = [IO.File]::Create($staged)
+        try { $inputStream.CopyTo($outputStream) }
+        finally { $outputStream.Dispose(); $inputStream.Dispose() }
+    }
+    finally { $zip.Dispose() }
+    $item = Get-Item -LiteralPath $staged -Force
+    if ($item.PSIsContainer -or
+        (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw 'extracted Terraform candidate is not a regular file'
+    }
+    $candidateArch = Get-PeArchitecture -Path $staged
+    if ($candidateArch -ne $assetExecutableArch) {
+        if (-not $candidateArch) { $candidateArch = 'an invalid header' }
+        throw "expected $assetExecutableArch Terraform executable but $assetFile has $candidateArch"
+    }
+    Unblock-File -LiteralPath $staged
+    $found = Get-TerraformVersion -Path $staged -WorkingDirectory $stageDir -ConfigFile $probeConfig
+    if ($found -ne $terraformVersion) {
+        if (-not $found) { $found = 'unknown' }
+        throw "expected Terraform $terraformVersion but $assetFile reported $found"
+    }
+    Assert-ManagedTarget
+    Assert-BinaryReplaceable
+    Write-Host "Installing Terraform $terraformVersion..."
+    $retainStage = $true
+    try { [IO.File]::Move($staged, $target, $true) }
+    catch {
+        throw "failed to publish Terraform; the verified candidate remains at $staged and the existing target was not intentionally removed"
+    }
+    $retainStage = $false
+}
+finally {
+    if ($retainStage) { Write-Error "verified Terraform recovery file remains in $stageDir" -ErrorAction Continue }
+    else {
+        try { Remove-Item -LiteralPath $stageDir -Recurse -Force }
+        catch { Write-Warning "could not remove Terraform staging directory $stageDir" }
+    }
+}
+{{ end }}
+{{- end -}}
