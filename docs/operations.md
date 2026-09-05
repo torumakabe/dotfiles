@@ -27,6 +27,8 @@ GitHub CLI は、未導入か `githubCli.minimumVersion` 未満のときだけ�
 
 jq と uv は毎回の適用で走り、導入済みの版が宣言と一致すればネットワークへ出ない。取得物は `~/.local/bin` 配下の staging へ置き、SHA-256 と版を確認してから最終パスへ移す。checksum または版の検証に失敗した場合は既存のバイナリを残す。版を更新するときは、上流の公式リリースで版と SHA-256 を確認してから `home/.chezmoidata.toml` を編集し、`uv run -m unittest tests.test_direct_tool_installs -v` を実行する。
 
+jq はダウンロードに失敗した場合も異常終了し、既存の jq を変更しない。未導入の場合は未導入のままとなる。通信を復旧してから `chezmoi apply` を再実行する。
+
 jq の asset は `"<chezmoi.os>-<chezmoi.arch>"` ごとに固定する。宣言に無い OS/CPU では、別 CPU 向けの asset へフォールバックせず警告して何もしない。
 
 ## 定期チェック対象の制約
@@ -219,7 +221,7 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。現在の draw.io 配布フローには公式 checksum がないため、更新担当者が対象リリース asset の SHA-256 を計算し、上流リリースの出所と asset を確認してから pin を更新する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。
 
-ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
+初期セットアップ用の `run_once` スクリプトでは、ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
 
 `run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。`home/.chezmoidata.toml` で宣言する jq と uv だけは例外であり、`run_after_26-install-jq` と `run_after_25-install-uv` が毎回の適用で宣言との一致を確認し、違う場合だけ入れ直す。macOS の Homebrew formula から公式バイナリへの移行も例外であり、解決される mise が formula の実体である場合、または mise が未解決の場合に移行処理を実行する。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 

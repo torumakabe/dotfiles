@@ -284,6 +284,31 @@ class InstallerRenderingTests(unittest.TestCase):
                         continue
                     self.assertNotIn(other_asset["sha256"], rendered)
 
+    def test_windows_jq_download_failure_is_fatal_and_preserves_the_target(
+        self,
+    ) -> None:
+        for arch in ("amd64", "arm64"):
+            with self.subTest(arch=arch):
+                rendered = _render(JQ_PS1, "windows", arch)
+                download = rendered[
+                    rendered.index("Invoke-WebRequest"):
+                    rendered.index("$actualSha256 =")
+                ]
+                self.assertIn('throw ("failed to download', download)
+                self.assertIn("$_.Exception.Message", download)
+                self.assertNotIn("Write-Warning", download)
+                self.assertNotIn("exit 0", download)
+                self.assertIn(
+                    "[System.IO.File]::Move($stagedJq, $targetJq, $true)",
+                    rendered,
+                )
+                self.assertNotIn("Move-Item", rendered)
+                self.assertNotIn("Remove-Item -LiteralPath $targetJq", rendered)
+                self.assertRegex(
+                    rendered,
+                    r"finally\s*\{\s*Remove-Item -LiteralPath \$stageDir",
+                )
+
     def test_jq_installers_refuse_unsupported_platforms(self) -> None:
         jq = self.data["jq"]
 
@@ -594,18 +619,59 @@ class DirectInstallBehaviourTests(unittest.TestCase):
             self.assertIn("1.6", result.stderr)
             self.assertEqual(existing.read_text(encoding="utf-8"), original)
 
-    def test_jq_download_failure_warns_and_continues(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = pathlib.Path(temp_dir)
-            bin_dir = root / ".local/bin"
-            bin_dir.mkdir(parents=True)
-            env, _ = self._environment(root, None)
+    def test_jq_download_failure_is_fatal_preserves_the_target_and_allows_retry(
+        self,
+    ) -> None:
+        version = self.data["jq"]["version"]
+        for preinstalled in (False, True):
+            with self.subTest(preinstalled=preinstalled):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    root = pathlib.Path(temp_dir)
+                    bin_dir = root / ".local/bin"
+                    bin_dir.mkdir(parents=True)
+                    target = bin_dir / "jq"
+                    original = b"#!/bin/sh\necho 'jq-1.7.1'\n"
+                    if preinstalled:
+                        _write_executable(target, original.decode("utf-8"))
+                    body = root / "download.bin"
+                    body.write_bytes(b"partial download")
+                    env, calls = self._environment(root, body)
+                    curl = root / "stub/curl"
+                    _write_executable(curl, CURL_STUB + "\nexit 22\n")
 
-            result = self._run_script(_render(JQ_SH, "linux", "amd64"), root, env)
+                    result = self._run_script(
+                        _render(JQ_SH, "linux", "amd64"), root, env
+                    )
 
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("failed to download", result.stderr)
-            self.assertFalse((bin_dir / "jq").exists())
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn("failed to download", result.stderr)
+                    self.assertNotIn("Installing jq", result.stdout)
+                    if preinstalled:
+                        self.assertEqual(target.read_bytes(), original)
+                    else:
+                        self.assertFalse(target.exists())
+                    self.assertEqual(
+                        sorted(path.name for path in bin_dir.iterdir()),
+                        ["jq"] if preinstalled else [],
+                    )
+                    self.assertEqual(calls.read_text().splitlines(), ["called"])
+
+                    _write_executable(body, f"#!/bin/sh\necho 'jq-{version}'\n")
+                    _write_executable(curl, CURL_STUB)
+                    source = _render(JQ_SH, "linux", "amd64").replace(
+                        self.data["jq"]["assets"]["linux-amd64"]["sha256"],
+                        _sha256(body),
+                    )
+                    retry = self._run_script(source, root, env)
+
+                    self.assertEqual(retry.returncode, 0, retry.stderr)
+                    self.assertEqual(target.read_bytes(), body.read_bytes())
+                    self.assertEqual(
+                        sorted(path.name for path in bin_dir.iterdir()), ["jq"]
+                    )
+                    self.assertEqual(
+                        calls.read_text().splitlines(), ["called", "called"]
+                    )
 
     def test_uv_makes_no_network_call_when_the_declared_version_is_present(
         self,

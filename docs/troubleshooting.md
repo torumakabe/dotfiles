@@ -280,6 +280,10 @@ command -v copilot uv jq gh
 
 `uv` / `jq` / `gh` が mise shims の側に解決される場合は、`~/.local/bin` が先に来ていない。上の state 削除と `chezmoi apply` で並びを入れ直す。
 
+## jq のダウンロードに失敗する
+
+`failed to download` で `chezmoi apply` が停止する。既存の jq は変更されず、未導入の場合は未導入のままとなる。宣言版と asset の URL、ネットワークやプロキシの状態を確認し、復旧後に `chezmoi apply` を再実行する。
+
 ## `uv` / `jq` の導入が checksum またはバージョン検証で失敗する
 
 症状: `chezmoi apply` が `error: checksum verification failed for ...` または `error: expected jq <version> but ...` / `error: expected uv <version> but ...` で停止する。

@@ -49,8 +49,8 @@ try {
         Invoke-WebRequest -Uri $assetUrl -OutFile $stagedJq -UseBasicParsing
     }
     catch {
-        Write-Warning "Failed to download $assetFile; keeping the current jq."
-        exit 0
+        throw ("failed to download $assetFile; jq was not installed or updated. " +
+            $_.Exception.Message)
     }
 
     $actualSha256 = (Get-FileHash -LiteralPath $stagedJq -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -70,7 +70,7 @@ try {
 
     Write-Host "Installing jq $jqVersion..."
     try {
-        Move-Item -LiteralPath $stagedJq -Destination $targetJq -Force
+        [System.IO.File]::Move($stagedJq, $targetJq, $true)
     }
     catch {
         # 実行中の jq.exe は置き換えられない。既存のバイナリはそのまま残す。

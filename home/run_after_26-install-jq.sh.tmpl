@@ -54,8 +54,8 @@ chmod 700 "${stage_dir}"
 
 staged_jq="${stage_dir}/jq"
 if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${staged_jq}" "${asset_url}"; then
-  echo "Warning: failed to download ${asset_file}; keeping the current jq." >&2
-  exit 0
+  echo "error: failed to download ${asset_file}; jq was not installed or updated." >&2
+  exit 1
 fi
 
 actual_sha256="$(sha256_file "${staged_jq}")"
