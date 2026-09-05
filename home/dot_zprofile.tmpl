@@ -9,7 +9,7 @@
 # ~/.profile は __DOTFILES_PROFILE_LOADED ガードで再実行されないため、
 # 並びは自力で戻す必要がある。
 #
-# ここで戻すのは git だけに絞る。~/.local/bin や mise shims をまとめて
+# ここで戻すのは git だけに絞る。~/.local/bin をまとめて
 # /usr/bin より前に出すと、システムツール全般を shadow して影響が読めない。
 # /opt/homebrew/opt/git/bin は git 関連の実行ファイルしか持たないため、
 # 影響範囲が git に閉じる。

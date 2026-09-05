@@ -21,8 +21,6 @@ from tests.chezmoi_test_helpers import execute_template
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "home"
 DATA_PATH = SOURCE_ROOT / ".chezmoidata.toml"
-MISE_CONFIG_PATH = SOURCE_ROOT / "dot_config/mise/config.toml.tmpl"
-MISE_LOCK_PATH = SOURCE_ROOT / "dot_config/mise/private_mise.lock"
 HOOKS_PATH = SOURCE_ROOT / "private_dot_copilot/hooks/hooks.json"
 PROFILE_PATH = SOURCE_ROOT / "dot_profile.tmpl"
 USER_PATH_PS1 = SOURCE_ROOT / "run_once_after_05-setup-user-path.ps1.tmpl"
@@ -204,38 +202,7 @@ class DeclarationTests(unittest.TestCase):
         )
 
 
-class MiseOwnershipTests(unittest.TestCase):
-    """撤去した 3 つは mise の設定にも lockfile にも残らない。"""
-
-    REMOVED_TOOLS = ("github-cli", "jq", "uv")
-
-    def test_mise_config_no_longer_declares_the_removed_tools(self) -> None:
-        config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
-
-        for tool in self.REMOVED_TOOLS:
-            with self.subTest(tool=tool):
-                self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
-
-    def test_mise_lock_no_longer_pins_the_removed_tools(self) -> None:
-        lock = tomllib.loads(MISE_LOCK_PATH.read_text(encoding="utf-8"))
-
-        for tool in self.REMOVED_TOOLS:
-            with self.subTest(tool=tool):
-                self.assertNotIn(tool, lock.get("tools", {}))
-
-    def test_p1_tools_no_longer_appear_in_mise_config_or_lock(self) -> None:
-        """P1 (ADR-028) 第二弾で mise から直接導入へ移行した 7 ツール分。"""
-        config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
-        lock = tomllib.loads(MISE_LOCK_PATH.read_text(encoding="utf-8"))
-
-        for tool in ("go", "node", "dotnet", "bun", "pnpm"):
-            with self.subTest(tool=tool):
-                self.assertNotIn(tool, lock.get("tools", {}))
-        for tool in ("npm:typescript", "npm:typescript-language-server"):
-            with self.subTest(tool=tool):
-                self.assertNotIn(tool, lock.get("tools", {}))
-                self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
-
+class CopilotHooksContractTests(unittest.TestCase):
     def test_copilot_hooks_no_longer_force_mise_resolution(self) -> None:
         hooks = HOOKS_PATH.read_text(encoding="utf-8")
 
@@ -975,7 +942,7 @@ class DirectInstallBehaviourTests(unittest.TestCase):
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 @unittest.skipUnless(shutil.which("sh"), "sh is required")
 class PosixPathOrderTests(unittest.TestCase):
-    """~/.local/bin は mise shims より前に来る。"""
+    """新規PATHはmiseを追加せず、既存項目は削除しない。"""
 
     def _resolved_path(self, os_name: str, initial: str, home: pathlib.Path) -> list[str]:
         profile = home / ".profile"
@@ -990,7 +957,7 @@ class PosixPathOrderTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout.split(":")
 
-    def test_local_bin_precedes_mise_shims(self) -> None:
+    def test_profile_does_not_add_mise_shims(self) -> None:
         for os_name in ("linux", "darwin"):
             with self.subTest(os=os_name), tempfile.TemporaryDirectory() as temp_dir:
                 home = pathlib.Path(temp_dir)
@@ -998,12 +965,10 @@ class PosixPathOrderTests(unittest.TestCase):
                 shims = home / ".local/share/mise/shims"
                 for directory in (local_bin, shims):
                     directory.mkdir(parents=True)
-
                 entries = self._resolved_path(os_name, "/usr/bin:/bin", home)
 
-                self.assertLess(
-                    entries.index(str(local_bin)), entries.index(str(shims))
-                )
+                self.assertEqual(entries[0], str(local_bin))
+                self.assertNotIn(str(shims), entries)
 
     def test_direct_tool_payload_roots_are_not_added_to_path(self) -> None:
         payload_roots = (
@@ -1018,10 +983,9 @@ class PosixPathOrderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             home = pathlib.Path(temp_dir)
             local_bin = home / ".local/bin"
-            shims = home / ".local/share/mise/shims"
             dotfiles_share = home / ".local/share/chezmoi-dotfiles"
             roots = {name: dotfiles_share / name for name in payload_roots}
-            for directory in (local_bin, shims, *roots.values()):
+            for directory in (local_bin, *roots.values()):
                 directory.mkdir(parents=True)
 
             entries = self._resolved_path("linux", "/usr/bin:/bin", home)
@@ -1039,16 +1003,19 @@ class PosixPathOrderTests(unittest.TestCase):
                 directory.mkdir(parents=True)
 
             entries = self._resolved_path(
-                "linux", f"/usr/bin:{local_bin}:/bin", home
+                "linux", f"/usr/bin:{shims}:{local_bin}:/bin", home
             )
 
             self.assertEqual(entries[0], str(local_bin))
             self.assertEqual(entries.count(str(local_bin)), 1)
-            self.assertLess(entries.index(str(local_bin)), entries.index(str(shims)))
+            self.assertEqual(
+                entries,
+                [str(local_bin), "/usr/bin", str(shims), "/bin"],
+            )
 
 
 class WindowsPathOrderTests(unittest.TestCase):
-    def test_user_path_script_puts_local_bin_before_mise_shims(self) -> None:
+    def test_user_path_leading_roots_do_not_add_mise_shims(self) -> None:
         source = USER_PATH_PS1.read_text(encoding="utf-8")
 
         self.assertIn(
@@ -1060,14 +1027,11 @@ class WindowsPathOrderTests(unittest.TestCase):
             "    $pnpmRootDir,\n"
             "    $typescriptCliBinDir,\n"
             "    $typescriptLspBinDir,\n"
-            "    $typescriptLanguageServerBinDir,\n"
-            "    $shimsDir",
+            "    $typescriptLanguageServerBinDir\n"
+            ")",
             source,
         )
-        self.assertLess(
-            source.index("$localBinDir = Join-Path $HOME '.local\\bin'"),
-            source.index("$shimsDir = Join-Path $env:LOCALAPPDATA 'mise\\shims'"),
-        )
+        self.assertNotIn("$shimsDir", source)
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
@@ -1077,7 +1041,7 @@ class WindowsPathOrderTests(unittest.TestCase):
         )
         script = (
             f"{block}\n"
-            "$leading = @('C:\\Users\\x\\.local\\bin', 'C:\\Users\\x\\AppData\\mise\\shims')\n"
+            "$leading = @('C:\\Users\\x\\.local\\bin')\n"
             "$existing = @("
             "'C:/Users/x/AppData/mise/shims/', "
             "'C:\\Windows\\System32', "
@@ -1099,7 +1063,7 @@ class WindowsPathOrderTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
             result.stdout.strip(),
-            "C:\\Users\\x\\.local\\bin;C:\\Users\\x\\AppData\\mise\\shims;"
+            "C:\\Users\\x\\.local\\bin;C:/Users/x/AppData/mise/shims/;"
             "C:\\Windows\\System32;C:\\Tools",
         )
 

@@ -16,9 +16,19 @@ ZSHRC_PATH = REPO_ROOT / "home/dot_zshrc.tmpl"
 POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 INSTALL_PS1_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.ps1.tmpl"
-MISE_CONFIG_PATH = REPO_ROOT / "home/dot_config/mise/config.toml.tmpl"
-MISE_SHIM_LINK_PATH = (
-    REPO_ROOT / "home/run_onchange_after_21-link-mise-shims.sh.tmpl"
+PROFILE_PATH = REPO_ROOT / "home/dot_profile.tmpl"
+USER_PATH_PS1_PATH = REPO_ROOT / "home/run_once_after_05-setup-user-path.ps1.tmpl"
+MISE_RUNTIME_PATHS = tuple(
+    REPO_ROOT / "home" / path
+    for path in (
+        "dot_config/mise/config.toml.tmpl",
+        "dot_config/mise/private_mise.lock",
+        "run_once_after_20-mise-install.sh.tmpl",
+        "run_once_before_20-install-mise.sh.tmpl",
+        "run_onchange_after_15-mise-sync-tools.ps1.tmpl",
+        "run_onchange_after_15-mise-sync-tools.sh.tmpl",
+        "run_onchange_after_21-link-mise-shims.sh.tmpl",
+    )
 )
 CHEZMOI_DATA_PATH = REPO_ROOT / "home/.chezmoidata.toml"
 INSTRUCTIONS_PATH = REPO_ROOT / ".github/copilot-instructions.md"
@@ -188,10 +198,6 @@ PLATFORM_CONTRACT = {
     ),
     "shell:ghcd": _implemented_everywhere(),
     "shell:git-hooks-audit": _implemented_everywhere(),
-    "shell:mise-self-upgrade": _windows_only(
-        "exception: docs/operations.md platform exception rationale"
-    ),
-    "shell:mise-upgrade": _implemented_everywhere(),
     "shell:kubectl-shortcut": _implemented_everywhere(),
     "shell:ll": _implemented_everywhere(),
     "shell:copilot-guardrails": _implemented_everywhere(),
@@ -255,10 +261,6 @@ PLATFORM_CONTRACT = {
 ZSH_INTERNAL_FUNCTIONS = {
     "_cached_source",
     "_completion_cache_clear",
-    "_mise_normalize_log_line",
-    "_mise_is_allowed_warning",
-    "_mise_check_warnings",
-    "_mise_restore_lockfile",
 }
 POWERSHELL_INTERNAL_FUNCTIONS = {
     "Get-CachedSourcePath",
@@ -269,7 +271,6 @@ POWERSHELL_INTERNAL_FUNCTIONS = {
 ZSH_PUBLIC_SYMBOLS = {
     ("function", "ghcd"): "shell:ghcd",
     ("function", "git-hooks-audit"): "shell:git-hooks-audit",
-    ("function", "mise-upgrade"): "shell:mise-upgrade",
     ("alias", "k"): "shell:kubectl-shortcut",
     ("alias", "ll"): "shell:ll",
     ("alias", "copilot-guardrails"): "shell:copilot-guardrails",
@@ -281,14 +282,10 @@ POWERSHELL_PUBLIC_SYMBOLS = {
     ("function", "zi"): "shell:zoxide",
     ("function", "ghcd"): "shell:ghcd",
     ("function", "ll"): "shell:ll",
-    ("function", "Invoke-MiseSelfUpgrade"): "shell:mise-self-upgrade",
-    ("function", "Invoke-MiseUpgrade"): "shell:mise-upgrade",
     ("function", "Invoke-GitHooksAudit"): "shell:git-hooks-audit",
     ("function", "Invoke-CopilotGuardrails"): "shell:copilot-guardrails",
     ("alias", "e"): "shell:edit-shortcut",
     ("alias", "k"): "shell:kubectl-shortcut",
-    ("alias", "mise-self-upgrade"): "shell:mise-self-upgrade",
-    ("alias", "mise-upgrade"): "shell:mise-upgrade",
     ("alias", "git-hooks-audit"): "shell:git-hooks-audit",
     ("alias", "copilot-guardrails"): "shell:copilot-guardrails",
     ("alias", "z"): "shell:zoxide",
@@ -300,11 +297,6 @@ SHELL_ANCHORS = {
     "shell:git-hooks-audit": {
         "zsh": "git-hooks-audit() {",
         "powershell": "function Invoke-GitHooksAudit {",
-    },
-    "shell:mise-self-upgrade": {"powershell": "function Invoke-MiseSelfUpgrade {"},
-    "shell:mise-upgrade": {
-        "zsh": "mise-upgrade() {",
-        "powershell": "function Invoke-MiseUpgrade {",
     },
     "shell:kubectl-shortcut": {
         "zsh": "alias k=kubectl",
@@ -366,7 +358,6 @@ SOURCE_INITIALIZERS = {
 
 EXCEPTION_DOCUMENT_IDENTIFIERS = {
     "shell:edit-shortcut": ("Microsoft Edit",),
-    "shell:mise-self-upgrade": ("mise-self-upgrade",),
     "completion:terraform": ("Terraform", "PowerShell completion"),
     "completion:rad": ("Radicle", "Windows"),
     "tool:bubblewrap": ("bubblewrap", "Seatbelt", "ProcessContainer"),
@@ -509,27 +500,47 @@ class PlatformParityTests(unittest.TestCase):
                     self.assertTrue(path.is_file(), path)
                     self.assertIn(anchors[feature], path.read_text(encoding="utf-8"))
 
-    def test_removed_mise_tools_have_no_mise_declaration_left(self) -> None:
-        config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
+    def test_mise_runtime_surfaces_are_absent_without_path_cleanup(self) -> None:
+        for path in MISE_RUNTIME_PATHS:
+            with self.subTest(path=path.relative_to(REPO_ROOT)):
+                self.assertFalse(path.exists(), path)
 
-        for tool in (
-            "uv",
-            "jq",
-            "github-cli",
-            "go",
-            "node",
-            "dotnet",
-            "bun",
-            "pnpm",
-            *P2_DATA_KEYS,
-            *P3_DATA_KEYS,
-        ):
-            with self.subTest(tool=tool):
-                self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
-        for tool in ("npm:typescript", "npm:typescript-language-server"):
-            with self.subTest(tool=tool):
-                self.assertNotIn(f"[tools.{tool}]", config)
-                self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
+        runtime_sources = {
+            PROFILE_PATH: (
+                ".local/share/mise/shims",
+            ),
+            ZSHRC_PATH: (
+                "mise activate",
+                "mise-upgrade",
+                "_mise_",
+            ),
+            POWERSHELL_PROFILE_PATH: (
+                "mise activate",
+                "Invoke-Mise",
+                "mise-self-upgrade",
+                "mise-upgrade",
+            ),
+            INSTALL_SH_PATH: (
+                ".local/share/mise/shims",
+                "mise uninstall",
+            ),
+            INSTALL_PS1_PATH: (
+                "mise uninstall",
+                "Get-Command mise",
+            ),
+            USER_PATH_PS1_PATH: (
+                "$shimsDir",
+            ),
+        }
+        for path, forbidden in runtime_sources.items():
+            source = path.read_text(encoding="utf-8")
+            for token in forbidden:
+                with self.subTest(path=path.name, token=token):
+                    self.assertNotIn(token, source)
+
+        user_path = USER_PATH_PS1_PATH.read_text(encoding="utf-8")
+        self.assertIn("@($Leading) + @($Existing)", user_path)
+        self.assertNotRegex(user_path, r"(?i)(remove|filter).*mise")
 
     def test_p2_asset_architecture_exceptions_are_explicitly_scoped(self) -> None:
         data = tomllib.loads(CHEZMOI_DATA_PATH.read_text(encoding="utf-8"))
@@ -556,49 +567,6 @@ class PlatformParityTests(unittest.TestCase):
         terraform_verification = data["terraform"]["verification"]
         self.assertEqual(terraform_verification["windowsArm64GpgArch"], "amd64")
         self.assertTrue(terraform_verification["windowsArm64GpgEmulated"])
-
-    def test_p2_migrated_commands_are_excluded_from_mise_shim_links(self) -> None:
-        source = MISE_SHIM_LINK_PATH.read_text(encoding="utf-8")
-        match = re.search(r"EXCLUDE_EXACT=\((.*?)\)", source, re.DOTALL)
-        self.assertIsNotNone(match, "EXCLUDE_EXACT array not found")
-        excluded = set(match.group(1).split())
-
-        self.assertTrue(
-            {
-                "kubelogin",
-                "cosign",
-                "cue",
-                "helm",
-                "kubectl",
-                "kustomize",
-                "sqlc",
-                "terraform",
-                "trivy",
-                "yq",
-            }.issubset(excluded)
-        )
-
-    def test_p3_migrated_commands_are_excluded_from_mise_shim_links(self) -> None:
-        source = MISE_SHIM_LINK_PATH.read_text(encoding="utf-8")
-        match = re.search(r"EXCLUDE_EXACT=\((.*?)\)", source, re.DOTALL)
-        self.assertIsNotNone(match, "EXCLUDE_EXACT array not found")
-        excluded = set(match.group(1).split())
-
-        self.assertTrue(
-            {
-                "op",
-                "bat",
-                "cargo-make",
-                "fzf",
-                "ghq",
-                "gitleaks",
-                "golangci-lint",
-                "lefthook",
-                "rg",
-                "shellcheck",
-                "zoxide",
-            }.issubset(excluded)
-        )
 
     def test_windows_arm64_workarounds_have_one_removal_condition(self) -> None:
         instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
@@ -734,10 +702,7 @@ class PlatformParityTests(unittest.TestCase):
                     r"(?:uv|& \$uvExe) tool install --quiet specify-cli",
                 )
                 self.assertIn(source, installer)
-                self.assertIn("mise uninstall --all 'ubi:github/spec-kit'", installer)
-        mise_config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
-        self.assertNotIn('"ubi:github/spec-kit"', mise_config)
-        self.assertNotIn('"pipx:specify-cli"', mise_config)
+                self.assertNotIn("mise", installer)
 
     def test_powershell_uv_tool_failures_are_reported(self) -> None:
         installer = INSTALL_PS1_PATH.read_text(encoding="utf-8")
@@ -748,34 +713,6 @@ class PlatformParityTests(unittest.TestCase):
             ),
             2,
         )
-
-    @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
-    def test_mise_tool_table_renders_empty_on_every_platform(self) -> None:
-        platform_data = {
-            "windows-powershell": {"os": "windows", "arch": "amd64"},
-            "macos-zsh": {"os": "darwin", "arch": "arm64"},
-            "linux-zsh": {"os": "linux", "arch": "amd64"},
-            "wsl-zsh": {"os": "linux", "arch": "amd64"},
-        }
-
-        for platform, chezmoi_data in platform_data.items():
-            with self.subTest(platform=platform):
-                result = subprocess.run(
-                    [
-                        "chezmoi",
-                        "execute-template",
-                        "--override-data",
-                        json.dumps({"chezmoi": chezmoi_data}),
-                        "--file",
-                        str(MISE_CONFIG_PATH),
-                    ],
-                    check=False,
-                    capture_output=True,
-                    encoding="utf-8",
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                config = tomllib.loads(result.stdout)
-                self.assertEqual(config["tools"], {})
 
     def test_powershell_completion_cache_executes_generated_sources(self) -> None:
         pwsh = shutil.which("pwsh")

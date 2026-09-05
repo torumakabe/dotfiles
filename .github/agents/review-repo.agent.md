@@ -1,6 +1,6 @@
 ---
 name: review-repo
-description: リポジトリの整頓。instructions、agents、README、docs、install.sh の鮮度と規模、記述の置き場所、ADR/memories の健全性、git 追跡、chezmoi 規約、mise 整合性、hooks と CI を確認する。「リポジトリを点検」「整頓」「hygiene」「文書の陳腐化を確認」「文書の肥大化を確認」「priming をレビュー」「instructions を見直して」「review-repo」と言われたら使う。
+description: リポジトリの整頓。instructions、agents、README、docs、install.sh の鮮度と規模、記述の置き場所、ADR/memories の健全性、git 追跡、chezmoi 規約、ツール導入契約、hooks と CI を確認する。「リポジトリを点検」「整頓」「hygiene」「文書の陳腐化を確認」「文書の肥大化を確認」「priming をレビュー」「instructions を見直して」「review-repo」と言われたら使う。
 ---
 
 リポジトリ全体を点検し、根拠のある問題と修正案を報告する。修正はユーザー承認後に行う。
@@ -147,16 +147,16 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 1. `home/run_once*` を bootstrap または migration に分類する
 2. migration は追加時のcommit、ADR、コメントから旧状態と削除条件を確認する
-3. 削除条件を設定、lockfile、現行仕様で確認する。根拠を示せなければ削除しない
+3. 削除条件を設定、desired declaration、現行仕様で確認する。根拠を示せなければ削除しない
 4. 不要なmigrationは関連テストと文書を含めて削除を提案する。再実行が不要なら chezmoi の scriptState は変更しない
 5. 新しいmigrationに旧状態と機械的な削除条件がなければ補足を求める
 
-### 7. mise と install-packages
+### 7. desired declaration と公式導入経路
 
-- `home/dot_config/mise/config.toml.tmpl` と `home/run_once_before_10-install-packages.sh.tmpl` の重複と欠落を確認する
-- ADR-004対象の `azd` と `copilot-cli` が mise 外にあるか確認する
-- `mise lock` の運用が `--global --platform` を指定するか確認する
-- 任意の実機検査では `mise ls` の Source が空の孤児ツールと余剰版を確認し、`mise uninstall --all` または `mise prune --tools` を提案する
+- `home/.chezmoidata.toml` の版、最低版、asset、検証情報が、OS package とツール別の導入スクリプトで欠落なく使われるか確認する
+- 各ツールの所有元、導入経路、版とCPU種別の probe、入口の配置が `docs/operations.md` の契約と一致するか確認する
+- 通常の `run_after_` が、適合する実体と入口をローカルで確認できる場合に通信しないか確認する
+- 旧 mise 由来の端末状態を清掃対象として提案しない。移行時の所有者保護と撤去条件は `.github/copilot-instructions.md` のワークアラウンドを正本として確認する
 
 ### 8. プラットフォーム機能等価性
 
@@ -175,7 +175,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 - bash と powershell の起動行が同じスクリプトと環境変数を指すか
 - `ask-files.txt` と `blocked-files.txt` のパターンが `/` 区切りで、`copilot-guard.py` の正規化と一致するか
 - `tests/test_copilot_hooks_config.py` が現在の hooks.json の構成を検査するか
-- `lsp-config.json` と `mcp-config.json` が参照するコマンドが、mise 管理下または導入手順に存在するか
+- `lsp-config.json` と `mcp-config.json` が参照するコマンドが、desired declaration と導入手順に存在するか
 
 ### 11. CI ワークフロー
 

@@ -10,9 +10,8 @@
 #   - Linux distro default で `~/.bashrc` が期待される場面の整合性確保。
 #
 # 注: GitHub Desktop の Copilot SDK のように bash を --norc --noprofile で spawn する
-# ケースでは `~/.bashrc` は読まれない。そちらは macOS 限定で
-# `run_onchange_after_21-link-mise-shims.sh` が mise shim を `~/.local/bin` に
-# symlink することで対処する (Copilot CLI の PATH には `~/.local/bin` が含まれるため)。
+# ケースでは `~/.bashrc` は読まれない。必要なコマンドは `~/.local/bin` の
+# 管理対象symlinkから解決する。
 #
 # Ubuntu default .bashrc に倣い非対話は早期 return する。scp / rsync /
 # 非対話 ssh で ~/.bashrc が読まれるケースで stdout 汚染 / 余計な処理を避ける。

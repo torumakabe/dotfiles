@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted
+Deprecated
 
 ## Context
+
+mise shim のリンク生成を撤去したため、本 ADR を廃止した。現在の導入方針は [ADR-028](028-remove-mise-use-official-per-tool-install-paths.md) を参照。以下は採用当時の記録であり、現在の操作手順ではない。
 
 GitHub Desktop に組み込まれた Copilot CLI SDK は子シェルを `bash --norc --noprofile` で起動し、独自の hardcoded PATH を使う。そこには `~/.local/bin` は含まれるが `~/.local/share/mise/shims` は含まれない。結果として、mise で管理しているツール（`uv`, `gh`, `copilot` 以外のランタイム等）がエージェント実行環境から見えなくなる。
 

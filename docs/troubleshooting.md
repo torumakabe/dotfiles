@@ -1,6 +1,6 @@
 # Troubleshooting
 
-README に載せない復旧手順だけをまとめる。一般的な `chezmoi` / `mise` の仕様説明は各公式ドキュメントを参照。
+README に載せない復旧手順だけをまとめる。一般的な `chezmoi` の仕様説明は公式ドキュメントを参照。
 
 ## `warning: config file template has changed`
 
@@ -13,21 +13,6 @@ chezmoi init torumakabe
 リポジトリ名を省略すると、ソースディレクトリが空になり `chezmoi update` が動かなくなる。必ず `torumakabe` を指定する。
 
 `windowsUser` / `corpUser` の入力を求めるのは stdin が TTY のときだけだが、非対話で実行しても既存の設定値は引き継ぐ。値を変更したいときは対話シェルで実行する。
-
-## `mise install` が部分失敗する
-
-まず [`docs/operations.md`](operations.md#github-api-と-github_token) の手順で `GITHUB_TOKEN` を付けて再実行する。
-
-### lockfile を再生成する
-
-lockfile 側の問題なら再生成する。
-
-```bash
-mise ls --missing
-rm ~/.config/mise/mise.lock
-GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
-mise install
-```
 
 ## OS package版CLIの入口を作成できない
 
@@ -108,103 +93,9 @@ jq .sandbox.enabled ~/.copilot/settings.json
 
 本リポジトリの以前のブランチ（file-based managed settings 方式）を適用したことがある場合、Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json` が残っている可能性がある。組織が所有するファイルの可能性があるため自動削除しない。内容が本リポジトリ由来（`sandbox.enabled=true` の強制のみ等）と確認できた場合に限り、手動で削除するか組織の管理者に確認する。
 
-## `mise.lock has changed since chezmoi last wrote it?` と聞かれる
-
-`chezmoi status` が `MM .config/mise/mise.lock` を示し、`chezmoi apply` が上のプロンプトを出す。Codespaces のような TTY の無い環境では `could not open a new TTY` で停止する。
-
-デプロイ済みの lockfile に、意図しないプラットフォームのエントリが加わった状態である。`chezmoi diff ~/.config/mise/mise.lock` で追加された行を確認する。`linux-x64-musl` や `windows-x64-baseline` のようなエントリが増えていれば、`lockfile_platforms` が効かないまま auto-lock が走ったことを意味する（[ADR-021](adr/021-mise-lockfile-platforms.md)）。
-
-原因は二つある。まず mise のバージョンを確認する。
-
-```bash
-mise --version
-```
-
-`lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。Homebrew formula 以外の mise がある端末では `run_once_before_20-install-mise.sh` がバージョンを問わず既存バイナリを保持するため、自分で更新する。
-
-```text
-macOS / Linux: mise self-update
-Windows:       mise-self-upgrade
-```
-
-macOS の移行では、現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、formula を自動削除しない。Homebrew 版の activation を読み込んだターミナルやシェルをすべて終了する。現在のシェルを継続して使う場合は、profile の再実行ガードを解除して login shell を起動し直す。
-
-```bash
-unset __DOTFILES_PROFILE_LOADED
-exec zsh -l
-```
-
-新しいシェルで、`command -v mise` が導入スクリプトの案内したパスを返すことを確認して formula を削除する。新規に公式バイナリを配置した場合のパスは `~/.local/bin/mise` である。
-
-```bash
-command -v mise   # ~/.local/bin/mise
-brew uninstall mise
-```
-
-formula をすでに削除し、`_mise_hook: no such file or directory: /opt/homebrew/bin/mise` が出る場合は、影響を受ける各シェルで公式バイナリの hook を読み直すか、そのシェルを終了する。
-
-```bash
-mise_path="$HOME/.local/bin/mise" # 導入スクリプトが別のパスを案内した場合は置き換える
-eval "$("$mise_path" activate zsh)"
-rehash
-```
-
-mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。
-
-```bash
-mise settings get lockfile_platforms
-chezmoi apply --force ~/.config/mise/config.toml
-```
-
-どちらの場合も、最後にデプロイ済み lockfile を source の内容へ戻す。`--force` を付けるのは、対象を lockfile 一つに限ってプロンプトを飛ばすためである。他のファイルのローカル変更には影響しない。
-
-```bash
-chezmoi apply --force ~/.config/mise/mise.lock
-chezmoi status
-```
-
-`chezmoi status` から `.config/mise/mise.lock` が消えれば復旧している。
-
-## `mise install` が `aube install failed: failed to resolve dependencies` で止まる
-
-`npm:` バックエンドは mise 内蔵の [aube](https://aube.jdx.dev/) で install する。aube の `trustPolicy=no-downgrade` は、選んだ版より古い版が 1 つでも強い信頼証跡を持つ場合に install を止める。証跡は `approver`（staged publish） > `_npmUser.trustedPublisher` > `dist.attestations.provenance` の順にランク付けされる。
-
-mise の表示は上記の一行に丸められるため、原因の判別には packument を直接見る。npm CLI は mise の shim 経由だと未導入ツールの自動 install を誘発して出力が汚れるので、node 同梱の実体を使う。
-
-```bash
-npm=$(dirname "$(mise which node)")/npm
-for v in <古い版> <入らない版>; do
-  echo "--- $v ---"
-  "$npm" view "<pkg>@$v" _npmUser.trustedPublisher --json
-  "$npm" view "<pkg>@$v" dist.attestations --json
-done
-```
-
-古い版にだけ証跡があれば証跡後退である。まず上流の公開経路が変わったのかを確認する（リリース workflow の差分、公開者）。変わっていなければレジストリ側で剥がれている。利用中の npm レジストリプロキシは `dist.integrity` / `signatures` / `attestations` を全バージョンで落とし、`_npmUser.trustedPublisher` の保持もバージョンによってばらつく。
-
-対処は `trust_policy_excludes` をバージョン指定で足す。
-
-```toml
-[tools]
-"npm:some-tool" = { version = "latest", trust_policy_excludes = ["some-tool@1.2.3"] }
-```
-
-パッケージ名だけを書くと将来版も一括で除外され、本物の証跡後退に気づけなくなる。`npm.shell_out=true` は mise の信頼検証を全パッケージで外すため使わない。
-
-## shell 起動時に `mise WARN missing:` が出る
-
-`mise upgrade` 等で `~/.config/mise/mise.lock` が更新された後、対応する `mise install` / `mise reshim` が走っていないと shim と install marker が古いまま残り、`mise hook-env` で `WARN missing:` が出る。
-
-通常は `chezmoi apply` で `run_onchange_after_15-mise-sync-tools` フック（[ADR-013](adr/013-mise-lockfile-sync-hook.md)）が自動で同期する。手動で `mise uninstall` した等のケースで残った場合は次を実行する。
-
-```bash
-mise install
-mise reshim
-```
-
 ## TypeScript language server が TypeScript を発見できない
 
-Copilot CLI の起動ログに `Could not find a valid TypeScript installation` が出る場合、安定 prefix に LSP 用 TypeScript が導入されているか確認する。`tsc --version` の成功は、別の mise インストール先にあるコンパイラーを確認するだけであり、language server の依存解決を保証しない。
+Copilot CLI の起動ログに `Could not find a valid TypeScript installation` が出る場合、安定 prefix に LSP 用 TypeScript が導入されているか確認する。`tsc --version` の成功は、コンパイラー用 TypeScript の確認に限られ、language server の依存解決を保証しない。
 
 設定と導入スクリプトを配布すると、`run_after_22-install-typescript-lsp` が直接導入した Node.js に同梱された npm で LSP 用 TypeScript を確認し、不足または版違いの場合だけ導入する。
 
@@ -233,7 +124,7 @@ node -p "require('$lsp_typescript_root/node_modules/typescript/package.json').ve
 
 実行順と役割は [`docs/architecture.md`](architecture.md#セットアップスクリプトの実行順) を参照。
 
-- **warning で継続**: shell 設定の一部、`mise install` 後の任意ツール、追加ツール導入の失敗
+- **warning で継続**: shell 設定の一部、任意ツール、追加ツール導入の失敗
 - **error で停止**: Oh My Zsh の clone、Docker 本体導入など継続に必要な処理
 
 warning は標準エラーに表示される。表示されたコマンドを手動で再実行して復旧する。
@@ -285,14 +176,14 @@ npm config set registry '<管理者指定の registry URL>'
 
 - **Unix**: `chezmoi apply` で `~/.profile` 系が配置されているか確認。新規 login シェル（新しい Terminal タブ）で有効化
 - **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: 個別の導入スクリプトが `~/.local/bin` へ実体またはnative symlinkを配置する。欠損した入口は `chezmoi apply` で復旧し、その後にCopilot CLIを再起動する。実体が適合していればリンクの修復に再ダウンロードは不要である。OS packageが最低版未満の場合は、[OS packageの障害](#os-package版cliの入口を作成できない)を参照する
-- **Windows**: `run_once_after_05-setup-user-path.ps1` は、`%USERPROFILE%\.local\bin`、Go、Node.js、.NET SDK、pnpm、三つの TypeScript 用ディレクトリ、残存する mise shims の順でユーザー環境変数 `Path` の先頭へ登録する。完全な一覧は [`operations.md`](operations.md#ツールごとの導入経路) を参照する。既存プロセスは変更前の環境変数を保持するため、ターミナルを開き直す。GUI アプリへ反映されない場合は、サインアウトまたは OS の再起動後に確認する。`pwsh -NoProfile` は PowerShell Profile を読まないが、親プロセスから継承したユーザー `Path` は削除しない
+- **Windows**: `run_once_after_05-setup-user-path.ps1` は、`%USERPROFILE%\.local\bin`、Go、Node.js、.NET SDK、pnpm、三つの TypeScript 用ディレクトリをユーザー環境変数 `Path` の先頭へ登録する。完全な一覧は [`operations.md`](operations.md#ツールごとの導入経路) を参照する。既存プロセスは変更前の環境変数を保持するため、ターミナルを開き直す。GUI アプリへ反映されない場合は、サインアウトまたは OS の再起動後に確認する。`pwsh -NoProfile` は PowerShell Profile を読まないが、親プロセスから継承したユーザー `Path` は削除しない
 
 PATH登録スクリプトが既に成功扱いで、登録だけを修復する場合は、[個別のrun_once再実行手順](operations.md#run_once_-の再実行)で対象keyだけを扱う。`scriptState` 全体は削除しない。
 
 確認コマンド:
 
 ```bash
-echo "$PATH" | tr ':' '\n'   # ~/.local/bin が ~/.local/share/mise/shims より前にあること
+echo "$PATH" | tr ':' '\n'   # ~/.local/bin が含まれること
 command -v copilot uv jq gh
 ```
 
@@ -301,7 +192,7 @@ command -v copilot uv jq gh
 [Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-Object -First 10
 ```
 
-`uv` / `jq` / `gh` が mise shims の側に解決される場合は、`~/.local/bin` が先に来ていない。上の state 削除と `chezmoi apply` で並びを入れ直す。
+現行構成が mise を必要としないことは、新規シェルで上のコマンドが管理対象の入口を返すかによって確認する。既存プロセスや端末に残る旧状態の扱いと、清掃済み確認を別作業にする理由は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
 ## jq のダウンロードに失敗する
 
@@ -362,7 +253,7 @@ chezmoi apply ~/.config/git/templates/hooks/pre-commit
 
 `init.templateDir` は `git init`/`git clone` した瞬間にしか `.git/hooks/` へコピーされない。既存リポジトリに hook が無い場合は `git -C <repo> init` を再実行して backfill する（既存ファイルは上書きされないため安全）。`git-hooks-audit` / `Invoke-GitHooksAudit` で ghq 管理下の全リポジトリの hook 有無をまとめて確認できる。
 
-Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin/env bash` が WSL の `bash.exe` を拾い、Windows 形式の `C:/...` パスを開けていない可能性がある。この pre-commit hook はその経路を避けるため POSIX `sh` 互換で管理する。mise の Windows shim も extensionless 版は `/bin/bash` スクリプトなので、hook 内では `gitleaks.exe` を優先する。
+Windows で hook が存在するのに同じエラーが出る場合、`/usr/bin/env bash` が WSL の `bash.exe` を拾い、Windows 形式の `C:/...` パスを開けていない可能性がある。この pre-commit hook はその経路を避けるため POSIX `sh` 互換で管理する。gitleaks は `~/.local/bin/gitleaks.exe`、WinGet の入口、PATH 上の実体の順に解決する。見つからない場合は警告して走査を省略し、解決した gitleaks の走査が失敗した場合は commit を拒否する。
 
 ## 設定ベースフックが全リポジトリで動いていない
 
@@ -400,7 +291,7 @@ test -L /usr/local/bin/git           # symlink なら誰かが張り替えた後
 sudo ln -sfn /usr/bin/git /usr/local/bin/git
 ```
 
-`command -v git` が `/usr/local/bin/git` 以外を返す場合や、すでに symlink である場合は、mise の shim や利用者自身のビルドである可能性がある。張り替える前に、その git の出所と PATH の並びを確認する。
+`command -v git` が `/usr/local/bin/git` 以外を返す場合や、すでに symlink である場合は、利用者自身のビルドや別の管理元である可能性がある。張り替える前に、その git の出所と PATH の並びを確認する。
 
 ## commit が gitleaks-pre-commit not found で拒否される
 
@@ -464,6 +355,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
 
-本リポジトリの command hook は `~/.local/bin/uv` の `uv run` で起動する。`uv` は mise の管理外にあり、shim もバージョン解決も挟まない。標準エラーに mise のインストールログが出る場合は、`~/.copilot/hooks/hooks.json` と PATH の並びが最新か確認し、`chezmoi apply` で配り直す。
+本リポジトリの command hook は `~/.local/bin/uv` の `uv run` で起動し、ツール管理機構による shim やバージョン解決を挟まない。`~/.copilot/hooks/hooks.json` の起動コマンドが異なる場合は、`chezmoi apply` で配り直す。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

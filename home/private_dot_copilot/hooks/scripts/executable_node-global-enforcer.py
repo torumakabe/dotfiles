@@ -5,10 +5,9 @@
 
 Prevents npm/yarn/pnpm/bun from installing packages globally, keeping the
 host Node.js environment clean.  One-off execution via npx/bunx/pnpm dlx,
-adding the package as a project devDependency, or (for tools mise still
-owns) managing it with mise are the intended alternatives. node/npm/pnpm/
-bun/TypeScript themselves are installed directly, not via mise; see
-home/.chezmoidata.toml.
+adding the package as a project devDependency, or using the repository's
+declared workstation installer for managed CLI tools are the intended
+alternatives. See home/.chezmoidata.toml for the approved tool boundaries.
 
 Reads a JSON tool-call from stdin and emits a JSON permission decision on stdout.
 
@@ -117,26 +116,26 @@ DENY_MESSAGES: dict[str, str] = {
     "npm": (
         "Global npm install is blocked. "
         "Use 'npx <cmd>' for one-off execution, add it as a project "
-        "devDependency, or manage it with mise if it is one of the "
-        "remaining mise-owned tools."
+        "devDependency, or use the repository's declared workstation "
+        "installer for a managed CLI tool."
     ),
     "yarn": (
         "Global yarn install is blocked. "
         "Use 'npx <cmd>' for one-off execution, add it as a project "
-        "devDependency, or manage it with mise if it is one of the "
-        "remaining mise-owned tools."
+        "devDependency, or use the repository's declared workstation "
+        "installer for a managed CLI tool."
     ),
     "pnpm": (
         "Global pnpm install is blocked. "
         "Use 'pnpm dlx <cmd>' or 'npx <cmd>' for one-off execution, "
-        "or add it as a project devDependency. pnpm/bun themselves are "
-        "installed directly (not via mise); see home/.chezmoidata.toml."
+        "or add it as a project devDependency. Managed CLI tools use the "
+        "repository's declared workstation installers."
     ),
     "bun": (
         "Global bun install is blocked. "
         "Use 'bunx <cmd>' for one-off execution, or add it as a project "
-        "devDependency. bun itself is installed directly (not via mise); "
-        "see home/.chezmoidata.toml."
+        "devDependency. Managed CLI tools use the repository's declared "
+        "workstation installers."
     ),
     "npm_link": (
         "npm link modifies the global node_modules. "

@@ -263,6 +263,16 @@ class TestNonShellToolsAllowed(unittest.TestCase):
         self.assertIsNone(nge.check_command("node script.js"))
 
 
+class TestInstallGuidance(unittest.TestCase):
+    def test_guidance_uses_project_local_or_declared_installers(self) -> None:
+        source = SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("mise", source.lower())
+        for message in nge.DENY_MESSAGES.values():
+            self.assertNotIn("mise", message.lower())
+        self.assertIn("devDependency", nge.DENY_MESSAGES["npm"])
+        self.assertIn("declared workstation installer", nge.DENY_MESSAGES["npm"])
+
+
 # ── Integration tests (stdin → stdout) ───────────────────────────────────
 
 

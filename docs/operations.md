@@ -1,6 +1,6 @@
 # Operations Guide
 
-`README.md` には日常的に使う操作だけを残し、このファイルには **このリポジトリ固有の運用** をまとめる。一般的な `chezmoi` / `mise` の使い方は各公式ドキュメントを参照。
+`README.md` には日常的に使う操作だけを残し、このファイルには **このリポジトリ固有の運用** をまとめる。一般的な `chezmoi` の使い方は公式ドキュメントを参照。
 
 ## ツールの管理境界
 
@@ -66,7 +66,7 @@ Go・Node.js・.NET SDK・Bun・pnpm・TypeScript CLI・TypeScript LSP 依存・
 
 Go と pnpm の版は、プロジェクト指定による別版の自動取得を無効にし、プロジェクト外で確認する。この設定は確認プロセスだけに適用し、通常の Go/pnpm の設定は変更しない。.NET もプロジェクト外で版を確認し、`global.json` による SDK 選択の影響を除く。
 
-直接導入する各ランタイムは、専用 root への実体配置に加えて POSIX (macOS/Linux/WSL) では主要コマンドへの symlink を `~/.local/bin` へ張る（`go`/`gofmt`、`node`/`npm`/`npx`、`dotnet`/`dnx`、`pnpm`、`tsc`、`tsserver`（typescript-lsp の npm 生成 launcher）、`typescript-language-server`）。置き換えるのは自身の入口と同名の旧 mise shim へのリンクだけで、管理外のファイルやリンクと衝突した場合は上書きせずに失敗する。payload が完全なのに symlink だけが欠落している場合は、再ダウンロードせずに symlink だけを復旧する。POSIX の `PATH` には専用 root を追加せず、`~/.local/bin` を残存する mise shims より前に置く。
+直接導入する各ランタイムは、専用 root への実体配置に加えて POSIX (macOS/Linux/WSL) では主要コマンドへの symlink を `~/.local/bin` へ張る（`go`/`gofmt`、`node`/`npm`/`npx`、`dotnet`/`dnx`、`pnpm`、`tsc`、`tsserver`（typescript-lsp の npm 生成 launcher）、`typescript-language-server`）。置き換えるのは自身が所有する入口だけで、管理外のファイルやリンクと衝突した場合は上書きせずに失敗する。旧構成からの一時的な置換許容、その意味、撤去条件は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を正本とする。payload が完全なのに symlink だけが欠落している場合は、再ダウンロードせずに symlink だけを復旧する。POSIX の `PATH` には専用 root を追加せず、公開コマンドは `~/.local/bin` から解決する。
 
 Windowsの言語ランタイムはSDKの探索規則に合わせて専用rootを使う。`run_once_after_05-setup-user-path.ps1` が次のディレクトリを、この順序でユーザー `Path` の先頭へ登録する。
 
@@ -78,9 +78,10 @@ Windowsの言語ランタイムはSDKの探索規則に合わせて専用rootを
 6. `%USERPROFILE%\.local\share\chezmoi-dotfiles\typescript-cli\node_modules\.bin`
 7. `%USERPROFILE%\.local\share\chezmoi-dotfiles\typescript-lsp\node_modules\.bin`
 8. `%USERPROFILE%\.local\share\chezmoi-dotfiles\typescript-language-server\node_modules\.bin`
-9. `%LOCALAPPDATA%\mise\shims`
 
 Go、Windows 版 Node.js、.NET SDK、pnpm と同梱の `dist`、各 npm prefix は公式配布構成のまま専用 root に保持する。Windows 版 Bun の `bunx.exe` は公式インストーラーと同じファイルコピーで提供する。ユーザー `Path` の変更は既存プロセスへ遡及しないため、新しいプロセスで確認する。GUI アプリが古い環境を保持している場合は、サインアウトまたは OS の再起動が必要になる。
+
+このスクリプトは新しい mise エントリを作らず、既存の User `Path` に残るエントリも削除しない。新規シェルで現行の入口だけが必要なことの確認と、既存端末から旧状態を清掃済みであることの確認は別の作業である。端末側の清掃条件は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
 ### OS packageが所有するCLIの入口
 
@@ -88,7 +89,9 @@ bat、fzf、ghq、gitleaks、lefthook、ripgrep、ShellCheck、zoxideは、macOS
 
 各ツールの通常 `run_after_` は、packageが所有する実体のCPU種別と版を確認し、`~/.local/bin` にnative symlinkを作る。macOSではHomebrewの安定したopt path、Windowsでは確認済みのユーザーpackageに対応するWinGet aliasを使い、実行時にpackage managerを起動しない。実体が適合していれば、入口の修復だけで通信は発生しない。Windowsのsymlink作成は、既存DSCのDeveloper Mode設定を前提とする。
 
-別packageやmiseの実体を、版が一致するという理由だけで受け入れない。管理外の入口と衝突した場合は保持して失敗する。OS packageの導入や更新はmanager側の処理であり、直接配置するバイナリと同じrollback保証は設けない。Windows arm64の互換実行範囲は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
+Windows の OS package 版 CLI は、`winget list`、`install`、`upgrade` に `--source winget` を指定し、User scope の package だけを照合する。実体は `%LOCALAPPDATA%\Microsoft\WinGet\Packages\<Id>_Microsoft.Winget.Source_8wekyb3d8bbwe` 配下に限定し、Machine scope や別 source の package は受け入れない。`winget list` が「該当なし」を返した場合だけ導入へ進み、それ以外のエラーでは停止する。通常の `run_after_` はローカルの所有者、版、CPU種別、入口を確認するだけで通信しない。
+
+別 package や管理外の実体を、版が一致するという理由だけで受け入れない。管理外の入口と衝突した場合は保持して失敗する。OS packageの導入や更新はmanager側の処理であり、直接配置するバイナリと同じrollback保証は設けない。Windows arm64の互換実行範囲は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
 ### 1Password CLIとgolangci-lint
 
@@ -114,18 +117,18 @@ Terraformでは、公開鍵、checksum list、detached signatureも検証する�
 
 ### cargo-makeの導入
 
-macOSではHomebrewの `cargo-make` と `makers` を検査し、両方の入口を `~/.local/bin` に作る。LinuxとWindowsのamd64では、固定した公式releaseの両実体を直接配置する。
+macOSではHomebrewの stable opt path にある `cargo-make` と `makers` を検査し、両方の入口を `~/.local/bin` に作る。LinuxとWindowsのamd64では、固定した公式releaseの両実体を直接配置する。
 
 LinuxとWindowsのARM64では、SHA-256を固定したcrateから既存のRustup/Cargoでビルドする。LinuxはOSスクリプトの `build-essential`、WindowsはDSCのVisual Studio 2022 Build ToolsとARM64 C++ componentを前提とする。ビルドには時間と依存取得の通信が必要だが、宣言版の両実体が既に適合していれば実行しない。対象範囲とsource buildを撤去する条件は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
-Windows ARM64ではnative Rust/MSVCとWindows SDKのARM64ライブラリを確認し、User scopeのCargoリンカー設定をビルドプロセスへ読み直す。プロセス内の環境変更は処理後に復元し、別CPUのcompilerへフォールバックしない。
+Windows ARM64では、既存のnative Rust/MSVCとWindows SDKだけをビルドプロセス内の限定環境へ初期化する。Developer PowerShell の `HostArch` 制約には依存しない。生成物は配置前に PE ヘッダーで ARM64 を確認し、別CPUのcompilerや成果物へフォールバックしない。プロセス内の環境変更は処理後に復元する。
 
-両実体は同じファイルシステムで版とCPUを確認してから配置する。二つの置換は単一の原子的操作ではないため、途中で失敗した場合は旧実体へ戻す。復元できない場合は回復用ファイルを残し、その場所を表示して非零終了する。
+両実体は同じファイルシステムでCPU種別を確認し、`cargo-make make --version` と `makers --version` で宣言版を検証してから配置する。二つの置換は単一の原子的操作ではないため、途中で失敗した場合は旧実体へ戻す。復元できない場合は回復用ファイルを残し、その場所を表示して非零終了する。
 
 ## その他のOS固有ツール
 
-- **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式 `.deb`、更新は `azd update`）
-- **copilot-cli**: mise の `github:` バックエンドで更新遅延やバージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式リリースアーカイブ、更新は `copilot update`）
+- **azure-dev**: macOS は `brew`、Windows は `winget`、Linux は固定した公式 `.deb` で管理する。更新は `azd update` を使う
+- **copilot-cli**: macOS は `brew`、Windows は `winget`、Linux は固定した公式リリースアーカイブで管理する。更新は `copilot update` を使う
 - **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
 
 ## gh-stack の更新
@@ -168,92 +171,9 @@ chezmoi edit ~/.zshrc   # または: vim "$(chezmoi source-path)/../home/dot_zsh
 chezmoi diff && chezmoi apply
 ```
 
-## mise の保守
-
-### 本体の導入元
-
-macOS と Linux は、`home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。Windows は DSC の `jdx.mise` を使い、winget が公式 GitHub Releases ZIP を配置する。導入経路は OS ごとに異なるが、全 OS で mise の公式成果物を使う（[ADR-027](adr/027-mise-install-from-official-artifacts-per-os.md)）。
-
-macOS に Homebrew formula の mise がある場合、現在解決される mise が formula の実体であるか、mise が未解決のときだけ、導入スクリプトは検証済みの公式バイナリを原子的に配置する。現在 `command -v mise` で解決される formula 以外の mise、または標準配置先 `~/.local/bin/mise` にある実行可能な mise は置き換えない。PATH 外の任意の場所は探索しない。現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、導入スクリプトは formula を削除しない。Homebrew 版の activation を読み込んだ既存のシェルをすべて終了し、新しいシェルで `command -v mise` が導入スクリプトの案内したパスを返すことを確認してから、`brew uninstall mise` を手動で実行する。
-
-### `mise-self-upgrade`
-
-Windows で mise 本体を winget 管理として更新する。
-
-```powershell
-mise-self-upgrade
-```
-
-このコマンドは `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、更新があった場合は続けて `mise reshim` を実行する。更新がない場合は正常終了する。winget portable package の symlink 判定により通常の upgrade が「変更済み」と誤検知されることがあるため、mise 本体の更新ではこの関数を使う。
-
-Copilot CLI など mise shim 経由のプロセスが動いていると winget が `mise.exe` を削除できないため、実行前に検出して停止を促す。
-
-### `mise-upgrade`
-
-zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、処理を始める前に既存 lockfile を退避してから次を一括実行する。
-
-1. `gh auth token` で一時トークンを取得
-2. 既存 lockfile を退避
-3. `mise upgrade`
-4. `minimum_release_age` の正規形警告と、`mise-versions ... fallback=true` の回復済み警告以外の `mise WARN` が出力された場合は、既存 lockfile を復元して停止
-5. 既存 lockfile を削除し、`mise lock --global --platform ...` で再生成
-6. `mise lock` が失敗した場合、または許可対象以外の `mise WARN` が出力された場合は、既存 lockfile を復元して停止
-7. `chezmoi re-add`
-8. git commit + push
-
-```bash
-mise-upgrade
-```
-
-### 対象プラットフォームの定義元
-
-対象プラットフォームは `~/.config/mise/config.toml` の `[settings] lockfile_platforms` が正本である。この設定は、auto-lock（`mise install` が実インストール後に走らせる書き戻し）と `--platform` を省略した `mise lock` が使う基準集合を決める。
-
-```toml
-[settings]
-lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", "windows-arm64"]
-```
-
-この設定には、運用上で把握しておくべき性質が四つある。
-
-- **厳密な許可リストではない。実行中のプラットフォームは設定値に無くても必ず加わる。** 上記に無い環境（musl 系の `linux-x64-musl` など）で `mise install` を実行すると、その環境の分だけエントリが増える。この dotfiles は macOS を Apple Silicon に限定しているため、`macos-x64` は集合に含めていない。
-- **明示した `--platform` が設定より優先される。** 別の集合を書きたいときは CLI で指定する。
-- **既存エントリは削除されない。** 設定を絞っても、すでに lockfile にあるプラットフォームはそのまま残る。不要なエントリを消すには lockfile を削除して再生成する。
-- **グローバル設定なので、他のリポジトリでの lockfile 操作にも及ぶ。** auto-lock が影響を受けるのは、そのリポジトリ自身が `lockfile = true` を有効にしている場合に限る（`lockfile = true` はグローバルからリポジトリへ波及しない）。一方、そのリポジトリで `mise lock` を明示実行した場合は、`lockfile = true` の有無に関わらずこの基準集合が使われる。
-
-### 手動操作の重要ルール
-
-- `mise lock` は **`--global` が必須**（省略するとプロジェクト設定のみ対象になる）
-- lockfile 再生成時は **`--platform` を常に指定**する。`lockfile_platforms` があっても省略しない。lockfile を削除してから再生成する破壊的操作であり、設定が読まれない状況（古い mise、設定ファイルの欠落）でも意図した集合になることを保証するため
-- `mise upgrade` 後は lockfile を一度削除してから再生成する（既存エントリが残り新版が反映されないため）
-- 両シェルとも、`minimum_release_age` の正規形に一致するリリース保留警告と、`mise-versions` が `fallback=true` を明示した回復済み警告だけを許可し、警告内容と継続理由を表示する
-- `mise-versions ... fallback=true` は、GitHub Releases などの取得失敗後に代替経路で処理を継続できたことを示す。一時的な `502 Bad Gateway` でも発生するため、この警告だけから `GITHUB_TOKEN` の期限切れとは判断しない
-- 両シェルとも、許可対象以外の `mise WARN` が出力された場合は、終了コードが `0` でも lockfile を復元し、commit と push を行わない。`fallback=false`、`fallback` 欠落、形式不明の警告は停止対象とする
-- 両シェルとも、`mise upgrade` または `mise lock` の失敗時は、更新処理を始める前の lockfile を復元する
-- 処理を停止した関数は、原因となった警告、lockfile の復元結果、実行ログの保存先を標準エラー出力へ表示する。運用者は表示されたログを確認して原因を特定する
-- PowerShell では `$env:GITHUB_TOKEN = (gh auth token); <cmd>; $env:GITHUB_TOKEN = $null` でトークンを渡し、`--platform` の値はクォートする
-
-### 典型コマンド
-
-```bash
-# mise upgrade + lockfile 再生成
-GITHUB_TOKEN=$(gh auth token) mise upgrade
-rm -f ~/.config/mise/mise.lock
-GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
-chezmoi re-add ~/.config/mise/mise.lock
-
-# ツール追加・削除
-chezmoi edit ~/.config/mise/config.toml
-GITHUB_TOKEN=$(gh auth token) mise install
-GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
-chezmoi re-add ~/.config/mise/config.toml ~/.config/mise/mise.lock
-```
-
-lockfile を削除して再生成したいケース: 新プラットフォーム追加、不要プラットフォーム除去、lockfile 破損。
-
 ## Rust toolchain の更新
 
-Rust toolchain は mise ではなく、全 OS で公式 rustup が管理する（[ADR-016](adr/016-rust-external-rustup.md)）。`mise-upgrade` と `Invoke-MiseUpgrade` は Rust toolchain を更新しない。
+Rust toolchain は全 OS で公式 rustup が管理する（[ADR-016](adr/016-rust-external-rustup.md)）。
 
 default toolchain として stable を使う環境では、次のコマンドで stable を更新する。
 
@@ -282,11 +202,11 @@ rustup show active-toolchain
 
 ## GitHub API と `GITHUB_TOKEN`
 
-`mise` は GitHub API を使うため、未認証だとレート制限に当たりやすい。
+GitHub Releases を参照する導入スクリプトは、未認証だと GitHub API のレート制限に当たりやすい。
 
 ```bash
 gh auth login
-GITHUB_TOKEN=$(gh auth token) mise install
+GITHUB_TOKEN=$(gh auth token) chezmoi apply
 ```
 
 `GITHUB_TOKEN` を `.zshrc` や `$PROFILE` に常駐させないこと。
@@ -298,7 +218,6 @@ GITHUB_TOKEN=$(gh auth token) mise install
 | 正本 | pin |
 |------|-----|
 | `install.sh` | `CHEZMOI_VERSION` とアーキテクチャ別 SHA-256 |
-| `home/run_once_before_20-install-mise.sh.tmpl` | `MISE_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_before_10-install-packages.sh.tmpl` | `COPILOT_VERSION`、`AZD_VERSION`、`RUSTUP_VERSION` と各プラットフォーム別 SHA-256、Microsoft 署名鍵の primary-key fingerprint |
 | `home/run_once_after_30-install-tools.sh.tmpl` | `DRAWIO_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_after_10-setup-shell.sh.tmpl` | `OH_MY_ZSH_COMMIT`、zsh-completions の更新確認用 `ZSH_COMPLETIONS_TAG` と取得を強制する `ZSH_COMPLETIONS_COMMIT` |
@@ -308,7 +227,7 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 初期セットアップ用の `run_once` スクリプトでは、ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
 
-`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。`home/.chezmoidata.toml` で宣言する jq と uv だけは例外であり、`run_after_26-install-jq` と `run_after_25-install-uv` が毎回の適用で宣言との一致を確認し、違う場合だけ入れ直す。macOS の Homebrew formula から公式バイナリへの移行も例外であり、解決される mise が formula の実体である場合、または mise が未解決の場合に移行処理を実行する。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
+`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。`home/.chezmoidata.toml` で宣言する通常の `run_after_` 対象は、毎回の適用で宣言との一致を確認し、違う場合だけ更新する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で対象の `run_once` 記録だけを消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
 最低限の確認:
 
@@ -316,7 +235,6 @@ GITHUB_TOKEN=$(gh auth token) mise install
 shellcheck install.sh
 sed '/^[[:space:]]*{{/d' home/run_once_before_10-install-packages.sh.tmpl | shellcheck -e SC1091 -
 sed '/^[[:space:]]*{{/d' home/run_once_before_10-install-packages.sh.tmpl | bash -n
-sed '/^[[:space:]]*{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
 sed '/^[[:space:]]*{{/d' home/run_once_after_10-setup-shell.sh.tmpl | shellcheck -e SC2034 -
 sed '/^[[:space:]]*{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
 sed '/^[[:space:]]*{{/d' home/run_once_after_30-install-tools.sh.tmpl | shellcheck -
@@ -368,17 +286,19 @@ PYTHONDONTWRITEBYTECODE=1 uv run -m unittest discover -s tests
 
 ## プラットフォーム契約の運用確認
 
-開発者は公開関数、alias、補完、ツール導入を変更した後、契約とmise設定の回帰検査を実行する。
+開発者は公開関数、alias、補完、ツール導入を変更した後、プラットフォーム契約と desired declaration の回帰検査を実行する。
 
 ```bash
-uv run -m unittest tests.test_platform_parity tests.test_mise_config -v
+uv run -m unittest tests.test_platform_parity -v
 ```
 
 CIはzshとpwshの存在を確認した後、全テストをdiscover形式で実行する。
 
+ローカルテストとテンプレート展開は実機での導入成功を保証しない。外部適用前の実機確認対象は macOS arm64、Windows x64、WSL2 x64、Linux arm64 Dev Container、Codespaces とする。Windows ARM64 は実機確認まで静的検査の範囲として扱う。
+
 ## git pre-commit フック
 
-テンプレートフックと設定ベースフックを更新するときは、対応する二つの起動スクリプトを同じ変更で編集する。配布方式と保証範囲は [ADR-018](adr/018-git-hooks-via-init-templatedir.md) と [ADR-020](adr/020-git-hooks-via-config.md) を参照する。
+テンプレートフックと設定ベースフックを更新するときは、対応する二つの起動スクリプトを同じ変更で編集する。どちらも管理対象の入口、OS package の安定した入口、PATH 上の実体の順に gitleaks を解決する。gitleaks が見つからない場合は警告して走査を省略し、解決した gitleaks の走査が失敗した場合は commit を拒否する。この失敗方針も二つのスクリプトで一致させる。配布方式と保証範囲は [ADR-018](adr/018-git-hooks-via-init-templatedir.md) と [ADR-020](adr/020-git-hooks-via-config.md) を参照する。
 
 ```bash
 chezmoi edit ~/.config/git/templates/hooks/pre-commit

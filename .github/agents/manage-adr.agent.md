@@ -80,7 +80,7 @@ stored memories に蓄積された判断のうち、永続的で重要なもの�
 1. `docs/adr/INDEX.md` から Status が `Accepted` の ADR を一覧する
 2. 各 ADR について、言及されている構成が以下に実在するか確認する:
    - `home/`（chezmoi テンプレート）
-   - `home/dot_config/mise/`（mise 設定）
+   - `home/.chezmoidata.toml` と `home/run_*`（ツールの desired declaration と導入処理）
    - `home/private_dot_copilot/hooks/`（Copilot フック）
    - `tests/`
    - `install.sh` / `reference/`

@@ -665,7 +665,6 @@ _SAFE_VARIABLES: frozenset[str] = frozenset({
     "uid", "euid", "groups",
     "browser", "http_proxy", "https_proxy", "no_proxy",
     "ftp_proxy", "all_proxy",
-    "mise_shell",
     "_",  # last command
 })
 

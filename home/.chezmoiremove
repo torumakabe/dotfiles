@@ -1,5 +1,4 @@
 # Remove legacy config files superseded by new locations
-.mise.toml
 # Superseded by ~/.config/git/templates/hooks/pre-commit + init.templateDir (ADR-018)
 .config/git/hooks/pre-commit
 # Superseded by personal-skills@torumakabe-agent-plugins

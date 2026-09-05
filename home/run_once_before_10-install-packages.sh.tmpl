@@ -4,9 +4,9 @@ set -euo pipefail
 
 # System packages — runs once before chezmoi applies dotfiles
 # Order dependency:
-# - Keep this before run_once_before_20-install-mise so git/zsh/curl are available first.
-# - When changing packages here, confirm the later shell setup and mise bootstrap still
-#   have the commands they expect on each platform.
+# - Keep this before later user-level installers so git/zsh/curl are available first.
+# - When changing packages here, confirm later shell setup and installers still have
+#   the commands they expect on each platform.
 export DEBIAN_FRONTEND=noninteractive
 
 download_file() {
@@ -193,8 +193,8 @@ git_unshadow() {
 git_unshadow /usr/local/bin /usr/bin
 
 {{ end -}}
-# Copilot CLI — mise の github: バックエンドでは更新が遅れるため、
-# 公式リリースを checksum 検証して導入し、更新は copilot update で行う
+# Copilot CLI — 公式リリースを checksum 検証して導入し、
+# 更新は copilot update で行う
 # 判定に command -v を使わない: Codespaces / Dev Container のベースイメージには
 # /usr/local/bin/copilot が同梱されていることがあり、これを検出すると自前の導入が
 # スキップされ、copilot update の対象外の古いバイナリが使われ続ける。
@@ -237,7 +237,7 @@ if [ ! -x "${HOME}/.local/bin/copilot" ]; then
   )
 fi
 
-# GitHub CLI — mise install 前にトークン取得手段を確保する
+# GitHub CLI — 後続のGitHub APIを使う導入処理より先にトークン取得手段を確保する
 # Codespaces もカスタム Dev Container のベースイメージに gh がない場合があるため、
 # 他の Linux 環境と同じ apt 経路を使う。既存の apt 版が最小版以上なら更新しない。
 vendor_gh="$(apt_gh_path || true)"
@@ -455,9 +455,8 @@ if ! command -v az >/dev/null 2>&1; then
   )
 fi
 
-# Azure Developer CLI — 固定した公式 .deb を checksum 検証して導入する
-# github: バックエンドはバイナリ名を正規化しないため、macOS (brew) / Windows (winget) と同様に
-# mise 外で管理する。更新は azd update で行う
+# Azure Developer CLI — 固定した公式 .deb を checksum 検証して導入する。
+# 更新は azd update で行う
 if ! command -v azd >/dev/null 2>&1; then
   AZD_VERSION="1.31.1"
   case "$(dpkg --print-architecture)" in
@@ -757,7 +756,7 @@ for p3_spec in "${P3_HOMEBREW_SPECS[@]}"; do
 done
 # <<< p3-homebrew
 
-# gh: mise install 前にトークン取得手段を確保する。導入と更新は Homebrew が所有し、
+# gh: 後続のGitHub APIを使う導入処理より先にトークン取得手段を確保する。導入と更新は Homebrew が所有し、
 # 未導入か最小版未満のときだけ操作する。最小版以上の版は更新しない。
 vendor_gh="$(homebrew_gh_path || true)"
 if ! gh_meets_minimum "${vendor_gh}"; then
@@ -775,7 +774,7 @@ fi
 {{ end -}}
 
 # Rust — rust-toolchain.toml を持つプロジェクトでの version pinning を機能させるため、
-# mise ではなく公式インストーラー (rustup) で管理する。詳細: docs/adr/016-rust-external-rustup.md
+# 公式インストーラー (rustup) で管理する。詳細: docs/adr/016-rust-external-rustup.md
 if ! command -v rustup >/dev/null 2>&1; then
   RUSTUP_VERSION="1.29.0"
   case "$(uname -s)-$(uname -m)" in

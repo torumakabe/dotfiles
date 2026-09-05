@@ -27,21 +27,13 @@
 
 ## chezmoi 操作のトラップ
 
-- `private_` は属性でありターゲット名から除かれる。ソースの `private_mise.lock` はデプロイ先で `mise.lock` になる。文書ではどちらを指すかで表記を使い分ける
 - `chezmoi execute-template --init` の `--stdinisatty` は既定 true で、実際の stdin を見ない。非対話経路を検査するテストでは明示的に渡す。詳細は `tests/test_chezmoi_config_template.py` の `ConfigTemplateBehaviourTests` docstring
-
-## mise 操作のトラップ
-
-- グローバル設定の lockfile を操作する `mise lock` では **`--global`** と **`--platform`** を必ず指定する。理由と対象プラットフォームは [`docs/operations.md`](../docs/operations.md#手動操作の重要ルール) を参照する
-- lockfile を書き戻すのは `mise lock` だけではない。`lockfile = true` のもとで `mise install` が実インストールを行うと、対象ツールのエントリを auto-lock が書き直す。基準集合は `[settings] lockfile_platforms`（`home/dot_config/mise/config.toml.tmpl`）が正本であり、プラットフォームを増減するときはここを変更する。ただし実行中のプラットフォームは設定に関わらず常に加わり、既存エントリは削除されない
-- 同じツールとバージョンを維持したまま backend を変更すると、mise は既存の install path をインストール済みと判定し、新しい backend で再インストールしない場合がある。backend を変更した端末では、`mise install --force <tool>` または `mise uninstall <tool>@<version>` と `mise install <tool>` を一度実行する。バージョンも同時に変更し、新しい install path へ通常の `mise install` が実行される場合、この操作は不要
-- backend 移行はコマンドの終了だけで完了と判断しない。`mise ls <tool>` が `missing` を表示しないこと、`mise which <tool>` が新 backend の実体を返すこと、`<tool> --version` 等の実行確認が成功することを確認する。force install が失敗した場合は `reshim` や auto-install の無効化で回避せず、backend 固有の install path と検証コマンドを調査する
 
 ## ワークアラウンド（定期チェック対象）
 
+- **旧 mise 由来の端末状態**: 現行構成は mise を導入、設定、activation、shim 生成に使用しない。一方、個別インストーラーは移行時の所有者保護として、自身の入口と同名で既知の旧 mise 実体を指す symlink だけを置換できる。この判定は実行時依存ではない。既存プロセスの activation と継承済み PATH、端末上の mise 本体、設定、shim、state、Windows の既存 User `Path` エントリは自動削除しない。macOS の旧 shim 生成処理が残した `${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-links` も移行証拠として保持する。管理対象端末の inventory と dry-run で所有関係を確認し、利用者が清掃を別途承認した後にだけ、端末側の状態と個別インストーラーの旧リンク受け入れを撤去する
 - **cargo-makeのARM64 source build**: `home/run_after_62-install-cargo-make.{sh,ps1}.tmpl` は、LinuxとWindowsのARM64向け公式release assetがないため、`home/.chezmoidata.toml` の `cargoMake.source` に固定したcrateを検証し、既存Rustup/Cargoとnative C toolchainでビルドする。対象OS/CPUで宣言版の検証可能な公式assetが提供されたら、その対象のsource build処理と専用の前提条件、関連テストを公式asset導入へ置き換える。Rustupや、他のRustビルドでも使うMSVCリンカー設定は一括撤去しない
 - **Windows arm64 の公式配布物不足**: Windows arm64 では、cosign、Trivy、1Password CLI、ShellCheckの公式 amd64 実行ファイルを互換実行する。Terraform 本体は arm64 版を使うが、署名検証用の Git GPG ヘルパーには検証済みの amd64 版を使う。対象範囲は `home/.chezmoidata.toml` の `cosign.assets.windows-arm64.emulated`、`trivy.assets.windows-arm64.emulated`、`onePassword.assets.windows-arm64.emulated`、`shellcheck.winget.platforms.windows-arm64.emulated`、`terraform.verification.windowsArm64GpgEmulated` が `true` の経路に限る。GPGの例外はTerraformの署名検証だけに使用する。各対象について、宣言版（OS packageは最低版以上）の公式 Windows arm64 配布物、または検証済みの arm64 対応 Git GPG ヘルパーが利用可能になった時点で、その対象の例外と関連テストを撤去する
-- **Homebrew formula 版 mise の移行案内 (ADR-027)**: `home/run_once_before_20-install-mise.sh.tmpl` は macOS で Homebrew formula 版を検出し、検証済みの公式バイナリを配置する。既存の各シェルが Homebrew の絶対パスを含む activation hook を保持するためformulaは削除せず、対象シェルをすべて終了または公式activationへ更新し、案内した実体パスを確認してから手動削除するよう案内する。管理対象の macOS 端末で移行が完了し、`brew list --formula mise` が mise を返さないことを確認できたら、Homebrew の検出、既存バイナリとの調停、移行案内と関連テストを撤去する。公式バイナリの導入処理は残す
 - **azure-deploy のプロジェクト内 `.azure` 参照**: `home/private_dot_copilot/hooks/allowed-files.txt` は、`microsoft/azure-skills` の `azure-deploy` が直接読み書きする `.azure/deployment-plan.md` だけを Copilot Guard の拒否対象から除外する。ホームの `~/.azure` と、`azd` が内部管理する `.azure/<environment-name>/.env`、`.azure/config.json` は除外しない。PreToolUse がスキル識別子を提供し、呼び出し元を限定できるようになった場合、または上流スキルが `.azure/deployment-plan.md` を直接扱わなくなった場合は、この規則と関連テストを撤去する
 - **op-ssh-sign-wsl.exe CRLF (ADR-012)**: `home/dot_local/bin/executable_op-ssh-sign-wrapper.sh.tmpl` で stdout/stderr の CR を剥がしている。1Password が WSL バイナリの改行を LF に揃えた場合、または全対応 WSL 経路で Git 2.36 以上を保証できるようになった場合は、wrapper と `.gitconfig-linux` の `program` 切替を撤去する
 - **git の張り替え (ADR-020)**: `home/run_once_before_10-install-packages.sh.tmpl` の `git_unshadow` が、Codespaces と Dev Container のベースイメージが `/usr/local/bin` へソースビルドした古い git を `/usr/bin` の PPA 版へ symlink で張り替えている。ADR-020 の設定ベースフックが git 2.54 以上を要求するためである。対象イメージの `/usr/local/bin/git` がすべて 2.54 以上になったら、関数と呼び出しを撤去する（`devcontainers/base:ubuntu` は 2.55.0 で条件を満たす。Codespaces universal 5.1.5 は 2.53.0 で満たさない）

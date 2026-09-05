@@ -211,6 +211,7 @@ class DeclarationTests(unittest.TestCase):
         self.assertIn("Microsoft.VisualStudio.Component.VC.Tools.ARM64", dsc)
         self.assertIn(r"HostARM64\ARM64\link.exe", resolver)
         self.assertIn("CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER", resolver)
+        self.assertNotIn("jdx.mise", dsc)
 
     def test_apt_block_is_pinned_and_non_destructive(self) -> None:
         source = (SOURCE_ROOT / "run_once_before_10-install-packages.sh.tmpl").read_text()

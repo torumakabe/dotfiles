@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted
+Deprecated
 
 ## Context
+
+mise の設定と lockfile を撤去し、対象プラットフォームの固定も不要になったため、本 ADR を廃止した。現在の導入方針は [ADR-028](028-remove-mise-use-official-per-tool-install-paths.md) を参照。以下は採用当時の記録であり、現在の操作手順ではない。
 
 Codespace で `chezmoi status` が `MM .config/mise/mise.lock` を示し、`chezmoi apply` が「has changed since chezmoi last wrote it?」と問い合わせて TTY の無い環境で停止した。差分の方向を確認すると、source（`home/dot_config/mise/private_mise.lock`）は git クリーンで、デプロイ済みの `~/.config/mise/mise.lock` に 129 行のプラットフォームエントリ（`linux-arm64-musl`、`linux-x64-baseline`、`linux-x64-musl`、`linux-x64-musl-baseline`、`windows-x64-baseline`）が追加されていた。バージョンと既存 URL は変わらず、source は deployed の厳密な部分集合だった。
 

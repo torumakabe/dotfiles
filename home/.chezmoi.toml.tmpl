@@ -55,12 +55,9 @@
   windowsUser = {{ $windowsUser | quote }}
   corpUser = {{ $corpUser | quote }}
 
-# chezmoi の既定は `pwsh -NoLogo -File` で、プロファイルを読む。すると
-# `mise activate pwsh` が登録する CommandNotFound ハンドラが有効になり、
-# ハンドラ本体が参照する PSReadLine の型は非対話 pwsh に存在しないため、
-# スクリプトが見つからないコマンドを引くたびに InvalidOperation が出る。
-# スクリプトはプロファイルの関数や PATH 追加に依存しない（~/.local/bin と
-# mise shims は run_once_after_05-setup-user-path が User PATH へ永続登録する）。
+# chezmoi のスクリプトは、利用者の PowerShell profile に定義された関数、
+# CommandNotFound ハンドラ、PATH 変更へ依存しない。非対話実行へ対話用profileの
+# 副作用を持ち込まず、管理下の実体を明示的に参照できるよう -NoProfile を使う。
 [interpreters.ps1]
   command = "pwsh"
   args = ["-NoLogo", "-NoProfile", "-File"]

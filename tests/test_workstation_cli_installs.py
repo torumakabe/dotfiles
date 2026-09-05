@@ -300,7 +300,8 @@ try {{
         self.assertIn("ghq list -p | fzf", zsh)
         self.assertIn("ghq list -p | fzf", powershell)
         self.assertIn("_cached_source zoxide zoxide", zsh)
-        self.assertIn("command -v gitleaks", hook)
+        self.assertIn('"${home_root}/.local/bin/gitleaks"', hook)
+        self.assertIn('"${home_root}/.local/bin/gitleaks.exe"', hook)
         self.assertIn("git --pre-commit --staged", hook)
 
     @unittest.skipUnless(PWSH, "pwsh is unavailable; Windows parser checks skipped")

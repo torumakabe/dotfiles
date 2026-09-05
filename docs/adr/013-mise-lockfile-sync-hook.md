@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted
+Deprecated
 
 ## Context
+
+mise lockfile と install / reshim の同期フックを撤去したため、本 ADR を廃止した。現在の導入方針は [ADR-028](028-remove-mise-use-official-per-tool-install-paths.md) を参照。以下は採用当時の記録であり、現在の操作手順ではない。
 
 `mise upgrade` 等で `~/.config/mise/mise.lock` が更新されても、ローカルの `mise install` / `mise reshim` は自動で走らない。結果として shim と install marker が古いまま残り、shell 起動時の `_mise_hook`（`mise hook-env`）で `mise WARN missing:` が出る。Windows では `installs\<tool>\<ver>` が junction として作られるため shim が一度欠落すると復元されにくく、`MISE_AUTO_INSTALL=true`（既定）により毎起動で再 install が試みられて rustup の `info: syncing channel updates ...` も繰り返し表示される。
 

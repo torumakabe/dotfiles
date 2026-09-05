@@ -47,6 +47,7 @@ TS_LSP_SH = SOURCE_ROOT / "run_after_22-install-typescript-lsp.sh.tmpl"
 TS_LSP_PS1 = SOURCE_ROOT / "run_after_22-install-typescript-lsp.ps1.tmpl"
 TSLS_SH = SOURCE_ROOT / "run_after_23-install-typescript-language-server.sh.tmpl"
 TSLS_PS1 = SOURCE_ROOT / "run_after_23-install-typescript-language-server.ps1.tmpl"
+LSP_CONFIG = SOURCE_ROOT / "private_dot_copilot/lsp-config.json.tmpl"
 
 ALL_RUNTIME_SCRIPTS = (
     GO_SH, GO_PS1, NODE_SH, NODE_PS1, DOTNET_SH, DOTNET_PS1,
@@ -321,37 +322,25 @@ class DeclarationTests(unittest.TestCase):
         self.assertNotIn('"typescript@', tsls_source)
         self.assertIn('"typescript-language-server@${tsls_version}"', tsls_source)
 
-    def test_mise_shim_link_script_excludes_migrated_p1_binary_names(self) -> None:
-        """P1 移行後に mise shims ディレクトリへ残り得る古い shim を
-
-        誤って ~/.local/bin へ symlink しないよう、移行済みツールが公開して
-        いたバイナリ名を EXCLUDE_EXACT へ列挙しておく必要がある。列挙漏れが
-        あると、GUI 起動プロセス (~/.local/bin のみを PATH に含む) から古い
-        mise 管理版が復活して見える。
-        """
-        link_script = SOURCE_ROOT / "run_onchange_after_21-link-mise-shims.sh.tmpl"
-        source = link_script.read_text(encoding="utf-8")
-        match = re.search(r"EXCLUDE_EXACT=\((.*?)\)", source, re.DOTALL)
-        self.assertIsNotNone(match, "EXCLUDE_EXACT array not found")
-        excluded = set(match.group(1).split())
-
-        expected_p1_binary_names = {
-            "go", "gofmt",
-            "node", "npm", "npx",
-            "dotnet", "dnx",
-            "pnpm",
-            "bun", "bunx",
-            "tsc", "tsserver", "typescript-language-server",
-        }
-        missing = expected_p1_binary_names - excluded
-        self.assertEqual(set(), missing)
-
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 class InstallerRenderingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.data = _load_data()
+
+    def test_lsp_config_uses_the_stable_dedicated_tsserver_path(self) -> None:
+        os_name = "windows" if os.name == "nt" else "linux"
+        expected_suffix = (
+            r"typescript-lsp\node_modules\typescript\lib\tsserver.js"
+            if os.name == "nt"
+            else "typescript-lsp/node_modules/typescript/lib/tsserver.js"
+        )
+        rendered = json.loads(_render(LSP_CONFIG, os_name, "amd64"))
+        path = rendered["lspServers"]["typescript"]["initializationOptions"][
+            "tsserver"
+        ]["path"]
+        self.assertTrue(path.endswith(expected_suffix), path)
 
     def test_archive_installers_refuse_unsupported_platforms(self) -> None:
         """darwin-amd64 (Intel Mac) は宣言に無いため、別 CPU へ落とさず警告して終わる。"""

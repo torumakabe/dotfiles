@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted
+Deprecated
 
 ## Context
+
+mise shim のリンク生成を撤去し、除外パターンも不要になったため、本 ADR を廃止した。現在の導入方針は [ADR-028](028-remove-mise-use-official-per-tool-install-paths.md) を参照。以下は採用当時の記録であり、現在の操作手順ではない。
 
 ADR-002 で mise shim を `~/.local/bin` に symlink する方針を採用したが、当初は allowlist 方式（リンクするツール名を明示列挙）だった。mise で管理するツールが増えるたびにリストを更新する必要があり、追従漏れが頻発した。
 

@@ -11,11 +11,10 @@ ADR-012 op-ssh-sign paths, so losing them breaks commit signing silently.
 The fix seeds each variable from the current config data before the guard.
 These tests pin both the source shape and the observable behaviour.
 
-The template also pins the ``.ps1`` interpreter (ADR-023). chezmoi defaults to
-``pwsh -NoLogo -File``, which loads the profile, which activates mise, whose
-CommandNotFound handler dereferences a PSReadLine type that a non-interactive
-pwsh does not have. Every failed command lookup inside a script then prints an
-InvalidOperation error, so ``-NoProfile`` has to stay in the argument list.
+The template also pins the ``.ps1`` interpreter (ADR-023). Chezmoi defaults to
+``pwsh -NoLogo -File``, which loads the interactive profile and can introduce
+functions, command handlers, or PATH changes into otherwise deterministic
+scripts. ``-NoProfile`` keeps those user-session side effects out.
 """
 
 import os

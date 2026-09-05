@@ -116,7 +116,7 @@ class CopilotCliInstallTests(unittest.TestCase):
         )
         install_block = self.bootstrap[
             self.bootstrap.index("if ! download_file", self.bootstrap.index("COPILOT_VERSION")):
-            self.bootstrap.index("# GitHub CLI — mise install 前に")
+            self.bootstrap.index("# GitHub CLI")
         ]
         self.assertLess(
             install_block.index("Warning: failed to download GitHub Copilot CLI"),
@@ -243,22 +243,22 @@ class CopilotCliInstallTests(unittest.TestCase):
 
     def test_download_failures_warn_and_checksums_fail_closed(self) -> None:
         cases = (
-            (self.bootstrap, "GitHub Copilot CLI"),
-            (self.bootstrap, "Azure Developer CLI"),
-            (self.bootstrap, "rustup-init"),
-            (self.tools, "draw.io"),
+            (self.bootstrap, "GitHub Copilot CLI", "${copilot_archive}"),
+            (self.bootstrap, "Azure Developer CLI", "Azure Developer CLI"),
+            (self.bootstrap, "rustup-init", "rustup-init"),
+            (self.tools, "draw.io", "${deb_name}"),
         )
-        for source, name in cases:
+        for source, name, payload in cases:
             with self.subTest(name=name):
                 self.assertRegex(
                     source,
                     rf"(?s)Warning: failed to download {re.escape(name)}.*?exit 0",
                 )
-        self.assertEqual(
-            self.bootstrap.count("checksum verification failed"),
-            3,
-        )
-        self.assertEqual(self.tools.count("checksum verification failed"), 1)
+                self.assertRegex(
+                    source,
+                    rf'echo "error: checksum verification failed for '
+                    rf'{re.escape(payload)}" >&2[ \t]*\n[ \t]*exit 1',
+                )
 
     def test_shell_git_dependencies_use_verified_commits(self) -> None:
         self.assertIsNotNone(

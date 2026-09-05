@@ -12,11 +12,10 @@ home/                           ← chezmoi source
 ├── .chezmoidata.toml            ← 望ましい版・最小版・公式 asset の宣言
 ├── dot_gitconfig*.tmpl         ← Git 設定
 ├── dot_zshrc.tmpl              ← 対話 zsh
-├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
+├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv）
 ├── dot_{zprofile,zshenv,bash_profile,bashrc}.tmpl ← 全て ~/.profile を source
 ├── dot_config/git/templates/hooks/executable_pre-commit  ← gitleaks (init.templateDir 経由)
 ├── dot_local/bin/executable_gitleaks-pre-commit          ← gitleaks (設定ベースフック経由)
-├── dot_config/mise/{config.toml.tmpl,private_mise.lock}
 ├── PowerShell_profile.ps1.tmpl
 ├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp, skills）
 └── run_once_{before,after}_*   ← bootstrap スクリプト
@@ -45,7 +44,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 5. `git commit` の明示承認
 
 パス比較前に `\` を `/` へ正規化する。`allowed-files.txt` は、ワイルドカードのない単一のプロジェクト相対パスを `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。読み取り専用の `rg` と `glob` にも例外を適用するが、検索フィルターはワイルドカードのない許可パスに限定し、明示された検索ルートがすべてプロジェクト内にあることを確認する。シンボリックリンク、ジャンクション、file URI、`..` を含むパス、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
-各 command hook は `~/.local/bin/uv` 経由の `uv run` で起動する。`uv` は mise の管理外にあり、shim もバージョン解決も挟まないため、他ツールの missing 状態はフックの終了状態へ影響しない。
+各 command hook は `~/.local/bin/uv` 経由の `uv run` で起動する。ツール管理機構による shim やバージョン解決を挟まないため、他ツールの導入状態はフックの終了状態へ影響しない。
 
 Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
 
@@ -57,7 +56,7 @@ Copilot CLI local sandbox は user-level settings で管理し、未設定時の
 
 gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテンプレートフックと、リポジトリ内のフックとは別に動く設定ベースフックの二層で構成する。テンプレートフックは他のフック管理ツールへの影響をリポジトリ内へ限定し、設定ベースフックはリポジトリの作成時期やローカルフックの置換に依存しない走査を担う。両者の判断と保証範囲は [ADR-018](adr/018-git-hooks-via-init-templatedir.md) と [ADR-020](adr/020-git-hooks-via-config.md) を参照する。
 
-二つの起動スクリプトは別ファイルとして管理し、走査ロジックの一致をテストで検査する。更新と確認は [`operations.md`](operations.md#git-pre-commit-フック)、症状別の復旧は [`troubleshooting.md`](troubleshooting.md#新規リポジトリに-gitleaks-pre-commit-hook-が入らない) を参照する。
+二つの起動スクリプトは別ファイルとして管理し、gitleaks の解決順と走査ロジックの一致をテストで検査する。管理対象の入口、OS package の安定した入口、PATH 上の実体の順に解決する。gitleaks が見つからない場合は警告して走査を省略し、解決した gitleaks の走査が失敗した場合は commit を拒否する。更新と確認は [`operations.md`](operations.md#git-pre-commit-フック)、症状別の復旧は [`troubleshooting.md`](troubleshooting.md#新規リポジトリに-gitleaks-pre-commit-hook-が入らない) を参照する。
 
 ## プラットフォーム検出
 
@@ -77,7 +76,7 @@ gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテ�
 
 理由付き例外は次のとおりである。
 
-- Windows の `e` は、Microsoft Edit を winget/DSC で管理する Windows 固有機能である（ADR-011）。`mise-self-upgrade` も winget 管理の mise を更新するため Windows 固有である
+- Windows の `e` は、Microsoft Edit を winget/DSC で管理する Windows 固有機能である（ADR-011）
 - Terraform は公式の PowerShell completion を提供していないため、補完はzshだけで提供する
 - RadicleはWindows向け公式配布を確認できないため、`rad` の補完はzshだけで提供する
 - bubblewrap は Linux と WSL の sandbox backend に必要である。macOS は Seatbelt、Windows は ProcessContainer を使うため導入しない
@@ -96,22 +95,21 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 ## PATH 管理（非対話シェル対応）
 
-POSIX の非対話シェル（Copilot CLI エージェント、IDE、スクリプト）では `.zshrc` が読まれず、mise / brew 管理ツールが PATH から欠落する。対策として **POSIX 互換の `~/.profile` に共通 env を集約**し、各シェル起動ファイルから source する。
+POSIX の非対話シェル（Copilot CLI エージェント、IDE、スクリプト）では `.zshrc` が読まれず、`~/.local/bin` や Homebrew のコマンドが PATH から欠落する。対策として **POSIX 互換の `~/.profile` に共通 env を集約**し、各シェル起動ファイルから source する。
 
-`~/.local/bin` は全プラットフォームで残存する mise shims より前に置く。POSIX では、公式インストーラーが置いた実体（`uv` / `uvx` / `jq` / `bun`）、ベンダー実体への入口（`gh`）、専用 payload root にある公開コマンドへの symlink を `~/.local/bin` に集約する。Go、Node.js、.NET SDK、pnpm、TypeScript CLI、typescript-lsp、typescript-language-server の専用 root は POSIX の `PATH` へ追加しない。
+`~/.local/bin` は全プラットフォームで利用者向けコマンドの先頭に置く。POSIX では、公式インストーラーが置いた実体（`uv` / `uvx` / `jq` / `bun`）、ベンダー実体への入口（`gh`）、専用 payload root にある公開コマンドへの symlink を `~/.local/bin` に集約する。Go、Node.js、.NET SDK、pnpm、TypeScript CLI、typescript-lsp、typescript-language-server の専用 root は POSIX の `PATH` へ追加しない。
 
 | OS | 仕込み先 | 内容 |
 |----|---------|------|
-| Unix 共通 | `~/.profile` | brew shellenv、`GOPATH`、`~/go/bin` / `~/.cargo/bin` / mise shims / `~/.local/bin` をこの順で先頭へ移す（最後が最優先）。`__DOTFILES_PROFILE_LOADED` で再実行抑止 |
+| Unix 共通 | `~/.profile` | brew shellenv、`GOPATH`、`~/go/bin` / `~/.cargo/bin` / `~/.local/bin` をこの順で先頭へ移す（最後が最優先）。`__DOTFILES_PROFILE_LOADED` で再実行抑止 |
 | Unix 共通 | `~/.zprofile` / `~/.zshenv` / `~/.bash_profile` / `~/.bashrc` | いずれも `~/.profile` を source（login / 非login / 対話 bash を網羅） |
-| macOS のみ | `~/.local/bin/<tool>` への mise shim symlink | `run_onchange_after_21-link-mise-shims.sh` が自動生成 |
-| Windows | ユーザー環境変数 `Path` | `run_once_after_05-setup-user-path` が `%USERPROFILE%\.local\bin`、`%USERPROFILE%\.local\share\chezmoi-dotfiles` 配下の `go\bin`、`node`、`dotnet`、`pnpm`、三つの TypeScript 用 `node_modules\.bin`、`%LOCALAPPDATA%\mise\shims` の順に先頭へ置く。比較時は `\` を `/` へ正規化して大小文字を無視し、重複を畳む。完全な一覧は [`operations.md`](operations.md#ツールごとの導入経路) に示す |
+| Windows | ユーザー環境変数 `Path` | `run_once_after_05-setup-user-path` が `%USERPROFILE%\.local\bin` と、`%USERPROFILE%\.local\share\chezmoi-dotfiles` 配下の言語 SDK、pnpm、TypeScript 用ディレクトリを先頭へ置く。比較時は `\` を `/` へ正規化して大小文字を無視し、重複を畳む。完全な一覧は [`operations.md`](operations.md#ツールごとの導入経路) に示す |
 
 ### 各シェルの読み込み経路
 
 `sh` / `bash(login)` は `.profile` を直接、`zsh(login)` は `.zprofile`、`zsh(非login)` は `.zshenv`、`bash(interactive non-login)` は `.bashrc` のみ読む。いずれからも `~/.profile` に誘導することで PATH が揃う。`bash -c` 等の非対話は親から env 継承する。
 
-ただし macOS の login zsh では、並び順までは揃わない。`~/.zshenv` が `~/.profile` を読んだ後に `/etc/zprofile` が `path_helper` を実行し、`/etc/paths` に載るシステムディレクトリを先頭へ、それ以外を末尾へ移す。`~/.profile` は `__DOTFILES_PROFILE_LOADED` により再実行されないため、`~/.local/bin` や mise shims は `/usr/bin` より後ろに置かれたままになる。
+ただし macOS の login zsh では、並び順までは揃わない。`~/.zshenv` が `~/.profile` を読んだ後に `/etc/zprofile` が `path_helper` を実行し、`/etc/paths` に載るシステムディレクトリを先頭へ、それ以外を末尾へ移す。`~/.profile` は `__DOTFILES_PROFILE_LOADED` により再実行されないため、`~/.local/bin` は `/usr/bin` より後ろに置かれたままになる。
 
 `~/.zprofile` はこのうち `/opt/homebrew/opt/git/bin` だけを先頭へ戻す。gitleaks の設定ベースフックが git 2.54 以降を必要とするためである（ADR-020）。他のディレクトリを戻さないのは、システムツール全般を shadow したときの影響範囲を限定するためである。
 
@@ -119,13 +117,14 @@ POSIX の非対話シェル（Copilot CLI エージェント、IDE、スクリ�
 
 Dock / Spotlight / GitHub Desktop から起動された子プロセスは launchd 既定 PATH しか継承しない。特に **GitHub Desktop の Copilot SDK は `bash --norc --noprofile` で bash を spawn し、親が独自の hardcoded PATH を組む**ため、`.bashrc` / `BASH_ENV` / `launchctl setenv` では PATH を注入できない。この経路に含まれる `~/.local/bin` へ各ツールの導入スクリプトが実体またはnative symlinkを配置し、shell初期化や汎用managerの起動を挟まずにコマンドを解決する。
 
-- `run_onchange_after_21-link-mise-shims.sh` は引き続き存在するが、個別導入するコマンドは `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` により対象外とする。既存のstate file (`${XDG_STATE_HOME}/chezmoi-dotfiles/mise-shim-links`) は、このスクリプトが作ったsymlinkだけを識別するための記録であり、新しい導入方式では使わない。手動で作ったリンクをこの記録へ追加しない
 - **POSIX (macOS/Linux/WSL)**: Go、Node.js、.NET SDK、pnpm、TypeScript CLI、typescript-lsp、typescript-language-server は専用 root (`~/.local/share/chezmoi-dotfiles/<tool>`) に payload を置き、各導入スクリプトが主要コマンド (`go`/`gofmt`、`node`/`npm`/`npx`、`dotnet`/`dnx`、`pnpm`、`tsc`、`tsserver`、`typescript-language-server`) への symlink を `~/.local/bin` へ張る。したがって `~/.profile` を経由しない GUI 起動プロセスからも `~/.local/bin` 経由で bare コマンド名のまま解決できる
 - **Windowsの言語ランタイム**: 公式配布物の実行ファイルまたは npm が生成した launcher を含む専用ディレクトリをユーザー `Path` へ登録する。`pwsh -NoProfile` は PowerShell Profile を読まないが、親プロセスから継承したユーザー `Path` は削除しない。既存プロセスは変更前の環境を保持するため、新しいプロセスで確認する。GUI アプリが古い環境を保持している場合は、サインアウトまたは OS の再起動が必要になる
 
+旧構成が端末へ残した activation、PATH、symlink、state は現行構成の実行要件ではなく、自動削除もしない。移行時の所有者保護と撤去条件は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を正本とする。
+
 ### ツールごとの導入構造
 
-CLIとランタイムはツールごとの公式導入経路で導入する（ADR-028）。個別の対象、導入経路、更新手順は [`operations.md`](operations.md#ツールの管理境界) を参照する。miseの設定とlockfileには管理ツールを宣言していないが、本体のbootstrap、同期処理、activation、shim管理の実装は存在する。
+CLIとランタイムはツールごとの公式導入経路で導入する（ADR-028）。個別の対象、導入経路、更新手順は [`operations.md`](operations.md#ツールの管理境界) を参照する。
 
 - **GitHub CLI**: 導入と更新は OS/ベンダーのパッケージマネージャーが所有する。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を満たしているか検査して不足時に更新コマンドを案内する
 - **jq**: `run_after_26-install-jq` が公式リリース asset を OS/CPU ごとに固定し、SHA-256 を検証してから `~/.local/bin/jq` へ置く。宣言に無い OS/CPU では別 CPU の asset へフォールバックせず、警告して何もしない
@@ -138,7 +137,7 @@ CLIとランタイムはツールごとの公式導入経路で導入する（AD
 - **TypeScript CLI**: `run_after_21-install-typescript-cli` が直接導入した Node/npm で `npm install --prefix <専用 root> --no-save --package-lock=false typescript@<version>` を実行する（グローバルインストールではない）。エントリポイントは `typescript-cli/node_modules/.bin/tsc`。POSIX では同じ launcher への symlink を `~/.local/bin/tsc` へ張る（npm 生成のスクリプトをそのまま指し、独自の汎用プロキシは作らない）
 - **typescript-language-server**: `run_after_23-install-typescript-language-server` が同様に専用 prefix へ `typescript-language-server` だけを導入する。`typescript` を自身の依存に持たず、tsserver.js は次段の typescript-lsp から参照する。POSIX では `~/.local/bin/typescript-language-server` へ同様に symlink する
 - **typescript-lsp** (`[typescriptLsp]`, TypeScript 6.0.3 固定): `run_after_22-install-typescript-lsp` は tsserver.js 参照専用だが、typescript@6.0.3 の package.json が宣言する `bin.tsserver` から npm が生成する launcher (`node_modules/.bin/tsserver`) が同時に手に入るため、POSIX では `~/.local/bin/tsserver` をそこへ symlink する（TS7 系はこの bin を持たないため、tsserver コマンドの供給元は専用 TS6.0.3 側に限られる）
-- **クラウド関連CLI**: Azure kubelogin、Cosign、CUE、Helm、kubectl、kustomize、sqlc、Terraform、Trivy、yqは公式配布物から実行ファイルを取り出し、全OSで `~/.local/bin` に置く。専用PATHやruntime proxyは使わず、mise shimのリンク対象からも除外する。OS/CPU、取得元、SHA-256、実行architectureは `home/.chezmoidata.toml` のasset宣言で固定する
+- **クラウド関連CLI**: Azure kubelogin、Cosign、CUE、Helm、kubectl、kustomize、sqlc、Terraform、Trivy、yqは公式配布物から実行ファイルを取り出し、全OSで `~/.local/bin` に置く。専用PATHやruntime proxyは使わない。OS/CPU、取得元、SHA-256、実行architectureは `home/.chezmoidata.toml` のasset宣言で固定する
 - **Terraformの信頼起点**: 宣言に保持した公開鍵とfingerprintを使い、独立したGPGでchecksum listの署名を確認する。GPGのkeyringは一時領域に限り、利用者のkeyringや鍵サーバーを使わない。Cosign本体の初期導入も自身の検証機能には依存せず、宣言した公式配布物のSHA-256を使う
 - **OS package版CLI**: bat、fzf、ghq、gitleaks、lefthook、ripgrep、ShellCheck、zoxideは、macOSのHomebrewとWindowsのWinGetが実体を所有する。通常の導入スクリプトは所有元、CPU種別、最低版を確認し、`~/.local/bin` から安定したproviderの入口へnative symlinkを張る。実行時に独自wrapperやpackage managerは介在しない。Linuxでは固定した公式releaseの実体を配置する
 - **1Password CLI**: macOSのHomebrew caskとLinuxのvendor aptが所有する `op` へnative symlinkを張る。Windowsは署名付き公式ZIPから `op.exe` を直接配置する。信頼の確認にはOSごとの署名機構を使い、WindowsではAuthenticodeの発行者と固有EKUを照合する。1Password appのSSH署名経路は独立している
@@ -148,10 +147,6 @@ CLIとランタイムはツールごとの公式導入経路で導入する（AD
 通常の導入スクリプトは、固定版またはOS packageの最低版と必要な実体がそろっていればネットワークへ出ない。直接配置ではchecksumや版の検証に失敗した場合に既存のバイナリを残す。OS package自体の更新はpackage managerが担当するため、同じrollback保証はしない。npm ベースの 3 つは `npm` 標準の checksum 検証を使い、レジストリミラーが `dist.integrity` を欠く場合でも存在しない検証は追加しない。
 
 Windows arm64での互換実行は明示した例外だけに限定する。例外の範囲と撤去条件は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)、現在のasset選択はdesired declarationが正本である。クラウド関連CLIは実行ファイルのヘッダーからCPU種別を確認し、宣言と一致しない候補を配置しない。配布物が見つからないことを理由に、別architectureへ自動的にフォールバックしない。
-
-### mise shims の制約
-
-mise は shims と `mise activate` を併用する。対話 zsh では `mise activate zsh` が shims を除去して自前挿入し、`[env]` / hooks が効く。非対話シェルでは shims のみで解決する。shims では `[env]` / `hooks` / `_.file` が動かないが、本 repo の `config.toml` は `[tools]` / `[settings]` のみ使用するため影響なし（必要時は `mise exec -- <cmd>`）。詳細: <https://mise.jdx.dev/dev-tools/shims.html>
 
 ### TypeScript language server の依存配置
 
@@ -170,8 +165,6 @@ Windows で cargo が `windows-msvc` ターゲットをビルドするには MSV
 ## セットアップスクリプトの実行順
 
 chezmoi は `run_*_before_*`、通常ファイル、`run_*_after_*` の順に適用し、同じフェーズではファイル名の番号順に実行する。全件一覧は変化しやすいため、gh-stack の導入と Git hook の確認を含む全実装は `home/run_*` を正本とする。
-
-mise 関連では、本体を導入する `run_once_before_20-install-mise`、lockfile 変更を同期する `run_onchange_after_15-mise-sync-tools`、通常適用時にツールを導入する `run_once_after_20-mise-install`、macOS の shim symlink を更新する `run_onchange_after_21-link-mise-shims` の依存関係を保つ。変更時は、mise 本体と設定の配置前に `mise install` を実行しないこと、Codespaces と Dev Container の分岐を壊さないことを確認する。
 
 言語ランタイムとGitHub CLIの導入は `run_after_15-install-go` から `run_after_27-ensure-github-cli` までの番号順で実行する（Go/Node.js を最初に置くのは TypeScript CLI、typescript-lsp、typescript-language-server が直接導入した Node/npm に依存するため）。`uv` は `uv tool` を使う `run_once_after_30-install-tools` より前、`gh` の検査は `run_after_31-install-gh-stack` より前に置く。クラウド関連CLIは `run_after_50` から `59`、その他の個別導入CLIは `run_after_60` から `70` が担当する。OS packageを使うCLIでは、先行するOS packageスクリプトが導入を担当し、通常の `run_after_` が入口を整える。これらの通常スクリプトは毎回の適用で走り、実体と入口が宣言に適合していれば通信しない。Nodeの導入に失敗した場合は、依存するTypeScript系スクリプトも前提コマンドを確認できず非零終了し、既存の成果物を保持する。
 

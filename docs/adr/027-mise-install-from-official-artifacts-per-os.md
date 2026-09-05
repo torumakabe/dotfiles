@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted
+Deprecated
 
 ## Context
+
+Unix 系の mise 本体導入処理と Windows の winget/DSC 宣言を撤去したため、本 ADR を廃止した。現在の導入方針は [ADR-028](028-remove-mise-use-official-per-tool-install-paths.md) を参照。以下は採用当時の記録であり、現在の操作手順ではない。
 
 macOS で使っていた Homebrew formula の mise は、upstream が最適化した公式バイナリではなく、公式成果物との間に性能とサイズの差がある。Linux ではすでに GitHub Releases の公式アーカイブを検証して配置しており、macOS でも公式成果物を使う必要がある。一方、Windows の winget パッケージ `jdx.mise` は公式 ZIP を直接参照するため、再ビルドによる差はない。既存環境では formula 版と非 formula 版の mise が併存し得るため、移行時に既存の非 formula 版を壊さないことも要件になる。
 

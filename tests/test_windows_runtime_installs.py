@@ -59,7 +59,6 @@ EXPECTED_PATH_VARIABLES = (
     "$typescriptCliBinDir",
     "$typescriptLspBinDir",
     "$typescriptLanguageServerBinDir",
-    "$shimsDir",
 )
 
 
@@ -117,6 +116,7 @@ class WindowsRuntimeStaticContractTests(unittest.TestCase):
         )
 
         self.assertEqual(variables, EXPECTED_PATH_VARIABLES)
+        self.assertNotIn("$shimsDir", source)
         self.assertIn(
             "[Environment]::SetEnvironmentVariable('Path', $newPath, 'User')",
             source,
@@ -430,12 +430,12 @@ class WindowsRuntimePowerShellTests(unittest.TestCase):
             r"C:\Users\x\.local\share\chezmoi-dotfiles\typescript-cli\node_modules\.bin",
             r"C:\Users\x\.local\share\chezmoi-dotfiles\typescript-lsp\node_modules\.bin",
             r"C:\Users\x\.local\share\chezmoi-dotfiles\typescript-language-server\node_modules\.bin",
-            r"C:\Users\x\AppData\Local\mise\shims",
             r"C:\Users\x\AppData\Local\mise\installs\node\old",
             r"C:\Windows\System32",
+            "c:/users/x/appdata/local/MISE/shims/",
             r"C:\Tools",
         ]
-        leading = ",\n".join(f"    '{entry}'" for entry in expected[:9])
+        leading = ",\n".join(f"    '{entry}'" for entry in expected[:8])
         existing = (
             "'c:/users/x/.LOCAL/bin/', "
             "'C:/Users/x/.local/share/chezmoi-dotfiles/GO/bin/', "

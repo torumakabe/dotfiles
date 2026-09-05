@@ -54,17 +54,14 @@ command -v chezmoi
 command -v uv
 command -v copilot
 command -v jq
+git --version
 copilot --version
 chezmoi --version
-mise --version
-mise ls --missing
-repo_root="$(git rev-parse --show-toplevel)"
-chezmoi --source "${repo_root}/home" diff \
-  ~/.config/mise/config.toml \
-  ~/.config/mise/mise.lock
+uv --version
+jq --version
 ```
 
-`mise ls --missing` と `chezmoi diff` の結果を記録する。検証環境の導入版が lockfile と異なる場合は、その差を結果表へ残す。コマンドが不足している場合は、その環境の初期構築手順に従う。検証のためだけに異なる導入方法を追加すると、dotfiles が提供する構成を確認できないため、場当たり的なインストールは行わない。
+各コマンドの解決先とバージョンを記録する。uv と jq は `home/.chezmoidata.toml` の固定版と比較し、異なる場合はツール名と導入版を結果表へ残す。コマンドが不足している場合は、その環境の初期構築手順に従う。検証のためだけに異なる導入方法を追加すると、dotfiles が提供する構成を確認できないため、場当たり的なインストールは行わない。
 
 ## 自動テストを実行する
 
@@ -288,8 +285,9 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 | commit SHA | |
 | Copilot CLI version | |
 | chezmoi version | |
-| mise version、同期状態 | |
-| lockfile との差 | なし / 差の内容 |
+| Git / uv / jq version | |
+| 各コマンドの解決先 | |
+| 宣言と導入版の差 | なし / ツール名と差の内容 |
 | 自動テスト | 成功 / 失敗 |
 | 初期 `sandbox.enabled` | `true` / `false` / 組織管理値 |
 | `/sandbox` General/Auth/Filesystem/Network | 確認結果 |

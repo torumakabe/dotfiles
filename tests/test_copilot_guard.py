@@ -1030,6 +1030,13 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
         result = copilot_guard.check_env_access("echo $NODE_ENV")
         self.assertIsNone(result)
 
+    def test_mise_shell_uses_general_variable_classification(self) -> None:
+        self.assertNotIn("mise_shell", copilot_guard._SAFE_VARIABLES)
+        self.assertIsNone(copilot_guard.check_env_access("echo $MISE_SHELL"))
+        self.assertIsNotNone(
+            copilot_guard.check_env_access("echo $MISE_AUTH_TOKEN")
+        )
+
     def test_allows_editor(self) -> None:
         result = copilot_guard.check_env_access("echo $EDITOR")
         self.assertIsNone(result)

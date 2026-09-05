@@ -43,48 +43,103 @@ if git hook list pre-commit --show-scope 2>/dev/null \
 fi
 
 find_gitleaks() {
-  # Windows (Git Bash): prefer the .exe shim. The extensionless mise shim is a
-  # /bin/bash script and can still route to WSL bash in this environment.
+  home_root="$(cd -P "${HOME}" && pwd)"
+  home_mise_root="${home_root}/.local/share/mise/shims"
+  localappdata_unix=""
   if [ -n "${LOCALAPPDATA:-}" ]; then
-    localappdata_unix="$(cygpath -u "${LOCALAPPDATA}" 2>/dev/null || echo "${LOCALAPPDATA}")"
-    if [ -x "${localappdata_unix}/mise/shims/gitleaks.exe" ]; then
-      echo "${localappdata_unix}/mise/shims/gitleaks.exe"
-      return 0
+    if [ -x /usr/bin/cygpath ]; then
+      localappdata_unix="$(/usr/bin/cygpath -u "${LOCALAPPDATA}")"
+    else
+      localappdata_unix="${LOCALAPPDATA}"
+    fi
+    if [ -d "${localappdata_unix}" ]; then
+      localappdata_unix="$(cd -P "${localappdata_unix}" && pwd)"
     fi
   fi
-  if [ -x "${HOME}/.local/share/mise/shims/gitleaks.exe" ]; then
-    echo "${HOME}/.local/share/mise/shims/gitleaks.exe"
-    return 0
-  fi
-  if command -v gitleaks.exe >/dev/null 2>&1; then
-    command -v gitleaks.exe
-    return 0
-  fi
 
-  if command -v gitleaks >/dev/null 2>&1; then
-    command -v gitleaks
-    return 0
-  fi
+  is_mise_shim_path() {
+    checked_path=$1
+    case "${checked_path}" in
+      "${home_mise_root}/"*) return 0 ;;
+    esac
+    if [ -n "${localappdata_unix}" ]; then
+      checked_lower="$(printf '%s' "${checked_path}" | /usr/bin/tr '[:upper:]' '[:lower:]')"
+      home_mise_lower="$(printf '%s' "${home_mise_root}/" | /usr/bin/tr '[:upper:]' '[:lower:]')"
+      mise_lower="$(printf '%s' "${localappdata_unix}/mise/shims/" | /usr/bin/tr '[:upper:]' '[:lower:]')"
+      case "${checked_lower}" in
+        "${home_mise_lower}"*|"${mise_lower}"*) return 0 ;;
+      esac
+    fi
+    return 1
+  }
 
-  # Try mise shim locations when not in PATH (git hooks don't source shell rc).
-  if [ -x "${HOME}/.local/share/mise/shims/gitleaks" ]; then
-    echo "${HOME}/.local/share/mise/shims/gitleaks"
-    return 0
-  fi
+  resolve_candidate() {
+    current_path=$1
+    link_depth=0
+    while [ -L "${current_path}" ]; do
+      link_depth=$((link_depth + 1))
+      [ "${link_depth}" -le 16 ] || return 1
+      current_dir="${current_path%/*}"
+      [ "${current_dir}" != "${current_path}" ] || current_dir=.
+      current_dir="$(cd -P "${current_dir}" && pwd)" || return 1
+      next_path="$(/usr/bin/readlink "${current_path}")" || return 1
+      case "${next_path}" in
+        /*) current_path="${next_path}" ;;
+        *) current_path="${current_dir}/${next_path}" ;;
+      esac
+    done
+    current_dir="${current_path%/*}"
+    [ "${current_dir}" != "${current_path}" ] || current_dir=.
+    current_dir="$(cd -P "${current_dir}" && pwd)" || return 1
+    printf '%s/%s\n' "${current_dir}" "${current_path##*/}"
+  }
 
-  if [ -n "${LOCALAPPDATA:-}" ]; then
-    if [ -x "${localappdata_unix}/mise/shims/gitleaks" ]; then
-      echo "${localappdata_unix}/mise/shims/gitleaks"
+  candidate_is_usable() {
+    candidate_path=$1
+    [ -f "${candidate_path}" ] && [ -x "${candidate_path}" ] || return 1
+    resolved_path="$(resolve_candidate "${candidate_path}")" || return 1
+    is_mise_shim_path "${candidate_path}" && return 1
+    is_mise_shim_path "${resolved_path}" && return 1
+    return 0
+  }
+
+  for candidate_path in \
+    "${home_root}/.local/bin/gitleaks.exe" \
+    "${home_root}/.local/bin/gitleaks" \
+    "${localappdata_unix:+${localappdata_unix}/Microsoft/WinGet/Links/gitleaks.exe}" \
+    "/opt/homebrew/opt/gitleaks/bin/gitleaks"; do
+    if [ -n "${candidate_path}" ] && candidate_is_usable "${candidate_path}"; then
+      echo "${candidate_path}"
       return 0
     fi
-  fi
+  done
+
+  for command_name in gitleaks.exe gitleaks; do
+    path_candidate="$(
+      IFS=:
+      set -f
+      for path_dir in ${PATH:-}; do
+        [ -n "${path_dir}" ] || path_dir=.
+        candidate_path="${path_dir}/${command_name}"
+        if candidate_is_usable "${candidate_path}"; then
+          echo "${candidate_path}"
+          exit 0
+        fi
+      done
+      exit 1
+    )" || continue
+    if [ -n "${path_candidate}" ]; then
+      echo "${path_candidate}"
+      return 0
+    fi
+  done
 
   return 1
 }
 
 GITLEAKS=$(find_gitleaks) || {
-  echo "⚠️  gitleaks not found — skipping secret scan."
-  echo "   Install with: mise install gitleaks"
+  echo "⚠️  gitleaks not found — skipping secret scan." >&2
+  echo "   Run chezmoi apply to install the managed gitleaks command." >&2
   # fail-open: allow commit when gitleaks is not installed
   GITLEAKS=""
 }

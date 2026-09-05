@@ -1,17 +1,16 @@
 {{ if eq .chezmoi.os "windows" -}}
-# 非対話シェル用にユーザー PATH の先頭を固定する（対話シェルの mise activate とは共存可）。
+# 非対話シェル用にユーザー PATH の先頭を固定する。
 # ~/.local/bin には公式インストーラーが置いた実体（uv / uvx / jq / bun）が入るため、
-# 撤去済みツールの stale な mise shim が残っていても実体が勝つ順序にする。
+# ユーザー管理ツールの共通入口として最優先にする。
 #
-# mise から撤去した P1 ランタイム (Go/.NET SDK 本体, GOROOT\bin, dotnet, pnpm) と、
+# P1 ランタイム (Go/.NET SDK 本体, GOROOT\bin, dotnet, pnpm) と、
 # 直接導入した Node で npm --prefix 導入した TypeScript CLI、専用 tsserver、
-# typescript-language-server の node_modules\.bin も同じ理由で mise shims
-# より先に置く。Node の shim (.cmd) は自分の隣に node.exe が無ければ PATH
+# typescript-language-server の node_modules\.bin も固定順序で先頭に置く。
+# Node の shim (.cmd) は自分の隣に node.exe が無ければ PATH
 # 上の `node` へフォールバックするため、Node の root もここに含める。
 $ErrorActionPreference = 'Stop'
 
 $localBinDir = Join-Path $HOME '.local\bin'
-$shimsDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
 $dotfilesShareDir = Join-Path $HOME '.local\share\chezmoi-dotfiles'
 $goBinDir = Join-Path $dotfilesShareDir 'go\bin'
 $nodeRootDir = Join-Path $dotfilesShareDir 'node'
@@ -63,8 +62,7 @@ $leadingEntries = @(
     $pnpmRootDir,
     $typescriptCliBinDir,
     $typescriptLspBinDir,
-    $typescriptLanguageServerBinDir,
-    $shimsDir
+    $typescriptLanguageServerBinDir
 )
 $newPath = (Get-OrderedPathEntries -Leading $leadingEntries -Existing $existing) -join ';'
 

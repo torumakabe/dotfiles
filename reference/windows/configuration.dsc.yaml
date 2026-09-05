@@ -3,10 +3,8 @@
 #
 # Usage: winget configure -f configuration.dsc.yaml (管理者権限の PowerShell で実行)
 #
-# Note: Most CLI tool versions are managed by mise (~/.config/mise/config.toml).
-# DSC contains only: OS settings, GUI/CLI apps not managed by mise, and
-# bootstrap tooling (mise itself).
-# GitHub CLI, jq, uv are outside mise; see docs/operations.md「ツールの管理境界」.
+# CLIツールの導入経路と管理境界は docs/operations.md「ツールの管理境界」を参照。
+# DSCにはOS設定、初期構築用ツールと、このファイルに記載したアプリを定義する。
 properties:
   resources:
     - resource: Microsoft.Windows.Developer/DeveloperMode
@@ -76,15 +74,8 @@ properties:
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
-        description: "Install mise"
-        allowPrerelease: false
-      settings:
-        id: jdx.mise
-        source: winget
-    - resource: Microsoft.WinGet.DSC/WinGetPackage
-      directives:
         # rust-toolchain.toml を持つプロジェクトでの version pinning を機能させるため、
-        # mise ではなく公式インストーラー (rustup) で管理する。
+        # 公式インストーラー (rustup) で管理する。
         # 詳細: docs/adr/016-rust-external-rustup.md
         description: "Install Rust (rustup)"
         allowPrerelease: false
