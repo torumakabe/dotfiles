@@ -129,6 +129,9 @@ fi
 sudo apt-get install -y -qq \
   bash-completion \
   bubblewrap \
+{{ if eq .chezmoi.arch "arm64" -}}
+  build-essential \
+{{ end -}}
   curl \
   git \
   gnupg \
@@ -255,6 +258,140 @@ if ! gh_meets_minimum "${vendor_gh}"; then
     fi
   fi
 fi
+
+# >>> 1password-cli apt
+# 1Password CLI — vendor APT repository owns the Linux installation. Existing repository
+# configuration is accepted only when it already matches the pinned key, policy, and source;
+# this block never overwrites a different administrator-managed configuration.
+ONEPASSWORD_MINIMUM_VERSION="{{ .onePassword.minimumVersion }}"
+ONEPASSWORD_APT_KEY_URL="{{ .onePassword.linuxApt.keyUrl }}"
+ONEPASSWORD_APT_KEY_SHA256="{{ .onePassword.linuxApt.publicKeySha256 }}"
+ONEPASSWORD_APT_KEY_FINGERPRINT="{{ .onePassword.linuxApt.primaryFingerprint }}"
+ONEPASSWORD_APT_POLICY_URL="{{ .onePassword.linuxApt.policyUrl }}"
+ONEPASSWORD_APT_POLICY_SHA256="{{ .onePassword.linuxApt.policySha256 }}"
+
+onepassword_cli_meets_minimum() {
+  local installed
+
+  dpkg-query -W -f='${db:Status-Abbrev}' 1password-cli 2>/dev/null |
+    grep -q '^ii ' || return 1
+  [ -x /usr/bin/op ] || return 1
+  installed="$(/usr/bin/op --version 2>/dev/null)" || return 1
+  [ -n "${installed}" ] || return 1
+  version_ge "${installed}" "${ONEPASSWORD_MINIMUM_VERSION}"
+}
+
+if ! onepassword_cli_meets_minimum; then
+  case "$(dpkg --print-architecture)" in
+    amd64|arm64) onepassword_arch="$(dpkg --print-architecture)" ;;
+    *)
+      echo "error: 1Password CLI APT repository does not support $(dpkg --print-architecture)" >&2
+      exit 1
+      ;;
+  esac
+  echo "Installing 1Password CLI ${ONEPASSWORD_MINIMUM_VERSION} or later via vendor APT..."
+  (
+    tmp_dir="$(make_install_tmp_dir)"
+    trap 'rm -rf "${tmp_dir}"' EXIT
+    key_file="${tmp_dir}/1password.asc"
+    keyring_file="${tmp_dir}/1password.gpg"
+    policy_file="${tmp_dir}/1password.pol"
+    system_keyring=/usr/share/keyrings/1password-archive-keyring.gpg
+    debsig_keyring=/usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
+    debsig_policy=/etc/debsig/policies/AC2D62742012EA22/1password.pol
+    source_file=/etc/apt/sources.list.d/1password.list
+    source_line="deb [arch=${onepassword_arch} signed-by=${system_keyring}] https://downloads.1password.com/linux/debian/${onepassword_arch} stable main"
+
+    command -v gpg >/dev/null 2>&1 || {
+      echo "error: gpg is required to verify the 1Password repository key" >&2
+      exit 1
+    }
+    download_file "${ONEPASSWORD_APT_KEY_URL}" "${key_file}" || {
+      echo "error: failed to download the 1Password repository key" >&2
+      exit 1
+    }
+    [ "$(sha256_file "${key_file}")" = "${ONEPASSWORD_APT_KEY_SHA256}" ] || {
+      echo "error: checksum verification failed for the 1Password repository key" >&2
+      exit 1
+    }
+    downloaded_fingerprints="$(
+      gpg --no-options --batch --no-autostart --with-colons \
+        --import-options show-only --import "${key_file}" 2>/dev/null |
+        awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10; primary = 0 }'
+    )" || {
+      echo "error: failed to inspect the 1Password repository key" >&2
+      exit 1
+    }
+    [ "${downloaded_fingerprints}" = "${ONEPASSWORD_APT_KEY_FINGERPRINT}" ] || {
+      echo "error: 1Password repository key fingerprint verification failed" >&2
+      exit 1
+    }
+    gpg --no-options --batch --no-autostart --dearmor \
+      --output "${keyring_file}" "${key_file}" || {
+      echo "error: failed to prepare the verified 1Password repository key" >&2
+      exit 1
+    }
+
+    download_file "${ONEPASSWORD_APT_POLICY_URL}" "${policy_file}" || {
+      echo "error: failed to download the 1Password debsig policy" >&2
+      exit 1
+    }
+    [ "$(sha256_file "${policy_file}")" = "${ONEPASSWORD_APT_POLICY_SHA256}" ] || {
+      echo "error: checksum verification failed for the 1Password debsig policy" >&2
+      exit 1
+    }
+
+    for existing_keyring in "${system_keyring}" "${debsig_keyring}"; do
+      if sudo test -e "${existing_keyring}"; then
+        existing_fingerprints="$(
+          sudo gpg --no-options --batch --no-autostart --with-colons \
+            --import-options show-only --import "${existing_keyring}" 2>/dev/null |
+            awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10; primary = 0 }'
+        )" || {
+          echo "error: failed to inspect existing ${existing_keyring}; refusing to overwrite it" >&2
+          exit 1
+        }
+        [ "${existing_fingerprints}" = "${ONEPASSWORD_APT_KEY_FINGERPRINT}" ] || {
+          echo "error: existing ${existing_keyring} is not the pinned 1Password key; refusing to overwrite it" >&2
+          exit 1
+        }
+      fi
+    done
+    if sudo test -e "${debsig_policy}"; then
+      existing_policy_sha256="$(sudo sh -c 'sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"' sh "${debsig_policy}" | awk '{print $1}')" || {
+        echo "error: failed to inspect existing ${debsig_policy}; refusing to overwrite it" >&2
+        exit 1
+      }
+      [ "${existing_policy_sha256}" = "${ONEPASSWORD_APT_POLICY_SHA256}" ] || {
+        echo "error: existing ${debsig_policy} differs from the pinned policy; refusing to overwrite it" >&2
+        exit 1
+      }
+    fi
+    if sudo test -e "${source_file}"; then
+      [ "$(sudo cat "${source_file}")" = "${source_line}" ] || {
+        echo "error: existing ${source_file} differs from the required 1Password source; refusing to overwrite it" >&2
+        exit 1
+      }
+    fi
+
+    sudo test -e "${system_keyring}" ||
+      sudo install -D -m 644 "${keyring_file}" "${system_keyring}"
+    sudo test -e "${debsig_keyring}" ||
+      sudo install -D -m 644 "${keyring_file}" "${debsig_keyring}"
+    sudo test -e "${debsig_policy}" ||
+      sudo install -D -m 644 "${policy_file}" "${debsig_policy}"
+    if ! sudo test -e "${source_file}"; then
+      printf '%s\n' "${source_line}" | sudo tee "${source_file}" >/dev/null
+    fi
+    sudo apt-get update -qq
+    sudo apt-get install -y -qq debsig-verify 1password-cli
+  )
+  onepassword_cli_meets_minimum || {
+    echo "error: installed 1Password CLI does not satisfy ${ONEPASSWORD_MINIMUM_VERSION}" >&2
+    exit 1
+  }
+fi
+# <<< 1password-cli apt
 
 {{ if and (not .codespaces) (not .devcontainer) -}}
 # Azure CLI — Microsoft 署名付き apt リポジトリから導入する
@@ -386,6 +523,239 @@ brew install \
   watch \
   zsh-completions
 brew install --cask libreoffice
+
+# >>> p3-homebrew
+# P3 workstation tools are installed or upgraded only when the Homebrew-owned
+# binary is missing or below the declared minimum. PATH candidates are ignored.
+P3_BREW_BIN=/opt/homebrew/bin/brew
+[ -x "${P3_BREW_BIN}" ] || {
+  echo "error: Homebrew is required at ${P3_BREW_BIN} for P3 workstation tools" >&2
+  exit 1
+}
+P3_EXPECTED_BREW_PREFIX="$(dirname "$(dirname "${P3_BREW_BIN}")")"
+P3_BREW_PREFIX_RAW="$("${P3_BREW_BIN}" --prefix)"
+[ "${P3_BREW_PREFIX_RAW}" = "${P3_EXPECTED_BREW_PREFIX}" ] || {
+  echo "error: ${P3_BREW_BIN} reported an unexpected prefix: ${P3_BREW_PREFIX_RAW}" >&2
+  exit 1
+}
+P3_BREW_PREFIX="$(cd -P "${P3_BREW_PREFIX_RAW}" && pwd)"
+
+p3_homebrew_is_installed() {
+  local kind=$1 package=$2
+
+  if [ "${kind}" = "cask" ]; then
+    "${P3_BREW_BIN}" list --cask --versions "${package}" >/dev/null 2>&1
+  else
+    "${P3_BREW_BIN}" list --formula --versions "${package}" >/dev/null 2>&1
+  fi
+}
+
+p3_resolve_link() {
+  local current=$1 target directory
+
+  while [ -L "${current}" ]; do
+    directory="$(cd -P "$(dirname "${current}")" && pwd)"
+    target="$(readlink "${current}")"
+    case "${target}" in
+      /*) current="${target}" ;;
+      *) current="${directory}/${target}" ;;
+    esac
+  done
+  directory="$(cd -P "$(dirname "${current}")" && pwd)"
+  printf '%s/%s\n' "${directory}" "$(basename "${current}")"
+}
+
+p3_homebrew_binary() {
+  local kind=$1 package=$2 command_name=$3 prefix binary resolved
+
+  p3_homebrew_is_installed "${kind}" "${package}" || return 1
+  if [ "${kind}" = "cask" ]; then
+    prefix="${P3_BREW_PREFIX}"
+  else
+    prefix="$("${P3_BREW_BIN}" --prefix "${package}")" || return 1
+    [ "${prefix}" = "${P3_EXPECTED_BREW_PREFIX}/opt/${package}" ] || {
+      echo "error: Homebrew formula ${package} reported an unexpected prefix: ${prefix}" >&2
+      return 1
+    }
+  fi
+  binary="${prefix}/bin/${command_name}"
+  [ -x "${binary}" ] || return 1
+  resolved="$(p3_resolve_link "${binary}")" || return 1
+  case "${kind}:${resolved}" in
+    "cask:${P3_BREW_PREFIX}/Caskroom/${package}/"*) ;;
+    "formula:${P3_BREW_PREFIX}/Cellar/${package}/"*) ;;
+    *) return 1 ;;
+  esac
+  [ -f "${resolved}" ] && [ ! -L "${resolved}" ] || return 1
+  printf '%s\n' "${binary}"
+}
+
+p3_binary_version() {
+  local tool=$1 binary=$2 command_name=$3 output
+
+  case "${tool}" in
+    1password)
+      output="$("${binary}" --version 2>/dev/null)" || return 1
+      case "${output}" in
+        *'
+'*) return 1 ;;
+      esac
+      printf '%s\n' "${output}" | grep -E '^[0-9]+(\.[0-9]+){2}$'
+      return
+      ;;
+    cargo-make)
+      if [ "${command_name}" = "cargo-make" ]; then
+        output="$("${binary}" make --version 2>/dev/null)" || return 1
+      else
+        output="$("${binary}" --version 2>/dev/null)" || return 1
+      fi
+      case "${output}" in
+        *'
+'*) return 1 ;;
+      esac
+      printf '%s\n' "${output}" |
+        grep -Eq '^cargo-make [0-9]+(\.[0-9]+){2}$' || return 1
+      printf '%s\n' "${output#cargo-make }"
+      return
+      ;;
+    lefthook)
+      output="$("${binary}" version 2>/dev/null)" || return 1
+      ;;
+    *)
+      output="$("${binary}" --version 2>/dev/null)" || return 1
+      ;;
+  esac
+  printf '%s\n' "${output}" \
+    | grep -Eo '[0-9]+(\.[0-9]+){2}' \
+    | head -n 1
+}
+
+p3_macos_arch_matches() {
+  local binary=$1 expected header
+
+  case "$(uname -m)" in
+    arm64|aarch64) expected='cffaedfe0c000001' ;;
+    x86_64|amd64) expected='cffaedfe07000001' ;;
+    *)
+      echo "error: unsupported macOS architecture: $(uname -m)" >&2
+      return 1
+      ;;
+  esac
+  header="$(LC_ALL=C od -An -tx1 -N8 "${binary}" 2>/dev/null |
+    awk '{ for (i = 1; i <= NF; i++) printf "%s", $i } END { print "" }')" ||
+    return 1
+  [ "${header}" = "${expected}" ]
+}
+
+p3_homebrew_install_or_upgrade() {
+  local tool=$1 minimum=$2 package=$3 kind=$4 command_name=$5 extra_command=${6:-}
+  local binary installed_version extra_binary extra_version
+
+  if p3_homebrew_is_installed "${kind}" "${package}"; then
+    binary="$(p3_homebrew_binary "${kind}" "${package}" "${command_name}")" || {
+      echo "error: Homebrew package ${package} is installed but its owned ${command_name} binary is unavailable" >&2
+      return 1
+    }
+    if ! p3_macos_arch_matches "${binary}"; then
+      echo "error: Homebrew-owned ${command_name} does not match the native macOS architecture; refusing to replace it" >&2
+      return 1
+    fi
+    installed_version="$(p3_binary_version "${tool}" "${binary}" "${command_name}")" || {
+      echo "error: could not determine the Homebrew-owned ${command_name} version" >&2
+      return 1
+    }
+    if [ -n "${extra_command}" ]; then
+      extra_binary="$(p3_homebrew_binary "${kind}" "${package}" "${extra_command}")" || {
+        echo "error: Homebrew package ${package} is missing its owned ${extra_command} binary" >&2
+        return 1
+      }
+      if ! p3_macos_arch_matches "${extra_binary}"; then
+        echo "error: Homebrew-owned ${extra_command} does not match the native macOS architecture" >&2
+        return 1
+      fi
+      extra_version="$(p3_binary_version "${tool}" "${extra_binary}" "${extra_command}")" || {
+        echo "error: could not determine the Homebrew-owned ${extra_command} version" >&2
+        return 1
+      }
+    fi
+    if version_ge "${installed_version}" "${minimum}" &&
+      { [ -z "${extra_command}" ] || version_ge "${extra_version}" "${minimum}"; }; then
+      return 0
+    fi
+    echo "Upgrading ${tool} to ${minimum} or later via Homebrew..."
+    if [ "${kind}" = "cask" ]; then
+      "${P3_BREW_BIN}" upgrade --cask "${package}"
+    else
+      "${P3_BREW_BIN}" upgrade "${package}"
+    fi
+  else
+    if [ -e "${P3_BREW_PREFIX}/bin/${command_name}" ] || [ -L "${P3_BREW_PREFIX}/bin/${command_name}" ]; then
+      echo "error: ${P3_BREW_PREFIX}/bin/${command_name} exists but is not owned by Homebrew package ${package}" >&2
+      return 1
+    fi
+    echo "Installing ${tool} ${minimum} or later via Homebrew..."
+    if [ "${kind}" = "cask" ]; then
+      "${P3_BREW_BIN}" install --cask "${package}"
+    else
+      "${P3_BREW_BIN}" install "${package}"
+    fi
+  fi
+
+  binary="$(p3_homebrew_binary "${kind}" "${package}" "${command_name}")" || {
+    echo "error: Homebrew did not provide the expected ${command_name} binary for ${package}" >&2
+    return 1
+  }
+  if ! p3_macos_arch_matches "${binary}"; then
+    echo "error: Homebrew installed ${command_name} for the wrong CPU architecture" >&2
+    return 1
+  fi
+  installed_version="$(p3_binary_version "${tool}" "${binary}" "${command_name}")" || {
+    echo "error: could not determine the installed ${command_name} version" >&2
+    return 1
+  }
+  if ! version_ge "${installed_version}" "${minimum}"; then
+    echo "error: Homebrew installed ${tool} ${installed_version}, below required ${minimum}" >&2
+    return 1
+  fi
+  if [ -n "${extra_command}" ]; then
+    extra_binary="$(p3_homebrew_binary "${kind}" "${package}" "${extra_command}")" || {
+      echo "error: Homebrew did not provide the expected ${extra_command} binary for ${package}" >&2
+      return 1
+    }
+    if ! p3_macos_arch_matches "${extra_binary}"; then
+      echo "error: Homebrew installed ${extra_command} for the wrong CPU architecture" >&2
+      return 1
+    fi
+    extra_version="$(p3_binary_version "${tool}" "${extra_binary}" "${extra_command}")" || {
+      echo "error: could not determine the installed ${extra_command} version" >&2
+      return 1
+    }
+    if ! version_ge "${extra_version}" "${minimum}"; then
+      echo "error: Homebrew installed ${extra_command} ${extra_version}, below required ${minimum}" >&2
+      return 1
+    fi
+  fi
+}
+
+P3_HOMEBREW_SPECS=(
+  "1password|{{ .onePassword.minimumVersion }}|{{ .onePassword.homebrew.package }}|{{ .onePassword.homebrew.kind }}|op|"
+  "bat|{{ .bat.minimumVersion }}|{{ .bat.homebrew.package }}|{{ .bat.homebrew.kind }}|bat|"
+  "cargo-make|{{ .cargoMake.minimumVersion }}|{{ .cargoMake.homebrew.package }}|{{ .cargoMake.homebrew.kind }}|cargo-make|makers"
+  "fzf|{{ .fzf.minimumVersion }}|{{ .fzf.homebrew.package }}|{{ .fzf.homebrew.kind }}|fzf|"
+  "ghq|{{ .ghq.minimumVersion }}|{{ .ghq.homebrew.package }}|{{ .ghq.homebrew.kind }}|ghq|"
+  "gitleaks|{{ .gitleaks.minimumVersion }}|{{ .gitleaks.homebrew.package }}|{{ .gitleaks.homebrew.kind }}|gitleaks|"
+  "lefthook|{{ .lefthook.minimumVersion }}|{{ .lefthook.homebrew.package }}|{{ .lefthook.homebrew.kind }}|lefthook|"
+  "ripgrep|{{ .ripgrep.minimumVersion }}|{{ .ripgrep.homebrew.package }}|{{ .ripgrep.homebrew.kind }}|rg|"
+  "shellcheck|{{ .shellcheck.minimumVersion }}|{{ .shellcheck.homebrew.package }}|{{ .shellcheck.homebrew.kind }}|shellcheck|"
+  "zoxide|{{ .zoxide.minimumVersion }}|{{ .zoxide.homebrew.package }}|{{ .zoxide.homebrew.kind }}|zoxide|"
+)
+
+for p3_spec in "${P3_HOMEBREW_SPECS[@]}"; do
+  IFS='|' read -r p3_tool p3_minimum p3_package p3_kind p3_command p3_extra <<<"${p3_spec}"
+  p3_homebrew_install_or_upgrade \
+    "${p3_tool}" "${p3_minimum}" "${p3_package}" "${p3_kind}" "${p3_command}" "${p3_extra}"
+done
+# <<< p3-homebrew
 
 # gh: mise install 前にトークン取得手段を確保する。導入と更新は Homebrew が所有し、
 # 未導入か最小版未満のときだけ操作する。最小版以上の版は更新しない。

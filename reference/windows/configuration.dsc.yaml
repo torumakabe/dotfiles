@@ -113,7 +113,9 @@ properties:
       settings:
         productId: Microsoft.VisualStudio.Product.BuildTools
         channelId: VisualStudio.17.Release
-        components: Microsoft.VisualStudio.Workload.VCTools
+        components:
+          - Microsoft.VisualStudio.Workload.VCTools
+          - Microsoft.VisualStudio.Component.VC.Tools.ARM64
         includeRecommended: true
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:

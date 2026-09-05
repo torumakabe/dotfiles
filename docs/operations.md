@@ -6,16 +6,16 @@
 
 | 環境 | 管理ツール | 主な対象 |
 |------|-----------|----------|
-| Linux / WSL | `apt` + `mise` | OS パッケージ、Azure CLI、開発ツール |
-| macOS | `brew` + `mise` | OS パッケージ、GUI アプリ、Azure CLI、開発ツール |
-| Codespaces / Dev Container | ベースイメージ / Feature + `mise` | コンテナ基盤側ツール、開発ツール |
-| Windows | `winget` (DSC) + `mise` | GUI/CLI アプリ、Azure CLI、開発ツール |
+| Linux / WSL | `apt` とツールごとの公式導入経路 | OS パッケージ、Azure CLI、開発ツール |
+| macOS | `brew` とツールごとの公式導入経路 | OS パッケージ、GUI アプリ、Azure CLI、開発ツール |
+| Codespaces / Dev Container | ベースイメージ / Feature、`apt`、ツールごとの公式導入経路 | コンテナ基盤側ツール、開発ツール |
+| Windows | `winget` (DSC) とツールごとの公式導入経路 | GUI/CLI アプリ、Azure CLI、開発ツール |
 | 全環境共通 | `rustup` | Rust toolchain |
 | 全環境共通 | `gh extension` + `gh skill` | `gh-stack` extension と Copilot skill |
 
-### mise の管理外にあるツール
+### ツールごとの導入経路
 
-下表のCLIとランタイムは mise の `[tools]` にも lockfile にも載せず、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）。望ましい版、最小版、公式 asset は `home/.chezmoidata.toml` を正本とする。導入スクリプトはこのファイルを書き換えない。
+下表のCLIとランタイムは、ツールごとの公式導入経路を使う（[ADR-028](adr/028-remove-mise-use-official-per-tool-install-paths.md)）。望ましい版、最小版、公式 asset は `home/.chezmoidata.toml` を正本とする。導入スクリプトはこのファイルを書き換えない。
 
 | ツール | 導入経路 | 更新の起点 |
 |--------|---------|-----------|
@@ -40,6 +40,17 @@
 | Terraform | `releases.hashicorp.com` の公式ZIPと署名付きchecksum list | `[terraform]` の `version` / `assets` / `verification` |
 | Trivy | `aquasecurity/trivy` の公式アーカイブ | `[trivy]` の `version` / `assets` |
 | yq | `mikefarah/yq` の公式バイナリ | `[yq]` の `version` / `assets` |
+| 1Password CLI (`op`) | macOS: Homebrew cask / Linux: vendor apt / Windows: 公式ZIPとAuthenticode | `[onePassword]` の `minimumVersion` / `version` と署名検証の宣言 |
+| bat | macOS: Homebrew / Windows: WinGet / Linux: 公式release | `[bat]` の `minimumVersion` / `version` / `assets` |
+| cargo-make (`cargo-make` / `makers`) | macOS: Homebrew / LinuxとWindowsのamd64: 公式release / LinuxとWindowsのARM64: 固定crateからbuild | `[cargoMake]` の `minimumVersion` / `version` / `assets` / `source` |
+| fzf | macOS: Homebrew / Windows: WinGet / Linux: 公式release | `[fzf]` の `minimumVersion` / `version` / `assets` |
+| ghq | macOS: Homebrew / Windows: WinGet / Linux: 公式release | `[ghq]` の `minimumVersion` / `version` / `assets` |
+| gitleaks | macOS: Homebrew / Windows: WinGet / Linux: 公式release | `[gitleaks]` の `minimumVersion` / `version` / `assets` |
+| golangci-lint | macOS / Linux: 公式release / Windows: WinGet | `[golangciLint]` の `minimumVersion` / `version` / `assets` |
+| lefthook | macOS: Homebrew / Windows: WinGet / Linux: 公式release | `[lefthook]` の `minimumVersion` / `version` / `assets` |
+| ripgrep (`rg`) | macOS: Homebrew / Windows: WinGet / Linux: 公式release | `[ripgrep]` の `minimumVersion` / `version` / `assets` |
+| ShellCheck | macOS: Homebrew / Windows: WinGet / Linux: 公式release | `[shellcheck]` の `minimumVersion` / `version` / `assets` |
+| zoxide | macOS: Homebrew / Windows: WinGet / Linux: 公式release | `[zoxide]` の `minimumVersion` / `version` / `assets` |
 
 GitHub CLI は、未導入か `githubCli.minimumVersion` 未満のときだけ導入・更新する。最小版以上は更新しない。最小版は `gh skill list` / `gh skill install` の対応版であり、下回ると `gh-stack` のセットアップが完了しない。Linux、WSL、Dev Container、Codespaces は `apt`、macOS は Homebrew、Windows は WinGet を使う。Codespaces のカスタム Dev Containerには gh が含まれない場合があるため、ベースイメージへの同梱を前提にしない。`run_after_27-ensure-github-cli` は導入も複製もせず、POSIX では `~/.local/bin/gh` を vendor 実体への symlink として保ち、全プラットフォームで最小版を検査して不足時に更新コマンドを案内する。
 
@@ -57,7 +68,7 @@ Go と pnpm の版は、プロジェクト指定による別版の自動取得�
 
 直接導入する各ランタイムは、専用 root への実体配置に加えて POSIX (macOS/Linux/WSL) では主要コマンドへの symlink を `~/.local/bin` へ張る（`go`/`gofmt`、`node`/`npm`/`npx`、`dotnet`/`dnx`、`pnpm`、`tsc`、`tsserver`（typescript-lsp の npm 生成 launcher）、`typescript-language-server`）。置き換えるのは自身の入口と同名の旧 mise shim へのリンクだけで、管理外のファイルやリンクと衝突した場合は上書きせずに失敗する。payload が完全なのに symlink だけが欠落している場合は、再ダウンロードせずに symlink だけを復旧する。POSIX の `PATH` には専用 root を追加せず、`~/.local/bin` を残存する mise shims より前に置く。
 
-Windows は symlink や独自の汎用プロキシを作らず、`run_once_after_05-setup-user-path.ps1` が次のディレクトリを、この順序でユーザー `Path` の先頭へ登録する。
+Windowsの言語ランタイムはSDKの探索規則に合わせて専用rootを使う。`run_once_after_05-setup-user-path.ps1` が次のディレクトリを、この順序でユーザー `Path` の先頭へ登録する。
 
 1. `%USERPROFILE%\.local\bin`
 2. `%USERPROFILE%\.local\share\chezmoi-dotfiles\go\bin`
@@ -70,6 +81,22 @@ Windows は symlink や独自の汎用プロキシを作らず、`run_once_after
 9. `%LOCALAPPDATA%\mise\shims`
 
 Go、Windows 版 Node.js、.NET SDK、pnpm と同梱の `dist`、各 npm prefix は公式配布構成のまま専用 root に保持する。Windows 版 Bun の `bunx.exe` は公式インストーラーと同じファイルコピーで提供する。ユーザー `Path` の変更は既存プロセスへ遡及しないため、新しいプロセスで確認する。GUI アプリが古い環境を保持している場合は、サインアウトまたは OS の再起動が必要になる。
+
+### OS packageが所有するCLIの入口
+
+bat、fzf、ghq、gitleaks、lefthook、ripgrep、ShellCheck、zoxideは、macOSではHomebrew、WindowsではWinGetが導入と更新を所有する。OS packageの下限は `minimumVersion`、Linuxの公式配布物の固定版は `version` で指定する。最低版以上のpackageは日常の適用でupgradeしない。最低版の変更は既存のOS packageスクリプトの内容へ反映され、次の適用で再評価される。
+
+各ツールの通常 `run_after_` は、packageが所有する実体のCPU種別と版を確認し、`~/.local/bin` にnative symlinkを作る。macOSではHomebrewの安定したopt path、Windowsでは確認済みのユーザーpackageに対応するWinGet aliasを使い、実行時にpackage managerを起動しない。実体が適合していれば、入口の修復だけで通信は発生しない。Windowsのsymlink作成は、既存DSCのDeveloper Mode設定を前提とする。
+
+別packageやmiseの実体を、版が一致するという理由だけで受け入れない。管理外の入口と衝突した場合は保持して失敗する。OS packageの導入や更新はmanager側の処理であり、直接配置するバイナリと同じrollback保証は設けない。Windows arm64の互換実行範囲は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
+
+### 1Password CLIとgolangci-lint
+
+1Password CLIは、macOSではHomebrew cask、Linuxでは1Passwordの署名付きapt repositoryを使う。Linuxの導入では固定した公開鍵のhashとfingerprint、packageの署名検証を確認する。既存のrepository設定や鍵が一致しない場合は、利用者の設定を上書きして続行しない。
+
+Windowsの1Password CLIは、固定版ZIPのSHA-256と、展開した `op.exe` のAuthenticodeを確認する。署名の有効性に加えてAgilebitsのsubject、Microsoftのissuer、1Password固有のEKUを照合し、成功後にCPU種別と版を確認して配置する。この処理は1Password appの `op-ssh-sign` とは別で、Git署名やWSLのwrapperを変更しない。
+
+golangci-lintは、macOSとLinuxでは固定した公式release、WindowsではWinGetを使う。Homebrewが別のGoを追加する構成にはせず、Goは既存の公式導入経路で管理する。固定版の更新ではassetのhashとCPU種別を確認し、Windowsの最低版更新ではWinGet所有の実体を再評価する。
 
 ### クラウド関連CLIの導入
 
@@ -85,11 +112,18 @@ Terraformでは、公開鍵、checksum list、detached signatureも検証する�
 
 版を更新するときは、その版の公式配布物とchecksumを確認して `version` / `assets` を更新する。Terraformは対応する署名付きlistとsignatureの宣言も更新する。署名鍵が変わる場合は新しい鍵とfingerprintを確認し、取得したファイルのhashで機械的に宣言を上書きしない。変更後は `uv run python -m unittest tests.test_cloud_core_installs tests.test_cloud_security_installs tests.test_platform_parity` を実行する。
 
-## 定期チェック対象の制約
+### cargo-makeの導入
 
-`mise` 設定や導入元を見直すときに、次の制約が残っているか確認する。解消されていれば条件分岐やワークアラウンドを外せる。
+macOSではHomebrewの `cargo-make` と `makers` を検査し、両方の入口を `~/.local/bin` に作る。LinuxとWindowsのamd64では、固定した公式releaseの両実体を直接配置する。
 
-- **cargo-make**: linux/arm64 向け配布なし
+LinuxとWindowsのARM64では、SHA-256を固定したcrateから既存のRustup/Cargoでビルドする。LinuxはOSスクリプトの `build-essential`、WindowsはDSCのVisual Studio 2022 Build ToolsとARM64 C++ componentを前提とする。ビルドには時間と依存取得の通信が必要だが、宣言版の両実体が既に適合していれば実行しない。対象範囲とsource buildを撤去する条件は[ワークアラウンド](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
+
+Windows ARM64ではnative Rust/MSVCとWindows SDKのARM64ライブラリを確認し、User scopeのCargoリンカー設定をビルドプロセスへ読み直す。プロセス内の環境変更は処理後に復元し、別CPUのcompilerへフォールバックしない。
+
+両実体は同じファイルシステムで版とCPUを確認してから配置する。二つの置換は単一の原子的操作ではないため、途中で失敗した場合は旧実体へ戻す。復元できない場合は回復用ファイルを残し、その場所を表示して非零終了する。
+
+## その他のOS固有ツール
+
 - **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式 `.deb`、更新は `azd update`）
 - **copilot-cli**: mise の `github:` バックエンドで更新遅延やバージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式リリースアーカイブ、更新は `copilot update`）
 - **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
@@ -315,7 +349,6 @@ devcontainer up --workspace-folder .
 
 ```bash
 gh auth login
-GITHUB_TOKEN=$(gh auth token) mise install --yes
 chezmoi apply
 ```
 
@@ -364,9 +397,16 @@ git config --local hook.dotfiles-gitleaks.enabled false
 
 ## `run_once_*` の再実行
 
+OS packageの不足が原因なら、そのpackageだけを担当managerで修復し、`chezmoi apply` で通常の入口検査をやり直す。修復のために、すべての `run_once_` を再実行する必要はない。
+
+スクリプト全体を意図して再実行するときは、`chezmoi state dump --format=json` で実行記録を確認する。`run_once_` のkeyはテンプレート展開後の内容のSHA-256であり、ソースファイル自体のhashではない。対象のkeyを特定してから、以下の `CONFIRMED_SCRIPT_SHA256` をその値に置き換える。
+
 ```bash
-chezmoi state delete-bucket --bucket=scriptState
+chezmoi state get --bucket=scriptState --key=CONFIRMED_SCRIPT_SHA256
+chezmoi state delete --bucket=scriptState --key=CONFIRMED_SCRIPT_SHA256
 chezmoi apply
 ```
+
+`scriptState` のbucket全体は削除しない。同じ内容の別スクリプトもkeyを共有するため、対象を特定できなければ記録を削除せず止める。
 
 実行順は [`architecture.md`](architecture.md#セットアップスクリプトの実行順) を参照。

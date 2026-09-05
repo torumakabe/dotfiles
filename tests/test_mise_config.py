@@ -32,21 +32,6 @@ MISE_LOCK_PLATFORMS = (
     "windows-arm64",
 )
 MISE_LOCK_PLATFORM_CSV = ",".join(MISE_LOCK_PLATFORMS)
-CARGO_MAKE_EXCLUDED_PLATFORM = ("linux", "arm64")
-CARGO_MAKE_UPSTREAM_ISSUE = "https://github.com/sagiegurari/cargo-make/issues/541"
-REMAINING_MISE_TOOLS = {
-    "1password",
-    "bat",
-    "cargo-make",
-    "fzf",
-    "ghq",
-    "gitleaks",
-    "golangci-lint",
-    "lefthook",
-    "ripgrep",
-    "shellcheck",
-    "zoxide",
-}
 
 # aube の trustPolicy=no-downgrade 除外。プロキシが証跡を落とす版だけを明記し、
 # パッケージ名だけの除外へ広げない（将来版の検査を残すため）。
@@ -146,16 +131,18 @@ def _powershell_mise_upgrade_function() -> str:
 
 
 class MiseConfigTests(unittest.TestCase):
-    def test_only_p3_tools_remain_in_mise_config_and_lock(self) -> None:
-        config_tools = set(
-            _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))["tools"]
-        )
-        lock_tools = set(
-            tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))["tools"]
-        )
+    def test_mise_tool_table_is_empty_but_framework_settings_remain(self) -> None:
+        config = _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))
+        lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
 
-        self.assertEqual(config_tools, REMAINING_MISE_TOOLS)
-        self.assertEqual(lock_tools, REMAINING_MISE_TOOLS)
+        self.assertEqual(config["tools"], {})
+        self.assertNotIn("tools", lock)
+        self.assertTrue(config["settings"]["experimental"])
+        self.assertTrue(config["settings"]["lockfile"])
+        self.assertEqual(
+            config["settings"]["lockfile_platforms"],
+            list(MISE_LOCK_PLATFORMS),
+        )
 
     def test_mise_bootstrap_excludes_known_vulnerable_release(self) -> None:
         bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
@@ -398,7 +385,7 @@ class MiseConfigTests(unittest.TestCase):
         config = CONFIG_PATH.read_text(encoding="utf-8")
         lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
 
-        self.assertNotIn("dotnet", lock["tools"])
+        self.assertNotIn("dotnet", lock.get("tools", {}))
         self.assertNotIn("[tool_alias]", config)
         self.assertNotRegex(config, r"(?m)^\[tools\.dotnet\]")
 
@@ -943,37 +930,6 @@ $result = @{{
                     set(platform_values),
                     {platform_csv},
                 )
-
-    def test_cargo_make_linux_arm64_constraint_stays_aligned(self) -> None:
-        config = CONFIG_PATH.read_text(encoding="utf-8")
-        instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
-        operations = OPERATIONS_PATH.read_text(encoding="utf-8")
-        os_name, arch = CARGO_MAKE_EXCLUDED_PLATFORM
-        platform = f"{os_name}/{arch}"
-
-        cargo_make_block = re.search(
-            r'{{ if not \(and \(eq \.chezmoi\.os "([^"]+)"\) '
-            r'\(eq \.chezmoi\.arch "([^"]+)"\)\) -}}\s*'
-            r"# [^\n]*\s*cargo-make = \"latest\"\s*{{ end -}}",
-            config,
-        )
-        self.assertIsNotNone(cargo_make_block)
-        self.assertEqual(cargo_make_block.groups(), CARGO_MAKE_EXCLUDED_PLATFORM)
-
-        for path, document in (
-            (INSTRUCTIONS_PATH, instructions),
-            (OPERATIONS_PATH, operations),
-        ):
-            with self.subTest(path=path):
-                cargo_make_lines = [
-                    line for line in document.splitlines() if "cargo-make" in line
-                ]
-                self.assertTrue(cargo_make_lines)
-                self.assertTrue(
-                    all(platform in line for line in cargo_make_lines)
-                )
-
-        self.assertIn(CARGO_MAKE_UPSTREAM_ISSUE, instructions)
 
     def test_trust_policy_excludes_stay_version_scoped(self) -> None:
         # P1 (ADR-028) で npm:typescript-language-server が mise から離れたため、

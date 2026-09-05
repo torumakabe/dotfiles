@@ -374,6 +374,23 @@ Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
 
 # Completion cache: generate once and return the source file path.
 # Cache is invalidated when the tool binary is updated (mtime comparison).
+function Get-ResolvedCommandItem {
+    param([string]$Path)
+
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    for ($depth = 0; $item -and $depth -lt 16; $depth++) {
+        if (-not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            return $item
+        }
+        $target = [string]@($item.Target)[0]
+        if (-not [System.IO.Path]::IsPathRooted($target)) {
+            $target = Join-Path $item.DirectoryName $target
+        }
+        $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    }
+    return $null
+}
+
 function Get-CachedSourcePath {
     param(
         [string]$Name,
@@ -388,7 +405,9 @@ function Get-CachedSourcePath {
     $cacheFile = Join-Path $cacheDir "$Name.ps1"
     if (-not (Test-Path $cacheDir)) { [void](New-Item -ItemType Directory -Path $cacheDir -Force) }
 
-    $cmdMtime = (Get-Item $cmdPath).LastWriteTime
+    $cmdItem = Get-ResolvedCommandItem -Path $cmdPath
+    if (-not $cmdItem) { return }
+    $cmdMtime = $cmdItem.LastWriteTime
     if ((Test-Path $cacheFile) -and (Get-Item $cacheFile).LastWriteTime -gt $cmdMtime) {
         return $cacheFile
     }

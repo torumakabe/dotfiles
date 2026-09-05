@@ -1,18 +1,4 @@
 [tools]
-fzf = "latest"
-1password = "latest"
-ghq = "latest"
-golangci-lint = "latest"
-ripgrep = "latest"
-zoxide = "latest"
-bat = "latest"
-shellcheck = "latest"
-gitleaks = "latest"
-lefthook = "latest"
-{{ if not (and (eq .chezmoi.os "linux") (eq .chezmoi.arch "arm64")) -}}
-# プリビルドバイナリが linux/arm64 未提供のためスキップ
-cargo-make = "latest"
-{{ end -}}
 
 [settings]
 experimental = true

@@ -1,0 +1,469 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+$ErrorActionPreference = 'Stop'
+$toolVersion = '{{ .cargoMake.version }}'
+$platformArch = '{{ .chezmoi.arch }}'
+$binDir = Join-Path $HOME '.local\bin'
+$targets = @{
+    'cargo-make' = Join-Path $binDir 'cargo-make.exe'
+    'makers' = Join-Path $binDir 'makers.exe'
+}
+$miseTargets = @{
+    'cargo-make' = Join-Path $env:LOCALAPPDATA 'mise\shims\cargo-make.exe'
+    'makers' = Join-Path $env:LOCALAPPDATA 'mise\shims\makers.exe'
+}
+
+function ConvertTo-NormalizedPath {
+    param([string]$Path, [string]$BasePath)
+    if (-not [System.IO.Path]::IsPathRooted($Path)) { $Path = Join-Path $BasePath $Path }
+    return [System.IO.Path]::GetFullPath($Path).Replace('\', '/').TrimEnd('/')
+}
+
+function Assert-OneTarget {
+    param([string]$Name)
+    $path = $targets[$Name]
+    $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return 'Missing' }
+    if ($item.PSIsContainer) { throw "$path is a directory; refusing to replace it." }
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        $linkTarget = [string]@($item.Target)[0]
+        if (-not [System.IO.Path]::IsPathRooted($linkTarget)) {
+            $linkTarget = Join-Path $item.DirectoryName $linkTarget
+        }
+        if ((ConvertTo-NormalizedPath $linkTarget $item.DirectoryName) -ine
+            (ConvertTo-NormalizedPath $miseTargets[$Name] $item.DirectoryName)) {
+            throw "$path is a foreign symlink; refusing to replace it."
+        }
+        return 'MiseLink'
+    }
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "$path is not a regular file; refusing to replace it."
+    }
+    return 'File'
+}
+
+function Assert-Targets {
+    Assert-OneTarget 'cargo-make' | Out-Null
+    Assert-OneTarget 'makers' | Out-Null
+}
+
+function Test-PeMachine {
+    param([string]$Path, [int]$ExpectedMachine)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) { return $false }
+    $stream = $null
+    $reader = $null
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        $reader = [System.IO.BinaryReader]::new($stream)
+        if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { return $false }
+        $stream.Position = 0x3c
+        $peOffset = $reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 6)) { return $false }
+        $stream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) { return $false }
+        $machine = $reader.ReadUInt16()
+        return $machine -eq $ExpectedMachine
+    }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.Security.SecurityException] { return $false }
+    finally {
+        if ($reader) { $reader.Dispose() } elseif ($stream) { $stream.Dispose() }
+    }
+}
+
+function Test-BinaryArchitecture {
+    param([string]$Path)
+    $expectedMachine = if ($platformArch -ceq 'amd64') { 0x8664 } else { 0xAA64 }
+    return Test-PeMachine $Path $expectedMachine
+}
+
+function Test-ExpectedVersion {
+    param([string]$Path, [string]$Name, [string]$WorkingDirectory)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    $oldHome = $env:HOME
+    $oldProfile = $env:USERPROFILE
+    $oldCargoHome = $env:CARGO_HOME
+    $oldUpdate = $env:CARGO_MAKE_DISABLE_CHECK_FOR_UPDATES
+    $probeHome = Join-Path $WorkingDirectory ([System.IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Path $probeHome | Out-Null
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $env:HOME = $probeHome
+        $env:USERPROFILE = $probeHome
+        $env:CARGO_HOME = Join-Path $probeHome 'cargo'
+        $env:CARGO_MAKE_DISABLE_CHECK_FOR_UPDATES = '1'
+        $output = if ($Name -ceq 'cargo-make') {
+            & $Path make --version 2>$null
+        }
+        elseif ($Name -ceq 'makers') {
+            & $Path --version 2>$null
+        }
+        else { return $false }
+        if ($LASTEXITCODE -ne 0) { return $false }
+    }
+    catch [System.Management.Automation.CommandNotFoundException] { return $false }
+    catch [System.Management.Automation.ApplicationFailedException] { return $false }
+    catch [System.ComponentModel.Win32Exception] { return $false }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    finally {
+        foreach ($pair in @(
+            @('HOME', $oldHome), @('USERPROFILE', $oldProfile), @('CARGO_HOME', $oldCargoHome),
+            @('CARGO_MAKE_DISABLE_CHECK_FOR_UPDATES', $oldUpdate))) {
+            if ($null -eq $pair[1]) { Remove-Item "Env:$($pair[0])" -ErrorAction SilentlyContinue }
+            else { Set-Item "Env:$($pair[0])" ([string]$pair[1]) }
+        }
+        Pop-Location
+        Remove-Item -LiteralPath $probeHome -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if (@($output).Count -ne 1) { return $false }
+    $text = ([string]$output).Trim()
+    return $text -ceq "cargo-make $toolVersion"
+}
+
+function Assert-Unlocked {
+    param([string]$Name)
+    if ((Assert-OneTarget $Name) -ne 'File') { return }
+    $path = $targets[$Name]
+    try {
+        $stream = [System.IO.File]::Open(
+            $path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None)
+        $stream.Dispose()
+    }
+    catch {
+        throw "$path cannot be replaced because it is locked; existing entries were not changed."
+    }
+}
+
+function Extract-ExactZipEntry {
+    param([string]$Archive, [string]$EntryName, [string]$Output)
+    if ([System.IO.Path]::IsPathRooted($EntryName) -or
+        @($EntryName.Replace('\', '/').Split('/')).Contains('..')) {
+        throw "unsafe archive entry $EntryName"
+    }
+    $bundle = [System.IO.Compression.ZipFile]::OpenRead($Archive)
+    try {
+        $matches = @($bundle.Entries | Where-Object {
+            $_.FullName.Replace('\', '/') -ceq $EntryName.Replace('\', '/')
+        })
+        if ($matches.Count -ne 1 -or -not $matches[0].Name) {
+            throw "expected exactly one regular $EntryName in the archive"
+        }
+        $inputStream = $matches[0].Open()
+        $outputStream = [System.IO.File]::Create($Output)
+        try { $inputStream.CopyTo($outputStream) }
+        finally {
+            $outputStream.Dispose()
+            $inputStream.Dispose()
+        }
+    }
+    finally { $bundle.Dispose() }
+}
+
+Assert-Targets
+$cargoState = Assert-OneTarget 'cargo-make'
+$makersState = Assert-OneTarget 'makers'
+if ($cargoState -eq 'File' -and $makersState -eq 'File' -and
+    (Test-BinaryArchitecture $targets['cargo-make']) -and
+    (Test-BinaryArchitecture $targets['makers']) -and
+    (Test-ExpectedVersion $targets['cargo-make'] 'cargo-make' $binDir) -and
+    (Test-ExpectedVersion $targets['makers'] 'makers' $binDir)) {
+    exit 0
+}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$stageDir = Join-Path $binDir ('.cargo-make-install.' + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+$keepRecovery = $false
+try {
+    $stagedCargoMake = Join-Path $stageDir 'cargo-make.exe'
+    $stagedMakers = Join-Path $stageDir 'makers.exe'
+{{ if eq .chezmoi.arch "amd64" -}}
+{{- $asset := index .cargoMake.assets $platform }}
+    $archive = Join-Path $stageDir 'download.zip'
+    Invoke-WebRequest -Uri '{{ $asset.url }}' -OutFile $archive -UseBasicParsing
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne
+        '{{ $asset.sha256 }}') {
+        throw 'checksum verification failed for {{ $asset.file }}'
+    }
+    Extract-ExactZipEntry $archive '{{ $asset.entry }}' $stagedCargoMake
+    Extract-ExactZipEntry $archive '{{ $asset.secondEntry }}' $stagedMakers
+{{ else if eq .chezmoi.arch "arm64" -}}
+    if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -ne
+        [System.Runtime.InteropServices.Architecture]::Arm64) {
+        throw 'native ARM64 PowerShell is required for the cargo-make source build'
+    }
+    $sourceArchive = Join-Path $stageDir '{{ .cargoMake.source.file }}'
+    Invoke-WebRequest -Uri '{{ .cargoMake.source.url }}' -OutFile $sourceArchive -UseBasicParsing
+    if ((Get-FileHash -LiteralPath $sourceArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne
+        '{{ .cargoMake.source.sha256 }}') {
+        throw 'checksum verification failed for {{ .cargoMake.source.file }}'
+    }
+    $entries = & tar.exe -tzf $sourceArchive
+    if ($LASTEXITCODE -ne 0 -or -not $entries) { throw 'could not inspect cargo-make crate archive' }
+    foreach ($entry in @($entries)) {
+        $normalized = ([string]$entry).Replace('\', '/')
+        if ($normalized.StartsWith('/') -or @($normalized.Split('/')).Contains('..')) {
+            throw "unsafe cargo-make crate path: $entry"
+        }
+    }
+    $sourceParent = Join-Path $stageDir 'source'
+    New-Item -ItemType Directory -Path $sourceParent | Out-Null
+    & tar.exe -xzf $sourceArchive -C $sourceParent
+    if ($LASTEXITCODE -ne 0) { throw 'could not extract cargo-make crate archive' }
+    $sourceRoot = Join-Path $sourceParent '{{ .cargoMake.source.entry }}'
+    if (-not (Test-Path (Join-Path $sourceRoot 'Cargo.lock') -PathType Leaf) -or
+        -not (Test-Path (Join-Path $sourceRoot 'Cargo.toml') -PathType Leaf)) {
+        throw 'cargo-make crate is missing Cargo.lock or Cargo.toml'
+    }
+    $rustupCommand = Get-Command rustup.exe -CommandType Application -ErrorAction Stop |
+        Select-Object -First 1
+    $rustupFull = [System.IO.Path]::GetFullPath($rustupCommand.Source)
+    $expectedRustup = [System.IO.Path]::GetFullPath((Join-Path $HOME '.cargo\bin\rustup.exe'))
+    if ($rustupFull -ine $expectedRustup -or -not (Test-BinaryArchitecture $rustupFull)) {
+        throw 'rustup is not a native ARM64 executable'
+    }
+    $cargoBinary = [string](& $rustupFull which cargo 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $cargoBinary) {
+        throw 'rustup could not resolve cargo for native cargo-make build'
+    }
+    $rustupRoot = [System.IO.Path]::GetFullPath(
+        $(if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $HOME '.rustup' }))
+    $cargoFull = [System.IO.Path]::GetFullPath($cargoBinary)
+    if (-not $cargoFull.StartsWith(
+        ($rustupRoot.TrimEnd('\') + '\toolchains\'),
+        [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'cargo is not owned by the rustup toolchain'
+    }
+    if (-not (Test-BinaryArchitecture $cargoFull)) { throw 'rustup cargo is not native arm64' }
+    $rustcBinary = [string](& $rustupFull which rustc 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $rustcBinary) {
+        throw 'rustup could not resolve rustc for native cargo-make build'
+    }
+    $rustcFull = [System.IO.Path]::GetFullPath($rustcBinary)
+    if (-not $rustcFull.StartsWith(
+        ($rustupRoot.TrimEnd('\') + '\toolchains\'),
+        [System.StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-BinaryArchitecture $rustcFull)) {
+        throw 'rustup rustc is not a native ARM64 toolchain executable'
+    }
+    $linker = [Environment]::GetEnvironmentVariable(
+        'CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER', 'User')
+    if (-not $linker -or -not (Test-Path -LiteralPath $linker -PathType Leaf) -or
+        $linker.Replace('/', '\') -notmatch '\\bin\\HostARM64\\ARM64\\link\.exe$') {
+        throw 'native ARM64 MSVC linker was not resolved; apply the MSVC linker configuration first'
+    }
+    if (-not (Test-PeMachine $linker 0xAA64)) {
+        throw 'resolved ARM64 target linker is not a native ARM64 MSVC executable'
+    }
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
+        throw 'vswhere.exe is required to initialize the ARM64 MSVC build environment'
+    }
+    $installationPath = [string](& $vswhere -latest -prerelease -products * `
+        -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath)
+    if ($LASTEXITCODE -ne 0 -or -not $installationPath) {
+        throw 'Visual Studio ARM64 build tools installation was not found'
+    }
+    $installationPath = [System.IO.Path]::GetFullPath($installationPath.Trim())
+    $linkerFull = [System.IO.Path]::GetFullPath($linker)
+    if (-not $linkerFull.StartsWith(
+        ($installationPath.TrimEnd('\') + '\'),
+        [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'resolved ARM64 target linker is outside the selected Visual Studio installation'
+    }
+    # ARM64 HostArch はDeveloper PowerShellの公開引数では選べないため、
+    # VS 17.4以降のnative toolsetとWindows SDKのARM64構成だけを明示する。
+    $vcBin = Split-Path -Parent $linkerFull
+    $hostToolsRoot = Split-Path -Parent $vcBin
+    $vcBinRoot = Split-Path -Parent $hostToolsRoot
+    $vcToolsRoot = Split-Path -Parent $vcBinRoot
+    if (-not $vcToolsRoot.StartsWith(
+        ((Join-Path $installationPath 'VC\Tools\MSVC').TrimEnd('\') + '\'),
+        [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'resolved ARM64 linker is outside the Visual Studio MSVC toolsets'
+    }
+    $compiler = Join-Path $vcBin 'cl.exe'
+    $librarian = Join-Path $vcBin 'lib.exe'
+    foreach ($tool in @($compiler, $linkerFull, $librarian)) {
+        if (-not (Test-PeMachine $tool 0xAA64)) {
+            throw "$tool is not a native ARM64 MSVC executable"
+        }
+    }
+    $vcInclude = Join-Path $vcToolsRoot 'include'
+    $vcLib = Join-Path $vcToolsRoot 'lib\arm64'
+    if (-not (Test-Path -LiteralPath $vcInclude -PathType Container) -or
+        -not (Test-Path -LiteralPath $vcLib -PathType Container)) {
+        throw 'native ARM64 MSVC headers or libraries are missing'
+    }
+    $kitsRoot = [string](Get-ItemPropertyValue -LiteralPath `
+        'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots' `
+        -Name KitsRoot10)
+    if (-not $kitsRoot) { throw 'Windows SDK KitsRoot10 is not registered' }
+    $kitsRoot = [System.IO.Path]::GetFullPath($kitsRoot)
+    $sdkVersion = $null
+    foreach ($candidate in @(
+        Get-ChildItem -LiteralPath (Join-Path $kitsRoot 'Include') -Directory |
+            Where-Object Name -Match '^\d+\.\d+\.\d+\.\d+$' |
+            Sort-Object { [version]$_.Name } -Descending)) {
+        $version = $candidate.Name
+        if ((Test-Path -LiteralPath (Join-Path $candidate.FullName 'ucrt') -PathType Container) -and
+            (Test-Path -LiteralPath (Join-Path $candidate.FullName 'shared') -PathType Container) -and
+            (Test-Path -LiteralPath (Join-Path $candidate.FullName 'um') -PathType Container) -and
+            (Test-Path -LiteralPath (Join-Path $kitsRoot "Lib\$version\ucrt\arm64") -PathType Container) -and
+            (Test-Path -LiteralPath (Join-Path $kitsRoot "Lib\$version\um\arm64") -PathType Container) -and
+            (Test-Path -LiteralPath (Join-Path $kitsRoot "bin\$version\arm64\rc.exe") -PathType Leaf)) {
+            $sdkVersion = $version
+            break
+        }
+    }
+    if (-not $sdkVersion) {
+        throw 'a complete ARM64 Windows SDK installation was not found'
+    }
+    $sdkIncludeRoot = Join-Path $kitsRoot "Include\$sdkVersion"
+    $sdkLibRoot = Join-Path $kitsRoot "Lib\$sdkVersion"
+    $sdkBin = Join-Path $kitsRoot "bin\$sdkVersion\arm64"
+    $resourceCompiler = Join-Path $sdkBin 'rc.exe'
+    if (-not (Test-PeMachine $resourceCompiler 0xAA64)) {
+        throw 'Windows SDK rc.exe is not a native ARM64 executable'
+    }
+    $includePaths = [System.Collections.Generic.List[string]]::new()
+    $includePaths.Add($vcInclude)
+    foreach ($name in @('ucrt', 'shared', 'um', 'winrt', 'cppwinrt')) {
+        $path = Join-Path $sdkIncludeRoot $name
+        if (Test-Path -LiteralPath $path -PathType Container) { $includePaths.Add($path) }
+    }
+    $libPaths = @(
+        $vcLib,
+        (Join-Path $sdkLibRoot 'ucrt\arm64'),
+        (Join-Path $sdkLibRoot 'um\arm64'))
+    $savedEnvironment = @{}
+    Get-ChildItem Env: | ForEach-Object { $savedEnvironment[$_.Name] = $_.Value }
+    try {
+        $env:PATH = "$vcBin;$sdkBin;$($env:PATH)"
+        $env:INCLUDE = [string]::Join(';', $includePaths)
+        $env:LIB = [string]::Join(';', $libPaths)
+        $env:LIBPATH = $vcLib
+        $env:VCINSTALLDIR = (Join-Path $installationPath 'VC').TrimEnd('\') + '\'
+        $env:VSINSTALLDIR = $installationPath.TrimEnd('\') + '\'
+        $env:VCToolsInstallDir = $vcToolsRoot.TrimEnd('\') + '\'
+        $env:WindowsSdkDir = $kitsRoot.TrimEnd('\') + '\'
+        $env:WindowsSDKVersion = "$sdkVersion\"
+        $env:UniversalCRTSdkDir = $kitsRoot.TrimEnd('\') + '\'
+        $env:UCRTVersion = $sdkVersion
+        $compilerCommand = Get-Command cl.exe -CommandType Application -ErrorAction Stop |
+            Select-Object -First 1
+        if ([System.IO.Path]::GetFullPath($compilerCommand.Source) -ine $compiler) {
+            throw 'Visual Studio did not select the native ARM64 compiler host'
+        }
+        $developerLinkerCommand = Get-Command link.exe -CommandType Application -ErrorAction Stop |
+            Select-Object -First 1
+        $developerLinker = [System.IO.Path]::GetFullPath($developerLinkerCommand.Source)
+        if ($developerLinker -ine $linkerFull) {
+            throw 'Visual Studio developer environment did not select the resolved ARM64 linker'
+        }
+        $resourceCompilerCommand = Get-Command rc.exe -CommandType Application -ErrorAction Stop |
+            Select-Object -First 1
+        if ([System.IO.Path]::GetFullPath($resourceCompilerCommand.Source) -ine $resourceCompiler) {
+            throw 'Windows SDK did not select the native ARM64 resource compiler'
+        }
+        $env:HOME = Join-Path $stageDir 'build-home'
+        $env:USERPROFILE = $env:HOME
+        $env:CARGO_HOME = Join-Path $stageDir 'cargo-home'
+        $env:CARGO_TARGET_DIR = Join-Path $stageDir 'target'
+        $env:CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER = $linker
+        $env:RUSTC = $rustcFull
+        $env:CC = $compiler
+        $env:CC_aarch64_pc_windows_msvc = $compiler
+        $env:AR_aarch64_pc_windows_msvc = $librarian
+        New-Item -ItemType Directory -Force -Path $env:HOME, $env:CARGO_HOME, $env:CARGO_TARGET_DIR |
+            Out-Null
+        Push-Location -LiteralPath $stageDir
+        try {
+            & $cargoFull install --path $sourceRoot --root (Join-Path $stageDir 'installed') `
+                --target aarch64-pc-windows-msvc --locked --bins
+            if ($LASTEXITCODE -ne 0) { throw 'native cargo-make source build failed' }
+        }
+        finally { Pop-Location }
+    }
+    finally {
+        foreach ($name in @(Get-ChildItem Env: | ForEach-Object Name)) {
+            if (-not $savedEnvironment.ContainsKey($name)) {
+                Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+            }
+        }
+        foreach ($name in $savedEnvironment.Keys) {
+            Set-Item "Env:$name" ([string]$savedEnvironment[$name])
+        }
+    }
+    [System.IO.File]::Move(
+        (Join-Path $stageDir 'installed\bin\cargo-make.exe'), $stagedCargoMake)
+    [System.IO.File]::Move((Join-Path $stageDir 'installed\bin\makers.exe'), $stagedMakers)
+{{ else -}}
+    throw 'cargo-make {{ $platform }} is unsupported'
+{{ end -}}
+
+    foreach ($candidate in @(
+        @{ Path = $stagedCargoMake; Name = 'cargo-make' },
+        @{ Path = $stagedMakers; Name = 'makers' })) {
+        $candidatePath = [string]$candidate.Path
+        $candidateName = [string]$candidate.Name
+        $item = Get-Item -LiteralPath $candidatePath -Force -ErrorAction SilentlyContinue
+        if (-not $item -or $item.PSIsContainer -or
+            ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -or
+            -not (Test-BinaryArchitecture $candidatePath) -or
+            -not (Test-ExpectedVersion $candidatePath $candidateName $stageDir)) {
+            throw "$candidatePath is not a valid native cargo-make $toolVersion executable"
+        }
+    }
+
+    Assert-Unlocked 'cargo-make'
+    Assert-Unlocked 'makers'
+    Assert-Targets
+    $backups = @{}
+    $published = [System.Collections.Generic.List[string]]::new()
+    try {
+        foreach ($name in @('cargo-make', 'makers')) {
+            $path = $targets[$name]
+            $existing = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+            if ($existing) {
+                $backup = Join-Path $stageDir "previous-$name.exe"
+                [System.IO.File]::Move($path, $backup)
+                $backups[$name] = $backup
+            }
+        }
+        [System.IO.File]::Move($stagedCargoMake, $targets['cargo-make'], $true)
+        $published.Add('cargo-make')
+        [System.IO.File]::Move($stagedMakers, $targets['makers'], $true)
+        $published.Add('makers')
+    }
+    catch {
+        $publishError = $_
+        try {
+            foreach ($name in @($published | Select-Object -Reverse)) {
+                [System.IO.File]::Delete($targets[$name])
+            }
+            foreach ($name in @('cargo-make', 'makers')) {
+                if ($backups.ContainsKey($name)) {
+                    [System.IO.File]::Move($backups[$name], $targets[$name])
+                }
+            }
+        }
+        catch {
+            $keepRecovery = $true
+            throw "cargo-make rollback failed; recovery files remain in $stageDir. " +
+                "publish: $($publishError.Exception.Message); rollback: $($_.Exception.Message)"
+        }
+        throw "cargo-make publish failed; previous entries were restored. $($publishError.Exception.Message)"
+    }
+}
+finally {
+    if (-not $keepRecovery) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+{{- end }}

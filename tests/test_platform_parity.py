@@ -103,6 +103,19 @@ DIRECT_INSTALL_COMPONENT_PATHS = {
     "tool:terraform": _paired_installer("run_after_57-install-terraform"),
     "tool:trivy": _paired_installer("run_after_58-install-trivy"),
     "tool:yq": _paired_installer("run_after_59-install-yq"),
+    "tool:1password": _paired_installer("run_after_60-install-1password-cli"),
+    "tool:bat": _paired_installer("run_after_61-install-bat"),
+    "tool:cargo-make": _paired_installer("run_after_62-install-cargo-make"),
+    "tool:fzf": _paired_installer("run_after_63-install-fzf"),
+    "tool:ghq": _paired_installer("run_after_64-install-ghq"),
+    "tool:gitleaks": _paired_installer("run_after_65-install-gitleaks"),
+    "tool:golangci-lint": _paired_installer(
+        "run_after_66-install-golangci-lint"
+    ),
+    "tool:lefthook": _paired_installer("run_after_67-install-lefthook"),
+    "tool:ripgrep": _paired_installer("run_after_68-install-ripgrep"),
+    "tool:shellcheck": _paired_installer("run_after_69-install-shellcheck"),
+    "tool:zoxide": _paired_installer("run_after_70-install-zoxide"),
 }
 
 P2_DATA_KEYS = {
@@ -127,6 +140,19 @@ P2_PLATFORMS = frozenset(
     }
 )
 P2_WINDOWS_ARM64_EMULATION = frozenset({"cosign", "trivy"})
+P3_DATA_KEYS = {
+    "1password": "onePassword",
+    "bat": "bat",
+    "cargo-make": "cargoMake",
+    "fzf": "fzf",
+    "ghq": "ghq",
+    "gitleaks": "gitleaks",
+    "golangci-lint": "golangciLint",
+    "lefthook": "lefthook",
+    "ripgrep": "ripgrep",
+    "shellcheck": "shellcheck",
+    "zoxide": "zoxide",
+}
 
 
 def _implemented_everywhere() -> dict[str, str]:
@@ -214,6 +240,16 @@ PLATFORM_CONTRACT = {
     "tool:terraform": _implemented_everywhere(),
     "tool:trivy": _implemented_everywhere(),
     "tool:yq": _implemented_everywhere(),
+    "tool:1password": _implemented_everywhere(),
+    "tool:bat": _implemented_everywhere(),
+    "tool:cargo-make": _implemented_everywhere(),
+    "tool:fzf": _implemented_everywhere(),
+    "tool:ghq": _implemented_everywhere(),
+    "tool:gitleaks": _implemented_everywhere(),
+    "tool:golangci-lint": _implemented_everywhere(),
+    "tool:ripgrep": _implemented_everywhere(),
+    "tool:shellcheck": _implemented_everywhere(),
+    "tool:zoxide": _implemented_everywhere(),
 }
 
 ZSH_INTERNAL_FUNCTIONS = {
@@ -226,6 +262,7 @@ ZSH_INTERNAL_FUNCTIONS = {
 }
 POWERSHELL_INTERNAL_FUNCTIONS = {
     "Get-CachedSourcePath",
+    "Get-ResolvedCommandItem",
     "Clear-CompletionCache",
 }
 
@@ -387,7 +424,7 @@ def _installed_tools(source: str) -> set[str]:
 
 
 def _powershell_completion_section(profile: str) -> str:
-    start = profile.index("function Get-CachedSourcePath {")
+    start = profile.index("function Get-ResolvedCommandItem {")
     last_call = (
         "$zoxideCompletionPath = Get-CachedSourcePath -Name zoxide "
         "-Command zoxide -Generator { zoxide init powershell --cmd cd }"
@@ -456,6 +493,10 @@ class PlatformParityTests(unittest.TestCase):
                 f"tool:{tool}": f".{data_key}.version"
                 for tool, data_key in P2_DATA_KEYS.items()
             },
+            **{
+                f"tool:{tool}": f".{data_key}."
+                for tool, data_key in P3_DATA_KEYS.items()
+            },
         }
         for feature, paths in DIRECT_INSTALL_COMPONENT_PATHS.items():
             self.assertEqual(set(paths), PLATFORMS)
@@ -481,6 +522,7 @@ class PlatformParityTests(unittest.TestCase):
             "bun",
             "pnpm",
             *P2_DATA_KEYS,
+            *P3_DATA_KEYS,
         ):
             with self.subTest(tool=tool):
                 self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
@@ -536,7 +578,29 @@ class PlatformParityTests(unittest.TestCase):
             }.issubset(excluded)
         )
 
-    def test_p2_windows_arm64_workarounds_have_one_removal_condition(self) -> None:
+    def test_p3_migrated_commands_are_excluded_from_mise_shim_links(self) -> None:
+        source = MISE_SHIM_LINK_PATH.read_text(encoding="utf-8")
+        match = re.search(r"EXCLUDE_EXACT=\((.*?)\)", source, re.DOTALL)
+        self.assertIsNotNone(match, "EXCLUDE_EXACT array not found")
+        excluded = set(match.group(1).split())
+
+        self.assertTrue(
+            {
+                "op",
+                "bat",
+                "cargo-make",
+                "fzf",
+                "ghq",
+                "gitleaks",
+                "golangci-lint",
+                "lefthook",
+                "rg",
+                "shellcheck",
+                "zoxide",
+            }.issubset(excluded)
+        )
+
+    def test_windows_arm64_workarounds_have_one_removal_condition(self) -> None:
         instructions = INSTRUCTIONS_PATH.read_text(encoding="utf-8")
         heading = "- **Windows arm64 の公式配布物不足**:"
         self.assertEqual(instructions.count(heading), 1)
@@ -550,17 +614,21 @@ class PlatformParityTests(unittest.TestCase):
         for identifier in (
             "cosign",
             "Trivy",
+            "1Password CLI",
+            "ShellCheck",
             "Terraform",
             "Git GPG",
             "`home/.chezmoidata.toml`",
             "`cosign.assets.windows-arm64.emulated`",
             "`trivy.assets.windows-arm64.emulated`",
+            "`onePassword.assets.windows-arm64.emulated`",
+            "`shellcheck.winget.platforms.windows-arm64.emulated`",
             "`terraform.verification.windowsArm64GpgEmulated`",
             "関連テストを撤去する",
         ):
             with self.subTest(identifier=identifier):
                 self.assertIn(identifier, workaround)
-        for data_key in ("cosign", "trivy", "terraform"):
+        for data_key in ("cosign", "trivy", "onePassword", "shellcheck", "terraform"):
             with self.subTest(version=data_key):
                 self.assertNotIn(data[data_key]["version"], workaround)
 
@@ -682,7 +750,7 @@ class PlatformParityTests(unittest.TestCase):
         )
 
     @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
-    def test_lefthook_is_managed_by_mise_on_every_platform(self) -> None:
+    def test_mise_tool_table_renders_empty_on_every_platform(self) -> None:
         platform_data = {
             "windows-powershell": {"os": "windows", "arch": "amd64"},
             "macos-zsh": {"os": "darwin", "arch": "arm64"},
@@ -707,7 +775,7 @@ class PlatformParityTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 config = tomllib.loads(result.stdout)
-                self.assertEqual(config["tools"]["lefthook"], "latest")
+                self.assertEqual(config["tools"], {})
 
     def test_powershell_completion_cache_executes_generated_sources(self) -> None:
         pwsh = shutil.which("pwsh")
@@ -803,6 +871,80 @@ $result = @{{
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(set(state["sourced"]), powershell_initializers)
             self.assertEqual(set(state["registered"]), {"kubectl", "k"})
+
+    def test_powershell_completion_cache_tracks_nested_symlink_target(self) -> None:
+        pwsh = shutil.which("pwsh")
+        if pwsh is None:
+            self.skipTest("pwsh is required for PowerShell completion cache tests")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            bin_dir = root / "bin"
+            provider_dir = root / "provider"
+            bin_dir.mkdir()
+            provider_dir.mkdir()
+            first = provider_dir / "zoxide-v1"
+            second = provider_dir / "zoxide-v2"
+            for path in (first, second):
+                path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                path.chmod(0o755)
+            second.touch()
+            os.utime(second, (second.stat().st_atime, second.stat().st_mtime + 120))
+
+            provider_alias = provider_dir / "zoxide"
+            local_link = bin_dir / "zoxide"
+            try:
+                provider_alias.symlink_to(first)
+                local_link.symlink_to(provider_alias)
+            except OSError as error:
+                self.skipTest(f"symlink creation is unavailable: {error}")
+
+            script_file = root / "test-completion-symlink.ps1"
+            script_file.write_text(
+                f"""
+$global:GENERATOR_CALLS = 0
+{_powershell_completion_section(self.powershell)}
+$first = Get-CachedSourcePath -Name zoxide-test -Command zoxide -Generator {{
+    $global:GENERATOR_CALLS++
+    '$null = 1'
+}}
+Remove-Item -LiteralPath '{provider_alias}'
+New-Item -ItemType SymbolicLink -Path '{provider_alias}' -Target '{second}' | Out-Null
+$second = Get-CachedSourcePath -Name zoxide-test -Command zoxide -Generator {{
+    $global:GENERATOR_CALLS++
+    '$null = 1'
+}}
+"RESULT_JSON=$(@{{
+    calls = $global:GENERATOR_CALLS
+    first = [bool]$first
+    second = [bool]$second
+}} | ConvertTo-Json -Compress)"
+""",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env.update(
+                {
+                    "LOCALAPPDATA": str(root / "local-app-data"),
+                    "PATH": f"{bin_dir}{os.pathsep}{env.get('PATH', '')}",
+                }
+            )
+            result = subprocess.run(
+                [pwsh, "-NoProfile", "-NonInteractive", "-File", str(script_file)],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+            )
+            match = re.search(r"(?m)^RESULT_JSON=(.+)$", result.stdout)
+            self.assertIsNotNone(match, result.stdout + result.stderr)
+            state = json.loads(match.group(1))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(state["first"])
+            self.assertTrue(state["second"])
+            self.assertEqual(state["calls"], 2)
 
     def test_closed_azure_warning_workaround_is_removed(self) -> None:
         self.assertNotRegex(self.zshrc, r"(?m)^az\(\)\s*\{")

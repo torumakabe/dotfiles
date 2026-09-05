@@ -10,6 +10,375 @@ version = "1.0.1"
 # GitHub CLI は OS/ベンダーのパッケージマネージャーが所有する。ここでは本リポジトリの
 # 挙動が要求する最小版だけを宣言する。最小版以上なら更新しない。
 # gh skill list / gh skill install は 2.94.0 以降でのみ利用できる。
+[onePassword]
+version = "2.39.0"
+minimumVersion = "2.39.0"
+[onePassword.homebrew]
+package = "1password-cli"
+kind = "cask"
+prefix = "/opt/homebrew"
+[onePassword.linuxApt]
+package = "1password-cli"
+keyUrl = "https://downloads.1password.com/linux/keys/1password.asc"
+publicKeySha256 = "f39e7dd9dedc581ced85732832f217e0de5860a3b80279b5af4bc7c6d8157bae"
+primaryFingerprint = "3FEF9748469ADBE15DA7CA80AC2D62742012EA22"
+policyUrl = "https://downloads.1password.com/linux/debian/debsig/1password.pol"
+policySha256 = "c0c148807d8dc588750a9cc512c7243ed10a9cfd5519a5a6f0a038ad66a19c39"
+[onePassword.windowsVerification]
+subject = "CN=Agilebits, O=Agilebits, L=Toronto, S=Ontario, C=CA"
+issuer = "CN=Microsoft ID Verified CS AOC CA 02, O=Microsoft Corporation, C=US"
+eku = "1.3.6.1.4.1.311.97.661420558.769123285.207353056.500447802"
+[onePassword.assets.windows-amd64]
+file = "op_windows_amd64_v2.39.0.zip"
+url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.39.0/op_windows_amd64_v2.39.0.zip"
+sha256 = "38b3748d76d104469eb6e2744f843d2a7e03d1b6d330cc42d600cff379c37bab"
+archive = "zip"
+entry = "op.exe"
+executableArch = "amd64"
+emulated = false
+[onePassword.assets.windows-arm64]
+file = "op_windows_amd64_v2.39.0.zip"
+url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.39.0/op_windows_amd64_v2.39.0.zip"
+sha256 = "38b3748d76d104469eb6e2744f843d2a7e03d1b6d330cc42d600cff379c37bab"
+archive = "zip"
+entry = "op.exe"
+executableArch = "amd64"
+emulated = true
+
+[bat]
+version = "0.26.1"
+minimumVersion = "0.26.1"
+[bat.homebrew]
+package = "bat"
+kind = "formula"
+[bat.winget]
+id = "sharkdp.bat"
+[bat.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[bat.winget.platforms.windows-arm64]
+architecture = "arm64"
+executableArch = "arm64"
+emulated = false
+[bat.assets.linux-amd64]
+file = "bat-v0.26.1-x86_64-unknown-linux-musl.tar.gz"
+url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-unknown-linux-musl.tar.gz"
+sha256 = "0dcd8ac79732c0d5b136f11f4ee00e581440e16a44eab5b3105b611bbf2cf191"
+archive = "tar.gz"
+entry = "bat-v0.26.1-x86_64-unknown-linux-musl/bat"
+executableArch = "amd64"
+emulated = false
+[bat.assets.linux-arm64]
+file = "bat-v0.26.1-aarch64-unknown-linux-musl.tar.gz"
+url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-aarch64-unknown-linux-musl.tar.gz"
+sha256 = "6369242c584065f195fb20cb36fbd7cb63ae690605bbe89868a7596b596c2c23"
+archive = "tar.gz"
+entry = "bat-v0.26.1-aarch64-unknown-linux-musl/bat"
+executableArch = "arm64"
+emulated = false
+
+[cargoMake]
+version = "0.37.24"
+minimumVersion = "0.37.24"
+[cargoMake.homebrew]
+package = "cargo-make"
+kind = "formula"
+prefix = "/opt/homebrew"
+[cargoMake.assets.linux-amd64]
+file = "cargo-make-v0.37.24-x86_64-unknown-linux-gnu.zip"
+url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-unknown-linux-gnu.zip"
+sha256 = "92a663fe3eeae741c17788202937f2e2f3f7effa2669f733f4d6a1659954288b"
+archive = "zip"
+entry = "cargo-make-v0.37.24-x86_64-unknown-linux-gnu/cargo-make"
+secondEntry = "cargo-make-v0.37.24-x86_64-unknown-linux-gnu/makers"
+executableArch = "amd64"
+emulated = false
+[cargoMake.assets.windows-amd64]
+file = "cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
+url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
+sha256 = "f7c757c7e147023ac86d80b134e5a59e0ed8ff032e39be3464cc4aad1e5e0f33"
+archive = "zip"
+entry = "cargo-make.exe"
+secondEntry = "makers.exe"
+executableArch = "amd64"
+emulated = false
+[cargoMake.source]
+file = "cargo-make-0.37.24.crate"
+url = "https://static.crates.io/crates/cargo-make/cargo-make-0.37.24.crate"
+sha256 = "7f304f6f709b5dbbc0efe9c84af1f42af22e0636e625c54799a60ec3d6efb64f"
+archive = "tar.gz"
+entry = "cargo-make-0.37.24"
+
+[fzf]
+version = "0.74.3"
+minimumVersion = "0.74.3"
+[fzf.homebrew]
+package = "fzf"
+kind = "formula"
+[fzf.winget]
+id = "junegunn.fzf"
+[fzf.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[fzf.winget.platforms.windows-arm64]
+architecture = "arm64"
+executableArch = "arm64"
+emulated = false
+[fzf.assets.linux-amd64]
+file = "fzf-0.74.3-linux_amd64.tar.gz"
+url = "https://github.com/junegunn/fzf/releases/download/v0.74.3/fzf-0.74.3-linux_amd64.tar.gz"
+sha256 = "3501a595e4b5c40a6b047340a0e8f805c46fd4e61ef95ef8a136ba8c61cf6f22"
+archive = "tar.gz"
+entry = "fzf"
+executableArch = "amd64"
+emulated = false
+[fzf.assets.linux-arm64]
+file = "fzf-0.74.3-linux_arm64.tar.gz"
+url = "https://github.com/junegunn/fzf/releases/download/v0.74.3/fzf-0.74.3-linux_arm64.tar.gz"
+sha256 = "4a17a17b46bd0c4873e995533de508995c11572c0be0664a5dbcf13f60463046"
+archive = "tar.gz"
+entry = "fzf"
+executableArch = "arm64"
+emulated = false
+
+[ghq]
+version = "1.10.1"
+minimumVersion = "1.10.1"
+[ghq.homebrew]
+package = "ghq"
+kind = "formula"
+[ghq.winget]
+id = "x-motemen.ghq"
+[ghq.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[ghq.winget.platforms.windows-arm64]
+architecture = "arm64"
+executableArch = "arm64"
+emulated = false
+[ghq.assets.linux-amd64]
+file = "ghq_linux_amd64.zip"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_linux_amd64.zip"
+sha256 = "32e380aa8ac76fdd58758cc06174d9ee5db7270bd0cbcc18138b5d36def91b6b"
+archive = "zip"
+entry = "ghq_linux_amd64/ghq"
+executableArch = "amd64"
+emulated = false
+[ghq.assets.linux-arm64]
+file = "ghq_linux_arm64.zip"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_linux_arm64.zip"
+sha256 = "7ed154f62751e91c8a2d415280caeeba3d114050d01e39f3d0f4aa1be15f3954"
+archive = "zip"
+entry = "ghq_linux_arm64/ghq"
+executableArch = "arm64"
+emulated = false
+
+[gitleaks]
+version = "8.30.1"
+minimumVersion = "8.30.1"
+[gitleaks.homebrew]
+package = "gitleaks"
+kind = "formula"
+[gitleaks.winget]
+id = "Gitleaks.Gitleaks"
+[gitleaks.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[gitleaks.winget.platforms.windows-arm64]
+architecture = "arm64"
+executableArch = "arm64"
+emulated = false
+[gitleaks.assets.linux-amd64]
+file = "gitleaks_8.30.1_linux_x64.tar.gz"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+sha256 = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+archive = "tar.gz"
+entry = "gitleaks"
+executableArch = "amd64"
+emulated = false
+[gitleaks.assets.linux-arm64]
+file = "gitleaks_8.30.1_linux_arm64.tar.gz"
+url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz"
+sha256 = "e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080"
+archive = "tar.gz"
+entry = "gitleaks"
+executableArch = "arm64"
+emulated = false
+
+[golangciLint]
+version = "2.13.2"
+minimumVersion = "2.13.2"
+[golangciLint.winget]
+id = "GolangCI.golangci-lint"
+[golangciLint.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[golangciLint.winget.platforms.windows-arm64]
+architecture = "arm64"
+executableArch = "arm64"
+emulated = false
+[golangciLint.assets.darwin-arm64]
+file = "golangci-lint-2.13.2-darwin-arm64.tar.gz"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-darwin-arm64.tar.gz"
+sha256 = "f4bf83f0b64f055c42b28fc9a38861839f69c096e61c788e72dfaae412011789"
+archive = "tar.gz"
+entry = "golangci-lint-2.13.2-darwin-arm64/golangci-lint"
+executableArch = "arm64"
+emulated = false
+[golangciLint.assets.linux-amd64]
+file = "golangci-lint-2.13.2-linux-amd64.tar.gz"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-linux-amd64.tar.gz"
+sha256 = "2277d43b98ec0054280f2ac26b53268bae97682444678a59a657dd565da021d6"
+archive = "tar.gz"
+entry = "golangci-lint-2.13.2-linux-amd64/golangci-lint"
+executableArch = "amd64"
+emulated = false
+[golangciLint.assets.linux-arm64]
+file = "golangci-lint-2.13.2-linux-arm64.tar.gz"
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-linux-arm64.tar.gz"
+sha256 = "a2a4e0065aa41be71f7c5ac90f271b61751331e5d04314e62afe4027855f0893"
+archive = "tar.gz"
+entry = "golangci-lint-2.13.2-linux-arm64/golangci-lint"
+executableArch = "arm64"
+emulated = false
+
+[lefthook]
+version = "2.1.12"
+minimumVersion = "2.1.12"
+[lefthook.homebrew]
+package = "lefthook"
+kind = "formula"
+[lefthook.winget]
+id = "evilmartians.lefthook"
+[lefthook.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[lefthook.winget.platforms.windows-arm64]
+architecture = "arm64"
+executableArch = "arm64"
+emulated = false
+[lefthook.assets.linux-amd64]
+file = "lefthook_2.1.12_Linux_x86_64"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.12/lefthook_2.1.12_Linux_x86_64"
+sha256 = "22ff1ad48d1a0f4dca8d6b7e920056c6a9015f9204e5b693858ed9c2db759a16"
+archive = "raw"
+entry = ""
+executableArch = "amd64"
+emulated = false
+[lefthook.assets.linux-arm64]
+file = "lefthook_2.1.12_Linux_arm64"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.12/lefthook_2.1.12_Linux_arm64"
+sha256 = "9c130d98d2d57286698200b83998db9c025f350541aa6368315ff43b7a6440ac"
+archive = "raw"
+entry = ""
+executableArch = "arm64"
+emulated = false
+
+[ripgrep]
+version = "15.2.0"
+minimumVersion = "15.2.0"
+[ripgrep.homebrew]
+package = "ripgrep"
+kind = "formula"
+[ripgrep.winget]
+id = "BurntSushi.ripgrep.MSVC"
+[ripgrep.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[ripgrep.winget.platforms.windows-arm64]
+architecture = "arm64"
+executableArch = "arm64"
+emulated = false
+[ripgrep.assets.linux-amd64]
+file = "ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz"
+url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz"
+sha256 = "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
+archive = "tar.gz"
+entry = "ripgrep-15.2.0-x86_64-unknown-linux-musl/rg"
+executableArch = "amd64"
+emulated = false
+[ripgrep.assets.linux-arm64]
+file = "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz"
+url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz"
+sha256 = "a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d"
+archive = "tar.gz"
+entry = "ripgrep-15.2.0-aarch64-unknown-linux-gnu/rg"
+executableArch = "arm64"
+emulated = false
+
+[shellcheck]
+version = "0.11.0"
+minimumVersion = "0.11.0"
+[shellcheck.homebrew]
+package = "shellcheck"
+kind = "formula"
+[shellcheck.winget]
+id = "koalaman.shellcheck"
+[shellcheck.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[shellcheck.winget.platforms.windows-arm64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = true
+[shellcheck.assets.linux-amd64]
+file = "shellcheck-v0.11.0.linux.x86_64.tar.gz"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.gz"
+sha256 = "b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6"
+archive = "tar.gz"
+entry = "shellcheck-v0.11.0/shellcheck"
+executableArch = "amd64"
+emulated = false
+[shellcheck.assets.linux-arm64]
+file = "shellcheck-v0.11.0.linux.aarch64.tar.gz"
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.gz"
+sha256 = "68a8133197a50beb8803f8d42f9908d1af1c5540d4bb05fdfca8c1fa47decefc"
+archive = "tar.gz"
+entry = "shellcheck-v0.11.0/shellcheck"
+executableArch = "arm64"
+emulated = false
+
+[zoxide]
+version = "0.10.0"
+minimumVersion = "0.10.0"
+[zoxide.homebrew]
+package = "zoxide"
+kind = "formula"
+[zoxide.winget]
+id = "ajeetdsouza.zoxide"
+[zoxide.winget.platforms.windows-amd64]
+architecture = "x64"
+executableArch = "amd64"
+emulated = false
+[zoxide.winget.platforms.windows-arm64]
+architecture = "arm64"
+executableArch = "arm64"
+emulated = false
+[zoxide.assets.linux-amd64]
+file = "zoxide-0.10.0-x86_64-unknown-linux-musl.tar.gz"
+url = "https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-x86_64-unknown-linux-musl.tar.gz"
+sha256 = "2d93385b99f3e82cf2701609a1bffcad863fbeb75aa3fe7eb6be4d29be68b1ae"
+archive = "tar.gz"
+entry = "zoxide"
+executableArch = "amd64"
+emulated = false
+[zoxide.assets.linux-arm64]
+file = "zoxide-0.10.0-aarch64-unknown-linux-musl.tar.gz"
+url = "https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-aarch64-unknown-linux-musl.tar.gz"
+sha256 = "f1f16c5d6298d63dee467eedea1cdcd8490e43e493bea43acd416dc9033ef641"
+archive = "tar.gz"
+entry = "zoxide"
+executableArch = "arm64"
+emulated = false
+
 [githubCli]
 minimumVersion = "2.94.0"
 

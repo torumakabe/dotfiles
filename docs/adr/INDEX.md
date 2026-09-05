@@ -29,7 +29,7 @@
 | [014](014-github-multi-account-https-auth-per-owner.md) | GitHub 多アカウント HTTPS 認証は credential の URL パス方式 + gh auth token --user で解決する | Accepted |
 | [015](015-copilot-cli-shell-network-via-local-sandbox.md) | Copilot CLI shell のネットワーク制御は local sandbox で行う | Superseded by ADR-025 |
 | [016](016-rust-external-rustup.md) | Rust は全 OS で外部 rustup 管理とする (mise 管理から除外) | Accepted |
-| [017](017-msvc-linker-env-var-override-windows.md) | Windows の MSVC リンカーは CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER で明示指定する | Accepted |
+| [017](017-msvc-linker-env-var-override-windows.md) | Windows の MSVC リンカーは Cargo のターゲット別環境変数で明示指定する | Accepted |
 | [018](018-git-hooks-via-init-templatedir.md) | 機械全体への Git hook 配布は init.templateDir で行う | Accepted |
 | [019](019-cross-platform-parity-contract.md) | クロスプラットフォーム機能等価性はプラットフォーム契約と静的検査で担保する | Accepted |
 | [020](020-git-hooks-via-config.md) | gitleaks の pre-commit は Git の設定ベースフックで配る | Accepted |

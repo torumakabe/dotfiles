@@ -29,19 +29,31 @@ GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm6
 mise install
 ```
 
+## OS package版CLIの入口を作成できない
+
+最低版やCPU種別の検査に失敗した場合は、HomebrewまたはWinGetが所有する実体を確認する。PATH上の別のコピーが同じ版を返しても、導入済みとは扱わない。packageが不足している場合は、そのpackageだけをmanagerで修復して再適用する。全scriptの実行記録を消す必要はない。
+
+Windowsではユーザーpackageの所有aliasとその参照先を確認する。machine scopeのpackageや他の場所の実体へ勝手に切り替えない。native symlinkの作成に失敗した場合は、既存DSCのDeveloper Mode設定と対象ディレクトリの権限を確認する。独自wrapperやファイルコピーで置き換えない。
+
+`~/.local/bin` の管理外ファイルやリンクと衝突した場合、スクリプトはそれを保持する。所有元を確認せずに削除しない。packageの実体が適合していれば、入口が欠けている場合だけ `chezmoi apply` で無通信の修復ができる。
+
 ## 直接導入したツールの導入に失敗する
 
 ### checksum 検証に失敗する
 
 `checksum verification failed` は、取得物が `home/.chezmoidata.toml` のasset宣言と一致しないことを示す。.NETはSHA-512、その他の直接取得する配布物はSHA-256で確認する。この段階では既存の実体を変更しない。
 
-宣言した版の公式checksumと `sha256` / `sha512` を照合する。一致していれば、通信経路による破損などを確認して `chezmoi apply` を再実行する。宣言が別の版の値を指していた場合は、版と取得元の対応を修正する。検証を省略したり、取得物から計算した値で宣言を上書きしたりしない。ツールごとの取得元は[運用手順](operations.md#mise-の管理外にあるツール)を参照する。
+宣言した版の公式checksumと `sha256` / `sha512` を照合する。一致していれば、通信経路による破損などを確認して `chezmoi apply` を再実行する。宣言が別の版の値を指していた場合は、版と取得元の対応を修正する。検証を省略したり、取得物から計算した値で宣言を上書きしたりしない。ツールごとの取得元は[運用手順](operations.md#ツールごとの導入経路)を参照する。
 
 ### Terraformの署名を確認できない
 
 GPGが見つからない場合は、Linuxの `gnupg`、macOSのHomebrew `gnupg`、WindowsのGit同梱 `gpg.exe` の導入状態と実行パスを確認する。Windowsへ別のGnuPG packageを追加する構成にはしていない。
 
 署名検証の失敗では、宣言した版に対応するchecksum list、signature、公開鍵、fingerprintの組合せを確認する。`GOODSIG` や「正しい署名」という表示だけでは受け入れず、終了コードと `VALIDSIG` のfingerprintを確認する。認証できなかった配布物は配置せず、署名確認を無効にして続行しない。
+
+### 1Password CLIの署名を確認できない
+
+1Password CLIで署名確認に失敗した場合は、固定版ZIPのhashと `op.exe` のAuthenticode結果を確認する。署名が有効でも、subject、issuer、固有EKUが宣言と異なれば配置しない。版を変えるだけで検証を通したり、署名確認を省略したりしない。Linuxのapt repositoryや鍵の衝突も、既存設定の所有元を確認してから解消する。
 
 ### Windows で直接導入した実体を置き換えられない
 
@@ -57,7 +69,7 @@ typescript-language-server.cmd 等）を排他オープンできるか root の�
 
 `expected <tool> <version>` のようなエラーは、候補の起動や版確認に失敗したことを示す。宣言した版、取得URL、アーカイブ内の選択対象、実際の終了コードを確認する。別版の混入や誤ったentrypointを修正し、検証を省略せず再適用する。
 
-クラウド関連CLIでCPU種別の検証に失敗した場合は、OS/CPUに対応するassetを選んでいるか確認する。Windows arm64でx64版が起動できても、明示した互換実行の対象以外は受け入れない。
+クラウド関連CLIやワークステーションCLIでCPU種別の検証に失敗した場合は、OS/CPUに対応するassetを選んでいるか確認する。Windows arm64でx64版が起動できても、明示した互換実行の対象以外は受け入れない。
 
 ### クラウド関連CLIの既存ファイルが拒否される
 
@@ -249,10 +261,6 @@ Windows と WSL は通常、GitHub CLI の認証情報を別々に保持する�
 
 Codespaces 以外ではパッケージ導入に sudo が必要である。パスワードを入力するか、sudoers を設定する。
 
-## Dev Container で mise ツールが入っていない
-
-コンテナ作成時は `mise install` を自動実行しない。README の Dev Container セクション、または [`docs/operations.md`](operations.md#github-api-と-github_token) の手順で起動後に実行する。
-
 ## Dev Container から npm registry へ接続できない
 
 このリポジトリは、ホストの npm 設定をコンテナへ自動継承しない。公式レジストリへの接続に失敗した場合は、まずコンテナ内で現在の設定を確認する。
@@ -276,16 +284,10 @@ npm config set registry '<管理者指定の registry URL>'
 設計の全体像は [`docs/architecture.md`](architecture.md#path-管理非対話シェル対応) を参照。復旧は以下を試す:
 
 - **Unix**: `chezmoi apply` で `~/.profile` 系が配置されているか確認。新規 login シェル（新しい Terminal タブ）で有効化
-- **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り、残っている mise 管理ツール（kubectl・lefthook・helm・terraform 等）の shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）。
-  - Go、Node.js、.NET SDK、Bun、pnpm、TypeScript CLI、typescript-language-server、typescript-lsp (`tsserver`) は shim-link の対象ではない。各導入スクリプトが主要コマンド (`go`/`gofmt`、`node`/`npm`/`npx`、`dotnet`/`dnx`、`bun`/`bunx`、`pnpm`、`tsc`、`typescript-language-server`、`tsserver`) への入口を `~/.local/bin` に置くため、POSIX (macOS/Linux/WSL) では `bash --norc --noprofile` のような非対話 shell からもコマンド名で解決できる。リンクだけが欠損し payload が完全な場合は、`chezmoi apply` の再実行で再ダウンロードせずに復旧する
-- **Windows**: `run_once_after_05-setup-user-path.ps1` は、`%USERPROFILE%\.local\bin`、Go、Node.js、.NET SDK、pnpm、三つの TypeScript 用ディレクトリ、残存する mise shims の順でユーザー環境変数 `Path` の先頭へ登録する。完全な一覧は [`operations.md`](operations.md#mise-の管理外にあるツール) を参照する。`chezmoi apply` を再実行して登録内容を直す。既存プロセスは変更前の環境変数を保持するため、ターミナルを開き直す。GUI アプリへ反映されない場合は、サインアウトまたは OS の再起動後に確認する。`pwsh -NoProfile` は PowerShell Profile を読まないが、親プロセスから継承したユーザー `Path` は削除しない
+- **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: 個別の導入スクリプトが `~/.local/bin` へ実体またはnative symlinkを配置する。欠損した入口は `chezmoi apply` で復旧し、その後にCopilot CLIを再起動する。実体が適合していればリンクの修復に再ダウンロードは不要である。OS packageが最低版未満の場合は、[OS packageの障害](#os-package版cliの入口を作成できない)を参照する
+- **Windows**: `run_once_after_05-setup-user-path.ps1` は、`%USERPROFILE%\.local\bin`、Go、Node.js、.NET SDK、pnpm、三つの TypeScript 用ディレクトリ、残存する mise shims の順でユーザー環境変数 `Path` の先頭へ登録する。完全な一覧は [`operations.md`](operations.md#ツールごとの導入経路) を参照する。既存プロセスは変更前の環境変数を保持するため、ターミナルを開き直す。GUI アプリへ反映されない場合は、サインアウトまたは OS の再起動後に確認する。`pwsh -NoProfile` は PowerShell Profile を読まないが、親プロセスから継承したユーザー `Path` は削除しない
 
-それでも反映されないときは state を消して再実行:
-
-```bash
-chezmoi state delete-bucket --bucket=scriptState
-chezmoi apply
-```
+PATH登録スクリプトが既に成功扱いで、登録だけを修復する場合は、[個別のrun_once再実行手順](operations.md#run_once_-の再実行)で対象keyだけを扱う。`scriptState` 全体は削除しない。
 
 確認コマンド:
 

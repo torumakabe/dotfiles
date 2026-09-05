@@ -221,15 +221,7 @@ class MiseOwnershipTests(unittest.TestCase):
 
         for tool in self.REMOVED_TOOLS:
             with self.subTest(tool=tool):
-                self.assertNotIn(tool, lock["tools"])
-
-    def test_mise_still_owns_the_remaining_tools(self) -> None:
-        # P2 までの移行対象外である残存ツールを代表して確認する。
-        lock = tomllib.loads(MISE_LOCK_PATH.read_text(encoding="utf-8"))
-
-        for tool in ("lefthook",):
-            with self.subTest(tool=tool):
-                self.assertIn(tool, lock["tools"])
+                self.assertNotIn(tool, lock.get("tools", {}))
 
     def test_p1_tools_no_longer_appear_in_mise_config_or_lock(self) -> None:
         """P1 (ADR-028) 第二弾で mise から直接導入へ移行した 7 ツール分。"""
@@ -238,10 +230,10 @@ class MiseOwnershipTests(unittest.TestCase):
 
         for tool in ("go", "node", "dotnet", "bun", "pnpm"):
             with self.subTest(tool=tool):
-                self.assertNotIn(tool, lock["tools"])
+                self.assertNotIn(tool, lock.get("tools", {}))
         for tool in ("npm:typescript", "npm:typescript-language-server"):
             with self.subTest(tool=tool):
-                self.assertNotIn(tool, lock["tools"])
+                self.assertNotIn(tool, lock.get("tools", {}))
                 self.assertNotRegex(config, rf"(?m)^{re.escape(tool)}\s*=")
 
     def test_copilot_hooks_no_longer_force_mise_resolution(self) -> None:

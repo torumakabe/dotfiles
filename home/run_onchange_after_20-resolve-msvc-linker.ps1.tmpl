@@ -1,5 +1,5 @@
 {{ if eq .chezmoi.os "windows" -}}
-# MSVC リンカー (link.exe) を CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER で明示指定する。
+# MSVC リンカー (link.exe) を対象 CPU の Cargo 環境変数で明示指定する。
 #
 # 背景:
 #   winget で導入した Coreutils for Windows (Microsoft.Coreutils) は GNU coreutils 版の
@@ -12,7 +12,7 @@
 #   prepend) では解決できない。
 #
 # 対応:
-#   PATH の並び順に依存しない CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER 環境変数
+#   PATH の並び順に依存しない CARGO_TARGET_*_PC_WINDOWS_MSVC_LINKER 環境変数
 #   (ユーザースコープ) で MSVC の link.exe を直接指定する。vswhere で毎回解決し直す
 #   ため、Visual Studio Build Tools の更新でツールセットのバージョンフォルダが
 #   変わっても追従する (ハードコードされた絶対パスを chezmoi ソースに持たない)。
@@ -34,9 +34,18 @@ if (-not (Test-Path -LiteralPath $vswhere)) {
     exit 0
 }
 
+{{ if eq .chezmoi.arch "arm64" -}}
+$component = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64'
+$linkerPattern = 'VC\Tools\MSVC\**\bin\HostARM64\ARM64\link.exe'
+$varName = 'CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER'
+{{ else -}}
+$component = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
+$linkerPattern = 'VC\Tools\MSVC\**\bin\Hostx64\x64\link.exe'
+$varName = 'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER'
+{{ end -}}
 $linkerPaths = & $vswhere -latest -prerelease -products * `
-    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-    -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\link.exe' 2>$null
+    -requires $component `
+    -find $linkerPattern 2>$null
 
 if (-not $linkerPaths) {
     Write-Host 'MSVC link.exe not found via vswhere; skipping (Desktop development with C++ ワークロードを導入してください).'
@@ -44,7 +53,6 @@ if (-not $linkerPaths) {
 }
 
 $linkerPath = $linkerPaths | Sort-Object | Select-Object -Last 1
-$varName = 'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER'
 $current = [Environment]::GetEnvironmentVariable($varName, 'User')
 
 if ($current -eq $linkerPath) {

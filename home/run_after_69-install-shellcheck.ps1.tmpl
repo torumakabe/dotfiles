@@ -1,0 +1,165 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+# shellcheck の WinGet 所有 alias を ~/.local/bin へ native symlink として公開する。
+$ErrorActionPreference = 'Stop'
+
+$toolName = 'shellcheck'
+$minimumVersion = '{{ .shellcheck.minimumVersion }}'
+$wingetId = '{{ .shellcheck.winget.id }}'
+{{ if not (hasKey .shellcheck.winget.platforms $platform) }}
+throw "shellcheck has no WinGet platform declaration for {{ $platform }}"
+{{ else }}
+{{- $wingetPlatform := index .shellcheck.winget.platforms $platform }}
+$platformArch = '{{ .chezmoi.arch }}'
+$wingetArchitecture = '{{ $wingetPlatform.architecture }}'
+$executableArch = '{{ $wingetPlatform.executableArch }}'
+$emulated = {{ $wingetPlatform.emulated }}
+$binDir = Join-Path $HOME '.local\bin'
+$target = Join-Path $binDir 'shellcheck.exe'
+$miseTarget = Join-Path $env:LOCALAPPDATA 'mise\shims\shellcheck.exe'
+$providerAlias = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\shellcheck.exe'
+$packagesRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+$wingetSourceIdentifier = 'Microsoft.Winget.Source_8wekyb3d8bbwe'
+
+$architectureMap = @{ x64 = 'amd64'; arm64 = 'arm64' }
+if ($architectureMap[$wingetArchitecture] -cne $executableArch) {
+    throw "WinGet architecture $wingetArchitecture does not match executable $executableArch"
+}
+if (-not $emulated -and $executableArch -cne $platformArch) {
+    throw "native shellcheck declaration does not match $platformArch"
+}
+
+function ConvertTo-NormalizedPath {
+    param([string]$Path, [string]$BasePath)
+    if (-not [System.IO.Path]::IsPathRooted($Path)) {
+        $Path = Join-Path $BasePath $Path
+    }
+    return [System.IO.Path]::GetFullPath($Path).Replace('\', '/').TrimEnd('/')
+}
+
+function Compare-VersionAtLeast {
+    param([string]$Actual, [string]$Minimum)
+    if (-not $Actual) { return $false }
+    try {
+        return [version]$Actual -ge [version]$Minimum
+    }
+    catch [System.FormatException] {
+        return $false
+    }
+}
+
+function Get-ProviderExecutable {
+    $alias = Get-Item -LiteralPath $providerAlias -Force -ErrorAction SilentlyContinue
+    if (-not $alias -or -not ($alias.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "WinGet alias $providerAlias is missing"
+    }
+    $linkTarget = [string]@($alias.Target)[0]
+    $resolved = ConvertTo-NormalizedPath -Path $linkTarget -BasePath $alias.DirectoryName
+    $root = ConvertTo-NormalizedPath -Path $packagesRoot -BasePath $alias.DirectoryName
+    $ownedPrefix = "$root/$wingetId`_$wingetSourceIdentifier/"
+    if (-not $resolved.StartsWith($ownedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "WinGet alias for $toolName is not owned by package $wingetId from the winget source"
+    }
+    if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+        throw "WinGet package executable is missing: $resolved"
+    }
+    return $resolved
+}
+
+function Test-BinaryArchitecture {
+    param([string]$Path)
+    try {
+        $stream = [System.IO.File]::Open(
+            $Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read,
+            [System.IO.FileShare]::ReadWrite
+        )
+        $reader = [System.IO.BinaryReader]::new($stream)
+        if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { return $false }
+        $stream.Position = 0x3c
+        $peOffset = $reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 6)) { return $false }
+        $stream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) { return $false }
+        $machine = $reader.ReadUInt16()
+        $expectedMachine = if ($executableArch -eq 'amd64') { 0x8664 } else { 0xAA64 }
+        return $machine -eq $expectedMachine
+    }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.Security.SecurityException] { return $false }
+    finally {
+        if ($reader) { $reader.Dispose() }
+        elseif ($stream) { $stream.Dispose() }
+    }
+}
+
+function Get-ToolVersion {
+    param([string]$Path, [string]$WorkingDirectory)
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $output = & $Path --version 2>$null
+        if ($LASTEXITCODE -ne 0) { return $null }
+    }
+    catch [System.Management.Automation.CommandNotFoundException] { return $null }
+    catch [System.Management.Automation.ApplicationFailedException] { return $null }
+    catch [System.ComponentModel.Win32Exception] { return $null }
+    catch [System.IO.IOException] { return $null }
+    catch [System.UnauthorizedAccessException] { return $null }
+    finally {
+        Pop-Location
+    }
+    foreach ($line in @($output)) { if ([string]$line -match '^version: ([0-9]+(?:\.[0-9]+)+)$') { return $Matches[1] } }
+    return $null
+}
+
+function Assert-TargetReplaceable {
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if (-not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "$target is not a managed symlink; refusing to replace it."
+    }
+    $linkTarget = [string]@($item.Target)[0]
+    $current = ConvertTo-NormalizedPath -Path $linkTarget -BasePath $item.DirectoryName
+    $provider = ConvertTo-NormalizedPath -Path $providerAlias -BasePath $item.DirectoryName
+    $mise = ConvertTo-NormalizedPath -Path $miseTarget -BasePath $item.DirectoryName
+    if ($current -ine $provider -and $current -ine $mise) {
+        throw "$target is a foreign symlink; refusing to replace it."
+    }
+    if (Test-Path -LiteralPath $target -PathType Container) {
+        throw "$target points to a directory; refusing to replace it."
+    }
+}
+
+$provider = Get-ProviderExecutable
+if (-not (Test-BinaryArchitecture -Path $provider)) {
+    throw "WinGet package $wingetId does not provide an $executableArch executable"
+}
+$providerVersion = Get-ToolVersion -Path $providerAlias -WorkingDirectory (Split-Path -Parent $provider)
+if (-not (Compare-VersionAtLeast -Actual $providerVersion -Minimum $minimumVersion)) {
+    throw "WinGet $toolName $($providerVersion ?? 'unknown') is below $minimumVersion"
+}
+
+Assert-TargetReplaceable
+$targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+if ($targetItem -and ($targetItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+    $current = ConvertTo-NormalizedPath -Path ([string]@($targetItem.Target)[0]) -BasePath $targetItem.DirectoryName
+    $expected = ConvertTo-NormalizedPath -Path $providerAlias -BasePath $targetItem.DirectoryName
+    if ($current -ieq $expected) { exit 0 }
+}
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$stageDir = Join-Path $binDir (".$toolName-link." + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+try {
+    $stagedLink = Join-Path $stageDir 'shellcheck.exe'
+    New-Item -ItemType SymbolicLink -Path $stagedLink -Target $providerAlias | Out-Null
+    [System.IO.File]::Move($stagedLink, $target, $true)
+}
+catch {
+    throw "could not publish $target; the previous entry was kept. $($_.Exception.Message)"
+}
+finally {
+    Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+{{ end }}
+{{- end -}}

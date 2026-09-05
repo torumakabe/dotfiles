@@ -142,12 +142,10 @@ class GhStackInstallTests(unittest.TestCase):
             readme.index("### Windows") : readme.index("## 日常操作")
         ]
 
-        self.assertLess(
-            devcontainer.index("mise install --yes"),
-            devcontainer.index("chezmoi apply"),
-        )
-        self.assertNotIn("chezmoi init --apply", windows)
         auth_and_apply = "gh auth login\nchezmoi apply"
+        self.assertIn(auth_and_apply, devcontainer)
+        self.assertNotIn("mise install", devcontainer)
+        self.assertNotIn("chezmoi init --apply", windows)
         self.assertIn(auth_and_apply, windows)
         for earlier, later in (
             ("chezmoi init torumakabe", "winget configure"),

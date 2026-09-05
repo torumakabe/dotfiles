@@ -1,4 +1,5 @@
 {{ if eq .chezmoi.os "windows" -}}
+{{ $p3WingetPlatform := printf "windows-%s" .chezmoi.arch -}}
 # Windows 向け追加ツールのインストール
 # 実行順序: run_after_25-install-uv の後。uv が ~/.local/bin にある必要がある。
 # Go と uv は mise から撤去済み。別の run_after スクリプトで設定した
@@ -8,6 +9,299 @@ $ErrorActionPreference = 'Stop'
 $localBinDir = Join-Path $HOME '.local\bin'
 $goExe = Join-Path $HOME '.local\share\chezmoi-dotfiles\go\bin\go.exe'
 $uvExe = Join-Path $localBinDir 'uv.exe'
+
+# >>> p3-winget
+# P3 workstation tools use exact WinGet package ownership and the WinGet-owned
+# user alias. PATH candidates, machine-scope packages, and foreign aliases are
+# not replaced implicitly.
+$p3WinGetExe = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'
+$p3WinGetLinkDir = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
+$p3WinGetPackagesDir = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+$p3WinGetSource = 'winget'
+$p3WinGetSourceIdentifier = 'Microsoft.Winget.Source_8wekyb3d8bbwe'
+$p3WinGetNoApplicationsFound = -1978335212
+
+function Test-P3WinGetPackage {
+    param(
+        [string]$Id,
+        [ValidateSet('user', 'machine')]
+        [string]$Scope
+    )
+
+    $output = @(
+        & $p3WinGetExe list --id $Id --exact --source $p3WinGetSource --scope $Scope `
+            --accept-source-agreements --disable-interactivity 2>&1 |
+            ForEach-Object { "$_" }
+    )
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -eq 0) {
+        return $true
+    }
+    if ($exitCode -eq $p3WinGetNoApplicationsFound) {
+        return $false
+    }
+    throw "WinGet list failed for $Id ($Scope scope) with exit code ${exitCode}: $($output -join [Environment]::NewLine)"
+}
+
+function Get-P3PeArchitecture {
+    param([string]$Path)
+
+    $stream = [System.IO.File]::Open(
+        $Path,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::ReadWrite
+    )
+    try {
+        $reader = [System.IO.BinaryReader]::new($stream)
+        try {
+            if ($reader.ReadUInt16() -ne 0x5A4D) {
+                throw "$Path is not a PE executable"
+            }
+            $stream.Position = 0x3C
+            $peOffset = $reader.ReadUInt32()
+            $stream.Position = $peOffset
+            if ($reader.ReadUInt32() -ne 0x00004550) {
+                throw "$Path has no PE signature"
+            }
+            switch ($reader.ReadUInt16()) {
+                0x8664 { return 'amd64' }
+                0xAA64 { return 'arm64' }
+                default { return 'unsupported' }
+            }
+        } finally {
+            $reader.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
+function Get-P3ExecutableVersion {
+    param(
+        [string]$Path,
+        [string[]]$Arguments
+    )
+
+    $output = (& $Path @Arguments 2>$null | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        throw "version probe failed for $Path"
+    }
+    $match = [regex]::Match($output, '(?<!\d)(\d+\.\d+\.\d+)(?!\d)')
+    if (-not $match.Success) {
+        throw "could not parse a semantic version from $Path"
+    }
+    return [version]$match.Groups[1].Value
+}
+
+function Get-P3WinGetExecutable {
+    param(
+        [string]$Id,
+        [string]$Command
+    )
+
+    $aliasPath = Join-Path $p3WinGetLinkDir "$Command.exe"
+    $alias = Get-Item -LiteralPath $aliasPath -Force -ErrorAction SilentlyContinue
+    if (-not $alias -or $alias.PSIsContainer -or
+        -not ($alias.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "WinGet package $Id does not provide its managed alias at $aliasPath"
+    }
+    $target = [string]@($alias.Target)[0]
+    if (-not [System.IO.Path]::IsPathRooted($target)) {
+        $target = Join-Path $alias.DirectoryName $target
+    }
+    $resolved = [System.IO.Path]::GetFullPath($target)
+    $packagesRoot = [System.IO.Path]::GetFullPath($p3WinGetPackagesDir).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar
+    ) + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $resolved.StartsWith(
+        $packagesRoot,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )) {
+        throw "WinGet alias target is outside its package root: $resolved"
+    }
+    $relative = $resolved.Substring($packagesRoot.Length)
+    $packageDirectory = $relative.Split(
+        [System.IO.Path]::DirectorySeparatorChar
+    )[0]
+    $expectedPackageDirectory = "$Id`_$p3WinGetSourceIdentifier"
+    if (-not $packageDirectory.Equals(
+        $expectedPackageDirectory,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )) {
+        throw "WinGet alias for $Command is not owned by package $Id from source $p3WinGetSource"
+    }
+    $item = Get-Item -LiteralPath $resolved -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "WinGet payload for $Command is not a regular file"
+    }
+    return $item.FullName
+}
+
+function Install-P3WinGetPackage {
+    param([pscustomobject]$Spec)
+
+    if (-not (Test-Path -LiteralPath $p3WinGetExe -PathType Leaf)) {
+        throw "WinGet executable is unavailable at $p3WinGetExe"
+    }
+
+    $aliasPath = Join-Path $p3WinGetLinkDir "$($Spec.Command).exe"
+    $aliasEntry = Get-Item -LiteralPath $aliasPath -Force -ErrorAction SilentlyContinue
+    $aliasExists = $null -ne $aliasEntry
+    $preflightBinary = $null
+    if ($aliasExists) {
+        $preflightBinary = Get-P3WinGetExecutable -Id $Spec.Id -Command $Spec.Command
+    }
+
+    $userInstalled = Test-P3WinGetPackage -Id $Spec.Id -Scope user
+    $machineInstalled = Test-P3WinGetPackage -Id $Spec.Id -Scope machine
+    if ($machineInstalled) {
+        throw "WinGet package $($Spec.Id) is machine-owned; refusing an implicit scope or privilege change"
+    }
+
+    if ($userInstalled) {
+        $binary = $preflightBinary
+        if (-not $binary) {
+            throw "WinGet user package $($Spec.Id) is registered without its managed alias"
+        }
+        $actualArch = Get-P3PeArchitecture -Path $binary
+        if ($actualArch -ne $Spec.ExecutableArch) {
+            throw "WinGet-owned $($Spec.Command) architecture $actualArch does not match declared $($Spec.ExecutableArch); refusing to replace it"
+        }
+        $installedVersion = Get-P3ExecutableVersion -Path $aliasPath -Arguments $Spec.VersionArguments
+        if ($installedVersion -ge [version]$Spec.MinimumVersion) {
+            return
+        }
+
+        Write-Host "Upgrading $($Spec.Name) to $($Spec.MinimumVersion) or later via WinGet..."
+        & $p3WinGetExe upgrade --id $Spec.Id --exact --source $p3WinGetSource --scope user --architecture $Spec.Architecture --accept-package-agreements --accept-source-agreements --disable-interactivity
+        if ($LASTEXITCODE -ne 0) {
+            throw "WinGet upgrade failed for $($Spec.Id)"
+        }
+    } else {
+        if ($aliasExists) {
+            throw "$aliasPath exists without the expected registered WinGet user package $($Spec.Id)"
+        }
+
+        Write-Host "Installing $($Spec.Name) $($Spec.MinimumVersion) or later via WinGet..."
+        & $p3WinGetExe install --id $Spec.Id --exact --source $p3WinGetSource --scope user --architecture $Spec.Architecture --accept-package-agreements --accept-source-agreements --disable-interactivity
+        if ($LASTEXITCODE -ne 0) {
+            throw "WinGet install failed for $($Spec.Id)"
+        }
+    }
+
+    if (-not (Test-P3WinGetPackage -Id $Spec.Id -Scope user)) {
+        throw "WinGet did not register user-owned package $($Spec.Id)"
+    }
+    $binary = Get-P3WinGetExecutable -Id $Spec.Id -Command $Spec.Command
+    $actualArch = Get-P3PeArchitecture -Path $binary
+    if ($actualArch -ne $Spec.ExecutableArch) {
+        throw "WinGet installed $($Spec.Command) for architecture $actualArch instead of $($Spec.ExecutableArch)"
+    }
+    $installedVersion = Get-P3ExecutableVersion -Path $aliasPath -Arguments $Spec.VersionArguments
+    if ($installedVersion -lt [version]$Spec.MinimumVersion) {
+        throw "WinGet installed $($Spec.Name) $installedVersion, below required $($Spec.MinimumVersion)"
+    }
+}
+
+$p3WinGetSpecs = @(
+    [pscustomobject]@{
+        Name = 'bat'
+        MinimumVersion = '{{ .bat.minimumVersion }}'
+        Id = '{{ .bat.winget.id }}'
+        Command = 'bat'
+        VersionArguments = @('--version')
+        Architecture = '{{ index (index .bat.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .bat.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .bat.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+    [pscustomobject]@{
+        Name = 'fzf'
+        MinimumVersion = '{{ .fzf.minimumVersion }}'
+        Id = '{{ .fzf.winget.id }}'
+        Command = 'fzf'
+        VersionArguments = @('--version')
+        Architecture = '{{ index (index .fzf.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .fzf.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .fzf.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+    [pscustomobject]@{
+        Name = 'ghq'
+        MinimumVersion = '{{ .ghq.minimumVersion }}'
+        Id = '{{ .ghq.winget.id }}'
+        Command = 'ghq'
+        VersionArguments = @('--version')
+        Architecture = '{{ index (index .ghq.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .ghq.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .ghq.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+    [pscustomobject]@{
+        Name = 'gitleaks'
+        MinimumVersion = '{{ .gitleaks.minimumVersion }}'
+        Id = '{{ .gitleaks.winget.id }}'
+        Command = 'gitleaks'
+        VersionArguments = @('version')
+        Architecture = '{{ index (index .gitleaks.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .gitleaks.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .gitleaks.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+    [pscustomobject]@{
+        Name = 'golangci-lint'
+        MinimumVersion = '{{ .golangciLint.minimumVersion }}'
+        Id = '{{ .golangciLint.winget.id }}'
+        Command = 'golangci-lint'
+        VersionArguments = @('version', '--short')
+        Architecture = '{{ index (index .golangciLint.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .golangciLint.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .golangciLint.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+    [pscustomobject]@{
+        Name = 'lefthook'
+        MinimumVersion = '{{ .lefthook.minimumVersion }}'
+        Id = '{{ .lefthook.winget.id }}'
+        Command = 'lefthook'
+        VersionArguments = @('version')
+        Architecture = '{{ index (index .lefthook.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .lefthook.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .lefthook.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+    [pscustomobject]@{
+        Name = 'ripgrep'
+        MinimumVersion = '{{ .ripgrep.minimumVersion }}'
+        Id = '{{ .ripgrep.winget.id }}'
+        Command = 'rg'
+        VersionArguments = @('--version')
+        Architecture = '{{ index (index .ripgrep.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .ripgrep.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .ripgrep.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+    [pscustomobject]@{
+        Name = 'shellcheck'
+        MinimumVersion = '{{ .shellcheck.minimumVersion }}'
+        Id = '{{ .shellcheck.winget.id }}'
+        Command = 'shellcheck'
+        VersionArguments = @('--version')
+        Architecture = '{{ index (index .shellcheck.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .shellcheck.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .shellcheck.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+    [pscustomobject]@{
+        Name = 'zoxide'
+        MinimumVersion = '{{ .zoxide.minimumVersion }}'
+        Id = '{{ .zoxide.winget.id }}'
+        Command = 'zoxide'
+        VersionArguments = @('--version')
+        Architecture = '{{ index (index .zoxide.winget.platforms $p3WingetPlatform) "architecture" }}'
+        ExecutableArch = '{{ index (index .zoxide.winget.platforms $p3WingetPlatform) "executableArch" }}'
+        Emulated = ${{ index (index .zoxide.winget.platforms $p3WingetPlatform) "emulated" }}
+    }
+)
+
+foreach ($p3Spec in $p3WinGetSpecs) {
+    Install-P3WinGetPackage -Spec $p3Spec
+}
+# <<< p3-winget
 
 # --- Go tools ---
 if (Test-Path -LiteralPath $goExe -PathType Leaf) {

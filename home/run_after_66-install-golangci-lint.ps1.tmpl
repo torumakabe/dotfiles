@@ -1,0 +1,192 @@
+{{- if eq .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+$ErrorActionPreference = 'Stop'
+$minimumVersion = [Version]'{{ .golangciLint.minimumVersion }}'
+{{ if not (hasKey .golangciLint.winget.platforms $platform) }}
+throw "golangci-lint has no WinGet platform declaration for {{ $platform }}"
+{{ else }}
+{{- $winget := index .golangciLint.winget.platforms $platform }}
+$platformArch = '{{ .chezmoi.arch }}'
+$executableArch = '{{ $winget.executableArch }}'
+$emulated = [System.Convert]::ToBoolean('{{ $winget.emulated }}')
+$binDir = Join-Path $HOME '.local\bin'
+$target = Join-Path $binDir 'golangci-lint.exe'
+$miseTarget = Join-Path $env:LOCALAPPDATA 'mise\shims\golangci-lint.exe'
+$wingetLink = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\golangci-lint.exe'
+$wingetPackages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+$wingetSourceIdentifier = 'Microsoft.Winget.Source_8wekyb3d8bbwe'
+$packageDirectoryName = "{{ $.golangciLint.winget.id }}_$wingetSourceIdentifier"
+
+if ($executableArch -cne $platformArch -or $emulated) {
+    throw "golangci-lint must use a native WinGet executable on $platformArch"
+}
+
+function ConvertTo-NormalizedPath {
+    param([string]$Path, [string]$BasePath)
+    if (-not [System.IO.Path]::IsPathRooted($Path)) { $Path = Join-Path $BasePath $Path }
+    return [System.IO.Path]::GetFullPath($Path).Replace('\', '/').TrimEnd('/')
+}
+
+function Get-WinGetBinary {
+    $link = Get-Item -LiteralPath $wingetLink -Force -ErrorAction SilentlyContinue
+    if (-not $link -or $link.PSIsContainer -or
+        -not ($link.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "WinGet did not provide its managed golangci-lint link at $wingetLink"
+    }
+    $linkTarget = [string]@($link.Target)[0]
+    if (-not [System.IO.Path]::IsPathRooted($linkTarget)) {
+        $linkTarget = Join-Path $link.DirectoryName $linkTarget
+    }
+    $resolved = ConvertTo-NormalizedPath $linkTarget $link.DirectoryName
+    $packagesRoot = (ConvertTo-NormalizedPath $wingetPackages $wingetPackages) + '/'
+    if (-not $resolved.StartsWith($packagesRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "WinGet link target is outside its package root: $resolved"
+    }
+    $relative = $resolved.Substring($packagesRoot.Length)
+    $packageDirectory = $relative.Split('/')[0]
+    if (-not $packageDirectory.Equals(
+        $packageDirectoryName, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "WinGet link target is not owned by {{ $.golangciLint.winget.id }} from the winget source"
+    }
+    $item = Get-Item -LiteralPath ($resolved -replace '/', '\') -Force -ErrorAction SilentlyContinue
+    if (-not $item -or $item.PSIsContainer -or
+        ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw 'WinGet golangci-lint payload is not a regular file'
+    }
+    return $item.FullName
+}
+
+function Assert-TargetReplaceable {
+    param([string]$Provider)
+    $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return 'Missing' }
+    if ($item.PSIsContainer) { throw "$target is a directory; refusing to replace it." }
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        $linkTarget = [string]@($item.Target)[0]
+        if (-not [System.IO.Path]::IsPathRooted($linkTarget)) {
+            $linkTarget = Join-Path $item.DirectoryName $linkTarget
+        }
+        $current = ConvertTo-NormalizedPath $linkTarget $item.DirectoryName
+        $knownMise = ConvertTo-NormalizedPath $miseTarget $item.DirectoryName
+        $knownProvider = ConvertTo-NormalizedPath $Provider $item.DirectoryName
+        if ($current -ine $knownMise -and $current -ine $knownProvider) {
+            throw "$target is a foreign symlink; refusing to replace it."
+        }
+        return $(if ($current -ieq $knownProvider) { 'ProviderLink' } else { 'MiseLink' })
+    }
+    if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+        throw "$target is not a regular file; refusing to replace it."
+    }
+    return 'File'
+}
+
+function Test-BinaryArchitecture {
+    param([string]$Path)
+    $stream = $null
+    $reader = $null
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        $reader = [System.IO.BinaryReader]::new($stream)
+        if ($stream.Length -lt 64 -or $reader.ReadUInt16() -ne 0x5A4D) { return $false }
+        $stream.Position = 0x3c
+        $peOffset = $reader.ReadUInt32()
+        if ($peOffset -gt ($stream.Length - 6)) { return $false }
+        $stream.Position = $peOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) { return $false }
+        $machine = $reader.ReadUInt16()
+        $expectedMachine = if ($platformArch -ceq 'amd64') { 0x8664 } else { 0xAA64 }
+        return $machine -eq $expectedMachine
+    }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.Security.SecurityException] { return $false }
+    finally {
+        if ($reader) { $reader.Dispose() } elseif ($stream) { $stream.Dispose() }
+    }
+}
+
+function Test-MinimumVersion {
+    param([string]$Path, [string]$WorkingDirectory)
+    $old = @{
+        HOME = $env:HOME
+        USERPROFILE = $env:USERPROFILE
+        GOLANGCI_LINT_CACHE = $env:GOLANGCI_LINT_CACHE
+        GOTOOLCHAIN = $env:GOTOOLCHAIN
+        GOENV = $env:GOENV
+        GOWORK = $env:GOWORK
+    }
+    $probeHome = Join-Path $WorkingDirectory ([System.IO.Path]::GetRandomFileName())
+    New-Item -ItemType Directory -Path $probeHome | Out-Null
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $env:HOME = $probeHome
+        $env:USERPROFILE = $probeHome
+        $env:GOLANGCI_LINT_CACHE = Join-Path $probeHome 'cache'
+        $env:GOTOOLCHAIN = 'local'
+        $env:GOENV = 'off'
+        $env:GOWORK = 'off'
+        $output = & $Path version --short 2>$null
+        if ($LASTEXITCODE -ne 0 -or @($output).Count -ne 1) { return $false }
+        [Version]$found = $null
+        if (-not [Version]::TryParse(([string]$output).Trim(), [ref]$found)) { return $false }
+        return $found -ge $minimumVersion
+    }
+    catch [System.Management.Automation.CommandNotFoundException] { return $false }
+    catch [System.Management.Automation.ApplicationFailedException] { return $false }
+    catch [System.ComponentModel.Win32Exception] { return $false }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    finally {
+        foreach ($name in $old.Keys) {
+            if ($null -eq $old[$name]) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
+            else { Set-Item "Env:$name" ([string]$old[$name]) }
+        }
+        Pop-Location
+        Remove-Item -LiteralPath $probeHome -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Assert-Unlocked {
+    param([string]$Provider)
+    if ((Assert-TargetReplaceable $Provider) -ne 'File') { return }
+    try {
+        $stream = [System.IO.File]::Open(
+            $target, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None)
+        $stream.Dispose()
+    }
+    catch {
+        throw "$target cannot be replaced because it is locked; the existing file was not changed."
+    }
+}
+
+$provider = Get-WinGetBinary
+$state = Assert-TargetReplaceable $provider
+if (-not (Test-BinaryArchitecture $provider)) {
+    throw "WinGet golangci-lint is not native $platformArch"
+}
+if (-not (Test-MinimumVersion $provider $binDir)) {
+    throw "WinGet golangci-lint is older than $minimumVersion"
+}
+if ($state -eq 'ProviderLink') { exit 0 }
+
+New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+$stageDir = Join-Path $binDir ('.golangci-lint-entrypoint.' + [System.IO.Path]::GetRandomFileName())
+New-Item -ItemType Directory -Path $stageDir | Out-Null
+try {
+    $staged = Join-Path $stageDir 'golangci-lint.exe'
+    New-Item -ItemType SymbolicLink -Path $staged -Target $provider | Out-Null
+    Assert-Unlocked $provider
+    Assert-TargetReplaceable $provider | Out-Null
+    try {
+        [System.IO.File]::Move($staged, $target, $true)
+    }
+    catch {
+        throw "could not publish $target; the previous entry was kept. $($_.Exception.Message)"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+{{ end }}
+{{- end }}

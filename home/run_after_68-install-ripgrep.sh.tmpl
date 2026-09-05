@@ -1,0 +1,274 @@
+{{- if ne .chezmoi.os "windows" -}}
+{{- $platform := printf "%s-%s" .chezmoi.os .chezmoi.arch -}}
+#!/usr/bin/env bash
+# ripgrep を OS provider または公式 Linux asset から ~/.local/bin へ公開する。
+
+set -euo pipefail
+
+tool_name='rg'
+desired_version='{{ .ripgrep.version }}'
+minimum_version='{{ .ripgrep.minimumVersion }}'
+bin_dir="${HOME}/.local/bin"
+target="${bin_dir}/${tool_name}"
+mise_target="${HOME}/.local/share/mise/shims/${tool_name}"
+platform_os='{{ .chezmoi.os }}'
+platform_arch='{{ .chezmoi.arch }}'
+
+version_at_least() {
+  awk -v actual="$1" -v minimum="$2" 'BEGIN {
+    na = split(actual, a, "."); nm = split(minimum, m, ".")
+    n = na > nm ? na : nm
+    for (i = 1; i <= n; i++) {
+      av = (i <= na ? a[i] : 0) + 0
+      mv = (i <= nm ? m[i] : 0) + 0
+      if (av > mv) exit 0
+      if (av < mv) exit 1
+    }
+    exit 0
+  }'
+}
+
+assert_target_replaceable() {
+  local expected=$1
+  if [ -L "${target}" ]; then
+    local current
+    current="$(readlink "${target}")"
+    if [ "${current}" != "${expected}" ] && [ "${current}" != "${mise_target}" ]; then
+      echo "error: ${target} is a foreign symlink (${current}); refusing to replace it" >&2
+      return 1
+    fi
+    if [ -d "${target}" ]; then
+      echo "error: ${target} points to a directory; refusing to replace it" >&2
+      return 1
+    fi
+  elif [ -e "${target}" ]; then
+    echo "error: ${target} is not a managed symlink; refusing to replace it" >&2
+    return 1
+  fi
+}
+
+binary_has_architecture() {
+  local binary=$1 expected_arch=$2 header
+  [ -f "${binary}" ] || return 1
+  if ! header="$(LC_ALL=C od -An -tx1 -N20 "${binary}" 2>/dev/null |
+    awk '{ for (i = 1; i <= NF; i++) printf "%s", $i } END { print "" }')"; then
+    return 1
+  fi
+  case "${platform_os}:${expected_arch}" in
+    linux:amd64)
+      [ "${#header}" -ge 40 ] && [ "${header:0:12}" = "7f454c460201" ] &&
+        [ "${header:36:4}" = "3e00" ]
+      ;;
+    linux:arm64)
+      [ "${#header}" -ge 40 ] && [ "${header:0:12}" = "7f454c460201" ] &&
+        [ "${header:36:4}" = "b700" ]
+      ;;
+    darwin:arm64)
+      [ "${#header}" -ge 16 ] && [ "${header:0:16}" = "cffaedfe0c000001" ]
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+tool_version() {
+  local binary=$1 cwd=$2 output version
+  [ -f "${binary}" ] && [ -x "${binary}" ] || return 1
+  if ! output="$(cd "${cwd}" && "${binary}" --version 2>/dev/null)"; then
+    return 1
+  fi
+  version="$(printf "%s\n" "$output" |
+    awk 'NR == 1 && $1 == "ripgrep" &&
+      $2 ~ /^[0-9]+([.][0-9]+)+$/ { print $2 }')"
+  [ -n "${version}" ] || return 1
+  printf "%s\n" "${version}"
+}
+
+publish_link() {
+  local provider=$1
+  assert_target_replaceable "${provider}"
+  mkdir -p "${bin_dir}"
+  link_stage_dir="$(mktemp -d "${bin_dir}/.${tool_name}-link.XXXXXX")"
+  trap 'rm -rf -- "${link_stage_dir}"' EXIT
+  chmod 700 "${link_stage_dir}"
+  ln -s "${provider}" "${link_stage_dir}/${tool_name}"
+  if ! mv -f "${link_stage_dir}/${tool_name}" "${target}"; then
+    echo "error: could not publish ${target}; the previous entry was kept" >&2
+    exit 1
+  fi
+  rm -rf -- "${link_stage_dir}"
+  trap - EXIT
+  link_stage_dir=
+}
+
+command -v od >/dev/null 2>&1 || {
+  echo "error: od is required to verify ${tool_name}" >&2
+  exit 1
+}
+
+{{ if eq .chezmoi.os "darwin" }}
+brew_bin=/opt/homebrew/bin/brew
+brew_package='{{ .ripgrep.homebrew.package }}'
+[ -x "${brew_bin}" ] || {
+  echo "error: Homebrew is required to provide ${tool_name}" >&2
+  exit 1
+}
+brew_prefix="$("${brew_bin}" --prefix)"
+[ "${brew_prefix}" = "/opt/homebrew" ] || {
+  echo "error: unexpected Homebrew prefix ${brew_prefix}; refusing to use it" >&2
+  exit 1
+}
+provider="${brew_prefix}/opt/${brew_package}/bin/${tool_name}"
+[ -f "${provider}" ] || {
+  echo "error: Homebrew package ${brew_package} does not provide ${provider}" >&2
+  exit 1
+}
+binary_has_architecture "${provider}" "${platform_arch}" || {
+  echo "error: ${provider} is not a native ${platform_arch} Mach-O executable" >&2
+  exit 1
+}
+provider_version="$(tool_version "${provider}" / || true)"
+version_at_least "${provider_version}" "${minimum_version}" || {
+  echo "error: Homebrew ${tool_name} ${provider_version:-unknown} is below ${minimum_version}" >&2
+  exit 1
+}
+if [ -L "${target}" ] && [ "$(readlink "${target}")" = "${provider}" ]; then
+  exit 0
+fi
+publish_link "${provider}"
+{{ else if eq .chezmoi.os "linux" }}
+{{ if not (hasKey .ripgrep.assets $platform) }}
+echo "error: ripgrep ${desired_version} has no asset for {{ $platform }}" >&2
+exit 1
+{{ else }}
+{{- $asset := index .ripgrep.assets $platform }}
+asset_file='{{ $asset.file }}'
+asset_url='{{ $asset.url }}'
+asset_sha256='{{ $asset.sha256 }}'
+asset_archive='{{ $asset.archive }}'
+asset_entry='{{ $asset.entry }}'
+executable_arch='{{ $asset.executableArch }}'
+
+[ "${executable_arch}" = "${platform_arch}" ] || {
+  echo "error: declared executable architecture ${executable_arch} does not match ${platform_arch}" >&2
+  exit 1
+}
+
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    echo "error: sha256sum or shasum is required to verify ${asset_file}" >&2
+    return 1
+  fi
+}
+
+assert_linux_target_replaceable() {
+  existing_version=
+  if [ -L "${target}" ]; then
+    local current
+    current="$(readlink "${target}")"
+    if [ "${current}" != "${mise_target}" ]; then
+      echo "error: ${target} is a foreign symlink (${current}); refusing to replace it" >&2
+      return 1
+    fi
+    if [ -d "${target}" ]; then
+      echo "error: ${target} points to a directory; refusing to replace it" >&2
+      return 1
+    fi
+  elif [ -e "${target}" ]; then
+    if [ ! -f "${target}" ] || [ ! -x "${target}" ]; then
+      echo "error: ${target} is not a regular executable; refusing to replace it" >&2
+      return 1
+    fi
+    if ! binary_has_architecture "${target}" "${platform_arch}"; then
+      echo "error: ${target} is not a native ${platform_arch} executable; refusing to replace it" >&2
+      return 1
+    fi
+    if ! existing_version="$(tool_version "${target}" "${bin_dir}")"; then
+      echo "error: ${target} is not recognized as ${tool_name}; refusing to replace it" >&2
+      return 1
+    fi
+  fi
+}
+
+assert_linux_target_replaceable
+if [ "${existing_version}" = "${desired_version}" ]; then
+  exit 0
+fi
+
+command -v curl >/dev/null 2>&1 || {
+  echo "error: curl is required to install ${tool_name}" >&2
+  exit 1
+}
+case "${asset_archive}" in
+  tar.gz) command -v tar >/dev/null 2>&1 || { echo "error: tar is required" >&2; exit 1; } ;;
+  zip) command -v unzip >/dev/null 2>&1 || { echo "error: unzip is required" >&2; exit 1; } ;;
+  raw) ;;
+  *) echo "error: unsupported archive type ${asset_archive}" >&2; exit 1 ;;
+esac
+case "${asset_entry}" in
+  /*|..|../*|*/..|*/../*) echo "error: unsafe archive entry ${asset_entry}" >&2; exit 1 ;;
+esac
+
+mkdir -p "${bin_dir}"
+stage_dir="$(mktemp -d "${bin_dir}/.${tool_name}-install.XXXXXX")"
+trap 'rm -rf "${stage_dir}"' EXIT
+chmod 700 "${stage_dir}"
+download="${stage_dir}/download"
+if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${download}" "${asset_url}"; then
+  echo "error: failed to download ${asset_file}; keeping the current ${tool_name}" >&2
+  exit 1
+fi
+if [ "$(sha256_file "${download}")" != "${asset_sha256}" ]; then
+  echo "error: checksum verification failed for ${asset_file}" >&2
+  exit 1
+fi
+
+extract_dir="${stage_dir}/extracted"
+mkdir "${extract_dir}"
+candidate="${extract_dir}/${tool_name}"
+case "${asset_archive}" in
+  raw)
+    cp "${download}" "${candidate}"
+    ;;
+  tar.gz)
+    [ -n "${asset_entry}" ] || { echo "error: archive entry is empty" >&2; exit 1; }
+    tar -xzf "${download}" -C "${extract_dir}" "${asset_entry}" ||
+      { echo "error: failed to extract ${asset_entry}" >&2; exit 1; }
+    candidate="${extract_dir}/${asset_entry}"
+    ;;
+  zip)
+    [ -n "${asset_entry}" ] || { echo "error: archive entry is empty" >&2; exit 1; }
+    unzip -qq "${download}" "${asset_entry}" -d "${extract_dir}" ||
+      { echo "error: failed to extract ${asset_entry}" >&2; exit 1; }
+    candidate="${extract_dir}/${asset_entry}"
+    ;;
+esac
+if [ ! -f "${candidate}" ] || [ -L "${candidate}" ]; then
+  echo "error: expected entry is not a regular file in ${asset_file}" >&2
+  exit 1
+fi
+binary_has_architecture "${candidate}" "${platform_arch}" || {
+  echo "error: ${asset_file} does not contain a ${platform_arch} ELF executable" >&2
+  exit 1
+}
+chmod 755 "${candidate}"
+if [ "$(tool_version "${candidate}" "${stage_dir}" || true)" != "${desired_version}" ]; then
+  echo "error: ${asset_file} did not report ripgrep ${desired_version}" >&2
+  exit 1
+fi
+
+assert_linux_target_replaceable
+echo "Installing ripgrep ${desired_version}..."
+if ! mv -f "${candidate}" "${target}"; then
+  echo "error: could not publish ${target}; the previous file was kept" >&2
+  exit 1
+fi
+{{ end }}
+{{ else }}
+echo "error: ripgrep is unsupported on {{ .chezmoi.os }}" >&2
+exit 1
+{{ end }}
+{{- end -}}
