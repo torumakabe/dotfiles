@@ -62,9 +62,32 @@ function Get-CosignVersion {
     catch [System.UnauthorizedAccessException] { return $null }
     catch [System.IO.IOException] { return $null }
     if ($status -ne 0 -or -not $output) { return $null }
-    try { return ([string]($output | Out-String) | ConvertFrom-Json).gitVersion }
+    try { $version = [string](([string]($output | Out-String) | ConvertFrom-Json).gitVersion) }
     catch [System.ArgumentException] { return $null }
     catch [System.Management.Automation.PSInvalidOperationException] { return $null }
+    if ($version -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:[-.+][0-9A-Za-z.-]+)?$') { return $null }
+    return $version
+}
+
+function Test-CosignIdentity {
+    param([string]$Path)
+    try { $output = & $Path help 2>&1; $status = $LASTEXITCODE }
+    catch [System.Management.Automation.CommandNotFoundException] { return $false }
+    catch [System.Management.Automation.ApplicationFailedException] { return $false }
+    catch [System.ComponentModel.Win32Exception] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.IO.IOException] { return $false }
+    if ($status -ne 0) { return $false }
+    $text = [string]($output | Out-String)
+    return $text.Contains('A tool for Container Signing, Verification and Storage in an OCI registry') -and
+        $text.Contains('cosign [command]')
+}
+
+function Get-ManagedCosignVersion {
+    param([string]$Path)
+    $version = Get-CosignVersion -Path $Path
+    if (-not $version -or -not (Test-CosignIdentity -Path $Path)) { return $null }
+    return $version
 }
 
 # >>> target-guards
@@ -103,6 +126,9 @@ function Assert-ManagedTarget {
         return
     }
     if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+    if (-not (Get-ManagedCosignVersion -Path $target)) {
+        throw "refusing to replace unrecognized cosign file $target"
+    }
 }
 
 function Assert-BinaryReplaceable {
@@ -136,7 +162,7 @@ Assert-ManagedTarget
 $targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
 if (-not $targetItem -or
     (($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
-    if ((Get-CosignVersion -Path $target) -eq "v$cosignVersion") { exit 0 }
+    if ((Get-ManagedCosignVersion -Path $target) -eq "v$cosignVersion") { exit 0 }
 }
 
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
@@ -160,7 +186,7 @@ try {
         if (-not $candidateArch) { $candidateArch = 'an invalid header' }
         throw "expected $assetExecutableArch cosign executable but $assetFile has $candidateArch"
     }
-    $found = Get-CosignVersion -Path $staged
+    $found = Get-ManagedCosignVersion -Path $staged
     if ($found -ne "v$cosignVersion") {
         if (-not $found) { $found = 'unknown' }
         throw "expected cosign v$cosignVersion but $assetFile reported $found"

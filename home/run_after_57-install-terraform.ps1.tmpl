@@ -86,9 +86,50 @@ function Get-TerraformVersion {
     catch [System.UnauthorizedAccessException] { return $null }
     catch [System.IO.IOException] { return $null }
     if ($process.ExitCode -ne 0) { return $null }
-    try { return ([string]$stdout | ConvertFrom-Json).terraform_version }
+    try { $version = [string](([string]$stdout | ConvertFrom-Json).terraform_version) }
     catch [System.ArgumentException] { return $null }
     catch [System.Management.Automation.PSInvalidOperationException] { return $null }
+    if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-.+][0-9A-Za-z.-]+)?$') { return $null }
+    return $version
+}
+
+function Test-TerraformIdentity {
+    param([string]$Path, [string]$WorkingDirectory, [string]$ConfigFile)
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $Path
+    $psi.ArgumentList.Add('-help')
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.Environment['CHECKPOINT_DISABLE'] = '1'
+    $psi.Environment['TF_CLI_CONFIG_FILE'] = $ConfigFile
+    try {
+        $process = [Diagnostics.Process]::Start($psi)
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+    }
+    catch [System.ComponentModel.Win32Exception] { return $false }
+    catch [System.InvalidOperationException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.IO.IOException] { return $false }
+    if ($process.ExitCode -ne 0) { return $false }
+    $text = $stdout + $stderr
+    return $text.Contains('Usage: terraform') -and
+        $text.Contains('Main commands:') -and
+        $text.Contains('Prepare your working directory for other commands') -and
+        $text.Contains('Show changes required by the current configuration')
+}
+
+function Get-ManagedTerraformVersion {
+    param([string]$Path, [string]$WorkingDirectory, [string]$ConfigFile)
+    $version = Get-TerraformVersion -Path $Path -WorkingDirectory $WorkingDirectory -ConfigFile $ConfigFile
+    if (-not $version -or
+        -not (Test-TerraformIdentity -Path $Path -WorkingDirectory $WorkingDirectory -ConfigFile $ConfigFile)) {
+        return $null
+    }
+    return $version
 }
 
 # >>> target-guards
@@ -114,6 +155,7 @@ function Test-KnownMiseShimLink {
 }
 
 function Assert-ManagedTarget {
+    param([string]$WorkingDirectory, [string]$ConfigFile)
     $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
     if (-not $item) { return }
     if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
@@ -127,6 +169,9 @@ function Assert-ManagedTarget {
         return
     }
     if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+    if (-not (Get-ManagedTerraformVersion -Path $target -WorkingDirectory $WorkingDirectory -ConfigFile $ConfigFile)) {
+        throw "refusing to replace unrecognized Terraform file $target"
+    }
 }
 
 function Assert-BinaryReplaceable {
@@ -147,7 +192,6 @@ function Assert-BinaryReplaceable {
 }
 # <<< target-guards
 
-Assert-ManagedTarget
 if ($assetExecutableArch -ne '{{ .chezmoi.arch }}' -or $assetEmulated) {
     throw 'Terraform asset architecture declaration is inconsistent'
 }
@@ -158,10 +202,11 @@ $retainStage = $false
 try {
     $probeConfig = Join-Path $stageDir 'terraform.rc'
     New-Item -ItemType File -Path $probeConfig | Out-Null
+    Assert-ManagedTarget -WorkingDirectory $stageDir -ConfigFile $probeConfig
     $targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
     if (-not $targetItem -or
         (($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
-        if ((Get-TerraformVersion -Path $target -WorkingDirectory $stageDir -ConfigFile $probeConfig) -eq $terraformVersion) {
+        if ((Get-ManagedTerraformVersion -Path $target -WorkingDirectory $stageDir -ConfigFile $probeConfig) -eq $terraformVersion) {
             exit 0
         }
     }
@@ -289,12 +334,12 @@ try {
         throw "expected $assetExecutableArch Terraform executable but $assetFile has $candidateArch"
     }
     Unblock-File -LiteralPath $staged
-    $found = Get-TerraformVersion -Path $staged -WorkingDirectory $stageDir -ConfigFile $probeConfig
+    $found = Get-ManagedTerraformVersion -Path $staged -WorkingDirectory $stageDir -ConfigFile $probeConfig
     if ($found -ne $terraformVersion) {
         if (-not $found) { $found = 'unknown' }
         throw "expected Terraform $terraformVersion but $assetFile reported $found"
     }
-    Assert-ManagedTarget
+    Assert-ManagedTarget -WorkingDirectory $stageDir -ConfigFile $probeConfig
     Assert-BinaryReplaceable
     Write-Host "Installing Terraform $terraformVersion..."
     $retainStage = $true

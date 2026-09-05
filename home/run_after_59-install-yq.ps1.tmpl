@@ -60,9 +60,31 @@ function Get-YqVersion {
     catch [System.IO.IOException] { return $null }
     if ($status -ne 0) { return $null }
     $text = ([string]($output | Select-Object -First 1)).Trim()
-    if ($text -match '^yq \(.*\) version v([0-9]+\.[0-9]+\.[0-9]+)$' -and
-        $Matches[1] -eq $yqVersion) { return $Matches[1] }
+    if ($text -match '^yq \(.*\) version v([0-9]+\.[0-9]+\.[0-9]+(?:[-.+][0-9A-Za-z.-]+)?)$') {
+        return $Matches[1]
+    }
     return $null
+}
+
+function Test-YqIdentity {
+    param([string]$Path)
+    try { $output = & $Path --help 2>&1; $status = $LASTEXITCODE }
+    catch [System.Management.Automation.CommandNotFoundException] { return $false }
+    catch [System.Management.Automation.ApplicationFailedException] { return $false }
+    catch [System.ComponentModel.Win32Exception] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.IO.IOException] { return $false }
+    if ($status -ne 0) { return $false }
+    $text = [string]($output | Out-String)
+    return $text.Contains('yq is a portable command-line data file processor (https://github.com/mikefarah/yq/)') -and
+        $text.Contains('https://mikefarah.gitbook.io/yq/')
+}
+
+function Get-ManagedYqVersion {
+    param([string]$Path)
+    $version = Get-YqVersion -Path $Path
+    if (-not $version -or -not (Test-YqIdentity -Path $Path)) { return $null }
+    return $version
 }
 
 # >>> target-guards
@@ -101,6 +123,9 @@ function Assert-ManagedTarget {
         return
     }
     if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+    if (-not (Get-ManagedYqVersion -Path $target)) {
+        throw "refusing to replace unrecognized yq file $target"
+    }
 }
 
 function Assert-BinaryReplaceable {
@@ -128,7 +153,7 @@ Assert-ManagedTarget
 $targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
 if (-not $targetItem -or
     (($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
-    if ((Get-YqVersion -Path $target) -eq $yqVersion) { exit 0 }
+    if ((Get-ManagedYqVersion -Path $target) -eq $yqVersion) { exit 0 }
 }
 
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
@@ -152,7 +177,7 @@ try {
         if (-not $candidateArch) { $candidateArch = 'an invalid header' }
         throw "expected $assetExecutableArch yq executable but $assetFile has $candidateArch"
     }
-    $found = Get-YqVersion -Path $staged
+    $found = Get-ManagedYqVersion -Path $staged
     if ($found -ne $yqVersion) {
         if (-not $found) { $found = 'unknown' }
         throw "expected yq $yqVersion but $assetFile reported $found"

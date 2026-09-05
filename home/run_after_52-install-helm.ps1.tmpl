@@ -94,33 +94,73 @@ function Test-BinaryArchitecture {
     }
 }
 
-function Test-ExpectedVersion {
+function Get-ToolVersion {
     param([string]$Path, [string]$WorkingDirectory)
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     Push-Location -LiteralPath $WorkingDirectory
     try {
         $output = & $Path version --template $helmTemplate 2>$null
-        if ($LASTEXITCODE -ne 0) { return $false }
+        if ($LASTEXITCODE -ne 0) { return $null }
     }
     catch [System.Management.Automation.CommandNotFoundException] {
-        return $false
+        return $null
     }
     catch [System.Management.Automation.ApplicationFailedException] {
-        return $false
+        return $null
     }
     catch [System.ComponentModel.Win32Exception] {
-        return $false
+        return $null
     }
     catch [System.IO.IOException] {
-        return $false
+        return $null
     }
     catch [System.UnauthorizedAccessException] {
-        return $false
+        return $null
     }
     finally {
         Pop-Location
     }
-    return ([string]$output).Trim() -ceq "v$toolVersion"
+    $text = ([string]$output).Trim()
+    if ($text -match '^v([0-9]+(?:\.[0-9]+)+)$') { return $Matches[1] }
+    return $null
+}
+
+function Test-ExpectedVersion {
+    param([string]$Path, [string]$WorkingDirectory)
+    return (Get-ToolVersion -Path $Path -WorkingDirectory $WorkingDirectory) -ceq $toolVersion
+}
+
+function Test-ToolIdentity {
+    param([string]$Path, [string]$WorkingDirectory)
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        $output = & $Path template --help 2>&1
+        if ($LASTEXITCODE -ne 0) { return $false }
+    }
+    catch [System.Management.Automation.CommandNotFoundException] { return $false }
+    catch [System.Management.Automation.ApplicationFailedException] { return $false }
+    catch [System.ComponentModel.Win32Exception] { return $false }
+    catch [System.IO.IOException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    finally {
+        Pop-Location
+    }
+    $text = [string]::Join([Environment]::NewLine, @($output))
+    return $text -match 'helm template' -and $text -match 'chart'
+}
+
+function Get-RecognizedTargetVersion {
+    if (-not (Test-BinaryArchitecture -Path $target)) {
+        throw "$target is not a native $platformArch Windows executable; refusing to replace it."
+    }
+    $version = Get-ToolVersion -Path $target -WorkingDirectory $binDir
+    if (-not $version) {
+        throw "$target is not recognized as $toolName; refusing to replace it."
+    }
+    if (-not (Test-ToolIdentity -Path $target -WorkingDirectory $binDir)) {
+        throw "$target does not provide the expected $toolName interface; refusing to replace it."
+    }
+    return $version
 }
 
 function Assert-ZipEntriesSafe {
@@ -152,6 +192,7 @@ function Assert-ZipEntriesSafe {
 function Assert-Unlocked {
     $state = Assert-TargetReplaceable
     if ($state -ne 'File') { return }
+    $null = Get-RecognizedTargetVersion
     try {
         $stream = [System.IO.File]::Open(
             $target, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite,
@@ -165,9 +206,9 @@ function Assert-Unlocked {
 }
 
 $targetState = Assert-TargetReplaceable
-if ($targetState -eq 'File' -and (Test-BinaryArchitecture -Path $target) -and
-    (Test-ExpectedVersion -Path $target -WorkingDirectory $binDir)) {
-    exit 0
+if ($targetState -eq 'File') {
+    $installedVersion = Get-RecognizedTargetVersion
+    if ($installedVersion -ceq $toolVersion) { exit 0 }
 }
 
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null

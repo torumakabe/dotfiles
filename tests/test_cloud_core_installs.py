@@ -94,34 +94,63 @@ def _write_executable(path: pathlib.Path, body: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _binary_body(command: str, version: str, *, exit_code: int = 0) -> str:
+def _binary_body(
+    command: str,
+    version: str,
+    *,
+    exit_code: int = 0,
+    identity_output: str | None = None,
+    version_output: str | None = None,
+) -> str:
+    outputs = {
+        "kubelogin": f"git hash: v{version}/synthetic\\nGo version: synthetic",
+        "cue": f"cue version v{version}",
+        "helm": f"v{version}",
+        "kubectl": f'{{\"clientVersion\":{{\"gitVersion\":\"v{version}\"}}}}',
+        "kustomize": f"v{version}",
+    }
+    output = version_output or outputs[command]
     probes = {
         "kubelogin": (
             '[ "$#" -eq 1 ] && [ "$1" = "--version" ] || exit 64\n'
-            f"printf '%s\\n' 'git hash: v{version}/synthetic' 'Go version: synthetic'\n"
+            f"printf '%b\\n' '{output}'\n"
         ),
         "cue": (
             '[ "$#" -eq 1 ] && [ "$1" = "version" ] || exit 64\n'
-            f"printf '%s\\n' 'cue version v{version}'\n"
+            f"printf '%b\\n' '{output}'\n"
         ),
         "helm": (
             '[ "$#" -eq 3 ] && [ "$1" = "version" ] && '
             '[ "$2" = "--template" ] && [ "$3" = "{{.Version}}" ] || exit 64\n'
-            f"printf '%s' 'v{version}'\n"
+            f"printf '%b' '{output}'\n"
         ),
         "kubectl": (
             '[ "$#" -eq 3 ] && [ "$1" = "version" ] && '
             '[ "$2" = "--client=true" ] && [ "$3" = "--output=json" ] || exit 64\n'
-            f"printf '%s\\n' '{{\"clientVersion\":{{\"gitVersion\":\"v{version}\"}}}}'\n"
+            f"printf '%b\\n' '{output}'\n"
         ),
         "kustomize": (
             '[ "$#" -eq 1 ] && [ "$1" = "version" ] || exit 64\n'
-            f"printf '%s\\n' 'v{version}'\n"
+            f"printf '%b\\n' '{output}'\n"
         ),
     }
+    identity_probe = ""
+    if command == "helm":
+        identity = identity_output or "helm template renders chart templates"
+        identity_probe = (
+            'if [ "$#" -eq 2 ] && [ "$1" = "template" ] && '
+            f'[ "$2" = "--help" ]; then printf \'%s\\n\' \'{identity}\'; exit 0; fi\n'
+        )
+    elif command == "kustomize":
+        identity = identity_output or "kustomize build reads a kustomization"
+        identity_probe = (
+            'if [ "$#" -eq 2 ] && [ "$1" = "build" ] && '
+            f'[ "$2" = "--help" ]; then printf \'%s\\n\' \'{identity}\'; exit 0; fi\n'
+        )
     return (
         "#!/bin/sh\n"
         'printf "%s\\n" "$PWD" >> "${PROBE_CWDS:?}"\n'
+        + identity_probe
         + probes[command]
         + f"exit {exit_code}\n"
     )
@@ -278,16 +307,13 @@ class DeclarationAndRenderingTests(unittest.TestCase):
                 self.assertIn(expected_posix[spec["command"]], sh_source)
                 self.assertLess(
                     sh_source.index("assert_target_replaceable"),
-                    sh_source.index("has_expected_version"),
+                    sh_source.index("get_tool_version"),
                 )
                 self.assertIn('stage_dir="$(mktemp -d "${bin_dir}/.', sh_source)
                 self.assertIn('[ -L "${candidate}" ]', sh_source)
                 self.assertIn("has_expected_architecture", sh_source)
-                self.assertIn(
-                    'has_expected_architecture "${target}" &&\n'
-                    '  has_expected_version "${target}"',
-                    sh_source,
-                )
+                self.assertIn("classify_target", sh_source)
+                self.assertIn('installed_version="$(get_tool_version', sh_source)
                 self.assertIn('mv -f "${candidate}" "${target}"', sh_source)
                 self.assertNotIn('rm -f "${target}"', sh_source)
                 self.assertIn(
@@ -303,19 +329,22 @@ class DeclarationAndRenderingTests(unittest.TestCase):
                 self.assertIn("if ($current -ine $expected)", ps_source)
                 self.assertIn("function Test-BinaryArchitecture", ps_source)
                 self.assertIn("function Assert-TargetReplaceable", ps_source)
-                self.assertIn(
-                    "$targetState -eq 'File' -and (Test-BinaryArchitecture -Path $target)",
-                    ps_source,
+                self.assertIn("function Get-RecognizedTargetVersion", ps_source)
+                self.assertIn("$installedVersion = Get-RecognizedTargetVersion", ps_source)
+                self.assertGreaterEqual(
+                    ps_source.count("Get-RecognizedTargetVersion"),
+                    3,
                 )
                 architecture_function = _extract_between(
                     ps_source,
                     "function Test-BinaryArchitecture",
-                    "function Test-ExpectedVersion",
+                    "function Get-ToolVersion",
                 )
-                version_start = ps_source.index("function Test-ExpectedVersion")
+                version_start = ps_source.index("function Get-ToolVersion")
                 version_end_candidates = [
                     index
                     for marker in (
+                        "function Test-ExpectedVersion",
                         "function Assert-ZipEntriesSafe",
                         "function Assert-Unlocked",
                     )
@@ -332,6 +361,10 @@ class DeclarationAndRenderingTests(unittest.TestCase):
                 self.assertIn("[System.IO.FileShare]::None", ps_source)
                 self.assertIn("[System.IO.File]::Move($candidate, $target, $true)", ps_source)
                 self.assertNotIn("Remove-Item -LiteralPath $target", ps_source)
+                self.assertLess(
+                    ps_source.index("$installedVersion = Get-RecognizedTargetVersion"),
+                    ps_source.index("Invoke-WebRequest"),
+                )
                 if spec["command"] != "kubectl":
                     self.assertIn("function Assert-ZipEntriesSafe", ps_source)
                     self.assertLess(
@@ -340,6 +373,21 @@ class DeclarationAndRenderingTests(unittest.TestCase):
                     )
         helm = _render(_script_path(TOOLS["helm"], "sh"), "linux", "amd64")
         self.assertIn("helm_template='{{.Version}}'", helm)
+        self.assertIn('"${binary}" template --help', helm)
+        helm_ps1 = _render(
+            _script_path(TOOLS["helm"], "ps1"), "windows", "amd64"
+        )
+        self.assertIn("$output = & $Path template --help", helm_ps1)
+        kustomize = _render(
+            _script_path(TOOLS["kustomize"], "sh"), "linux", "amd64"
+        )
+        self.assertIn('"${binary}" build --help', kustomize)
+        kustomize_ps1 = _render(
+            _script_path(TOOLS["kustomize"], "ps1"), "windows", "amd64"
+        )
+        self.assertIn("$output = & $Path build --help", kustomize_ps1)
+        self.assertIn(r"Version:kustomize\/v", kustomize)
+        self.assertIn("Version:kustomize/v", kustomize_ps1)
         kubectl = _render(_script_path(TOOLS["kubectl"], "ps1"), "windows", "amd64")
         self.assertLess(
             kubectl.index("$LASTEXITCODE -ne 0"),
@@ -526,10 +574,10 @@ cp "$STUB_CURL_SOURCE" "$output"
                 bin_dir / "jq",
                 "#!/bin/sh\n"
                 "input=$(cat)\n"
-                "case \"$input\" in\n"
-                "  *'\"gitVersion\":\"v1.37.0\"'*) printf '%s\\n' 'v1.37.0' ;;\n"
-                "  *) exit 1 ;;\n"
-                "esac\n",
+                "version=$(printf '%s\\n' \"$input\" | "
+                "sed -n 's/.*\"gitVersion\":\"\\([^\"]*\\)\".*/\\1/p')\n"
+                "[ -n \"$version\" ] || exit 1\n"
+                "printf '%s\\n' \"$version\"\n",
             )
         rendered = _render(
             _script_path(spec, "sh"), "linux", "amd64", data=override
@@ -646,6 +694,75 @@ cp "$STUB_CURL_SOURCE" "$output"
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertNotEqual(target.read_bytes(), old_bytes)
 
+    def test_kustomize_legacy_provenance_version_can_be_upgraded(self) -> None:
+        data_name = "kustomize"
+        spec = TOOLS[data_name]
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            fixture, override = self._fixture(root, data_name)
+            script, home, env = self._prepare(
+                root, data_name, fixture=fixture, override=override
+            )
+            target = home / ".local/bin" / spec["command"]
+            _write_executable(
+                target,
+                _binary_body(
+                    spec["command"],
+                    "4.5.7",
+                    version_output=(
+                        "{Version:kustomize/v4.5.7 "
+                        "GitCommit:56d82a8e8f92 BuildDate:2022-08-02T16:35:54Z "
+                        "GoOs:linux GoArch:amd64}"
+                    ),
+                ),
+            )
+            old_bytes = target.read_bytes()
+            result = subprocess.run(
+                [BASH, str(script)],
+                env=env,
+                cwd=root,
+                capture_output=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotEqual(target.read_bytes(), old_bytes)
+
+    def test_kustomize_fake_legacy_provenance_is_rejected_before_network(self) -> None:
+        data_name = "kustomize"
+        spec = TOOLS[data_name]
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            fixture, override = self._fixture(root, data_name)
+            script, home, env = self._prepare(
+                root, data_name, fixture=fixture, override=override
+            )
+            target = home / ".local/bin" / spec["command"]
+            _write_executable(
+                target,
+                _binary_body(
+                    spec["command"],
+                    "4.5.7",
+                    version_output=(
+                        "{Version:other/v4.5.7 "
+                        "GitCommit:56d82a8e8f92 BuildDate:2022-08-02T16:35:54Z "
+                        "GoOs:linux GoArch:amd64}"
+                    ),
+                ),
+            )
+            old_bytes = target.read_bytes()
+            result = subprocess.run(
+                [BASH, str(script)],
+                env=env,
+                cwd=root,
+                capture_output=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(target.read_bytes(), old_bytes)
+            self.assertFalse(pathlib.Path(env["STUB_CURL_CALLS"]).exists())
+
     def test_failures_are_nonzero_and_preserve_existing_target(self) -> None:
         cases = ("download", "checksum", "version", "version-exit", "rename")
         for data_name, spec in TOOLS.items():
@@ -687,7 +804,10 @@ cp "$STUB_CURL_SOURCE" "$output"
                             mv_fail=failure == "rename",
                         )
                         target = home / ".local/bin" / spec["command"]
-                        target.write_text("old bytes", encoding="utf-8")
+                        _write_executable(
+                            target, _binary_body(spec["command"], "0.0.1")
+                        )
+                        old_bytes = target.read_bytes()
                         result = subprocess.run(
                             [BASH, str(script)],
                             env=env,
@@ -697,7 +817,102 @@ cp "$STUB_CURL_SOURCE" "$output"
                             check=False,
                         )
                         self.assertNotEqual(result.returncode, 0, result.stderr)
-                        self.assertEqual(target.read_text(encoding="utf-8"), "old bytes")
+                        self.assertEqual(target.read_bytes(), old_bytes)
+
+    def test_unknown_regular_files_are_rejected_before_network(self) -> None:
+        for data_name, spec in TOOLS.items():
+            for kind in (
+                "non-executable",
+                "script",
+                "unknown-output",
+                "failed-probe",
+            ):
+                with self.subTest(tool=spec["command"], kind=kind):
+                    with tempfile.TemporaryDirectory() as temp:
+                        root = pathlib.Path(temp)
+                        fixture, override = self._fixture(root, data_name)
+                        script, home, env = self._prepare(
+                            root, data_name, fixture=fixture, override=override
+                        )
+                        target = home / ".local/bin" / spec["command"]
+                        if kind == "non-executable":
+                            target.write_text("foreign bytes", encoding="utf-8")
+                        elif kind == "script":
+                            _write_executable(
+                                target,
+                                "#!/bin/sh\n"
+                                'printf "%s\\n" "$PWD" >> "${PROBE_CWDS:?}"\n'
+                                "printf '%s\\n' 'unrelated command'\n",
+                            )
+                            (root / "stubs/od").unlink()
+                        elif kind == "unknown-output":
+                            _write_executable(
+                                target,
+                                _binary_body(
+                                    spec["command"],
+                                    spec["version"],
+                                    version_output="unrelated command",
+                                ),
+                            )
+                        else:
+                            _write_executable(
+                                target,
+                                _binary_body(
+                                    spec["command"], spec["version"], exit_code=1
+                                ),
+                            )
+                        old_bytes = target.read_bytes()
+                        result = subprocess.run(
+                            [BASH, str(script)],
+                            env=env,
+                            cwd=root,
+                            capture_output=True,
+                            encoding="utf-8",
+                            check=False,
+                        )
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertEqual(target.read_bytes(), old_bytes)
+                        self.assertFalse(
+                            pathlib.Path(env["STUB_CURL_CALLS"]).exists()
+                        )
+                        if kind == "script":
+                            self.assertFalse(
+                                pathlib.Path(env["PROBE_CWDS"]).exists()
+                            )
+
+    def test_same_version_from_another_cli_is_rejected_before_network(self) -> None:
+        for data_name in ("helm", "kustomize"):
+            spec = TOOLS[data_name]
+            with self.subTest(tool=spec["command"]):
+                with tempfile.TemporaryDirectory() as temp:
+                    root = pathlib.Path(temp)
+                    fixture, override = self._fixture(root, data_name)
+                    script, home, env = self._prepare(
+                        root, data_name, fixture=fixture, override=override
+                    )
+                    target = home / ".local/bin" / spec["command"]
+                    _write_executable(
+                        target,
+                        _binary_body(
+                            spec["command"],
+                            spec["version"],
+                            identity_output="unrelated product",
+                        ),
+                    )
+                    old_bytes = target.read_bytes()
+                    result = subprocess.run(
+                        [BASH, str(script)],
+                        env=env,
+                        cwd=root,
+                        capture_output=True,
+                        encoding="utf-8",
+                        check=False,
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(target.read_bytes(), old_bytes)
+                    self.assertFalse(
+                        pathlib.Path(env["STUB_CURL_CALLS"]).exists()
+                    )
 
     def test_wrong_candidate_architecture_is_not_executed_or_published(self) -> None:
         for data_name, spec in TOOLS.items():
@@ -711,12 +926,21 @@ cp "$STUB_CURL_SOURCE" "$output"
                     _write_executable(
                         root / "stubs/od",
                         "#!/bin/sh\n"
-                        "printf '%s\\n' "
-                        "' 7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00"
-                        " 02 00 b7 00'\n",
+                        "binary=''\n"
+                        "for argument do binary=$argument; done\n"
+                        "machine='3e 00'\n"
+                        "case \"$binary\" in\n"
+                        "  */.*-install.*/*) machine='b7 00' ;;\n"
+                        "esac\n"
+                        "printf '%s%s\\n' "
+                        "' 7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00' "
+                        "\" 02 00 ${machine}\"\n",
                     )
                     target = home / ".local/bin" / spec["command"]
-                    target.write_text("old bytes", encoding="utf-8")
+                    _write_executable(
+                        target, _binary_body(spec["command"], "0.0.1")
+                    )
+                    old_bytes = target.read_bytes()
                     result = subprocess.run(
                         [BASH, str(script)],
                         env=env,
@@ -726,8 +950,7 @@ cp "$STUB_CURL_SOURCE" "$output"
                         check=False,
                     )
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(target.read_text(encoding="utf-8"), "old bytes")
-                    self.assertFalse(pathlib.Path(env["PROBE_CWDS"]).exists())
+                    self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_wrong_local_architecture_is_not_treated_as_compliant(self) -> None:
         for data_name, spec in TOOLS.items():
@@ -764,9 +987,8 @@ cp "$STUB_CURL_SOURCE" "$output"
                     )
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(target.read_bytes(), old_bytes)
-                    self.assertEqual(
-                        pathlib.Path(env["STUB_CURL_CALLS"]).read_text(encoding="utf-8"),
-                        "called\n",
+                    self.assertFalse(
+                        pathlib.Path(env["STUB_CURL_CALLS"]).exists()
                     )
                     self.assertFalse(pathlib.Path(env["PROBE_CWDS"]).exists())
 
@@ -803,7 +1025,10 @@ cp "$STUB_CURL_SOURCE" "$output"
                         root, data_name, fixture=fixture, override=override
                     )
                     target = home / ".local/bin" / spec["command"]
-                    target.write_text("old bytes", encoding="utf-8")
+                    _write_executable(
+                        target, _binary_body(spec["command"], "0.0.1")
+                    )
+                    old_bytes = target.read_bytes()
                     result = subprocess.run(
                         [BASH, str(script)],
                         env=env,
@@ -813,7 +1038,7 @@ cp "$STUB_CURL_SOURCE" "$output"
                         check=False,
                     )
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(target.read_text(encoding="utf-8"), "old bytes")
+                    self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_archive_symlink_entry_is_rejected(self) -> None:
         for data_name in ("azureKubelogin", "cue"):
@@ -1063,6 +1288,8 @@ class WindowsLockBehaviourTests(unittest.TestCase):
                 f"$target = '{quoted_target}'\n"
                 f"$miseTarget = '{quoted_mise}'\n"
                 + functions
+                + "\nRemove-Item Function:Get-RecognizedTargetVersion\n"
+                "function Get-RecognizedTargetVersion { return '0.0.1' }\n"
                 + "\n$lock = [System.IO.File]::Open("
                 "$target,[System.IO.FileMode]::Open,[System.IO.FileAccess]::Read,"
                 "[System.IO.FileShare]::Read)\n"

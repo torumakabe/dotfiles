@@ -57,24 +57,60 @@ binary_arch_of() {
 }
 # <<< executable-architecture
 
+clear_trivy_environment() {
+  local name
+  while IFS= read -r name; do
+    unset "${name}"
+  done < <(compgen -e TRIVY_)
+}
+
 trivy_version_of() {
-  local binary=$1 work_dir=$2 cache_dir=$3 output
+  local binary=$1 work_dir=$2 cache_dir=$3 config_file=$4 output
   [ -x "${binary}" ] && [ -f "${binary}" ] && [ ! -L "${binary}" ] || return 1
   [ "$(binary_arch_of "${binary}" || true)" = "${asset_executable_arch}" ] || return 1
   output="$(
     cd "${work_dir}"
-    TRIVY_CACHE_DIR="${cache_dir}" "${binary}" --version --format json 2>/dev/null
+    clear_trivy_environment
+    TRIVY_CACHE_DIR="${cache_dir}" \
+      "${binary}" --config "${config_file}" --version --format json 2>/dev/null
   )" || return 1
   [ -x "${HOME}/.local/bin/jq" ] || {
     echo "error: ${HOME}/.local/bin/jq is required to validate Trivy" >&2
     return 1
   }
-  printf '%s' "${output}" |
-    "${HOME}/.local/bin/jq" -er '(.Version // .version) | strings' 2>/dev/null
+  output="$(printf '%s' "${output}" |
+    "${HOME}/.local/bin/jq" -er '(.Version // .version) | strings' 2>/dev/null)" || return 1
+  [[ "${output}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]] || return 1
+  printf '%s\n' "${output}"
+}
+
+trivy_identity_ok() {
+  local binary=$1 work_dir=$2 cache_dir=$3 config_file=$4 output
+  output="$(
+    cd "${work_dir}"
+    clear_trivy_environment
+    TRIVY_CACHE_DIR="${cache_dir}" \
+      "${binary}" --config "${config_file}" --help 2>&1
+  )" || return 1
+  case "${output}" in
+    *"Scanner for vulnerabilities in container images, file systems, and Git repositories"*"Scanning Commands:"*"Scan a container image"*"Scan local filesystem"*)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+trivy_managed_version_of() {
+  local binary=$1 work_dir=$2 cache_dir=$3 config_file=$4 version
+  version="$(trivy_version_of "${binary}" "${work_dir}" "${cache_dir}" "${config_file}")" ||
+    return 1
+  trivy_identity_ok "${binary}" "${work_dir}" "${cache_dir}" "${config_file}" ||
+    return 1
+  printf '%s\n' "${version}"
 }
 
 classify_target() {
-  local link
+  local work_dir=$1 cache_dir=$2 config_file=$3 link
   if [ -L "${target}" ]; then
     link="$(readlink "${target}")" || return 1
     if [ "${link}" != "${HOME}/.local/share/mise/shims/trivy" ]; then
@@ -89,6 +125,12 @@ classify_target() {
   elif [ -e "${target}" ] && [ ! -f "${target}" ]; then
     echo "error: refusing to replace non-file target ${target}" >&2
     return 1
+  elif [ -f "${target}" ]; then
+    if ! trivy_managed_version_of \
+      "${target}" "${work_dir}" "${cache_dir}" "${config_file}" >/dev/null; then
+      echo "error: refusing to replace unrecognized Trivy file ${target}" >&2
+      return 1
+    fi
   fi
 }
 
@@ -103,7 +145,6 @@ make_stage_dir() {
   return 1
 }
 
-classify_target
 command -v od >/dev/null 2>&1 || { echo "error: od is required to validate Trivy architecture" >&2; exit 1; }
 if [ "${asset_executable_arch}" != '{{ .chezmoi.arch }}' ] || [ "${asset_emulated}" != "false" ]; then
   echo "error: Trivy asset architecture declaration is inconsistent for {{ $platform }}" >&2
@@ -124,9 +165,13 @@ cleanup() {
 trap cleanup EXIT
 probe_cache="${stage_dir}/cache"
 mkdir "${probe_cache}"
+probe_config="${stage_dir}/trivy.yaml"
+printf '{}\n' >"${probe_config}"
 
+classify_target "${stage_dir}" "${probe_cache}" "${probe_config}"
 if [ ! -L "${target}" ] &&
-  [ "$(trivy_version_of "${target}" "${stage_dir}" "${probe_cache}" || true)" = "${trivy_version}" ]; then
+  [ "$(trivy_managed_version_of \
+    "${target}" "${stage_dir}" "${probe_cache}" "${probe_config}" || true)" = "${trivy_version}" ]; then
   exit 0
 fi
 
@@ -160,14 +205,15 @@ staged_arch="$(binary_arch_of "${staged}" || true)"
   exit 1
 }
 chmod 755 "${staged}"
-found="$(trivy_version_of "${staged}" "${stage_dir}" "${probe_cache}" || true)"
+found="$(trivy_managed_version_of \
+  "${staged}" "${stage_dir}" "${probe_cache}" "${probe_config}" || true)"
 [ "${found}" = "${trivy_version}" ] || {
   echo "error: expected Trivy ${trivy_version} but ${asset_file} reported ${found:-unknown}" >&2
   exit 1
 }
 
 echo "Installing Trivy ${trivy_version}..."
-classify_target
+classify_target "${stage_dir}" "${probe_cache}" "${probe_config}"
 retain_stage=1
 if ! mv -f "${staged}" "${target}"; then
   echo "error: failed to publish Trivy; the existing target was not intentionally removed" >&2

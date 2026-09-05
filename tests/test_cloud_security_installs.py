@@ -76,6 +76,11 @@ def _write_executable(path: pathlib.Path, body: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def _write_old_managed_binary(path: pathlib.Path, tool: str) -> bytes:
+    _write_executable(path, _binary(tool, "0.0.1"))
+    return path.read_bytes()
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -102,53 +107,126 @@ def _archive(kind: str, entry: str, body: str) -> bytes:
 
 
 def _binary(
-    tool: str, version: str, exit_code: int = 0, header_arch: str = "amd64"
+    tool: str,
+    version: str,
+    exit_code: int = 0,
+    header_arch: str = "amd64",
+    *,
+    identity: bool = True,
 ) -> str:
-    probes = {
+    identities = {
         "cosign": (
-            '[ "$#" -eq 2 ] && [ "$1" = "version" ] && [ "$2" = "--json" ] || exit 64\n'
-            f"printf '%s\\n' '{{\"gitVersion\":\"v{version}\"}}'\n"
+            "A tool for Container Signing, Verification and Storage in an OCI registry\n"
+            "Usage:\n  cosign [command]"
         ),
         "sqlc": (
-            '[ "$#" -eq 1 ] && [ "$1" = "version" ] || exit 64\n'
-            f"printf '%s\\n' 'v{version}'\n"
+            "Usage:\n  sqlc [command]\n"
+            "Generate source code from SQL\n"
+            "Statically check SQL for syntax and type errors"
         ),
         "trivy": (
-            '[ "$#" -eq 3 ] && [ "$1" = "--version" ] && '
-            '[ "$2" = "--format" ] && [ "$3" = "json" ] || exit 64\n'
-            'test -d "${TRIVY_CACHE_DIR:?}" || exit 65\n'
-            'printf "%s|%s\\n" "$PWD" "$TRIVY_CACHE_DIR" >> "${PROBE_LOG:?}"\n'
-            f"printf '%s\\n' '{{\"Version\":\"{version}\"}}'\n"
+            "Scanner for vulnerabilities in container images, file systems, and Git repositories\n"
+            "Scanning Commands:\n"
+            "Scan a container image\nScan local filesystem"
         ),
         "yq": (
-            '[ "$#" -eq 1 ] && [ "$1" = "--version" ] || exit 64\n'
-            f"printf '%s\\n' 'yq (https://github.com/mikefarah/yq/) version v{version}'\n"
+            "yq is a portable command-line data file processor "
+            "(https://github.com/mikefarah/yq/)\n"
+            "https://mikefarah.gitbook.io/yq/"
         ),
         "terraform": (
-            '[ "$#" -eq 2 ] && [ "$1" = "version" ] && [ "$2" = "-json" ] || exit 64\n'
-            '[ "${CHECKPOINT_DISABLE:-}" = 1 ] || exit 65\n'
-            '[ -f "${TF_CLI_CONFIG_FILE:?}" ] || exit 66\n'
-            'printf "%s|%s\\n" "$PWD" "$TF_CLI_CONFIG_FILE" >> "${PROBE_LOG:?}"\n'
-            f"printf '%s\\n' '{{\"terraform_version\":\"{version}\"}}'\n"
+            "Usage: terraform [global options] <subcommand> [args]\n"
+            "Main commands:\n"
+            "Prepare your working directory for other commands\n"
+            "Show changes required by the current configuration"
         ),
     }
-    return (
-        "#!/bin/sh\n"
-        f"# TEST_EXECUTABLE_ARCH={header_arch}\n"
-        + probes[tool]
-        + f"exit {exit_code}\n"
-    )
+    help_text = identities[tool] if identity else "unrelated command help"
+    probes = {
+        "cosign": (
+            'if [ "$#" -eq 2 ] && [ "$1" = "version" ] && [ "$2" = "--json" ]; then\n'
+            f"  printf '%s\\n' '{{\"gitVersion\":\"v{version}\"}}'; exit {exit_code}\n"
+            "fi\n"
+            'if [ "$#" -eq 1 ] && [ "$1" = "help" ]; then\n'
+            f"  printf '%s\\n' '{help_text}'; exit 0\n"
+            "fi\n"
+            "exit 64\n"
+        ),
+        "sqlc": (
+            'if [ "$#" -eq 1 ] && [ "$1" = "version" ]; then\n'
+            f"  printf '%s\\n' 'v{version}'; exit {exit_code}\n"
+            "fi\n"
+            'if [ "$#" -eq 1 ] && [ "$1" = "help" ]; then\n'
+            f"  printf '%s\\n' '{help_text}'; exit 0\n"
+            "fi\n"
+            "exit 64\n"
+        ),
+        "trivy": (
+            'if [ "$#" -eq 5 ] && [ "$1" = "--config" ] && '
+            '[ "$3" = "--version" ] && [ "$4" = "--format" ] && [ "$5" = "json" ]; then\n'
+            '  test -d "${TRIVY_CACHE_DIR:?}" || exit 65\n'
+            '  [ -f "$2" ] && [ "$(cat "$2")" = "{}" ] || exit 66\n'
+            '  [ -z "${TRIVY_CONFIG+x}" ] && [ -z "${TRIVY_TIMEOUT+x}" ] && '
+            '[ -z "${TRIVY_CACERT+x}" ] || exit 67\n'
+            '  printf "%s|%s\\n" "$PWD" "$TRIVY_CACHE_DIR" >> "${PROBE_LOG:?}"\n'
+            '  if [ -n "${PROBE_ENV_LOG:-}" ]; then\n'
+            '    printf "version|%s|%s|%s|%s\\n" "$PWD" "$TRIVY_CACHE_DIR" "$2" '
+            '"${TRIVY_CONFIG-unset}:${TRIVY_TIMEOUT-unset}:${TRIVY_CACERT-unset}" '
+            '>> "$PROBE_ENV_LOG"\n'
+            "  fi\n"
+            f"  printf '%s\\n' '{{\"Version\":\"{version}\"}}'; exit {exit_code}\n"
+            "fi\n"
+            'if [ "$#" -eq 3 ] && [ "$1" = "--config" ] && [ "$3" = "--help" ]; then\n'
+            '  test -d "${TRIVY_CACHE_DIR:?}" || exit 65\n'
+            '  [ -f "$2" ] && [ "$(cat "$2")" = "{}" ] || exit 66\n'
+            '  [ -z "${TRIVY_CONFIG+x}" ] && [ -z "${TRIVY_TIMEOUT+x}" ] && '
+            '[ -z "${TRIVY_CACERT+x}" ] || exit 67\n'
+            '  if [ -n "${PROBE_ENV_LOG:-}" ]; then\n'
+            '    printf "help|%s|%s|%s|%s\\n" "$PWD" "$TRIVY_CACHE_DIR" "$2" '
+            '"${TRIVY_CONFIG-unset}:${TRIVY_TIMEOUT-unset}:${TRIVY_CACERT-unset}" '
+            '>> "$PROBE_ENV_LOG"\n'
+            "  fi\n"
+            f"  printf '%s\\n' '{help_text}'; exit 0\n"
+            "fi\n"
+            "exit 64\n"
+        ),
+        "yq": (
+            'if [ "$#" -eq 1 ] && [ "$1" = "--version" ]; then\n'
+            f"  printf '%s\\n' 'yq (https://github.com/mikefarah/yq/) version v{version}'; exit {exit_code}\n"
+            "fi\n"
+            'if [ "$#" -eq 1 ] && [ "$1" = "--help" ]; then\n'
+            f"  printf '%s\\n' '{help_text}'; exit 0\n"
+            "fi\n"
+            "exit 64\n"
+        ),
+        "terraform": (
+            'if [ "$#" -eq 2 ] && [ "$1" = "version" ] && [ "$2" = "-json" ]; then\n'
+            '  [ "${CHECKPOINT_DISABLE:-}" = 1 ] || exit 65\n'
+            '  [ -f "${TF_CLI_CONFIG_FILE:?}" ] || exit 66\n'
+            '  printf "%s|%s\\n" "$PWD" "$TF_CLI_CONFIG_FILE" >> "${PROBE_LOG:?}"\n'
+            f"  printf '%s\\n' '{{\"terraform_version\":\"{version}\"}}'; exit {exit_code}\n"
+            "fi\n"
+            'if [ "$#" -eq 1 ] && [ "$1" = "-help" ]; then\n'
+            '  [ "${CHECKPOINT_DISABLE:-}" = 1 ] || exit 65\n'
+            '  [ -f "${TF_CLI_CONFIG_FILE:?}" ] || exit 66\n'
+            f"  printf '%s\\n' '{help_text}'; exit 0\n"
+            "fi\n"
+            "exit 64\n"
+        ),
+    }
+    return "#!/bin/sh\n" f"# TEST_EXECUTABLE_ARCH={header_arch}\n" + probes[tool]
 
 
 def _jq_stub() -> str:
     return """#!/bin/sh
 input=$(cat)
-case "$input" in
-  *'"gitVersion":"v3.1.3"'*) printf '%s\n' 'v3.1.3' ;;
-  *'"Version":"0.74.0"'*|*'"version":"0.74.0"'*) printf '%s\n' '0.74.0' ;;
-  *'"terraform_version":"1.16.1"'*) printf '%s\n' '1.16.1' ;;
-  *) exit 1 ;;
+case "$*" in
+  *gitVersion*) value=$(printf '%s' "$input" | sed -n 's/.*"gitVersion":"\\([^"]*\\)".*/\\1/p') ;;
+  *terraform_version*) value=$(printf '%s' "$input" | sed -n 's/.*"terraform_version":"\\([^"]*\\)".*/\\1/p') ;;
+  *) value=$(printf '%s' "$input" | sed -n 's/.*"[Vv]ersion":"\\([^"]*\\)".*/\\1/p') ;;
 esac
+[ -n "$value" ] || exit 1
+printf '%s\n' "$value"
 """
 
 
@@ -156,6 +234,12 @@ def _curl_stub() -> str:
     return """#!/bin/sh
 printf 'called\n' >> "$STUB_CURL_CALLS"
 [ "${STUB_CURL_FAIL:-0}" = 0 ] || exit 22
+if [ "${EXPECT_PARENT_TRIVY_ENV:-0}" = 1 ]; then
+  [ "${TRIVY_CONFIG:-}" = "$EXPECTED_TRIVY_CONFIG" ] || exit 80
+  [ "${TRIVY_TIMEOUT:-}" = invalid-timeout ] || exit 81
+  [ "${TRIVY_CACERT:-}" = "$EXPECTED_TRIVY_CACERT" ] || exit 82
+  [ "${TRIVY_CACHE_DIR:-}" = "$EXPECTED_TRIVY_CACHE_DIR" ] || exit 83
+fi
 output=""
 url=""
 while [ "$#" -gt 0 ]; do
@@ -429,6 +513,85 @@ class DeclarationAndRenderingTests(unittest.TestCase):
                     source,
                 )
 
+    def test_regular_file_guards_require_version_cpu_and_product_identity(self) -> None:
+        help_arguments = {
+            "cosign": "help",
+            "sqlc": "help",
+            "terraform": "-help",
+            "trivy": "--help",
+            "yq": "--help",
+        }
+        for tool, help_argument in help_arguments.items():
+            sh_source = _render(_script(tool, "sh"), "linux", "amd64")
+            ps_source = _render(_script(tool, "ps1"), "windows", "arm64")
+            with self.subTest(tool=tool):
+                self.assertIn(f"{tool}_identity_ok", sh_source)
+                self.assertIn("binary_arch_of", sh_source)
+                self.assertIn(help_argument, sh_source)
+                self.assertIn("refusing to replace unrecognized", sh_source)
+                self.assertRegex(ps_source, rf"function Test-{tool.title()}Identity")
+                self.assertIn("Get-PeArchitecture", ps_source)
+                self.assertIn(help_argument, ps_source)
+                self.assertIn("refusing to replace unrecognized", ps_source)
+
+    def test_trivy_probes_remove_inherited_trivy_environment_in_child_only(self) -> None:
+        sh_source = _render(_script("trivy", "sh"), "linux", "amd64")
+        self.assertIn("compgen -e TRIVY_", sh_source)
+        self.assertIn('unset "${name}"', sh_source)
+        self.assertIn('printf \'{}\\n\' >"${probe_config}"', sh_source)
+        self.assertIn(
+            '"${binary}" --config "${config_file}" --version --format json',
+            sh_source,
+        )
+        self.assertIn('"${binary}" --config "${config_file}" --help', sh_source)
+        self.assertNotIn("export -n TRIVY_", sh_source)
+
+        ps_source = _render(_script("trivy", "ps1"), "windows", "amd64")
+        self.assertIn(
+            "$environmentKeys = @($ProcessStartInfo.Environment.Keys)", ps_source
+        )
+        self.assertIn("[StringComparison]::OrdinalIgnoreCase", ps_source)
+        self.assertIn("$ProcessStartInfo.Environment.Remove([string]$key)", ps_source)
+        self.assertIn(
+            "$ProcessStartInfo.Environment['TRIVY_CACHE_DIR'] = $CacheDirectory",
+            ps_source,
+        )
+        self.assertGreaterEqual(ps_source.count("$psi.ArgumentList.Add('--config')"), 2)
+        self.assertIn("[IO.File]::WriteAllText(", ps_source)
+        self.assertNotIn("[Environment]::SetEnvironmentVariable", ps_source)
+
+    @unittest.skipUnless(PWSH, "pwsh is unavailable; child environment test skipped")
+    def test_trivy_powershell_environment_filter_does_not_change_parent(self) -> None:
+        source = _render(_script("trivy", "ps1"), "windows", "amd64")
+        start = source.index("function Set-IsolatedTrivyEnvironment")
+        end = source.index("function Get-TrivyVersion", start)
+        helper = source[start:end]
+        command = (
+            "$env:TRIVY_TIMEOUT='invalid-timeout';"
+            "$env:UNRELATED_INSTALLER_VALUE='keep';"
+            "$psi=[Diagnostics.ProcessStartInfo]::new();"
+            "$psi.UseShellExecute=$false;"
+            "$psi.Environment['TrIvY_CACERT']='bad-ca';"
+            + helper
+            + "\nSet-IsolatedTrivyEnvironment -ProcessStartInfo $psi "
+            "-CacheDirectory 'private-cache';"
+            "if($env:TRIVY_TIMEOUT -ne 'invalid-timeout'){exit 71};"
+            "if($env:UNRELATED_INSTALLER_VALUE -ne 'keep'){exit 72};"
+            "$remaining=@($psi.Environment.Keys|Where-Object{"
+            "([string]$_).StartsWith('TRIVY_',"
+            "[StringComparison]::OrdinalIgnoreCase)});"
+            "if($remaining.Count -ne 1 -or $remaining[0] -ne 'TRIVY_CACHE_DIR'){exit 73};"
+            "if($psi.Environment['TRIVY_CACHE_DIR'] -ne 'private-cache'){exit 74};"
+            "if($psi.Environment['UNRELATED_INSTALLER_VALUE'] -ne 'keep'){exit 75}"
+        )
+        result = subprocess.run(
+            [PWSH, "-NoProfile", "-Command", command],
+            capture_output=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
     @unittest.skipUnless(BASH, "bash is required for executable header checks")
     def test_posix_header_parser_accepts_only_the_declared_cpu(self) -> None:
         cases = (
@@ -639,10 +802,10 @@ class PosixInstallerBehaviourTests(unittest.TestCase):
                         mv_fail=failure == "publish",
                     )
                     target = home / ".local/bin" / tool
-                    target.write_bytes(b"old bytes")
+                    old_bytes = _write_old_managed_binary(target, tool)
                     result = self._run(script, root, env)
                     self.assertNotEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(target.read_bytes(), b"old bytes")
+                    self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_wrong_or_broken_candidate_header_is_nonzero_and_preserves_old_bytes(self) -> None:
         for tool in TOOLS:
@@ -654,28 +817,55 @@ class PosixInstallerBehaviourTests(unittest.TestCase):
                     )
                     script, home, env = self._prepare(root, tool, fixture, override)
                     target = home / ".local/bin" / tool
-                    target.write_bytes(b"old bytes")
+                    old_bytes = _write_old_managed_binary(target, tool)
                     result = self._run(script, root, env)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("executable", result.stderr)
-                    self.assertEqual(target.read_bytes(), b"old bytes")
+                    self.assertEqual(target.read_bytes(), old_bytes)
 
-    def test_wrong_cpu_local_binary_is_not_accepted_as_compliant(self) -> None:
+    def test_unrecognized_regular_files_are_rejected_before_network(self) -> None:
+        for tool in TOOLS:
+            variants = {
+                "unknown": b"unrelated bytes",
+                "script": b"#!/bin/sh\nexit 0\n",
+                "wrong-cpu": _binary(
+                    tool, self.data[tool]["version"], header_arch="arm64"
+                ).encode(),
+                "same-version-wrong-identity": _binary(
+                    tool, self.data[tool]["version"], identity=False
+                ).encode(),
+            }
+            for variant, content in variants.items():
+                with self.subTest(tool=tool, variant=variant), tempfile.TemporaryDirectory() as temporary:
+                    root = pathlib.Path(temporary)
+                    fixture, override = self._fixture(root, tool)
+                    script, home, env = self._prepare(root, tool, fixture, override)
+                    target = home / ".local/bin" / tool
+                    target.write_bytes(content)
+                    target.chmod(0o755)
+                    original = target.read_bytes()
+                    result = self._run(script, root, env)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("unrecognized", result.stderr)
+                    self.assertFalse(pathlib.Path(env["STUB_CURL_CALLS"]).exists())
+                    self.assertEqual(target.read_bytes(), original)
+
+    def test_recognized_old_version_is_updated(self) -> None:
         for tool in TOOLS:
             with self.subTest(tool=tool), tempfile.TemporaryDirectory() as temporary:
                 root = pathlib.Path(temporary)
                 fixture, override = self._fixture(root, tool)
                 script, home, env = self._prepare(root, tool, fixture, override)
                 target = home / ".local/bin" / tool
-                _write_executable(
-                    target,
-                    _binary(tool, self.data[tool]["version"], header_arch="arm64"),
-                )
+                old_bytes = _write_old_managed_binary(target, tool)
                 result = self._run(script, root, env)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertTrue(pathlib.Path(env["STUB_CURL_CALLS"]).exists())
+                self.assertNotEqual(target.read_bytes(), old_bytes)
                 self.assertIn(
-                    "TEST_EXECUTABLE_ARCH=amd64",
+                    f"v{self.data[tool]['version']}"
+                    if tool in {"cosign", "sqlc", "yq"}
+                    else self.data[tool]["version"],
                     target.read_text(encoding="utf-8"),
                 )
 
@@ -792,10 +982,10 @@ class PosixInstallerBehaviourTests(unittest.TestCase):
                 override[tool]["assets"]["linux-amd64"]["sha256"] = _sha256(payload)
                 script, home, env = self._prepare(root, tool, fixture, override)
                 target = home / ".local/bin" / tool
-                target.write_bytes(b"old bytes")
+                old_bytes = _write_old_managed_binary(target, tool)
                 result = self._run(script, root, env)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(target.read_bytes(), b"old bytes")
+                self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_trivy_probe_uses_isolated_cache_and_neutral_working_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -809,6 +999,62 @@ class PosixInstallerBehaviourTests(unittest.TestCase):
             cwd, cache = rows[0].split("|", maxsplit=1)
             self.assertIn("/.trivy-install.", cwd)
             self.assertEqual(pathlib.Path(cache).parent, pathlib.Path(cwd))
+
+    def test_trivy_probes_ignore_user_environment_without_mutating_installer_environment(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            fixture, override = self._fixture(root, "trivy")
+            script, home, env = self._prepare(root, "trivy", fixture, override)
+            bad_config = root / "bad-trivy.yaml"
+            bad_config.write_text("not: [valid", encoding="utf-8")
+            bad_ca = root / "missing-ca.pem"
+            user_cache = root / "user-cache"
+            env.update(
+                {
+                    "TRIVY_CONFIG": str(bad_config),
+                    "TRIVY_TIMEOUT": "invalid-timeout",
+                    "TRIVY_CACERT": str(bad_ca),
+                    "TRIVY_CACHE_DIR": str(user_cache),
+                    "EXPECTED_TRIVY_CONFIG": str(bad_config),
+                    "EXPECTED_TRIVY_CACERT": str(bad_ca),
+                    "EXPECTED_TRIVY_CACHE_DIR": str(user_cache),
+                    "EXPECT_PARENT_TRIVY_ENV": "1",
+                    "PROBE_ENV_LOG": str(root / "probe-environment"),
+                }
+            )
+
+            fresh = self._run(script, root, env)
+            self.assertEqual(fresh.returncode, 0, fresh.stderr)
+            target = home / ".local/bin/trivy"
+            self.assertEqual(env["TRIVY_CONFIG"], str(bad_config))
+            self.assertEqual(env["TRIVY_TIMEOUT"], "invalid-timeout")
+            self.assertEqual(env["TRIVY_CACERT"], str(bad_ca))
+            self.assertEqual(env["TRIVY_CACHE_DIR"], str(user_cache))
+
+            calls = root / "curl-calls"
+            calls.unlink()
+            exact = self._run(script, root, env)
+            self.assertEqual(exact.returncode, 0, exact.stderr)
+            self.assertFalse(calls.exists())
+
+            _write_old_managed_binary(target, "trivy")
+            updated = self._run(script, root, env)
+            self.assertEqual(updated.returncode, 0, updated.stderr)
+            self.assertTrue(calls.exists())
+
+            rows = (root / "probe-environment").read_text(
+                encoding="utf-8"
+            ).splitlines()
+            self.assertTrue(rows)
+            for row in rows:
+                probe, cwd, cache, config, inherited = row.split("|", maxsplit=4)
+                self.assertIn(probe, {"version", "help"})
+                self.assertIn("/.trivy-install.", cwd)
+                self.assertEqual(pathlib.Path(cache).parent, pathlib.Path(cwd))
+                self.assertEqual(pathlib.Path(config).parent, pathlib.Path(cwd))
+                self.assertEqual(inherited, "unset:unset:unset")
 
 
 @unittest.skipIf(os.name == "nt", "POSIX GPG behavior is tested on POSIX")
@@ -1055,6 +1301,44 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse((root / "curl-calls").exists())
 
+    def test_unrecognized_terraform_files_are_rejected_before_network(self) -> None:
+        variants = {
+            "unknown": b"unrelated bytes",
+            "script": b"#!/bin/sh\nexit 0\n",
+            "wrong-cpu": _binary(
+                "terraform", self.data["terraform"]["version"], header_arch="arm64"
+            ).encode(),
+            "same-version-wrong-identity": _binary(
+                "terraform", self.data["terraform"]["version"], identity=False
+            ).encode(),
+        }
+        for variant, content in variants.items():
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary)
+                override, downloads = self._fixture(root)
+                script, home, env = self._prepare(root, override, downloads)
+                target = home / ".local/bin/terraform"
+                target.write_bytes(content)
+                target.chmod(0o755)
+                original = target.read_bytes()
+                result = self._run(script, root, env)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("unrecognized", result.stderr)
+                self.assertFalse((root / "curl-calls").exists())
+                self.assertEqual(target.read_bytes(), original)
+
+    def test_recognized_old_terraform_is_updated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            override, downloads = self._fixture(root)
+            script, home, env = self._prepare(root, override, downloads)
+            target = home / ".local/bin/terraform"
+            old_bytes = _write_old_managed_binary(target, "terraform")
+            result = self._run(script, root, env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((root / "curl-calls").exists())
+            self.assertNotEqual(target.read_bytes(), old_bytes)
+
     def test_each_metadata_download_failure_is_nonzero_and_preserves_old_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
@@ -1074,12 +1358,12 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
                     case_root, override, case_downloads
                 )
                 target = home / ".local/bin/terraform"
-                target.write_bytes(b"old bytes")
+                old_bytes = _write_old_managed_binary(target, "terraform")
                 env["STUB_CURL_FAIL_BASENAME"] = failed_name
                 result = self._run(script, case_root, env)
                 with self.subTest(download=failed_name):
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertEqual(target.read_bytes(), b"old bytes")
+                    self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_tampered_key_list_and_signature_fail_and_preserve_old_bytes(self) -> None:
         for tamper in ("key", "list", "signature"):
@@ -1103,10 +1387,10 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
                     verification["signatureSha256"] = _sha256(path.read_bytes())
                 script, home, env = self._prepare(root, override, downloads)
                 target = home / ".local/bin/terraform"
-                target.write_bytes(b"old bytes")
+                old_bytes = _write_old_managed_binary(target, "terraform")
                 result = self._run(script, root, env)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(target.read_bytes(), b"old bytes")
+                self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_wrong_fingerprint_rejects_even_when_gpg_verify_exits_zero(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1115,11 +1399,11 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
             override["terraform"]["verification"]["signingFingerprint"] = self.primary
             script, home, env = self._prepare(root, override, downloads)
             target = home / ".local/bin/terraform"
-            target.write_bytes(b"old bytes")
+            old_bytes = _write_old_managed_binary(target, "terraform")
             result = self._run(script, root, env)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("VALIDSIG", result.stderr)
-            self.assertEqual(target.read_bytes(), b"old bytes")
+            self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_missing_or_failing_gpg_is_nonzero_and_preserves_old_bytes(self) -> None:
         for mode in ("missing", "failure"):
@@ -1128,10 +1412,10 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
                 override, downloads = self._fixture(root)
                 script, home, env = self._prepare(root, override, downloads, gpg_mode=mode)
                 target = home / ".local/bin/terraform"
-                target.write_bytes(b"old bytes")
+                old_bytes = _write_old_managed_binary(target, "terraform")
                 result = self._run(script, root, env)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(target.read_bytes(), b"old bytes")
+                self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_signed_selected_checksum_mismatch_is_nonzero(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1139,11 +1423,11 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
             override, downloads = self._fixture(root, signed_hash="0" * 64)
             script, home, env = self._prepare(root, override, downloads)
             target = home / ".local/bin/terraform"
-            target.write_bytes(b"old bytes")
+            old_bytes = _write_old_managed_binary(target, "terraform")
             result = self._run(script, root, env)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("disagrees with the declared", result.stderr)
-            self.assertEqual(target.read_bytes(), b"old bytes")
+            self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_archive_checksum_mismatch_is_nonzero(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1154,11 +1438,11 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
             archive.write_bytes(archive.read_bytes() + b"changed")
             script, home, env = self._prepare(root, override, downloads)
             target = home / ".local/bin/terraform"
-            target.write_bytes(b"old bytes")
+            old_bytes = _write_old_managed_binary(target, "terraform")
             result = self._run(script, root, env)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("checksum verification failed", result.stderr)
-            self.assertEqual(target.read_bytes(), b"old bytes")
+            self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_wrong_or_broken_terraform_header_is_nonzero(self) -> None:
         for header_arch in ("arm64", "broken"):
@@ -1167,11 +1451,11 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
                 override, downloads = self._fixture(root, header_arch=header_arch)
                 script, home, env = self._prepare(root, override, downloads)
                 target = home / ".local/bin/terraform"
-                target.write_bytes(b"old bytes")
+                old_bytes = _write_old_managed_binary(target, "terraform")
                 result = self._run(script, root, env)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("executable", result.stderr)
-                self.assertEqual(target.read_bytes(), b"old bytes")
+                self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_missing_archive_entry_is_nonzero(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1200,11 +1484,11 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
             verification["signatureSha256"] = _sha256(signature.read_bytes())
             script, home, env = self._prepare(root, override, downloads)
             target = home / ".local/bin/terraform"
-            target.write_bytes(b"old bytes")
+            old_bytes = _write_old_managed_binary(target, "terraform")
             result = self._run(script, root, env)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("failed to extract expected entry", result.stderr)
-            self.assertEqual(target.read_bytes(), b"old bytes")
+            self.assertEqual(target.read_bytes(), old_bytes)
 
     def test_duplicate_selected_checksum_rows_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1223,11 +1507,11 @@ class TerraformSignatureBehaviourTests(unittest.TestCase):
             verification["signatureSha256"] = _sha256(signature.read_bytes())
             script, home, env = self._prepare(root, override, downloads)
             target = home / ".local/bin/terraform"
-            target.write_bytes(b"old bytes")
+            old_bytes = _write_old_managed_binary(target, "terraform")
             result = self._run(script, root, env)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("exactly one row", result.stderr)
-            self.assertEqual(target.read_bytes(), b"old bytes")
+            self.assertEqual(target.read_bytes(), old_bytes)
 
 
 @unittest.skipUnless(

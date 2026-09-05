@@ -93,39 +93,55 @@ function Test-BinaryArchitecture {
     }
 }
 
-function Test-ExpectedVersion {
+function Get-ToolVersion {
     param([string]$Path, [string]$WorkingDirectory)
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     Push-Location -LiteralPath $WorkingDirectory
     try {
         $output = & $Path --version 2>$null
-        if ($LASTEXITCODE -ne 0) { return $false }
+        if ($LASTEXITCODE -ne 0) { return $null }
     }
     catch [System.Management.Automation.CommandNotFoundException] {
-        return $false
+        return $null
     }
     catch [System.Management.Automation.ApplicationFailedException] {
-        return $false
+        return $null
     }
     catch [System.ComponentModel.Win32Exception] {
-        return $false
+        return $null
     }
     catch [System.IO.IOException] {
-        return $false
+        return $null
     }
     catch [System.UnauthorizedAccessException] {
-        return $false
+        return $null
     }
     finally {
         Pop-Location
     }
     foreach ($line in @($output)) {
         $text = ([string]$line).Trim()
-        if ($text -eq "git hash: v$toolVersion" -or $text.StartsWith("git hash: v$toolVersion/")) {
-            return $true
+        if ($text -match '^git hash: v([0-9]+(?:\.[0-9]+)+)(?:/|$)') {
+            return $Matches[1]
         }
     }
-    return $false
+    return $null
+}
+
+function Test-ExpectedVersion {
+    param([string]$Path, [string]$WorkingDirectory)
+    return (Get-ToolVersion -Path $Path -WorkingDirectory $WorkingDirectory) -ceq $toolVersion
+}
+
+function Get-RecognizedTargetVersion {
+    if (-not (Test-BinaryArchitecture -Path $target)) {
+        throw "$target is not a native $platformArch Windows executable; refusing to replace it."
+    }
+    $version = Get-ToolVersion -Path $target -WorkingDirectory $binDir
+    if (-not $version) {
+        throw "$target is not recognized as $toolName; refusing to replace it."
+    }
+    return $version
 }
 
 function Assert-ZipEntriesSafe {
@@ -157,6 +173,7 @@ function Assert-ZipEntriesSafe {
 function Assert-Unlocked {
     $state = Assert-TargetReplaceable
     if ($state -ne 'File') { return }
+    $null = Get-RecognizedTargetVersion
     try {
         $stream = [System.IO.File]::Open(
             $target, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite,
@@ -170,9 +187,9 @@ function Assert-Unlocked {
 }
 
 $targetState = Assert-TargetReplaceable
-if ($targetState -eq 'File' -and (Test-BinaryArchitecture -Path $target) -and
-    (Test-ExpectedVersion -Path $target -WorkingDirectory $binDir)) {
-    exit 0
+if ($targetState -eq 'File') {
+    $installedVersion = Get-RecognizedTargetVersion
+    if ($installedVersion -ceq $toolVersion) { exit 0 }
 }
 
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null

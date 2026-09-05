@@ -62,8 +62,26 @@ sqlc_version_of() {
   [ -x "${binary}" ] && [ -f "${binary}" ] && [ ! -L "${binary}" ] || return 1
   [ "$(binary_arch_of "${binary}" || true)" = "${asset_executable_arch}" ] || return 1
   output="$("${binary}" version 2>/dev/null)" || return 1
-  [ "${output}" = "v${sqlc_version}" ] || return 1
+  [[ "${output}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]] || return 1
   printf '%s\n' "${output#v}"
+}
+
+sqlc_identity_ok() {
+  local binary=$1 output
+  output="$("${binary}" help 2>&1)" || return 1
+  case "${output}" in
+    *"sqlc [command]"*"Generate source code from SQL"*"Statically check SQL for syntax and type errors"*)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+sqlc_managed_version_of() {
+  local binary=$1 version
+  version="$(sqlc_version_of "${binary}")" || return 1
+  sqlc_identity_ok "${binary}" || return 1
+  printf '%s\n' "${version}"
 }
 
 classify_target() {
@@ -82,6 +100,11 @@ classify_target() {
   elif [ -e "${target}" ] && [ ! -f "${target}" ]; then
     echo "error: refusing to replace non-file target ${target}" >&2
     return 1
+  elif [ -f "${target}" ]; then
+    if ! sqlc_managed_version_of "${target}" >/dev/null; then
+      echo "error: refusing to replace unrecognized sqlc file ${target}" >&2
+      return 1
+    fi
   fi
 }
 
@@ -96,14 +119,10 @@ make_stage_dir() {
   return 1
 }
 
-classify_target
 command -v od >/dev/null 2>&1 || { echo "error: od is required to validate sqlc architecture" >&2; exit 1; }
 if [ "${asset_executable_arch}" != '{{ .chezmoi.arch }}' ] || [ "${asset_emulated}" != "false" ]; then
   echo "error: sqlc asset architecture declaration is inconsistent for {{ $platform }}" >&2
   exit 1
-fi
-if [ ! -L "${target}" ] && [ "$(sqlc_version_of "${target}" || true)" = "${sqlc_version}" ]; then
-  exit 0
 fi
 command -v tar >/dev/null 2>&1 || { echo "error: tar is required to install sqlc" >&2; exit 1; }
 mkdir -p "${bin_dir}"
@@ -119,6 +138,11 @@ cleanup() {
   return "${status}"
 }
 trap cleanup EXIT
+
+classify_target
+if [ ! -L "${target}" ] && [ "$(sqlc_managed_version_of "${target}" || true)" = "${sqlc_version}" ]; then
+  exit 0
+fi
 
 archive="${stage_dir}/${asset_file}"
 if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${archive}" "${asset_url}"; then
@@ -144,7 +168,7 @@ staged_arch="$(binary_arch_of "${staged}" || true)"
   exit 1
 }
 chmod 755 "${staged}"
-found="$(sqlc_version_of "${staged}" || true)"
+found="$(sqlc_managed_version_of "${staged}" || true)"
 [ "${found}" = "${sqlc_version}" ] || {
   echo "error: expected sqlc ${sqlc_version} but ${asset_file} reported ${found:-unknown}" >&2
   exit 1

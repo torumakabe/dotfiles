@@ -47,14 +47,35 @@ function Get-PeArchitecture {
 }
 # <<< executable-architecture
 
+function Set-IsolatedTrivyEnvironment {
+    param(
+        [Diagnostics.ProcessStartInfo]$ProcessStartInfo,
+        [string]$CacheDirectory
+    )
+    $environmentKeys = @($ProcessStartInfo.Environment.Keys)
+    foreach ($key in $environmentKeys) {
+        if (([string]$key).StartsWith('TRIVY_', [StringComparison]::OrdinalIgnoreCase)) {
+            $ProcessStartInfo.Environment.Remove([string]$key) | Out-Null
+        }
+    }
+    $ProcessStartInfo.Environment['TRIVY_CACHE_DIR'] = $CacheDirectory
+}
+
 function Get-TrivyVersion {
-    param([string]$Path, [string]$WorkingDirectory, [string]$CacheDirectory)
+    param(
+        [string]$Path,
+        [string]$WorkingDirectory,
+        [string]$CacheDirectory,
+        [string]$ConfigFile
+    )
     $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if (-not $item -or $item.PSIsContainer -or
         (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $null }
     if ((Get-PeArchitecture -Path $Path) -ne $assetExecutableArch) { return $null }
     $psi = [Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $Path
+    $psi.ArgumentList.Add('--config')
+    $psi.ArgumentList.Add($ConfigFile)
     $psi.ArgumentList.Add('--version')
     $psi.ArgumentList.Add('--format')
     $psi.ArgumentList.Add('json')
@@ -62,7 +83,7 @@ function Get-TrivyVersion {
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    $psi.Environment['TRIVY_CACHE_DIR'] = $CacheDirectory
+    Set-IsolatedTrivyEnvironment -ProcessStartInfo $psi -CacheDirectory $CacheDirectory
     try {
         $process = [Diagnostics.Process]::Start($psi)
         $stdout = $process.StandardOutput.ReadToEnd()
@@ -76,11 +97,64 @@ function Get-TrivyVersion {
     if ($process.ExitCode -ne 0) { return $null }
     try {
         $parsed = [string]$stdout | ConvertFrom-Json
-        if ($parsed.Version) { return [string]$parsed.Version }
-        return [string]$parsed.version
+        $version = if ($parsed.Version) { [string]$parsed.Version } else { [string]$parsed.version }
+        if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-.+][0-9A-Za-z.-]+)?$') { return $null }
+        return $version
     }
     catch [System.ArgumentException] { return $null }
     catch [System.Management.Automation.PSInvalidOperationException] { return $null }
+}
+
+function Test-TrivyIdentity {
+    param(
+        [string]$Path,
+        [string]$WorkingDirectory,
+        [string]$CacheDirectory,
+        [string]$ConfigFile
+    )
+    $psi = [Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = $Path
+    $psi.ArgumentList.Add('--config')
+    $psi.ArgumentList.Add($ConfigFile)
+    $psi.ArgumentList.Add('--help')
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    Set-IsolatedTrivyEnvironment -ProcessStartInfo $psi -CacheDirectory $CacheDirectory
+    try {
+        $process = [Diagnostics.Process]::Start($psi)
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+    }
+    catch [System.ComponentModel.Win32Exception] { return $false }
+    catch [System.InvalidOperationException] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.IO.IOException] { return $false }
+    if ($process.ExitCode -ne 0) { return $false }
+    $text = $stdout + $stderr
+    return $text.Contains('Scanner for vulnerabilities in container images, file systems, and Git repositories') -and
+        $text.Contains('Scanning Commands:') -and
+        $text.Contains('Scan a container image') -and
+        $text.Contains('Scan local filesystem')
+}
+
+function Get-ManagedTrivyVersion {
+    param(
+        [string]$Path,
+        [string]$WorkingDirectory,
+        [string]$CacheDirectory,
+        [string]$ConfigFile
+    )
+    $version = Get-TrivyVersion -Path $Path -WorkingDirectory $WorkingDirectory `
+        -CacheDirectory $CacheDirectory -ConfigFile $ConfigFile
+    if (-not $version -or
+        -not (Test-TrivyIdentity -Path $Path -WorkingDirectory $WorkingDirectory `
+            -CacheDirectory $CacheDirectory -ConfigFile $ConfigFile)) {
+        return $null
+    }
+    return $version
 }
 
 # >>> target-guards
@@ -106,6 +180,11 @@ function Test-KnownMiseShimLink {
 }
 
 function Assert-ManagedTarget {
+    param(
+        [string]$WorkingDirectory,
+        [string]$CacheDirectory,
+        [string]$ConfigFile
+    )
     $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
     if (-not $item) { return }
     if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
@@ -119,6 +198,10 @@ function Assert-ManagedTarget {
         return
     }
     if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+    if (-not (Get-ManagedTrivyVersion -Path $target -WorkingDirectory $WorkingDirectory `
+        -CacheDirectory $CacheDirectory -ConfigFile $ConfigFile)) {
+        throw "refusing to replace unrecognized Trivy file $target"
+    }
 }
 
 function Assert-BinaryReplaceable {
@@ -139,7 +222,6 @@ function Assert-BinaryReplaceable {
 }
 # <<< target-guards
 
-Assert-ManagedTarget
 {{ if eq .chezmoi.arch "arm64" }}
 if ($assetExecutableArch -ne 'amd64' -or -not $assetEmulated) {
     throw 'Windows arm64 Trivy must use the explicitly approved official amd64 emulated asset'
@@ -157,10 +239,16 @@ $retainStage = $false
 try {
     $probeCache = Join-Path $stageDir 'cache'
     New-Item -ItemType Directory -Path $probeCache | Out-Null
+    $probeConfig = Join-Path $stageDir 'trivy.yaml'
+    [IO.File]::WriteAllText(
+        $probeConfig, "{}$([Environment]::NewLine)", [Text.UTF8Encoding]::new($false))
+    Assert-ManagedTarget -WorkingDirectory $stageDir -CacheDirectory $probeCache `
+        -ConfigFile $probeConfig
     $targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
     if (-not $targetItem -or
         (($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
-        if ((Get-TrivyVersion -Path $target -WorkingDirectory $stageDir -CacheDirectory $probeCache) -eq $trivyVersion) {
+        if ((Get-ManagedTrivyVersion -Path $target -WorkingDirectory $stageDir `
+            -CacheDirectory $probeCache -ConfigFile $probeConfig) -eq $trivyVersion) {
             exit 0
         }
     }
@@ -193,12 +281,14 @@ try {
         throw "expected $assetExecutableArch Trivy executable but $assetFile has $candidateArch"
     }
     Unblock-File -LiteralPath $staged
-    $found = Get-TrivyVersion -Path $staged -WorkingDirectory $stageDir -CacheDirectory $probeCache
+    $found = Get-ManagedTrivyVersion -Path $staged -WorkingDirectory $stageDir `
+        -CacheDirectory $probeCache -ConfigFile $probeConfig
     if ($found -ne $trivyVersion) {
         if (-not $found) { $found = 'unknown' }
         throw "expected Trivy $trivyVersion but $assetFile reported $found"
     }
-    Assert-ManagedTarget
+    Assert-ManagedTarget -WorkingDirectory $stageDir -CacheDirectory $probeCache `
+        -ConfigFile $probeConfig
     Assert-BinaryReplaceable
     Write-Host "Installing Trivy $trivyVersion..."
     $retainStage = $true

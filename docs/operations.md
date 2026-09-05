@@ -75,7 +75,9 @@ Go、Windows 版 Node.js、.NET SDK、pnpm と同梱の `dist`、各 npm prefix 
 
 Azure kubeloginからyqまでの10ツールは、各 `run_after_50` から `run_after_59` が公式配布物を検証し、全OSで `~/.local/bin` へ実行ファイルを配置する。適合する実体があれば通信せず終了する。更新時は同じファイルシステムの一時ディレクトリでSHA-256、展開対象、実行ファイルのCPU種別、実際の版を確認し、成功後に既存の入口を置き換える。取得、検証、置換の失敗は非零終了とし、古い実体を先に削除しない。
 
-版確認では外部サービスへ接続しない。kubectlはclient-onlyで実行し、TerraformはCheckpointを無効にして空のCLI設定とプロジェクト外の作業ディレクトリを使う。Trivyも空のcacheと作業ディレクトリを使い、利用者のDBや `trivy.yaml` を参照しない。これらの設定は確認プロセスだけに適用する。
+既存の通常ファイルは、選択したassetと同じCPU種別のnative実行ファイルで、対象ツールと識別できる場合だけ更新する。版の出力だけでは製品を特定できない場合は、通信しないhelpの製品名と機能も確認する。未知ファイル、script、別製品、異なるCPUの実体は通信前に拒否して保持する。`version` は最低版ではなく固定版なので、識別できる実体が宣言版と異なる場合は、新旧にかかわらず宣言版へ更新する。旧mise由来のリンクは既知のものだけを受け入れ、管理情報のsidecarは作らない。
+
+版やhelpの確認では外部サービスへ接続しない。kubectlはclient-onlyで実行し、TerraformはCheckpointを無効にして空のCLI設定とプロジェクト外の作業ディレクトリを使う。Trivyは子プロセスの `TRIVY_*` を除き、専用の空設定ファイルを明示する。空のcacheと作業ディレクトリも使い、利用者のDBや `trivy.yaml` を参照しない。これらの設定は確認プロセスだけに適用し、親プロセスや永続的な環境変数は変更しない。
 
 Terraformでは、公開鍵、checksum list、detached signatureも検証する。公開鍵は `[terraform.verification]` に固定したBase64を一時ファイルへ復元し、isolated keyringへ取り込む。GPGの終了コードに加え、機械可読な `VALIDSIG` の署名subkeyとprimary fingerprintが宣言に一致することを要求する。選択したアーカイブのSHA-256は、署名を確認したlistとasset宣言の両方に一致しなければならない。鍵サーバーへの自動取得や署名確認の省略は行わない。
 

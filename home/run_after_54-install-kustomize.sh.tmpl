@@ -80,22 +80,85 @@ has_expected_architecture() {
   esac
 }
 
-has_expected_version() {
+get_tool_version() {
   local binary=$1 cwd=$2 output
   [ -f "${binary}" ] && [ ! -L "${binary}" ] && [ -x "${binary}" ] || return 1
   if ! output="$(cd "${cwd}" && "${binary}" version 2>/dev/null)"; then
     return 1
   fi
-  [ "${output}" = "v${tool_version}" ]
+  printf '%s\n' "${output}" | awk '
+    $0 ~ /^v[0-9]+([.][0-9]+)+$/ {
+      sub(/^v/, "")
+      print
+      found = 1
+      exit
+    }
+    NF == 5 &&
+      $1 ~ /^\{Version:kustomize\/v[0-9]+([.][0-9]+)+$/ &&
+      $2 ~ /^GitCommit:[^[:space:]}]+$/ &&
+      $3 ~ /^BuildDate:[^[:space:]}]+$/ &&
+      $4 ~ /^GoOs:[a-z0-9]+$/ &&
+      $5 ~ /^GoArch:[A-Za-z0-9_]+}$/ {
+      version = $1
+      sub(/^\{Version:kustomize\/v/, "", version)
+      print version
+      found = 1
+      exit
+    }
+    END { if (!found) exit 1 }
+  '
+}
+
+has_expected_version() {
+  [ "$(get_tool_version "$1" "$2" || true)" = "${tool_version}" ]
+}
+
+has_expected_identity() {
+  local binary=$1 cwd=$2 output
+  if ! output="$(cd "${cwd}" && "${binary}" build --help 2>&1)"; then
+    return 1
+  fi
+  printf '%s\n' "${output}" | awk '
+    index(tolower($0), "kustomize build") { name = 1 }
+    index(tolower($0), "kustomization") { feature = 1 }
+    END { exit !(name && feature) }
+  '
+}
+
+classify_target() {
+  target_state=Missing
+  installed_version=
+  assert_target_replaceable
+  if [ -L "${target}" ]; then
+    target_state=MiseLink
+    return
+  fi
+  [ -e "${target}" ] || return 0
+  [ -x "${target}" ] || {
+    echo "error: ${target} is not executable; refusing to replace it" >&2
+    return 1
+  }
+  has_expected_architecture "${target}" || {
+    echo "error: ${target} is not a native ${platform_arch} ${platform_os} executable; refusing to replace it" >&2
+    return 1
+  }
+  if ! installed_version="$(get_tool_version "${target}" "${bin_dir}")"; then
+    echo "error: ${target} is not recognized as ${tool_name}; refusing to replace it" >&2
+    return 1
+  fi
+  has_expected_identity "${target}" "${bin_dir}" || {
+    echo "error: ${target} does not provide the expected ${tool_name} interface; refusing to replace it" >&2
+    return 1
+  }
+  target_state=File
 }
 
 command -v od >/dev/null 2>&1 || {
   echo "error: od is required to verify ${tool_name} architecture" >&2
   exit 1
 }
-assert_target_replaceable
-if [ ! -L "${target}" ] && has_expected_architecture "${target}" &&
-  has_expected_version "${target}" "${bin_dir}"; then
+classify_target
+if [ "${target_state}" = File ] && [ "${installed_version}" = "${tool_version}" ]; then
   exit 0
 fi
 
@@ -150,7 +213,7 @@ if ! has_expected_version "${candidate}" "${stage_dir}"; then
   exit 1
 fi
 
-assert_target_replaceable
+classify_target
 echo "Installing kustomize ${tool_version}..."
 if ! mv -f "${candidate}" "${target}"; then
   echo "error: could not publish ${target}; the previous file was kept" >&2

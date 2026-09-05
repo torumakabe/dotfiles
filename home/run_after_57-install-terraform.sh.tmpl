@@ -78,11 +78,36 @@ terraform_version_of() {
     echo "error: ${HOME}/.local/bin/jq is required to validate Terraform" >&2
     return 1
   }
-  printf '%s' "${output}" | "${HOME}/.local/bin/jq" -er '.terraform_version | strings' 2>/dev/null
+  output="$(printf '%s' "${output}" |
+    "${HOME}/.local/bin/jq" -er '.terraform_version | strings' 2>/dev/null)" || return 1
+  [[ "${output}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]] || return 1
+  printf '%s\n' "${output}"
+}
+
+terraform_identity_ok() {
+  local binary=$1 work_dir=$2 config_file=$3 output
+  output="$(
+    cd "${work_dir}"
+    CHECKPOINT_DISABLE=1 TF_CLI_CONFIG_FILE="${config_file}" \
+      "${binary}" -help 2>&1
+  )" || return 1
+  case "${output}" in
+    *"Usage: terraform"*"Main commands:"*"Prepare your working directory for other commands"*"Show changes required by the current configuration"*)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+terraform_managed_version_of() {
+  local binary=$1 work_dir=$2 config_file=$3 version
+  version="$(terraform_version_of "${binary}" "${work_dir}" "${config_file}")" || return 1
+  terraform_identity_ok "${binary}" "${work_dir}" "${config_file}" || return 1
+  printf '%s\n' "${version}"
 }
 
 classify_target() {
-  local link
+  local work_dir=$1 config_file=$2 link
   if [ -L "${target}" ]; then
     link="$(readlink "${target}")" || return 1
     if [ "${link}" != "${HOME}/.local/share/mise/shims/terraform" ]; then
@@ -97,6 +122,11 @@ classify_target() {
   elif [ -e "${target}" ] && [ ! -f "${target}" ]; then
     echo "error: refusing to replace non-file target ${target}" >&2
     return 1
+  elif [ -f "${target}" ]; then
+    if ! terraform_managed_version_of "${target}" "${work_dir}" "${config_file}" >/dev/null; then
+      echo "error: refusing to replace unrecognized Terraform file ${target}" >&2
+      return 1
+    fi
   fi
 }
 
@@ -111,7 +141,6 @@ make_stage_dir() {
   return 1
 }
 
-classify_target
 command -v od >/dev/null 2>&1 || { echo "error: od is required to validate Terraform architecture" >&2; exit 1; }
 if [ "${asset_executable_arch}" != '{{ .chezmoi.arch }}' ] || [ "${asset_emulated}" != "false" ]; then
   echo "error: Terraform asset architecture declaration is inconsistent for {{ $platform }}" >&2
@@ -133,8 +162,9 @@ trap cleanup EXIT
 probe_config="${stage_dir}/terraform.rc"
 : >"${probe_config}"
 
+classify_target "${stage_dir}" "${probe_config}"
 if [ ! -L "${target}" ] &&
-  [ "$(terraform_version_of "${target}" "${stage_dir}" "${probe_config}" || true)" = "${terraform_version}" ]; then
+  [ "$(terraform_managed_version_of "${target}" "${stage_dir}" "${probe_config}" || true)" = "${terraform_version}" ]; then
   exit 0
 fi
 
@@ -258,14 +288,14 @@ staged_arch="$(binary_arch_of "${staged}" || true)"
   exit 1
 }
 chmod 755 "${staged}"
-found="$(terraform_version_of "${staged}" "${stage_dir}" "${probe_config}" || true)"
+found="$(terraform_managed_version_of "${staged}" "${stage_dir}" "${probe_config}" || true)"
 [ "${found}" = "${terraform_version}" ] || {
   echo "error: expected Terraform ${terraform_version} but ${asset_file} reported ${found:-unknown}" >&2
   exit 1
 }
 
 echo "Installing Terraform ${terraform_version}..."
-classify_target
+classify_target "${stage_dir}" "${probe_config}"
 retain_stage=1
 if ! mv -f "${staged}" "${target}"; then
   echo "error: failed to publish Terraform; the existing target was not intentionally removed" >&2

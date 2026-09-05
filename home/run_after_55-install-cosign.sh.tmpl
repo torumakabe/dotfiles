@@ -65,7 +65,28 @@ cosign_version_of() {
     echo "error: ${HOME}/.local/bin/jq is required to validate cosign" >&2
     return 1
   }
-  printf '%s' "${output}" | "${HOME}/.local/bin/jq" -er '.gitVersion | strings' 2>/dev/null
+  output="$(printf '%s' "${output}" |
+    "${HOME}/.local/bin/jq" -er '.gitVersion | strings' 2>/dev/null)" || return 1
+  [[ "${output}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]] || return 1
+  printf '%s\n' "${output}"
+}
+
+cosign_identity_ok() {
+  local binary=$1 output
+  output="$("${binary}" help 2>&1)" || return 1
+  case "${output}" in
+    *"A tool for Container Signing, Verification and Storage in an OCI registry"*"cosign [command]"*)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+cosign_managed_version_of() {
+  local binary=$1 version
+  version="$(cosign_version_of "${binary}")" || return 1
+  cosign_identity_ok "${binary}" || return 1
+  printf '%s\n' "${version}"
 }
 
 classify_target() {
@@ -84,6 +105,11 @@ classify_target() {
   elif [ -e "${target}" ] && [ ! -f "${target}" ]; then
     echo "error: refusing to replace non-file target ${target}" >&2
     return 1
+  elif [ -f "${target}" ]; then
+    if ! cosign_managed_version_of "${target}" >/dev/null; then
+      echo "error: refusing to replace unrecognized cosign file ${target}" >&2
+      return 1
+    fi
   fi
 }
 
@@ -101,19 +127,11 @@ make_stage_dir() {
   return 1
 }
 
-classify_target
 command -v od >/dev/null 2>&1 || { echo "error: od is required to validate cosign architecture" >&2; exit 1; }
 if [ "${asset_executable_arch}" != '{{ .chezmoi.arch }}' ] || [ "${asset_emulated}" != "false" ]; then
   echo "error: cosign asset architecture declaration is inconsistent for {{ $platform }}" >&2
   exit 1
 fi
-if [ ! -L "${target}" ]; then
-  installed_version="$(cosign_version_of "${target}" || true)"
-  if [ "${installed_version}" = "v${cosign_version}" ]; then
-    exit 0
-  fi
-fi
-
 [ -x "${HOME}/.local/bin/jq" ] || {
   echo "error: ${HOME}/.local/bin/jq is required to validate cosign" >&2
   exit 1
@@ -131,6 +149,14 @@ cleanup() {
   return "${status}"
 }
 trap cleanup EXIT
+
+classify_target
+if [ ! -L "${target}" ]; then
+  installed_version="$(cosign_managed_version_of "${target}" || true)"
+  if [ "${installed_version}" = "v${cosign_version}" ]; then
+    exit 0
+  fi
+fi
 
 staged="${stage_dir}/cosign"
 if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${staged}" "${asset_url}"; then
@@ -151,7 +177,7 @@ staged_arch="$(binary_arch_of "${staged}" || true)"
   exit 1
 }
 chmod 755 "${staged}"
-staged_version="$(cosign_version_of "${staged}" || true)"
+staged_version="$(cosign_managed_version_of "${staged}" || true)"
 [ "${staged_version}" = "v${cosign_version}" ] || {
   echo "error: expected cosign v${cosign_version} but ${asset_file} reported ${staged_version:-unknown}" >&2
   exit 1

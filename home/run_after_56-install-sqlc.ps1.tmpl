@@ -59,8 +59,32 @@ function Get-SqlcVersion {
     catch [System.ComponentModel.Win32Exception] { return $null }
     catch [System.UnauthorizedAccessException] { return $null }
     catch [System.IO.IOException] { return $null }
-    if ($status -ne 0 -or ([string]$output).Trim() -ne "v$sqlcVersion") { return $null }
-    return $sqlcVersion
+    if ($status -ne 0) { return $null }
+    $version = ([string]($output | Select-Object -First 1)).Trim()
+    if ($version -notmatch '^v([0-9]+\.[0-9]+\.[0-9]+(?:[-.+][0-9A-Za-z.-]+)?)$') { return $null }
+    return $Matches[1]
+}
+
+function Test-SqlcIdentity {
+    param([string]$Path)
+    try { $output = & $Path help 2>&1; $status = $LASTEXITCODE }
+    catch [System.Management.Automation.CommandNotFoundException] { return $false }
+    catch [System.Management.Automation.ApplicationFailedException] { return $false }
+    catch [System.ComponentModel.Win32Exception] { return $false }
+    catch [System.UnauthorizedAccessException] { return $false }
+    catch [System.IO.IOException] { return $false }
+    if ($status -ne 0) { return $false }
+    $text = [string]($output | Out-String)
+    return $text.Contains('sqlc [command]') -and
+        $text.Contains('Generate source code from SQL') -and
+        $text.Contains('Statically check SQL for syntax and type errors')
+}
+
+function Get-ManagedSqlcVersion {
+    param([string]$Path)
+    $version = Get-SqlcVersion -Path $Path
+    if (-not $version -or -not (Test-SqlcIdentity -Path $Path)) { return $null }
+    return $version
 }
 
 # >>> target-guards
@@ -99,6 +123,9 @@ function Assert-ManagedTarget {
         return
     }
     if ($item.PSIsContainer) { throw "refusing to replace non-file target $target" }
+    if (-not (Get-ManagedSqlcVersion -Path $target)) {
+        throw "refusing to replace unrecognized sqlc file $target"
+    }
 }
 
 function Assert-BinaryReplaceable {
@@ -126,7 +153,7 @@ Assert-ManagedTarget
 $targetItem = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
 if (-not $targetItem -or
     (($targetItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
-    if ((Get-SqlcVersion -Path $target) -eq $sqlcVersion) { exit 0 }
+    if ((Get-ManagedSqlcVersion -Path $target) -eq $sqlcVersion) { exit 0 }
 }
 
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
@@ -162,7 +189,7 @@ try {
         throw "expected $assetExecutableArch sqlc executable but $assetFile has $candidateArch"
     }
     Unblock-File -LiteralPath $staged
-    if ((Get-SqlcVersion -Path $staged) -ne $sqlcVersion) {
+    if ((Get-ManagedSqlcVersion -Path $staged) -ne $sqlcVersion) {
         throw "expected sqlc $sqlcVersion but $assetFile reported an unknown or different version"
     }
     Assert-ManagedTarget

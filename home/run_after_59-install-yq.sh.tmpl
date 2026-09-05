@@ -61,10 +61,27 @@ yq_version_of() {
   [ -x "${binary}" ] && [ -f "${binary}" ] && [ ! -L "${binary}" ] || return 1
   [ "$(binary_arch_of "${binary}" || true)" = "${asset_executable_arch}" ] || return 1
   output="$("${binary}" --version 2>/dev/null)" || return 1
+  [[ "${output}" =~ ^yq\ \(.+\)\ version\ v([0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?)$ ]] ||
+    return 1
+  printf '%s\n' "${BASH_REMATCH[1]}"
+}
+
+yq_identity_ok() {
+  local binary=$1 output
+  output="$("${binary}" --help 2>&1)" || return 1
   case "${output}" in
-    "yq ("*") version v${yq_version}") printf '%s\n' "${yq_version}" ;;
+    *"yq is a portable command-line data file processor (https://github.com/mikefarah/yq/)"*"https://mikefarah.gitbook.io/yq/"*)
+      return 0
+      ;;
     *) return 1 ;;
   esac
+}
+
+yq_managed_version_of() {
+  local binary=$1 version
+  version="$(yq_version_of "${binary}")" || return 1
+  yq_identity_ok "${binary}" || return 1
+  printf '%s\n' "${version}"
 }
 
 classify_target() {
@@ -83,6 +100,11 @@ classify_target() {
   elif [ -e "${target}" ] && [ ! -f "${target}" ]; then
     echo "error: refusing to replace non-file target ${target}" >&2
     return 1
+  elif [ -f "${target}" ]; then
+    if ! yq_managed_version_of "${target}" >/dev/null; then
+      echo "error: refusing to replace unrecognized yq file ${target}" >&2
+      return 1
+    fi
   fi
 }
 
@@ -97,16 +119,11 @@ make_stage_dir() {
   return 1
 }
 
-classify_target
 command -v od >/dev/null 2>&1 || { echo "error: od is required to validate yq architecture" >&2; exit 1; }
 if [ "${asset_executable_arch}" != '{{ .chezmoi.arch }}' ] || [ "${asset_emulated}" != "false" ]; then
   echo "error: yq asset architecture declaration is inconsistent for {{ $platform }}" >&2
   exit 1
 fi
-if [ ! -L "${target}" ] && [ "$(yq_version_of "${target}" || true)" = "${yq_version}" ]; then
-  exit 0
-fi
-
 mkdir -p "${bin_dir}"
 stage_dir="$(make_stage_dir)"
 retain_stage=0
@@ -120,6 +137,11 @@ cleanup() {
   return "${status}"
 }
 trap cleanup EXIT
+
+classify_target
+if [ ! -L "${target}" ] && [ "$(yq_managed_version_of "${target}" || true)" = "${yq_version}" ]; then
+  exit 0
+fi
 
 staged="${stage_dir}/yq"
 if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${staged}" "${asset_url}"; then
@@ -140,7 +162,7 @@ staged_arch="$(binary_arch_of "${staged}" || true)"
   exit 1
 }
 chmod 755 "${staged}"
-found="$(yq_version_of "${staged}" || true)"
+found="$(yq_managed_version_of "${staged}" || true)"
 [ "${found}" = "${yq_version}" ] || {
   echo "error: expected yq ${yq_version} but ${asset_file} reported ${found:-unknown}" >&2
   exit 1
