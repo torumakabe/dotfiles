@@ -101,6 +101,9 @@ PLATFORM_CONTRACT = {
     "shell:kubectl-shortcut": _implemented_everywhere(),
     "shell:ll": _implemented_everywhere(),
     "shell:copilot-guardrails": _implemented_everywhere(),
+    "shell:copilot-winget-launcher": _windows_only(
+        "exception: docs/troubleshooting.md WindowsApps execution alias workaround"
+    ),
     "shell:zoxide": _implemented_everywhere(),
     "feature:copilot-local-sandbox": _implemented_everywhere(),
     "skill:gh-stack": _implemented_everywhere(),
@@ -164,6 +167,7 @@ POWERSHELL_PUBLIC_SYMBOLS = {
     ("alias", "mise-self-upgrade"): "shell:mise-self-upgrade",
     ("alias", "mise-upgrade"): "shell:mise-upgrade",
     ("alias", "git-hooks-audit"): "shell:git-hooks-audit",
+    ("alias", "copilot"): "shell:copilot-winget-launcher",
     ("alias", "copilot-guardrails"): "shell:copilot-guardrails",
     ("alias", "z"): "shell:zoxide",
 }
@@ -188,6 +192,9 @@ SHELL_ANCHORS = {
     "shell:copilot-guardrails": {
         "zsh": "alias copilot-guardrails=",
         "powershell": "Set-Alias -Name copilot-guardrails",
+    },
+    "shell:copilot-winget-launcher": {
+        "powershell": "Set-Alias -Name copilot -Value $copilotCli",
     },
     "shell:zoxide": {
         "zsh": "_cached_source zoxide",
@@ -241,6 +248,7 @@ SOURCE_INITIALIZERS = {
 EXCEPTION_DOCUMENT_IDENTIFIERS = {
     "shell:edit-shortcut": ("Microsoft Edit",),
     "shell:mise-self-upgrade": ("mise-self-upgrade",),
+    "shell:copilot-winget-launcher": ("WindowsApps", "WinGet", "macOS/Linux/WSL"),
     "completion:terraform": ("Terraform", "PowerShell completion"),
     "completion:rad": ("Radicle", "Windows"),
     "tool:bubblewrap": ("bubblewrap", "Seatbelt", "ProcessContainer"),
@@ -265,7 +273,7 @@ def _powershell_symbols(source: str) -> set[tuple[str, str]]:
         re.findall(r"(?m)^function\s+([A-Za-z][A-Za-z0-9-]*)\b", source)
     )
     aliases = set(
-        re.findall(r"(?m)^Set-Alias\s+-Name\s+([A-Za-z0-9-]+)\b", source)
+        re.findall(r"(?m)^[ \t]*Set-Alias\s+-Name\s+([A-Za-z0-9-]+)\b", source)
     )
     return {
         ("function", name) for name in functions - POWERSHELL_INTERNAL_FUNCTIONS
@@ -591,6 +599,49 @@ $result = @{{
 
     def test_copilot_app_cli_path_override_is_removed(self) -> None:
         self.assertNotIn("COPILOT_CLI_PATH", self.zshrc)
+
+    def test_copilot_winget_alias_resolution(self) -> None:
+        pwsh = shutil.which("pwsh")
+        if pwsh is None:
+            self.skipTest("pwsh is required for Copilot alias tests")
+        match = re.search(
+            r"(?ms)^\$copilotCli = .*?^Remove-Variable copilotCli$",
+            self.powershell,
+        )
+        self.assertIsNotNone(match)
+        setup = match.group(0)
+        for target_kind in ("file", "missing", "directory"):
+            with self.subTest(target_kind=target_kind):
+                with tempfile.TemporaryDirectory(prefix="copilot alias ") as temp_dir:
+                    cli = pathlib.Path(temp_dir) / "Microsoft/WinGet/Links/copilot.exe"
+                    if target_kind == "file":
+                        cli.parent.mkdir(parents=True)
+                        cli.touch()
+                    elif target_kind == "directory":
+                        cli.mkdir(parents=True)
+                    env = os.environ.copy()
+                    env["LOCALAPPDATA"] = temp_dir
+                    script = (
+                        "$ErrorActionPreference = 'Stop'\n"
+                        "$originalPath = $env:PATH\n"
+                        "Set-Alias -Name copilot -Value Write-Output\n"
+                        + setup + "\n" + setup + "\n"
+                        "@{ target = (Get-Alias copilot).Definition; "
+                        "pathUnchanged = ($env:PATH -ceq $originalPath) } "
+                        "| ConvertTo-Json -Compress\n"
+                    )
+                    result = subprocess.run(
+                        [pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    state = json.loads(result.stdout)
+                    expected = str(cli) if target_kind == "file" else "Write-Output"
+                    self.assertEqual(state["target"], expected)
+                    self.assertTrue(state["pathUnchanged"])
 
     def test_ci_runs_for_home_changes_on_pull_requests_and_main_pushes(self) -> None:
         pull_request = self.workflow.split("  push:", maxsplit=1)[0]

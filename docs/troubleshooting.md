@@ -2,6 +2,31 @@
 
 README に載せない復旧手順だけをまとめる。一般的な `chezmoi` / `mise` の仕様説明は各公式ドキュメントを参照。
 
+## Windows で Copilot CLI が「プロセスにパッケージ ID がありません」で起動しない
+
+症状: `copilot` または `copilot-guardrails` が `WindowsApps\copilot.exe` を呼び出し、起動前に失敗する。
+
+PATH で `WindowsApps` が `WinGet\Links` より前にあると、GitHub Copilot CLI 自身が登録する実行エイリアスが本体より先に選ばれる。同名のエイリアスが追加されるだけでも、PATH や profile を変更せずに起動先が変わる。
+
+実行エイリアスでこのエラーが発生していても、WinGet 管理下の本体は起動できる場合がある。利用者は本体を直接指定して切り分ける。本体の直接起動が成功しても、エイリアス側でパッケージ ID が成立しない内部原因までは特定できない。
+
+```powershell
+& "$env:LOCALAPPDATA\Microsoft\WinGet\Links\copilot.exe" --version
+```
+
+本体が起動する場合、利用者は次の設定で現在の PowerShell を復旧できる。
+
+```powershell
+Set-Alias -Name copilot -Value "$env:LOCALAPPDATA\Microsoft\WinGet\Links\copilot.exe"
+copilot-guardrails
+```
+
+同じ設定は管理対象の PowerShell profile に含まれる。適用済みの端末では新しい PowerShell から有効になる。`-NoProfile` で開始した子プロセスは alias を継承しないため、本体のパスを直接指定する。
+
+端末の profile や別の worktree だけを修正した場合、通常の適用元に修正がなければ、次の `chezmoi apply` で回避策が失われる可能性がある。利用者は `chezmoi source-path` で適用元を確認し、そのソースにも同じ修正を取り込んでから通常の適用を再開する。
+
+この回避策は CLI の起動経路を変更するもので、Windows のパッケージ登録を修復するものではない。パッケージ ID に依存するタスクバー連携の動作は未確認である。この WindowsApps 固有の回避策は macOS/Linux/WSL には追加しない。対象範囲と撤去条件の正本は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。
+
 ## `warning: config file template has changed`
 
 `.chezmoi.toml.tmpl` の更新後に出る。`chezmoi update` は設定を再生成しないため、`chezmoi init` を実行するまで毎回出続ける。
