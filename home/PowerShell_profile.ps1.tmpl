@@ -341,6 +341,13 @@ Set-Alias -Name mise-self-upgrade -Value Invoke-MiseSelfUpgrade
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 Set-Alias -Name git-hooks-audit -Value Invoke-GitHooksAudit
 
+# Bypass the broken WindowsApps execution alias; see docs/troubleshooting.md.
+$copilotCli = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\copilot.exe'
+if (Test-Path -LiteralPath $copilotCli -PathType Leaf) {
+    Set-Alias -Name copilot -Value $copilotCli
+}
+Remove-Variable copilotCli
+
 # Copilot CLI: local sandbox is enabled. preToolUse hooks still protect
 # sensitive files and shell-level secret reads.
 function Invoke-CopilotGuardrails {
