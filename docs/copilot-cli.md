@@ -1,19 +1,31 @@
 # GitHub Copilot CLI Guide
 
-この repo では `~/.copilot/` 配下のうち、**自分で維持したい設定だけ** を chezmoi で管理する。Copilot CLI 自体の一般的な使い方や `/plugin` の詳細は公式ドキュメントを参照。
+このリポジトリは、自身の作業用設定と、chezmoi で開発環境へ配布する設定を区別して管理する。Copilot CLI 自体の一般的な使い方や `/plugin` の詳細は公式ドキュメントを参照。
 
 ## 管理境界
 
-`~/.copilot/` 配下のうち chezmoi 管理対象:
+### カスタム指示とエージェント
 
-- `copilot-instructions.md` — ユーザーレベルのカスタム指示
-- `mcp-config.json` — 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
-- `settings.json` の実験機能、プラグイン、sandbox 設定 — `run_onchange_after_35-configure-copilot-sandbox.*` で既存設定へマージ
-- `hooks/hooks.json` / `hooks/scripts/*.py` — `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`, `audit-log.py`, `audit-failure.py`）
-- `hooks/{allowed-files,blocked-files,ask-files}.txt` — ファイルアクセス制御リスト
-- `skills/` — 手動追加分のみ（プラグイン由来は対象外）
+| 正本 | 適用範囲と読み込み |
+| --- | --- |
+| [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) | このリポジトリでの作業に適用する。開発環境への配布対象ではない |
+| [`.github/agents/manage-adr.agent.md`](../.github/agents/manage-adr.agent.md)、[`.github/agents/review-repo.agent.md`](../.github/agents/review-repo.agent.md) | このリポジトリで選択して使うカスタムエージェント。ユーザー共通のエージェントとしては配布しない |
+| [`home/private_dot_copilot/copilot-instructions.md`](../home/private_dot_copilot/copilot-instructions.md) | `~/.copilot/copilot-instructions.md` へ配布し、他のリポジトリでもユーザーレベルの指示として使う |
 
-管理外: `installed-plugins/` と `plugin-data/`（Copilot CLI 側で管理）。
+`home/` にソースがあるだけではユーザーレベルの指示として読み込まれない。リポジトリ用の指示から共通規範を参照するときは、配布済みであることを前提にせずソースを参照する。
+
+配布用のカスタムエージェント定義はなく、`home/private_dot_copilot/skills/` は `.gitkeep` のみである。外部スキルの管理は[プラグインとスキル](#プラグインとスキル)を参照する。
+
+### その他の配布設定
+
+`~/.copilot/` 配下のうち、次の設定も chezmoi で管理する。
+
+- `mcp-config.json`: 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
+- `settings.json` の実験機能、プラグイン、sandbox 設定: `run_onchange_after_35-configure-copilot-sandbox.*` で既存設定へマージ
+- `hooks/hooks.json` / `hooks/scripts/*.py`: `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`, `audit-log.py`, `audit-failure.py`）
+- `hooks/{allowed-files,blocked-files,ask-files}.txt`: ファイルアクセス制御リスト
+
+`installed-plugins/` と `plugin-data/` は Copilot CLI が管理し、chezmoi の対象外とする。
 
 ## CLI 本体の導入元
 
@@ -33,7 +45,9 @@ Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilo
 
 ## プラグインとスキル
 
-chezmoi は `settings.json` で追加 marketplace と有効なプラグインを宣言する。Copilot CLI は宣言されたプラグインの導入とセッション開始時の更新を担当し、導入実体とキャッシュは chezmoi で管理しない。プラグインに含めない外部 skill は `gh skill` で管理し、自作 skill と公式の導入コマンドを持たない skill だけを `~/.copilot/skills/` から chezmoi へ取り込む。
+プラグインの登録と有効化は [`home/.chezmoitemplates/copilot-user-settings.json`](../home/.chezmoitemplates/copilot-user-settings.json) を正本とし、既存の `settings.json` へマージする。登録外の既存プラグインも保持するため、排他的な許可リストではない。Copilot CLI が導入とセッション開始時の更新を担当し、スキル本文の正本は提供元にある。
+
+プラグインに含めない外部 skill は `gh skill` で管理し、自作 skill と公式の導入コマンドを持たない skill だけを `~/.copilot/skills/` から chezmoi へ取り込む。
 
 ```bash
 # GitHub Copilot の user scope へ外部 skill を導入する
@@ -42,7 +56,7 @@ gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 
 `personal-skills@torumakabe-agent-plugins` は `agentfinder`、`japanese-technical-writing`、`lsp-setup` を提供する。利用時はスキル名を指定する。`agentfinder` が返した候補は、ユーザーが明示的に選ぶまで自動インストールしない。
 
-`gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。Stacked PR を提案する条件は `copilot-instructions.md`、操作方法は公式 skill を正本とする。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
+`gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。提案条件は[配布用カスタム指示](../home/private_dot_copilot/copilot-instructions.md#エージェント行動規範)、操作方法は公式 skill を正本とする。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
 
 ## セキュリティフック
 
