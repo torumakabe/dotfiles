@@ -2,15 +2,17 @@
 
 このリポジトリは **chezmoi** と **mise** でクロスプラットフォームの dotfiles を管理している。
 
+このファイルと `.github/agents/` はリポジトリ自身用、`home/` 配下は開発環境への配布用である。管理境界は `docs/copilot-cli.md` を参照する。
+
 ## 知識ソース
 
-- **設計判断**: `docs/adr/` — 永続的な判断は ADR にまとめている（`docs/adr/INDEX.md`）
+- **設計判断**: `docs/adr/INDEX.md`（形式と一覧）
 - **運用ノート**: `docs/architecture.md` / `docs/operations.md` / `docs/troubleshooting.md` / `docs/copilot-cli.md`
-- **エージェント**: `.github/agents/` — `manage-adr`（ADR ライフサイクル）、`review-repo`（リポジトリ整頓）
+- **エージェント**: `.github/agents/` の `manage-adr`（ADR ライフサイクル）、`review-repo`（リポジトリ整頓）
 
 ## 記述の置き場所
 
-層ごとの規範はユーザーレベルの指示に従う。このリポジトリでの割り当ては次のとおり。
+指示や文書の変更時は、配布用指示のソースにある[記述の置き場所](../home/private_dot_copilot/copilot-instructions.md#記述の置き場所)を参照する。このリポジトリでの割り当ては次のとおり。
 
 - 判断の記録は `docs/adr/`
 - 手順と構造の文書は `docs/`
