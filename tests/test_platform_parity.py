@@ -101,6 +101,8 @@ PLATFORM_CONTRACT = {
     "shell:kubectl-shortcut": _implemented_everywhere(),
     "shell:ll": _implemented_everywhere(),
     "shell:copilot-guardrails": _implemented_everywhere(),
+    "shell:mise-executable-environment": _implemented_everywhere(),
+    "shell:copilot-hook-mise-exec": _implemented_everywhere(),
     "shell:copilot-winget-launcher": _windows_only(
         "exception: docs/troubleshooting.md WindowsApps execution alias workaround"
     ),
@@ -123,6 +125,7 @@ PLATFORM_CONTRACT = {
     "tool:fast": _implemented_everywhere(),
     "tool:gh-stack-extension": _implemented_everywhere(),
     "tool:lefthook": _implemented_everywhere(),
+    "tool:uv": _implemented_everywhere(),
     "tool:bubblewrap": _linux_only(
         "exception: docs/architecture.md platform exception rationale"
     ),
@@ -334,6 +337,32 @@ class PlatformParityTests(unittest.TestCase):
                         status,
                     )
 
+    def test_mise_executable_environment_uses_official_generation(self) -> None:
+        profile = (REPO_ROOT / "home/dot_profile.tmpl").read_text(encoding="utf-8")
+        for platform in ZSH_PLATFORMS:
+            with self.subTest(platform=platform):
+                self.assertEqual(
+                    PLATFORM_CONTRACT["shell:mise-executable-environment"][platform],
+                    "implemented",
+                )
+                self.assertIn("mise env --shell bash", profile)
+                self.assertIn('__DOTFILES_MISE_PATH="$PATH"', profile)
+                self.assertNotIn('__add_path "${HOME}/.local/share/mise/shims"', profile)
+        self.assertIn("mise activate pwsh", self.powershell)
+        self.assertIn("mise activate zsh", self.zshrc)
+
+    def test_copilot_hook_mise_exec_is_shared_by_all_platforms(self) -> None:
+        hooks = json.loads(
+            (REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json").read_text()
+        )["hooks"]
+        for commands in hooks.values():
+            for command in commands:
+                for platform in PLATFORMS:
+                    with self.subTest(platform=platform, command=command):
+                        key = "powershell" if platform == "windows-powershell" else "bash"
+                        self.assertIn("mise exec -- uv run ", command[key])
+                        self.assertEqual(command["cwd"], ".")
+
     def test_gh_stack_contract_components_exist_for_each_platform(self) -> None:
         for feature, paths in GH_STACK_COMPONENT_PATHS.items():
             self.assertEqual(set(paths), PLATFORMS)
@@ -498,6 +527,55 @@ class PlatformParityTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 config = tomllib.loads(result.stdout)
                 self.assertEqual(config["tools"]["lefthook"], "latest")
+
+    @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
+    def test_uv_backend_and_lock_options_cover_every_platform(self) -> None:
+        entries = tomllib.loads(
+            (REPO_ROOT / "home/dot_config/mise/private_mise.lock").read_text(
+                encoding="utf-8"
+            )
+        )["tools"]["uv"]
+        targets = (
+            ("windows-powershell", "windows", "amd64", "windows-x64"),
+            ("windows-powershell", "windows", "arm64", "windows-arm64"),
+            ("macos-zsh", "darwin", "arm64", "macos-arm64"),
+            ("linux-zsh", "linux", "amd64", "linux-x64"),
+            ("linux-zsh", "linux", "arm64", "linux-arm64"),
+            ("wsl-zsh", "linux", "amd64", "linux-x64"),
+            ("wsl-zsh", "linux", "arm64", "linux-arm64"),
+        )
+        self.assertEqual({target[0] for target in targets}, PLATFORMS)
+        for platform, os_name, arch, lock_platform in targets:
+            with self.subTest(platform=platform, arch=arch):
+                self.assertEqual(PLATFORM_CONTRACT["tool:uv"][platform], "implemented")
+                result = subprocess.run(
+                    [
+                        "chezmoi",
+                        "--config", os.devnull,
+                        "--config-format", "toml",
+                        "--source", str(REPO_ROOT / "home"),
+                        "execute-template",
+                        "--stdinisatty=false",
+                        "--override-data",
+                        json.dumps({"chezmoi": {"os": os_name, "arch": arch}}),
+                        "--file", str(MISE_CONFIG_PATH),
+                    ],
+                    check=False, capture_output=True, encoding="utf-8",
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                config = tomllib.loads(result.stdout)
+                uv = config["tools"]["uv"]
+                self.assertEqual(uv["version"], "latest")
+                self.assertEqual(config["tool_alias"]["uv"], "github:astral-sh/uv")
+                options = uv["platforms"].get(lock_platform, {})
+                matches = [
+                    entry for entry in entries
+                    if entry.get("options", {}) == options
+                    and f"platforms.{lock_platform}" in entry
+                ]
+                self.assertEqual(len(matches), 1)
+                self.assertEqual(matches[0]["backend"], config["tool_alias"]["uv"])
+                self.assertIn(uv["version"], matches[0]["specifiers"])
 
     def test_powershell_completion_cache_executes_generated_sources(self) -> None:
         pwsh = shutil.which("pwsh")

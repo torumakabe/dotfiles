@@ -7,7 +7,6 @@ trivy = "latest"
 node = "lts"
 # Node 25 で corepack の同梱が廃止されたため、pnpm は mise で直接管理する
 pnpm = "latest"
-uv = "latest"
 fzf = "latest"
 github-cli = "latest"
 1password = "latest"
@@ -38,6 +37,12 @@ bun = "latest"
 cargo-make = "latest"
 {{ end -}}
 
+[tools.uv]
+version = "latest"
+
+[tools.uv.platforms]
+windows-arm64 = { asset_pattern = "uv-x86_64-pc-windows-msvc.zip" }
+
 [tools.dotnet]
 version = "latest"
 {{ if eq .chezmoi.os "windows" -}}
@@ -58,3 +63,4 @@ fetch_remote_versions_timeout = "60s"
 
 [tool_alias]
 dotnet = "core:dotnet"
+uv = "github:astral-sh/uv"
