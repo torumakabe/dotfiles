@@ -40,7 +40,7 @@ reparse point、hardlink、ADS、readonly、sparse、compressed、encryptedは�
 
 通常のPowerShell 7.6以上とGitを使う。管理者として開き直さない。対象はユーザープロファイル配下のローカルNTFSにあるdotfilesリポジトリとする。共有フォルダーやreparse pointを含む保存先は対象外である。
 
-公開済みの完全なコミットSHAが別途提示され、fixture試験を依頼された後に以下を実行する。この文書の改訂だけを再実行の依頼と解釈しない。未コミット変更があれば停止し、既存の変更を退避、削除、上書きしない。
+公開済みの完全なコミットSHAが別途提示され、fixture試験を依頼された後に以下を実行する。この文書の改訂だけを再実行の依頼と解釈しない。追跡ファイルの未コミット変更や、試験結果以外の未追跡ファイルがあれば停止し、既存の変更を退避、削除、上書きしない。元のブランチにはこの試験用の`.gitignore`がない場合があるため、保持した`native-result-<番号>/`内の未追跡ファイルだけを取得前の停止条件から除く。
 
 ```powershell
 $branch = 'torumakabe-mise-shim-issues'
@@ -52,8 +52,12 @@ $previous = git symbolic-ref --quiet --short HEAD
 $wasDetached = $LASTEXITCODE -eq 1
 if ($wasDetached) { $previous = git rev-parse HEAD }
 if ($LASTEXITCODE -ne 0) { throw '現在のブランチまたはコミットを取得できません。' }
-$changes = @(git status --porcelain=v1 --untracked-files=all)
-if ($LASTEXITCODE -ne 0 -or $changes.Count -ne 0) { throw '未コミット変更があります。ここで停止してください。' }
+$changes = @(git status --porcelain=v1 --untracked-files=no)
+if ($LASTEXITCODE -ne 0 -or $changes.Count -ne 0) { throw '追跡ファイルに未コミット変更があります。ここで停止してください。' }
+$untracked = @(git ls-files --others --exclude-standard)
+if ($LASTEXITCODE -ne 0) { throw '未追跡ファイルを取得できません。' }
+$unexpected = @($untracked | Where-Object { $_ -cnotmatch '^tests/manual/windows-uv/native-result-[0-9]{2,}/' })
+if ($unexpected.Count -ne 0) { throw '試験結果以外の未追跡ファイルがあります。ここで停止してください。' }
 git fetch origin $branch
 if ($LASTEXITCODE -ne 0) { throw 'fetchに失敗しました。' }
 $fetched = git rev-parse FETCH_HEAD
