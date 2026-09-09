@@ -1,8 +1,10 @@
-# Windowsのuv復元用fixture試験
+# Windowsのuv復元用fixture試験とホスト移行手順
 
 この試験は、通常のmise、uv、profile、PATH、認証設定を変更しない。全件実行では専用ディレクトリ内の80ケースと5件の静的検査で、元オブジェクトの退避と復帰、中断からの復旧、NTFSの属性、拒否処理を確認する。実際のパッケージ導入や移行は実行しない。
 
-`windows-uv.ps1`は試験対象の関数を提供するために含めている。まだ実機での移行を確認していないため、同スクリプトの`Prepare`、`Install`、`Apply`、`Restore`を通常環境へ実行しない。`Prepare`に残る旧candidate-manifestの受け入れ条件は、この改訂によって実移行用に承認されたものではない。
+`windows-uv.ps1`は試験対象の関数と、固定したGitコミットを入力とする移行の入口を提供する。**実環境でのInstall、Apply、Restoreは未実施であり、各操作には利用者の承認が必要である。** この手順の整備やfixtureの成功を実移行の承認として扱わない。Prepareも新しいバックアップ領域へ書き込む操作として承認範囲を確認する。
+
+導入、設定変更、更新、バックアップ、復元とfixtureは、Copilot sandboxの外にある通常権限のWindows PowerShellで行う。導入済みツールを使うワークロードの受け入れはsandbox内で行い、両者の結果を分けて記録する。sandboxやCopilotの設定を無効化しない。
 
 ## 通常権限で確認する範囲
 
@@ -40,7 +42,7 @@ reparse point、hardlink、ADS、readonly、sparse、compressed、encryptedは�
 
 通常のPowerShell 7.6以上とGitを使う。管理者として開き直さない。対象はユーザープロファイル配下のローカルNTFSにあるdotfilesリポジトリとする。共有フォルダーやreparse pointを含む保存先は対象外である。
 
-公開済みの完全なコミットSHAが別途提示され、fixture試験を依頼された後に以下を実行する。この文書の改訂だけを再実行の依頼と解釈しない。追跡ファイルの未コミット変更や、試験結果以外の未追跡ファイルがあれば停止し、既存の変更を退避、削除、上書きしない。元のブランチにはこの試験用の`.gitignore`がない場合があるため、保持した`native-result-<番号>/`内の未追跡ファイルだけを取得前の停止条件から除く。
+公開済みの完全なコミットSHAが別途提示され、fixture試験またはホストでのPrepareを依頼された後に以下を実行する。この文書の改訂だけを再実行の依頼と解釈しない。Prepare用のSHAは、このGit入力対応を含む改訂の公開後に指定する。旧入口のSHAは代用できない。追跡ファイルの未コミット変更や、試験結果以外の未追跡ファイルがあれば停止し、既存の変更を退避、削除、上書きしない。元のブランチにはこの試験用の`.gitignore`がない場合があるため、保持した`native-result-<番号>/`内の未追跡ファイルだけを取得前の停止条件から除く。
 
 ```powershell
 $branch = 'torumakabe-mise-shim-issues'
@@ -114,10 +116,127 @@ if ($LASTEXITCODE -ne 0) { throw '元のブランチへ戻せません。強制�
 
 結果とfixtureは回収後も保持する。失敗後の再実行や通常環境への移行は、依頼元が結果を確認するまで行わない。
 
+## ホストでの準備と段階別の実行
+
+以下は承認後に使う手順であり、一括実行するスクリプトではない。取得するのは上記のリモートブランチと固定した完全SHAであり、ZIPやアーカイブは使わない。SourceはGitルートそのものを指定する。入口はHEADの一致と、追跡済みおよび未追跡の変更がないことをバックアップ作成前とPrepare完了直前に確認し、検証済みSHAをsnapshotの`sourceCommit`へ保存する。保持した`native-result-*`は既存の`.gitignore`に従って除外する。入口はブランチの切り替えや既存変更の処理を行わない。
+
+### 対象と保存先を確認する
+
+mise、chezmoi、uv、設定を開いているエディター、バックグラウンドジョブなど、対象を書き換えるプロセスを停止する。各段階で停止状態を維持し、`-WritersStopped`はその確認後にだけ指定する。
+
+ソースはWindowsで実際に使っている`C:\Users\tomakabe\.local\share\chezmoi`のGitルートを確認して使う。config、data、cacheは既定パスから推測しない。通常権限のPowerShell 7.6以上で、次のように実行ファイルと実際のパスだけを調べる。`$privateParent`には、リポジトリやmise管理領域の外にある既存の非共有ディレクトリを指定する。ユーザープロファイル配下で、対象と同じローカル固定NTFSボリュームにあり、他ユーザーに変更権限を与えていないことを確認する。ACLを広げて検査を通さない。
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$privateParent = '<確認済みの既存の非共有ディレクトリの絶対パス>'
+Set-Location -LiteralPath $privateParent
+$miseExe = (Get-Command mise -CommandType Application -TotalCount 1 -ErrorAction Stop).Source
+$chezmoiExe = (Get-Command chezmoi -CommandType Application -TotalCount 1 -ErrorAction Stop).Source
+$overrides = @(Get-ChildItem Env:MISE_* | Where-Object {
+    -not ($_.Name -ieq 'MISE_SHELL' -and $_.Value -ceq 'pwsh')
+} | Select-Object -ExpandProperty Name)
+if ($overrides.Count) { throw "専用手順が必要な変数があります（値は表示しません）: $($overrides -join ', ')" }
+$configsJson = & $miseExe config ls --json 2>$null
+if ($LASTEXITCODE -ne 0) { throw 'configの照会に失敗しました。' }
+$configPaths = @($configsJson | ConvertFrom-Json | ForEach-Object { $_.path })
+if ($configPaths.Count -ne 1) { throw '単一の有効なglobal configではありません。' }
+$config = $configPaths[0]
+$uvPath = (& $miseExe where uv 2>$null | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) { throw '既存uvの照会に失敗しました。' }
+if ((Split-Path $uvPath -Leaf) -cne '0.12.10' -or
+    (Split-Path (Split-Path $uvPath) -Leaf) -cne 'uv' -or
+    (Split-Path (Split-Path (Split-Path $uvPath)) -Leaf) -cne 'installs') {
+    throw '想定した既存uvの配置ではありません。'
+}
+$data = Split-Path (Split-Path (Split-Path $uvPath))
+$cache = (& $miseExe cache path 2>$null | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'cacheの照会に失敗しました。' }
+[pscustomobject]@{mise=$miseExe; chezmoi=$chezmoiExe; config=$config; data=$data; cache=$cache; uv=$uvPath}
+$backup = Join-Path $privateParent ('windows-uv-' + [guid]::NewGuid().ToString('N'))
+if (Test-Path -LiteralPath $backup) { throw '新規の保存先を指定してください。' }
+```
+
+通常の`mise activate pwsh`は`MISE_SHELL=pwsh`を設定するため、この識別子だけを許可する。config、data、cache、stateなどを変える変数や未知の`MISE_*`はPrepare、Install、Applyで拒否する。変数を消して既定パスへ誘導しない。環境変数の値、設定本文、認証情報を画面や返却ログへ出さない。Gitのリポジトリやindexを差し替える環境変数もSource確認時に拒否する。
+
+対象は、既存の`aqua:astral-sh/uv`版uv 0.12.10だけを持つ環境に限る。Prepareは31ツールの宣言とlock、共有インストール情報、実際のconfig、uv配置、cacheの一致を検査する。候補もuv 0.12.10を維持し、`github:astral-sh/uv`へ変更する。他の30ツールの宣言や設定、lock、共有情報を変更しないことを検査する。別バージョン、複数config、追加のuv版、reparse pointなどで停止したら、対象を消したり基準を書き換えたりしない。
+
+### Prepareだけを実行して停止する
+
+前節の取得手順で固定SHAへ切り替えた`$repo`と`$expected`を使う。Prepare中はGitソースも編集しない。
+
+```powershell
+$entry = Join-Path $repo 'tests\manual\windows-uv\windows-uv.ps1'
+pwsh -NoLogo -NoProfile -NonInteractive -File $entry -Command Prepare `
+    -Source $repo -SourceCommit $expected -Config $config -Data $data -Cache $cache `
+    -Backup $backup -WritersStopped
+if ($LASTEXITCODE -ne 0) { throw 'Prepare停止。作成済みの保存先は保持し、再利用しないでください。' }
+```
+
+`prepared_not_installed`と出力された`backup`、`snapshotDigest`、指定したSHAを、バックアップとは別の信頼できる記録先へ保存する。snapshotはschema 2、`rollback=same_volume_original_object`である。バックアップ内に入口の2スクリプト、観測用コピー、隔離したconfig、lock、作業領域を保存する。元のconfig、lock、uv、cache、shimsは変更しない。失敗してsnapshotとjournalが完成していない保存先をInstallやRestoreへ渡さない。
+
+**ここで停止する。Prepareの成功からInstallやApplyを自動実行しない。** 完了後のInstall、Apply、Restoreは保存済み入口を使い、候補checkoutやGitに依存しない。ソースのブランチを戻す場合は取得時に記録した値を使う。復元用ファイルや退避物を削除しない。
+
+### 承認後に隔離Installを一度だけ実行する
+
+別記録から`$backup`と`$snapshotDigest`を設定し、バックアップ内でdigestを再計算した値を無条件に採用しない。
+
+```powershell
+$savedEntry = Join-Path $backup 'windows-uv.ps1'
+pwsh -NoLogo -NoProfile -NonInteractive -File $savedEntry -Command Install `
+    -Backup $backup -SnapshotDigest $snapshotDigest -WritersStopped
+if ($LASTEXITCODE -ne 0) { throw 'Install停止。再試行せず、結果と保存先を保持してください。' }
+```
+
+この段階はネットワークを使い得る実インストールであり、`work`内の隔離したconfig、data、cache、stateに対して`mise --locked install --force uv`を一度だけ実行する。元の対象は変更しない。既存のGitHub認証を利用する承認がある場合だけ`-UseExistingGitHubAuth`を追加する。新規ログインは行わず、tokenやインストーラー出力をログへ保存しない。force installの再試行は禁止する。
+
+成功時の`isolated_install_verified_not_applied`と`planDigest`を別記録へ保存し、**Apply前に停止する。** backend、実行ファイル、PEのx64形式、版、他ツールの情報、隔離パスの混入を検査する。失敗時もコピーやログを消さない。`plan.json`が作られた後に中断し、digestを記録できなかった場合は、planの確認とdigestの確保が済むまで次の操作を止める。
+
+### Applyとsandbox内の受け入れを分ける
+
+Applyの承認後、別記録の2つのdigestを使う。
+
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File $savedEntry -Command Apply `
+    -Backup $backup -SnapshotDigest $snapshotDigest -PlanDigest $planDigest -WritersStopped
+if ($LASTEXITCODE -ne 0) { throw 'Apply停止。対象とjournalを保持し、承認したRestoreを検討してください。' }
+```
+
+Applyは対象の親ディレクトリに候補を作り、journalを保存してから元オブジェクトをバックアップへrenameし、候補を公開する。対象はconfig、mise.lock、uvのインストールディレクトリ、共有インストール情報、uvのcacheとdownloads、uv/uvxのshim名群である。profile、PATH、Copilot設定は変更しない。成功後も退避した元オブジェクトを保持する。
+
+ホストで`mise which uv`、`mise which uvx`と版の確認が成功しても、sandbox内のワークロード成功とは扱わない。入口が出力する`sandboxSuccess`は常に`false`である。導入後は通常の公式mise環境生成を使ったホストからCopilotを起動し、sandbox内で導入済みuvを使う承認済みの実ワークロードを別途確認する。このuvバックエンド変更だけで、全ツールのsandbox互換性を保証しない。受け入れのためにsandbox内で再インストール、移行、復元を行わない。
+
+### 承認後にオフラインRestoreを実行する
+
+ネットワーク、Git、候補checkout、mise、chezmoiの実行は不要である。保存済みの2スクリプト、snapshot、存在する場合のplan、journal、退避した元オブジェクトと通常権限のPowerShellを使う。インストーラーの作業領域や`observations`のコピーを復元元にしない。SourceCommitの再指定も不要である。
+
+```powershell
+$restore = @{
+    Command='Restore'; Backup=$backup
+    SnapshotDigest=$snapshotDigest; WritersStopped=$true
+}
+if (Test-Path -LiteralPath (Join-Path $backup 'plan.json')) {
+    if (-not $planDigest) { throw '別記録のplanDigestが必要です。planを削除して進めないでください。' }
+    $restore.PlanDigest = $planDigest
+}
+& (Join-Path $backup 'windows-uv.ps1') @restore
+```
+
+planがまだ存在しない失敗ではPlanDigestを指定しない。候補の公開後は既知の候補を退避して元オブジェクトを戻し、未変更の対象は動かさない。未知の変更やID不一致は停止条件であり、コピーで置き換えない。Restore自体もホストの対象へ書き込む操作なので、承認なしに実行しない。`restored`と元IDの一致を確認しても、退避物と記録は自動削除しない。
+
+## 検証結果の範囲
+
+Windows X64、PowerShell 7.6.5で、`native-result-04`の77件、`native-result-06`のADS 1件、通常権限のWindows Terminalでの`native-result-07`のjunction 1件と`native-result-08`のhardlink 1件に成功証跡がある。重複する静的検査5件を加算せず、異なるnativeケース80件を合算した結果である。sandboxとホストに分かれた実行の合算であり、全80件をホストだけで一括実行した結果ではない。`native-result-01`から`08`までを無視対象のまま保持する。この記録はfixtureの再実行依頼でも実移行の成功記録でもない。
+
 ## 手元で行える確認
 
 macOSのPowerShellでも構文、通常権限でのAudit呼び出しの不在、関数定義、mockの状態遷移を確認できる。mockは76ケースと5件の静的検査を実行する。Windowsではこれらの76ケースで実際のファイル操作を使い、NTFS固有の拒否試験4ケースを加える。ファイル同士の置換では元ファイルと候補を異なる作成日時で作り、候補の日時調整と公開前後の中断からの復元も対象とする。journal置換にはエラーコード5と32を注入し、コードの保持、再試行なし、元のjournalと対象を変更しないことを確認する。この注入試験は実機で発生したエラーコードの特定ではない。mockの成功をWindows API、SACLの一致、実際の移行成功とは扱わない。
 
 ```powershell
 pwsh -NoLogo -NoProfile -NonInteractive -File tests/manual/windows-uv/rehearse-windows-uv.ps1 -MockOnly
+```
+
+Git入力の検査は、実際の専用GitリポジトリとmacOSの既存PowerShellで実行できる。`tests/test_windows_uv_source.py`はASTから必要な関数だけを読み、Prepare本体を実行しない。PATH上にpwshがない場合は`PWSH`へ既存実行ファイルの絶対パスを指定する。新しい依存関係は導入しない。
+
+```sh
+UV_PYTHON_DOWNLOADS=never uv run --no-project --offline python -m unittest discover -s tests -p test_windows_uv_source.py -v
 ```

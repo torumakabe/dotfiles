@@ -3,7 +3,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('Prepare','Install','Apply','Restore')][string]$Command,
     [Parameter(Mandatory)][string]$Backup,
-    [string]$Config, [string]$Data, [string]$Cache, [string]$Source,
+    [string]$Config, [string]$Data, [string]$Cache, [string]$Source, [string]$SourceCommit,
     [string]$SnapshotDigest, [string]$PlanDigest,
     [switch]$WritersStopped, [switch]$UseExistingGitHubAuth
 )
@@ -26,6 +26,30 @@ foreach ($rule in $parentAcl.GetAccessRules($true,$true,[Security.Principal.Secu
 }
 
 function New-Directory([string]$Path) { New-ExclusiveDirectory $Path }
+function Assert-MiseEnvironment {
+    foreach ($key in @(Get-ChildItem Env: | Where-Object { $_.Name -like 'MISE_*' })) {
+        # 公式のPowerShell activationが設定するシェル識別子だけを許可する。
+        if ($key.Name -ieq 'MISE_SHELL' -and $key.Value -ceq 'pwsh') { continue }
+        throw "Existing $($key.Name) override needs a tailored procedure."
+    }
+}
+function Get-SourceCommit([string]$Source, [string]$SourceCommit) {
+    if ($SourceCommit -notmatch '^[0-9a-fA-F]{40}$') { throw 'Prepare requires a full 40-hex SourceCommit.' }
+    foreach ($name in @('GIT_DIR','GIT_WORK_TREE','GIT_COMMON_DIR','GIT_INDEX_FILE',
+            'GIT_OBJECT_DIRECTORY','GIT_ALTERNATE_OBJECT_DIRECTORIES')) {
+        if (Test-Path "Env:$name") { throw "Existing $name overrides source identity." }
+    }
+    $git = (Get-Command git -CommandType Application -TotalCount 1 -ErrorAction Stop).Source
+    $root = (Invoke-Captured $git @('--no-optional-locks','rev-parse','--show-toplevel') $Source).stdout.Trim()
+    if ([IO.Path]::GetFullPath($root).Replace('\','/').TrimEnd('/') -ine
+        [IO.Path]::GetFullPath($Source).Replace('\','/').TrimEnd('/')) { throw 'Source must be the Git worktree root, not a subdirectory.' }
+    $head = (Invoke-Captured $git @('--no-optional-locks','rev-parse','--verify','HEAD') $Source).stdout.Trim()
+    if ($head -ine $SourceCommit) { throw 'Source HEAD does not match SourceCommit.' }
+    $status = (Invoke-Captured $git @('--no-optional-locks','status','--porcelain=v1',
+        '--untracked-files=all','--ignore-submodules=none') $Source).stdout
+    if ($status.Length -ne 0) { throw 'Source has tracked or untracked changes; do not reset, stash or rebaseline.' }
+    return $head.ToLowerInvariant()
+}
 function Get-IsolatedEnvironment($State) {
     @{
         MISE_GLOBAL_CONFIG_FILE = (Join-Path $Backup 'work\config\config.toml')
@@ -174,23 +198,17 @@ function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [sw
 
 if ($Command -eq 'Prepare') {
     if (Test-Path -LiteralPath $Backup) { throw 'Backup already exists; never replace or rebaseline it.' }
-    foreach ($key in @(Get-ChildItem Env: | Where-Object { $_.Name -like 'MISE_*' })) {
-        throw "Existing $($key.Name) override needs a tailored procedure."
-    }
+    Assert-MiseEnvironment
     foreach ($path in @($Config,$Data,$Cache,$Source)) { Assert-Path $path }
     if ($Backup.StartsWith($Source.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase) -or
         $Source.StartsWith($Backup + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Backup must be independent of candidate source.' }
-    $sourceManifest=Join-Path $Source 'candidate-manifest.json'
-    if ((Get-Hash $sourceManifest) -cne '97D54FE3FFAF4B9147A9DB2C0693684F754829EB062562A9CEC1C000E8090826') {
-        throw 'Not the approved package-01 source manifest.'
-    }
-    $package=Read-Json $sourceManifest
-    if ($package.entries.Count -ne 119) { throw 'Unexpected package size.' }
-    foreach ($entry in $package.entries) {
-        $file=Join-Path $Source $entry.path
-        Assert-Beneath $file $Source
+    $verifiedCommit = Get-SourceCommit $Source $SourceCommit
+    if ($PSScriptRoot -ine (Join-Path $Source 'tests\manual\windows-uv')) { throw 'Run Prepare from the verified source entry.' }
+    $sourceTemplate = Join-Path $Source 'home\dot_config\mise\config.toml.tmpl'
+    $sourceLock = Join-Path $Source 'home\dot_config\mise\private_mise.lock'
+    foreach ($file in @($sourceTemplate,$sourceLock,(Join-Path $PSScriptRoot 'windows-uv.ps1'),
+            (Join-Path $PSScriptRoot 'uv-state.ps1'))) {
         Assert-Path $file
-        if ((Get-Hash $file) -ine $entry.sha256) { throw "Candidate changed: $($entry.path)" }
     }
     foreach ($path in @($Config,$Data,$Cache)) {
         Assert-Beneath $path $homeRoot
@@ -207,8 +225,8 @@ if ($Command -eq 'Prepare') {
                 $targets[$j].StartsWith($targets[$i] + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Overlapping targets' }
         }
     }
-    $mise = (Get-Command mise -CommandType Application -ErrorAction Stop).Source
-    $chezmoi = (Get-Command chezmoi -CommandType Application -ErrorAction Stop).Source
+    $mise = (Get-Command mise -CommandType Application -TotalCount 1 -ErrorAction Stop).Source
+    $chezmoi = (Get-Command chezmoi -CommandType Application -TotalCount 1 -ErrorAction Stop).Source
     New-Directory $Backup
     New-Directory (Join-Path $Backup 'observations')
     New-Directory (Join-Path $Backup 'work')
@@ -243,6 +261,7 @@ if ($Command -eq 'Prepare') {
     $activeCache=(Invoke-Captured $mise @('cache','path') $work $cacheQuery).stdout.Trim()
     if ($activeCache -ine $Cache) { throw 'Input cache directory does not match mise cache path.' }
     $state = @{ schema=2; sacl='unobserved'; rollback='same_volume_original_object'
+        sourceCommit=$verifiedCommit
         config=$Config; data=$Data; cache=$Cache; home=$homeRoot
         entries=$entries; mise=$mise; miseHash=(Get-Hash $mise); chezmoi=$chezmoi
         scripts=@{}; sandboxSuccess=$false }
@@ -259,8 +278,6 @@ if ($Command -eq 'Prepare') {
     }
     $versions = @(Get-ChildItem -LiteralPath (Join-Path $Data 'installs\uv') -Directory -Force)
     if ($versions.Count -ne 1 -or $versions[0].Name -cne '0.12.10') { throw 'Additional uv versions require a tailored procedure.' }
-    $sourceTemplate = Join-Path $Source 'home\dot_config\mise\config.toml.tmpl'
-    $sourceLock = Join-Path $Source 'home\dot_config\mise\private_mise.lock'
     $render = Invoke-Captured $chezmoi @('--config','NUL','--config-format','toml','--source',
         (Join-Path $Source 'home'),'execute-template','--stdinisatty=false','--file',$sourceTemplate) $work
     if ($render.stdout.Contains('CANDIDATE_USER')) { throw 'Placeholder render is not deployable.' }
@@ -322,6 +339,8 @@ if ($Command -eq 'Prepare') {
     $state.candidateHashes=@((Get-Hash $stagedTargets[0]),(Get-Hash $stagedTargets[1]))
     $state.otherMetadata = Get-WithoutUv (ConvertFrom-Toml ([IO.File]::ReadAllText($targets[3])) $chezmoi $work)
     Assert-Originals $state
+    Assert-Path $Source
+    $null = Get-SourceCommit $Source $verifiedCommit
     Write-NewJson (Join-Path $Backup 'snapshot.json') $state
     Write-NewJson (Join-Path $Backup 'journal.json') @{ phase='prepared'; records=@{} }
     @{ status='prepared_not_installed'; snapshotDigest=(Get-Hash (Join-Path $Backup 'snapshot.json')); backup=$Backup } | ConvertTo-Json
@@ -335,6 +354,7 @@ if ($state.home -ine $homeRoot) { throw 'Different target user.' }
 foreach ($file in $state.scripts.Keys) {
     if ((Get-Hash (Join-Path $Backup $file)) -cne $state.scripts[$file]) { throw 'Saved recovery script changed.' }
 }
+if ($Command -in @('Install','Apply')) { Assert-MiseEnvironment }
 $lease = [IO.FileStream]::new((Join-Path $Backup 'operation.lock'),'OpenOrCreate','ReadWrite','None')
 try {
     $journal = Read-Json (Join-Path $Backup 'journal.json')
@@ -353,7 +373,7 @@ try {
         Assert-Equal @($configs | ForEach-Object { $_.path }) @($stagedTargets[0]) 'Unexpected additional mise config'
         if ($UseExistingGitHubAuth) {
             $token = if ($env:GH_TOKEN) { $env:GH_TOKEN } elseif ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN }
-                else { (Invoke-Captured (Get-Command gh -CommandType Application).Source @('auth','token','--hostname','github.com') $work).stdout.Trim() }
+                else { (Invoke-Captured (Get-Command gh -CommandType Application -TotalCount 1 -ErrorAction Stop).Source @('auth','token','--hostname','github.com') $work).stdout.Trim() }
             if (-not $token) { throw 'Existing GitHub authentication unavailable; no login attempted.' }
             $envMap.GITHUB_TOKEN=$token
         }
