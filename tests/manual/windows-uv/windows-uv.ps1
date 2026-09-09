@@ -46,8 +46,15 @@ function Save-Event([string]$Name, $Value) { Write-NewJson (Join-Path $Backup ($
 function Save-Journal($Journal) {
     $stage = Join-Path $Backup ('journal-' + [guid]::NewGuid().ToString('N') + '.json')
     Write-NewJson $stage $Journal
-    if (-not [N4Uv.FileInfo]::MoveFileExW($stage,(Join-Path $Backup 'journal.json'),9)) {
-        throw 'Cannot persist journal replacement; no further object moves allowed'
+    $destination = Join-Path $Backup 'journal.json'
+    $code = Invoke-JournalRename $stage $destination
+    if ($code -ne 0) {
+        $exception = [ComponentModel.Win32Exception]::new($code,
+            "Cannot persist journal replacement (Win32 $code); no further object moves allowed")
+        $exception.Data['operation'] = 'MoveFileExW: journal replacement'
+        $exception.Data['source'] = $stage
+        $exception.Data['destination'] = $destination
+        throw $exception
     }
 }
 function Test-Absent($State) { $State.kind -eq 'absent' }
@@ -138,8 +145,10 @@ function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [sw
         Assert-Equal $Desired $entry.original 'Restore must select the original object'
         if ($null -eq $record) { return }
         # どちらのrenameよりも先に、選択済みの復元元と復元する意図を保存する。
-        $record.direction = 'restore'
-        Save-Journal $Journal
+        if ($record.direction -ne 'restore') {
+            $record.direction = 'restore'
+            Save-Journal $Journal
+        }
     } else {
         Assert-Equal $Desired $entry.after 'Apply must select the sealed candidate'
         if ($null -eq $record) {
@@ -410,21 +419,26 @@ try {
         foreach ($entry in $plan.entries) { Assert-Equal (Read-Tree $entry.blob) $entry.after 'Prepared output changed' }
     }
     $null=Get-CurrentStates $state $plan $journal
-    $journal.phase=if ($Command -eq 'Apply') { 'applying' } else { 'restoring' }
-    Save-Journal $journal
-    for ($i=0; $i -lt $state.entries.Count; $i++) {
-        $null=Get-CurrentStates $state $plan $journal
-        $blob=if ($Command -eq 'Apply') { $plan.entries[$i].blob } else { '' }
-        $desired=if ($Command -eq 'Apply') { $plan.entries[$i].after } else { $state.entries[$i].original }
-        Publish-One $state $journal $i $blob $desired -Restore:($Command -eq 'Restore')
+    $alreadyRestored=$Command -eq 'Restore' -and $journal.phase -eq 'restored'
+    if (-not $alreadyRestored) {
+        $journal.phase=if ($Command -eq 'Apply') { 'applying' } else { 'restoring' }
+        Save-Journal $journal
+        for ($i=0; $i -lt $state.entries.Count; $i++) {
+            $null=Get-CurrentStates $state $plan $journal
+            $blob=if ($Command -eq 'Apply') { $plan.entries[$i].blob } else { '' }
+            $desired=if ($Command -eq 'Apply') { $plan.entries[$i].after } else { $state.entries[$i].original }
+            Publish-One $state $journal $i $blob $desired -Restore:($Command -eq 'Restore')
+        }
     }
     if ($Command -eq 'Restore') {
         foreach ($entry in $state.entries) {
             Assert-Equal (Read-Tree $entry.target) $entry.original 'Restored original identity/observed metadata mismatch'
         }
     }
-    $journal.phase=if ($Command -eq 'Apply') { 'applied' } else { 'restored' }
-    Save-Journal $journal
+    if (-not $alreadyRestored) {
+        $journal.phase=if ($Command -eq 'Apply') { 'applied' } else { 'restored' }
+        Save-Journal $journal
+    }
     if ($Command -eq 'Apply') {
         $observations=@()
         $liveEnv=@{MISE_NO_HOOKS='1'; MISE_AUTO_INSTALL='0'; MISE_STATE_DIR=(Join-Path $work 'state'); MISE_CACHE_DIR=(Join-Path $work 'cache')}

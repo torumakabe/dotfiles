@@ -1,6 +1,6 @@
 # Windowsのuv復元用fixture試験
 
-この試験は、通常のmise、uv、profile、PATH、認証設定を変更しない。専用ディレクトリ内の77ケースと5件の静的検査で、元オブジェクトの退避と復帰、中断からの復旧、NTFSの属性、拒否処理を確認する。実際のパッケージ導入や移行は実行しない。
+この試験は、通常のmise、uv、profile、PATH、認証設定を変更しない。全件実行では専用ディレクトリ内の80ケースと5件の静的検査で、元オブジェクトの退避と復帰、中断からの復旧、NTFSの属性、拒否処理を確認する。実際のパッケージ導入や移行は実行しない。
 
 `windows-uv.ps1`は試験対象の関数を提供するために含めている。まだ実機での移行を確認していないため、同スクリプトの`Prepare`、`Install`、`Apply`、`Restore`を通常環境へ実行しない。`Prepare`に残る旧candidate-manifestの受け入れ条件は、この改訂によって実移行用に承認されたものではない。
 
@@ -28,7 +28,7 @@
 | 元オブジェクトを退避済みで、候補は未公開 | 候補を公開せず、元オブジェクトを戻す |
 | 候補を公開済み | 既知の候補を`candidate-<nonce>`へ退避し、元オブジェクトを戻す |
 | 復元途中で候補を退避済み | 残る元オブジェクトのrenameだけを行う |
-| 復元済み | IDと観測項目が一致する場合は何も動かさない |
+| 復元済み | IDと観測項目を照合する。オブジェクトの移動やjournalの再書き込みは行わない |
 
 元が存在しなかった対象は、既知の候補を退避して不存在へ戻す。候補も不存在なら何もしない。観測項目が元と同じ候補では元オブジェクトを動かさない。未知の内容やID、退避元の欠落、journalと矛盾する配置があれば、コピーによる代用や再基準化はせず停止する。
 
@@ -83,12 +83,26 @@ Write-Host "Fixture exit code: $fixtureExit"
 
 試験は`native-result-02\fixture`内にケース別の対象を作る。拒否の確認用に、同じfixture内のjunction、hardlink、ADS、readonlyファイルも作る。昇格、実行ポリシーの変更、bypassで試験を通さない。Windows以外では終了コード2で停止し、結果ディレクトリもfixtureも作らない。
 
+### 停止したケースを限定して調べる
+
+依頼文で限定実行が指定された場合は、全件実行の代わりに`-CaseName`へケース名を完全一致で渡す。たとえば、元が不存在の対象を公開した直後に中断し、復元するケースは次のとおり。`native-result-01`と`native-result-02`は変更せず、新しい結果名を使う。
+
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File $runner -ExpectedCommit $expected -ResultDirectory native-result-03 -CaseName 'absence interruption absent/file apply after-move-1'
+```
+
+指定した1ケースと静的検査5件だけを実行し、`selectedCase`を結果へ記録する。不明なケース名は失敗として扱う。限定実行のPASSは全件の成功や以前の失敗原因の解消を示すものではない。同じ失敗を再現できなければ、その事実を報告する。
+
+journal置換が失敗した場合は、ネイティブ呼び出しの直後に取得したWindowsエラーコード、操作名、置換元と置換先を`nativeError`へ記録する。失敗したケース名は`failedCase`に残す。子プロセスの終了コードが非ゼロでも、生成済みのJSONは`result.json`の`native`へ含める。中断を注入する試験中も、別のWindowsエラーを期待した中断として受け入れず、そのエラーで停止する。元のjournalと未公開の更新用ファイルを保持し、再試行や権限変更はしない。Windowsエラーコードがない旧ログから、共有違反やアクセス拒否を推定して対処しない。
+
 ## 結果を返して元のブランチへ戻る
 
 `PASS`、`FAIL`、`BLOCKED`の表示と、次のファイルを依頼元セッションへ返す。通常設定や認証情報、HOME全体は送らない。ファイルはGit管理対象外であり、commitやpushは行わない。
 
 - `tests/manual/windows-uv/native-result-02/result.json`
 - 存在する場合は同ディレクトリの`native.stdout.json`と`native.stderr.txt`
+
+限定実行では、上のパスの`native-result-02`を指定した結果名（例: `native-result-03`）に読み替える。
 
 結果を回収した後、上で記録したブランチまたはコミットへ戻す。途中でPowerShellを閉じた場合は、元の値を確認してから戻す。推測したブランチへ切り替えない。
 
@@ -102,7 +116,7 @@ if ($LASTEXITCODE -ne 0) { throw '元のブランチへ戻せません。強制�
 
 ## 手元で行える確認
 
-macOSのPowerShellでも構文、通常権限でのAudit呼び出しの不在、関数定義、mockの状態遷移を確認できる。mockは73ケースと5件の静的検査を実行する。Windowsではこれらの73ケースで実際のファイル操作を使い、NTFS固有の拒否試験4ケースを加える。ファイル同士の置換では元ファイルと候補を異なる作成日時で作り、候補の日時調整と公開前後の中断からの復元も対象とする。mockの成功をWindows API、SACLの一致、実際の移行成功とは扱わない。
+macOSのPowerShellでも構文、通常権限でのAudit呼び出しの不在、関数定義、mockの状態遷移を確認できる。mockは76ケースと5件の静的検査を実行する。Windowsではこれらの76ケースで実際のファイル操作を使い、NTFS固有の拒否試験4ケースを加える。ファイル同士の置換では元ファイルと候補を異なる作成日時で作り、候補の日時調整と公開前後の中断からの復元も対象とする。journal置換にはエラーコード5と32を注入し、コードの保持、再試行なし、元のjournalと対象を変更しないことを確認する。この注入試験は実機で発生したエラーコードの特定ではない。mockの成功をWindows API、SACLの一致、実際の移行成功とは扱わない。
 
 ```powershell
 pwsh -NoLogo -NoProfile -NonInteractive -File tests/manual/windows-uv/rehearse-windows-uv.ps1 -MockOnly

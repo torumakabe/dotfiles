@@ -1,6 +1,6 @@
 #requires -Version 7.6
 [CmdletBinding()]
-param([switch]$MockOnly,[string]$NativeRoot)
+param([switch]$MockOnly,[string]$NativeRoot,[string]$CaseName)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $results=[Collections.Generic.List[object]]::new()
@@ -44,6 +44,10 @@ $script:fixtureNumber=0
 $script:identityNumber=0
 $script:moveImplementation=${function:Move-Tree}
 $script:saveImplementation=${function:Save-Journal}
+$script:realSaveImplementation=${function:Save-Journal}
+$script:activeCase=$null
+$script:selectedCases=0
+$script:failure=''
 if ($MockOnly) {
     function Read-Tree([string]$Path) {
         if ($script:files.ContainsKey($Path)) { return (Get-Json $script:files[$Path] | ConvertFrom-Json -AsHashtable) }
@@ -94,6 +98,7 @@ function Move-Tree([string]$Source,[string]$Destination,$Expected) {
     if ($script:failure -eq "after-move-$script:moveAttempts") { throw 'injected after rename' }
 }
 function Save-Journal($Journal) {
+    $script:journalSaveAttempts++
     if ($script:failure -eq 'before-journal') { throw 'injected before journal save' }
     & $script:saveImplementation $Journal
     if ($script:failure -eq 'after-journal') { throw 'injected after durable journal save' }
@@ -104,12 +109,20 @@ function Reload-Journal($Fixture) {
     $script:failure=''; $script:moveAttempts=0
 }
 function Check([string]$Name,[scriptblock]$Body) {
+    if ($CaseName -and $Name -cne $CaseName) { return }
+    $script:activeCase=$Name
+    $script:selectedCases++
     & $Body
     $results.Add(@{case=$Name;status='passed';kind=$(if ($MockOnly) { 'mock_not_native' } else { 'native_fixture_not_install' })})
 }
 function Must-Fail([scriptblock]$Body) {
     $failed=$false
-    try { & $Body | Out-Null } catch { $failed=$true }
+    try { & $Body | Out-Null } catch {
+        if ($script:failure -and -not $_.Exception.Message.StartsWith('injected ',[StringComparison]::Ordinal)) {
+            throw
+        }
+        $failed=$true
+    }
     if (-not $failed) { throw 'Expected refusal' }
 }
 function New-TestTree([string]$Path,[string]$Kind,[string]$Content) {
@@ -131,6 +144,7 @@ function New-TestTree([string]$Path,[string]$Kind,[string]$Content) {
 }
 function Fixture([string]$OldKind='directory',[string]$NewKind='file') {
     $script:files=@{}; $script:tunneled=@{}; $script:moves=0; $script:moveAttempts=0; $script:failure=''
+    $script:journalSaveAttempts=0
     $script:fixtureNumber++
     $root=if ($MockOnly) { '/mock' } else { Join-Path $NativeRoot "case-$script:fixtureNumber" }
     $script:Backup=Join-Path $root 'backup'
@@ -214,8 +228,12 @@ try {
             Restore-Fixture $f
             Reload-Journal $f
             $moves=$script:moves
+            $journalWrites=$script:journalSaveAttempts
+            $script:failure='before-journal'
             Restore-Fixture $f
+            $script:failure=''
             Assert-Equal $script:moves $moves 'restore must be no-op'
+            Assert-Equal $script:journalSaveAttempts $journalWrites 'Repeated restore must not rewrite journal'
             if ($f.journal.records.Count) {
                 Assert-Equal $f.journal.records['0'].direction 'restore' 'Original association lost'
             }
@@ -306,7 +324,11 @@ try {
                     Reload-Journal $f
                     Restore-Fixture $f
                     Reload-Journal $f
+                    $journalWrites=$script:journalSaveAttempts
+                    $script:failure='before-journal'
                     Restore-Fixture $f
+                    $script:failure=''
+                    Assert-Equal $script:journalSaveAttempts $journalWrites 'Repeated absence restore rewrote journal'
                 }
             }
         }
@@ -394,6 +416,48 @@ try {
         Must-Fail { Restore-Fixture $f }
         Assert-Equal $script:moves $moves 'Replaced restored original was overwritten'
     }
+    Check 'injected interruption never hides an unrelated Windows failure' {
+        $f=Fixture
+        $script:failure='after-move-1'
+        $caught=$null
+        try { Must-Fail { throw [ComponentModel.Win32Exception]::new(32,'Unrelated journal failure') } }
+        catch [ComponentModel.Win32Exception] { $caught=$_.Exception }
+        if ($null -eq $caught) { throw 'Unrelated Windows failure was mistaken for an injected interruption' }
+        Assert-Equal $caught.NativeErrorCode 32 'Unrelated native error lost'
+        Must-Fail { throw 'injected after rename' }
+        $script:failure=''
+    }
+    foreach ($nativeCode in @(5,32)) {
+        Check "journal replacement Win32 $nativeCode is retained without retry or object moves" {
+            $f=Fixture
+            $saved=if ($MockOnly) { $script:durableJournal } else { Get-Json (Read-Json (Join-Path $Backup 'journal.json')) }
+            & {
+                $script:journalRenameAttempts=0
+                function Invoke-JournalRename([string]$Source,[string]$Destination) {
+                    $script:journalRenameAttempts++
+                    return $nativeCode
+                }
+                if ($MockOnly) {
+                    function Write-NewJson([string]$Path,$Value) {
+                        if (-not $Path.StartsWith((Join-Path $Backup 'journal-'))) { throw 'Unexpected staging path' }
+                    }
+                }
+                $f.journal.phase='restoring'
+                $caught=$null
+                try { & $script:realSaveImplementation $f.journal }
+                catch [ComponentModel.Win32Exception] { $caught=$_.Exception }
+                if ($null -eq $caught) { throw 'Native error was not propagated' }
+                Assert-Equal $caught.NativeErrorCode $nativeCode 'Native error code lost'
+                Assert-Equal $caught.Data['operation'] 'MoveFileExW: journal replacement' 'Operation missing'
+                Assert-Equal $caught.Data['destination'] (Join-Path $Backup 'journal.json') 'Destination missing'
+                Assert-Equal $script:journalRenameAttempts 1 'Journal replacement retried'
+            }
+            $current=if ($MockOnly) { $script:durableJournal } else { Get-Json (Read-Json (Join-Path $Backup 'journal.json')) }
+            Assert-Equal $current $saved 'Failed replacement changed durable journal'
+            Assert-Equal (Read-Tree $f.live) $f.old 'Failed journal save changed original'
+            Assert-Equal $script:moves 0 'Failed journal save moved an object'
+        }
+    }
     if (-not $MockOnly) {
         Check 'readonly rejected without clearing attributes' {
             $f=Fixture 'file'
@@ -417,14 +481,24 @@ try {
             Must-Fail { Read-Tree $f.live }
         }
     }
+    if ($CaseName -and $script:selectedCases -ne 1) { throw "Unknown or non-unique case name: $CaseName" }
     @{status=$(if ($MockOnly) {'mock_passed'} else {'native_fixture_passed_not_install'})
-        nativeExecuted=(-not $MockOnly);cases=$results;count=$results.Count;sacl='unobserved'
+        nativeExecuted=(-not $MockOnly);cases=$results;count=$results.Count;sacl='unobserved';selectedCase=$CaseName
         scope=$(if ($MockOnly) {'Parser and in-memory transitions only; no Windows API or installer.'}
             else {'Dedicated retained fixtures only; no real install, ARM64 emulation or sandbox validation.'})} |
         ConvertTo-Json -Depth 12
 } catch {
+    $exception=$_.Exception
+    while ($exception -isnot [ComponentModel.Win32Exception] -and $null -ne $exception.InnerException) {
+        $exception=$exception.InnerException
+    }
+    $nativeError=if ($exception -is [ComponentModel.Win32Exception]) {
+        @{code=$exception.NativeErrorCode;operation=$exception.Data['operation']
+            source=$exception.Data['source'];destination=$exception.Data['destination']}
+    } else { $null }
     @{status=$(if ($MockOnly) {'mock_failed'} else {'native_failed_or_unsupported_do_not_apply'})
         nativeExecuted=(-not $MockOnly);cases=$results;error=$_.Exception.Message
+        selectedCase=$CaseName;failedCase=$script:activeCase;nativeError=$nativeError
         location=$_.ScriptStackTrace} | ConvertTo-Json -Depth 12
     exit 1
 }

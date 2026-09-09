@@ -46,6 +46,10 @@ namespace N4Uv {
     IntPtr security, uint disposition, uint flags, IntPtr template);
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
   public static extern bool MoveFileExW(string source, string destination, uint flags);
+  public static int ReplaceJournal(string source, string destination) {
+   if (MoveFileExW(source, destination, 9)) return 0;
+   return Marshal.GetLastWin32Error();
+  }
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
   public static extern bool CreateDirectoryW(string path, IntPtr securityAttributes);
  }
@@ -99,6 +103,9 @@ function Get-ObjectInfo([string]$Path) {
     } finally { $handle.Dispose() }
 }
 function Get-Identity($Info) { '{0:X8}:{1:X8}{2:X8}' -f $Info.Volume,$Info.IndexHigh,$Info.IndexLow }
+function Invoke-JournalRename([string]$Source, [string]$Destination) {
+    return [N4Uv.FileInfo]::ReplaceJournal($Source,$Destination)
+}
 function Get-ObservedTree($Tree) {
     $copy = Get-Json $Tree | ConvertFrom-Json -AsHashtable
     foreach ($node in $copy.nodes) { $null = $node.Remove('identity') }
