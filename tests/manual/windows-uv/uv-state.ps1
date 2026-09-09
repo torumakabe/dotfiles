@@ -361,7 +361,7 @@ function Get-WithoutUv($Value) {
 }
 function Get-Targets([string]$Config, [string]$Data, [string]$Cache) {
     @($Config, (Join-Path (Split-Path $Config) 'mise.lock'),
-      (Join-Path $Data 'installs\uv'), (Join-Path $Data 'installs\.mise-installs.toml'),
+      (Join-Path $Data 'installs\uv\0.12.10'), (Join-Path $Data 'installs\.mise-installs.toml'),
       (Join-Path $Cache 'uv'), (Join-Path $Data 'downloads\uv')) +
       @('uv','uvx','uv.exe','uvx.exe','uv.cmd','uvx.cmd','uv.ps1','uvx.ps1' |
         ForEach-Object { Join-Path $Data "shims\$_" })

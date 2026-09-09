@@ -180,7 +180,9 @@ if (Test-Path -LiteralPath $backup) { throw '新規の保存先を指定して�
 
 入口はPrepareの入力とmiseから取得したパスについて、`/`を`\`へ変換し、連続した区切りを一つにしてから検査や比較を行う。相対パス、UNC、デバイスパスは受け付けない。`..`などの要素は解決せずに残し、既存のパス検査で拒否する。リンクやADS、末尾の空白などに対する拒否条件は変更しない。
 
-対象は、既存の`aqua:astral-sh/uv`版uv 0.12.10だけを持つ環境に限る。Prepareは31ツールの宣言とlock、共有インストール情報、実際のconfig、uv配置、cacheの一致を検査する。候補もuv 0.12.10を維持し、`github:astral-sh/uv`へ変更する。他の30ツールの宣言や設定、lock、共有情報を変更しないことを検査する。別バージョン、複数config、追加のuv版、reparse pointなどで停止したら、対象を消したり基準を書き換えたりしない。
+対象は、既存の`aqua:astral-sh/uv`版uv 0.12.10が選択されている環境に限る。Prepareは31ツールの宣言とlock、共有インストール情報、実際のconfig、uv配置、cacheの一致を検査する。候補もuv 0.12.10を維持し、`github:astral-sh/uv`へ変更する。他の30ツールの宣言や設定、lock、共有情報を変更しないことを検査する。別バージョンの選択、複数config、対象内のreparse pointなどで停止したら、対象を消したり基準を書き換えたりしない。
+
+uvの実体を扱う対象は`installs\uv\0.12.10`だけであり、親の`installs\uv`全体ではない。他バージョンのディレクトリが併存していても、コピー、インストール、置換、復元の対象に含めず、そのまま残す。隔離領域にも0.12.10だけを配置する。共有のuv backend設定、インストール情報、cache、downloadsは引き続き移行対象である。旧版のファイルを残すことと、旧版を新しいbackend設定で利用できることは別であり、後者の動作確認はこの手順に含めない。
 
 ### Prepareだけを実行して停止する
 
@@ -223,7 +225,7 @@ pwsh -NoLogo -NoProfile -NonInteractive -File $savedEntry -Command Apply `
 if ($LASTEXITCODE -ne 0) { throw 'Apply停止。対象とjournalを保持し、承認したRestoreを検討してください。' }
 ```
 
-Applyは対象の親ディレクトリに候補を作り、journalを保存してから元オブジェクトをバックアップへrenameし、候補を公開する。対象はconfig、mise.lock、uvのインストールディレクトリ、共有インストール情報、uvのcacheとdownloads、uv/uvxのshim名群である。profile、PATH、Copilot設定は変更しない。成功後も退避した元オブジェクトを保持する。
+Applyは対象の親ディレクトリに候補を作り、journalを保存してから元オブジェクトをバックアップへrenameし、候補を公開する。対象はconfig、mise.lock、`installs\uv\0.12.10`、共有インストール情報、uvのcacheとdownloads、uv/uvxのshim名群である。profile、PATH、Copilot設定は変更しない。成功後も退避した元オブジェクトを保持する。
 
 ホストで`mise which uv`、`mise which uvx`と版の確認が成功しても、sandbox内のワークロード成功とは扱わない。入口が出力する`sandboxSuccess`は常に`false`である。導入後は通常の公式mise環境生成を使ったホストからCopilotを起動し、sandbox内で導入済みuvを使う承認済みの実ワークロードを別途確認する。このuvバックエンド変更だけで、全ツールのsandbox互換性を保証しない。受け入れのためにsandbox内で再インストール、移行、復元を行わない。
 

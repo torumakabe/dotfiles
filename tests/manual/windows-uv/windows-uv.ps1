@@ -253,6 +253,7 @@ if ($Command -eq 'Prepare') {
     New-Directory (Join-Path $Backup 'work\config')
     New-Directory (Join-Path $Backup 'work\data')
     New-Directory (Join-Path $Backup 'work\data\installs')
+    New-Directory (Join-Path $Backup 'work\data\installs\uv')
     New-Directory (Join-Path $Backup 'work\data\downloads')
     New-Directory (Join-Path $Backup 'work\data\shims')
     New-Directory (Join-Path $Backup 'work\cache')
@@ -302,8 +303,6 @@ if ($Command -eq 'Prepare') {
     foreach ($entry in $oldLock.tools.uv) {
         if ($entry.version -cne '0.12.10' -or $entry.backend -cne 'aqua:astral-sh/uv') { throw 'Expected only aqua uv 0.12.10 locks.' }
     }
-    $versions = @(Get-ChildItem -LiteralPath (Join-Path $Data 'installs\uv') -Directory -Force)
-    if ($versions.Count -ne 1 -or $versions[0].Name -cne '0.12.10') { throw 'Additional uv versions require a tailored procedure.' }
     $render = Invoke-Captured $chezmoi @('--config','NUL','--config-format','toml','--source',
         (Join-Path $Source 'home'),'execute-template','--stdinisatty=false','--file',$sourceTemplate) $work
     if ($render.stdout.Contains('CANDIDATE_USER')) { throw 'Placeholder render is not deployable.' }

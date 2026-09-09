@@ -24,13 +24,17 @@ foreach ($file in @('uv-state.ps1','windows-uv.ps1')) {
         param($n)
         $n -is [Management.Automation.Language.FunctionDefinitionAst] -and
         $n.Name -in @('Invoke-Captured','Get-SourceCommit','Assert-MiseEnvironment',
-            'ConvertTo-WindowsPath','Assert-Path')
+            'ConvertTo-WindowsPath','Assert-Path','Get-Targets')
     },$true)) {
         . ([scriptblock]::Create($node.Extent.Text))
     }
 }
 try {
-    if ($env:TEST_MODE -eq 'path') {
+    if ($env:TEST_MODE -eq 'targets') {
+        @(Get-Targets (Join-Path $env:TEST_LAYOUT 'config/config.toml') `
+            (Join-Path $env:TEST_LAYOUT 'data') (Join-Path $env:TEST_LAYOUT 'cache')) |
+            ConvertTo-Json -AsArray
+    } elseif ($env:TEST_MODE -eq 'path') {
         $path = ConvertTo-WindowsPath $env:TEST_PATH
         if ($env:TEST_REJECT_PATH) {
             function Get-Item { throw 'Unexpected filesystem lookup' }
@@ -262,6 +266,65 @@ class WindowsUvSourceTests(unittest.TestCase):
             )
         for name in ("where", "activeCache", "exe"):
             self.assertRegex(text, rf"\${name}\s*=\s*ConvertTo-WindowsPath")
+
+    def test_active_install_target_leaves_eight_sibling_versions_untouched(self) -> None:
+        layout = self.root / "layout"
+        installs = layout / "data/installs/uv"
+        versions = (
+            "0.11.29", "0.11.31", "0.12.0", "0.12.10", "0.12.2",
+            "0.12.5", "0.12.7", "0.12.8", "0.12.9",
+        )
+        before = {}
+        for version in versions:
+            directory = installs / version
+            directory.mkdir(parents=True)
+            binary = directory / "uv.exe"
+            binary.write_text(f"fixture-{version}", encoding="utf-8")
+            before[version] = (directory.stat().st_ino, binary.stat().st_ino, binary.read_bytes())
+        result = self.identify(TEST_MODE="targets", TEST_LAYOUT=str(layout))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        targets = [Path(value) for value in json.loads(result.stdout)]
+        active = installs / "0.12.10"
+        self.assertEqual(targets[2], active)
+        self.assertEqual(len(targets), 14)
+        self.assertEqual(targets[3], layout / "data/installs/.mise-installs.toml")
+        for version in versions:
+            if version != "0.12.10":
+                self.assertFalse(any((installs / version).is_relative_to(t) for t in targets))
+        # Exercise the selected path with temporary directories, not Windows ACLs or an installer.
+        retained = self.root / "retained-active"
+        targets[2].rename(retained)
+        active.mkdir()
+        (active / "uv.exe").write_text("fixture-candidate", encoding="utf-8")
+        for version in versions:
+            if version != "0.12.10":
+                directory = installs / version
+                binary = directory / "uv.exe"
+                self.assertEqual(
+                    (directory.stat().st_ino, binary.stat().st_ino, binary.read_bytes()),
+                    before[version],
+                )
+        active.rename(self.root / "discard-candidate")
+        retained.rename(targets[2])
+        for version in versions:
+            directory = installs / version
+            binary = directory / "uv.exe"
+            self.assertEqual(
+                (directory.stat().st_ino, binary.stat().st_ino, binary.read_bytes()),
+                before[version],
+            )
+
+    def test_prepare_supports_siblings_and_creates_selected_work_parent(self) -> None:
+        text = ENTRY.read_text(encoding="utf-8")
+        self.assertNotIn("Additional uv versions", text)
+        self.assertNotIn("$versions.Count -ne 1", text)
+        self.assertLess(
+            text.index("New-Directory (Join-Path $Backup 'work\\data\\installs\\uv')"),
+            text.index("$stagedTargets = @(Get-Targets"),
+        )
+        self.assertIn("Expected uv 0.12.10 Windows executable.", text)
+        self.assertIn("Input data directory does not match installed uv.", text)
+        self.assertIn("Expected only aqua uv 0.12.10 locks.", text)
 
 
 if __name__ == "__main__":
