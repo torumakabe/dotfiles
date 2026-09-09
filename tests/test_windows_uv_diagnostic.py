@@ -52,6 +52,7 @@ $script:transactionPaths=@('/uv/.n4-live','/fixture/retained-original','/uv/.n4-
 $script:diagnosticEvents=[Collections.Generic.List[object]]::new()
 $script:writes=[Collections.Generic.List[string]]::new()
 $script:moves=[Collections.Generic.List[object]]::new()
+$script:publicationCopies=[Collections.Generic.List[object]]::new()
 $old=@{kind='directory'; nodes=@(@{identity='old';relative='';sddl='O:SYG:SYD:'})}
 $new=@{kind='directory'; nodes=@(@{identity='new';relative='';sddl='O:SYG:SYD:'})}
 $script:files=@{
@@ -71,6 +72,14 @@ function Write-NewJson($Path,$Value) {
     Assert-DiagnosticPath $Path
     if ($script:writes.Contains($Path)) { throw 'Evidence overwrite' }
     $script:writes.Add($Path)
+}
+function Copy-Tree($Source,$Destination,$Expected,$Desired) {
+    $script:publicationCopies.Add(@{source=$Source;destination=$Destination;expected=$Expected;desired=$Desired})
+    Assert-DiagnosticPath $Destination
+    if ($script:files.ContainsKey($Destination)) { throw 'Destination exists' }
+    Assert-Equal (Read-Tree $Source) $Expected 'Source differs'
+    $script:files[$Destination]=Get-Json $Desired | ConvertFrom-Json -AsHashtable
+    $script:writes.Add($Destination)
 }
 function Move-Tree($From,$To,$Expected) {
     $script:moves.Add(@($From,$To))
@@ -125,11 +134,25 @@ try {
             $desired.kind='file'
             Copy-DiagnosticTree '/uv/.n4-live' '/uv/.n4-stage' $old $desired
         }
+        'publication-copy' {
+            $script:files.Remove('/uv/.n4-stage')
+            $desired=Get-Json $old | ConvertFrom-Json -AsHashtable
+            $desired.nodes[0].sddl='O:SYG:BAD:AI(A;OICI;FA;;;SY)'
+            Copy-DiagnosticTree '/uv/.n4-live' '/uv/.n4-stage' $old $desired -PublicationCopy
+        }
+        'publication-input' {
+            Copy-DiagnosticTree '/uv/.n4-live' '/backup' $old $old -PublicationCopy
+        }
+        'publication-metadata-mismatch' {
+            $desired=Get-Json $old | ConvertFrom-Json -AsHashtable
+            $desired.kind='file'
+            Copy-DiagnosticTree '/uv/.n4-live' '/uv/.n4-stage' $old $desired -PublicationCopy
+        }
         default { Invoke-DiagnosticTransaction $old $new }
     }
 } catch { $failure=Get-DiagnosticError $_.Exception }
 @{error=$failure; events=$script:diagnosticEvents; moves=$script:moves; writes=$script:writes
-    files=$script:files} | ConvertTo-Json -Depth 20 -Compress
+    files=$script:files; publicationCopies=$script:publicationCopies} | ConvertTo-Json -Depth 20 -Compress
 """
 
 
@@ -144,7 +167,7 @@ class WindowsUvDiagnosticTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
-    def assert_protected(self, result):
+    def assert_protected(self, result, *, copy_writes=()):
         self.assertEqual(result["files"]["/backup"], {"kind": "protected-backup"})
         self.assertEqual(result["files"]["/uv/0.12.10"], {"kind": "protected-live"})
         for source, dest in result["moves"]:
@@ -154,7 +177,7 @@ class WindowsUvDiagnosticTests(unittest.TestCase):
             self.assertIn(dest, (
                 "/uv/.n4-live", "/fixture/retained-original", "/fixture/candidate",
             ))
-        self.assertEqual(result["writes"], [
+        self.assertEqual(result["writes"], list(copy_writes) + [
             f"/fixture/phase-{i + 1}.json" for i in range(len(result["events"]))
         ])
 
@@ -220,6 +243,26 @@ class WindowsUvDiagnosticTests(unittest.TestCase):
                 self.assertEqual(result["moves"], [])
                 self.assertEqual(result["writes"], [])
 
+    def test_publication_mode_reuses_production_copy_with_publication_requirements(self):
+        result = self.run_case("publication-copy")
+        self.assertIsNone(result["error"])
+        self.assertEqual(len(result["publicationCopies"]), 1)
+        copy = result["publicationCopies"][0]
+        self.assertEqual((copy["source"], copy["destination"]), ("/uv/.n4-live", "/uv/.n4-stage"))
+        self.assertNotEqual(copy["expected"]["nodes"][0]["sddl"], copy["desired"]["nodes"][0]["sddl"])
+        self.assertEqual(result["files"]["/uv/.n4-stage"], copy["desired"])
+        self.assertEqual(result["moves"], [])
+        self.assert_protected(result, copy_writes=("/uv/.n4-stage",))
+
+    def test_publication_mode_cannot_bypass_input_and_metadata_guards(self):
+        for mode in ("publication-input", "publication-metadata-mismatch"):
+            with self.subTest(mode=mode):
+                result = self.run_case(mode)
+                self.assertIsNotNone(result["error"])
+                self.assertEqual(result["publicationCopies"], [])
+                self.assertEqual(result["writes"], [])
+                self.assert_protected(result)
+
     def test_finally_checks_all_invariants_after_failure_without_losing_native_error(self):
         for mode, failures in (("finally-clean", 0), ("finally-damaged", 2),
                                ("finally-success-damaged", 2)):
@@ -248,7 +291,11 @@ class WindowsUvDiagnosticTests(unittest.TestCase):
         helper = (FIXTURES / "uv-state.ps1").read_text()
         self.assertNotIn("Set-Acl", source)
         self.assertNotIn("Set-Node", source)
-        self.assertNotIn("Copy-Tree ", source)
+        self.assertEqual(source.count("Copy-Tree $Source $Destination $Expected $Desired"), 1)
+        self.assertIn("if ($PublicationCopy)", source)
+        self.assertIn("$publicationCopy=$UsePublicationCopy -and $copy.phase -eq 'copy-candidate'", source)
+        self.assertIn("-PublicationCopy:$publicationCopy", source)
+        self.assertLess(source.index("Assert-DiagnosticPath $Destination"), source.index("if ($PublicationCopy)"))
         self.assertNotIn("Remove-Item", source)
         self.assertNotIn("Save-Journal", source)
         self.assertNotIn("Start-Sleep", source)

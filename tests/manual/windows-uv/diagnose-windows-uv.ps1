@@ -7,18 +7,23 @@ param(
     [Parameter(Mandatory)][string]$ApprovedUvParent,
     [Parameter(Mandatory)][string]$FixtureRoot,
     [Parameter(Mandatory)][string]$SourceCommit,
-    [switch]$WritersStopped
+    [switch]$WritersStopped,
+    [switch]$UsePublicationCopy
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'uv-state.ps1')
 
-function Copy-DiagnosticTree([string]$Source,[string]$Destination,$Expected,$Desired) {
+function Copy-DiagnosticTree([string]$Source,[string]$Destination,$Expected,$Desired,[switch]$PublicationCopy) {
+    Assert-DiagnosticPath $Destination
     Assert-Equal (Read-Tree $Source) $Expected 'Diagnostic input changed'
     $content = Get-Json $Expected | ConvertFrom-Json -AsHashtable
     for ($i=0; $i -lt $content.nodes.Count; $i++) { $content.nodes[$i].sddl=$Desired.nodes[$i].sddl }
     Assert-Observed $content $Desired 'Diagnostic copy requires identical non-ACL metadata'
-    Assert-DiagnosticPath $Destination
+    if ($PublicationCopy) {
+        Copy-Tree $Source $Destination $Expected $Desired
+        return
+    }
     foreach ($node in $Expected.nodes) {
         $dest = if ($node.relative) { Join-Path $Destination $node.relative } else { $Destination }
         $src = if ($node.relative) { Join-Path $Source $node.relative } else { $Source }
@@ -191,7 +196,8 @@ $parentBefore=Read-Parent $ApprovedUvParent
 $siblingsBefore=Read-DiagnosticSiblings
 $script:diagnosticEvents=[Collections.Generic.List[object]]::new()
 $result=@{status='failed'; simulated_only=$true; sandboxSuccess=$false; sourceCommit=$commit
-    explicitAclSetterReproduced=$false; paths=$script:transactionPaths; phases=$script:diagnosticEvents
+    publicationCopyRequested=[bool]$UsePublicationCopy; explicitAclSetterReproduced=$false
+    paths=$script:transactionPaths; phases=$script:diagnosticEvents
     copies=@(); error=$null; invariantErrors=@()}
 New-ExclusiveDirectory $FixtureRoot
 try {
@@ -201,10 +207,14 @@ try {
         @{phase='copy-candidate'; source=$candidate; destination=$stage
             expected=$plan.entries[2].blobState; desired=$plan.entries[2].after}
     )) {
-        $event=@{phase=$copy.phase; source=$copy.source; destination=$copy.destination; status='started'; error=$null}
+        $publicationCopy=$UsePublicationCopy -and $copy.phase -eq 'copy-candidate'
+        $event=@{phase=$copy.phase; source=$copy.source; destination=$copy.destination; status='started'; error=$null
+            copyMethod=$(if ($publicationCopy) {'production-publication-copy'} else {'inherited-acl-copy'})}
         $clock=[Diagnostics.Stopwatch]::StartNew()
         try {
-            Copy-DiagnosticTree $copy.source $copy.destination $copy.expected $copy.desired
+            if ($publicationCopy) { $result.explicitAclSetterReproduced=$null }
+            Copy-DiagnosticTree $copy.source $copy.destination $copy.expected $copy.desired -PublicationCopy:$publicationCopy
+            if ($publicationCopy) { $result.explicitAclSetterReproduced=$true }
             $event.status='passed'
         } catch {
             $event.status='failed'; $event.error=Get-DiagnosticError $_.Exception; throw
