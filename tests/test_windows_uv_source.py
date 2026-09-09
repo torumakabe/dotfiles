@@ -23,13 +23,21 @@ foreach ($file in @('uv-state.ps1','windows-uv.ps1')) {
     foreach ($node in $ast.FindAll({
         param($n)
         $n -is [Management.Automation.Language.FunctionDefinitionAst] -and
-        $n.Name -in @('Invoke-Captured','Get-SourceCommit','Assert-MiseEnvironment')
+        $n.Name -in @('Invoke-Captured','Get-SourceCommit','Assert-MiseEnvironment',
+            'ConvertTo-WindowsPath','Assert-Path')
     },$true)) {
         . ([scriptblock]::Create($node.Extent.Text))
     }
 }
 try {
-    if ($env:TEST_MODE -eq 'environment') {
+    if ($env:TEST_MODE -eq 'path') {
+        $path = ConvertTo-WindowsPath $env:TEST_PATH
+        if ($env:TEST_REJECT_PATH) {
+            function Get-Item { throw 'Unexpected filesystem lookup' }
+            Assert-Path $path
+        }
+        @{path=$path} | ConvertTo-Json -Compress
+    } elseif ($env:TEST_MODE -eq 'environment') {
         if ($env:TEST_ENV_NAME) {
             [Environment]::SetEnvironmentVariable($env:TEST_ENV_NAME,$env:TEST_ENV_VALUE)
         }
@@ -191,6 +199,69 @@ class WindowsUvSourceTests(unittest.TestCase):
         self.assertNotIn("Get-SourceCommit", saved)
         self.assertNotIn("$SourceCommit", saved)
         self.assertNotIn("candidate-manifest", text)
+
+    def test_mise_path_separators_are_normalized(self) -> None:
+        expected = r"C:\Users\tomakabe\.config\mise\config.toml"
+        for path in (
+            expected, "C:/Users/tomakabe/.config/mise/config.toml",
+            r"C:\Users\tomakabe\.config/mise/config.toml",
+            r"C:\\Users\\tomakabe\\\.config/mise/config.toml",
+        ):
+            with self.subTest(path=path):
+                result = self.identify(TEST_MODE="path", TEST_PATH=path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), {"path": expected})
+
+    def test_normalization_preserves_valid_path_components(self) -> None:
+        for path, expected in (
+            ("C:/Users/First Last/.config/mise/config.toml",
+             r"C:\Users\First Last\.config\mise\config.toml"),
+            ("D:/", "D:\\"),
+        ):
+            with self.subTest(path=path):
+                result = self.identify(TEST_MODE="path", TEST_PATH=path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), {"path": expected})
+
+    def test_non_local_or_relative_paths_are_not_reinterpreted(self) -> None:
+        for path in (
+            "", "config.toml", "C:config.toml", "/config.toml",
+            r"\\server\share\config.toml", "//server/share/config.toml",
+            r"\\?\C:\config.toml", r"\\.\C:\config.toml",
+        ):
+            with self.subTest(path=path):
+                self.assert_rejected(
+                    "Unsupported local absolute path", TEST_MODE="path", TEST_PATH=path,
+                )
+
+    def test_normalization_does_not_bypass_lexical_rejections(self) -> None:
+        for path in (
+            "C:/Users/../config.toml", "C:/Users/./config.toml",
+            "C:/Users/config.toml:stream", "C:/Users /config.toml",
+            "C:/Users./config.toml", "C:/Users/config.toml ",
+            "C:/Users/CON.txt", "C:/Users/NUl/config.toml",
+            "C:/Users/*.toml", 'C:/Users/"config.toml',
+        ):
+            with self.subTest(path=path):
+                self.assert_rejected(
+                    "Unsupported local absolute path", TEST_MODE="path",
+                    TEST_PATH=path, TEST_REJECT_PATH="1",
+                )
+
+    def test_path_normalization_covers_input_and_mise_queries(self) -> None:
+        text = ENTRY.read_text(encoding="utf-8")
+        prepare = text.split("if ($Command -eq 'Prepare') {", 1)[1]
+        for name in ("Config", "Data", "Cache", "Source"):
+            self.assertLess(
+                prepare.index(f"${name} = ConvertTo-WindowsPath ${name}"),
+                prepare.index("foreach ($path in @($Config,$Data,$Cache,$Source))"),
+            )
+        for name in ("activeConfigs", "configs"):
+            self.assertIn(
+                f"@(${name} | ForEach-Object {{ ConvertTo-WindowsPath $_.path }})", text,
+            )
+        for name in ("where", "activeCache", "exe"):
+            self.assertRegex(text, rf"\${name}\s*=\s*ConvertTo-WindowsPath")
 
 
 if __name__ == "__main__":

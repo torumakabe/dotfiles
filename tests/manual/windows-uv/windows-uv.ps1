@@ -26,6 +26,12 @@ foreach ($rule in $parentAcl.GetAccessRules($true,$true,[Security.Principal.Secu
 }
 
 function New-Directory([string]$Path) { New-ExclusiveDirectory $Path }
+function ConvertTo-WindowsPath([string]$Path) {
+    $local = $Path.Replace('/','\')
+    if ($local -notmatch '^[A-Za-z]:\\') { throw "Unsupported local absolute path: $Path" }
+    # 区切りだけを統一し、..、ADS、末尾の空白などはAssert-Pathの拒否対象として残す。
+    return [regex]::Replace($local, '\\+', '\')
+}
 function Assert-MiseEnvironment {
     foreach ($key in @(Get-ChildItem Env: | Where-Object { $_.Name -like 'MISE_*' })) {
         # 公式のPowerShell activationが設定するシェル識別子だけを許可する。
@@ -199,6 +205,10 @@ function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [sw
 if ($Command -eq 'Prepare') {
     if (Test-Path -LiteralPath $Backup) { throw 'Backup already exists; never replace or rebaseline it.' }
     Assert-MiseEnvironment
+    $Config = ConvertTo-WindowsPath $Config
+    $Data = ConvertTo-WindowsPath $Data
+    $Cache = ConvertTo-WindowsPath $Cache
+    $Source = ConvertTo-WindowsPath $Source
     foreach ($path in @($Config,$Data,$Cache,$Source)) { Assert-Path $path }
     if ($Backup.StartsWith($Source.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase) -or
         $Source.StartsWith($Backup + '\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Backup must be independent of candidate source.' }
@@ -254,11 +264,11 @@ if ($Command -eq 'Prepare') {
     $queryEnv=@{ MISE_NO_HOOKS='1'; MISE_AUTO_INSTALL='0'
         MISE_STATE_DIR=(Join-Path $work 'state'); MISE_CACHE_DIR=(Join-Path $work 'cache') }
     $activeConfigs=(Invoke-Captured $mise @('config','ls','--json') $work $queryEnv).stdout | ConvertFrom-Json
-    Assert-Equal @($activeConfigs | ForEach-Object { $_.path }) @($Config) 'Input is not the sole active global config'
-    $where=(Invoke-Captured $mise @('where','uv') $work $queryEnv).stdout.Trim()
+    Assert-Equal @($activeConfigs | ForEach-Object { ConvertTo-WindowsPath $_.path }) @($Config) 'Input is not the sole active global config'
+    $where=ConvertTo-WindowsPath (Invoke-Captured $mise @('where','uv') $work $queryEnv).stdout.Trim()
     if ($where -ine (Join-Path $Data 'installs\uv\0.12.10')) { throw 'Input data directory does not match installed uv.' }
     $cacheQuery=@{MISE_NO_HOOKS='1';MISE_AUTO_INSTALL='0';MISE_STATE_DIR=(Join-Path $work 'state')}
-    $activeCache=(Invoke-Captured $mise @('cache','path') $work $cacheQuery).stdout.Trim()
+    $activeCache=ConvertTo-WindowsPath (Invoke-Captured $mise @('cache','path') $work $cacheQuery).stdout.Trim()
     if ($activeCache -ine $Cache) { throw 'Input cache directory does not match mise cache path.' }
     $state = @{ schema=2; sacl='unobserved'; rollback='same_volume_original_object'
         sourceCommit=$verifiedCommit
@@ -370,7 +380,7 @@ try {
         if ((Get-Hash $state.mise) -cne $state.miseHash) { throw 'mise executable changed.' }
         Assert-Equal @((Get-Hash $stagedTargets[0]),(Get-Hash $stagedTargets[1])) $state.candidateHashes 'Prepared config/lock changed'
         $configs = (Invoke-Captured $state.mise @('config','ls','--json') $work $envMap).stdout | ConvertFrom-Json
-        Assert-Equal @($configs | ForEach-Object { $_.path }) @($stagedTargets[0]) 'Unexpected additional mise config'
+        Assert-Equal @($configs | ForEach-Object { ConvertTo-WindowsPath $_.path }) @($stagedTargets[0]) 'Unexpected additional mise config'
         if ($UseExistingGitHubAuth) {
             $token = if ($env:GH_TOKEN) { $env:GH_TOKEN } elseif ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN }
                 else { (Invoke-Captured (Get-Command gh -CommandType Application -TotalCount 1 -ErrorAction Stop).Source @('auth','token','--hostname','github.com') $work).stdout.Trim() }
@@ -391,7 +401,7 @@ try {
         if ($tool.backend -cne 'github:astral-sh/uv') { throw 'Backend did not migrate.' }
         $resolutions = @()
         foreach ($name in @('uv','uvx')) {
-            $exe = (Invoke-Captured $state.mise @('which',$name) $work $envMap).stdout.Trim()
+            $exe = ConvertTo-WindowsPath (Invoke-Captured $state.mise @('which',$name) $work $envMap).stdout.Trim()
             $expected = Join-Path $work "data\installs\uv\0.12.10\$name.exe"
             if ($exe -ine $expected) { throw "Unexpected $name resolution." }
             $pe=[IO.File]::ReadAllBytes($exe)
