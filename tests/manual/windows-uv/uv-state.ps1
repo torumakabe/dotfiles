@@ -42,6 +42,11 @@ namespace N4Uv {
   [DllImport("kernel32.dll", SetLastError=true)]
   public static extern bool GetFileInformationByHandle(SafeFileHandle handle, out Info info);
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
+  public static extern SafeFileHandle CreateFileW(string path, uint access, uint share,
+    IntPtr security, uint disposition, uint flags, IntPtr template);
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
+  public static extern bool MoveFileExW(string source, string destination, uint flags);
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
   public static extern bool CreateDirectoryW(string path, IntPtr securityAttributes);
  }
 }
@@ -57,7 +62,11 @@ function Assert-Path([string]$Path, [switch]$Absent) {
     $cursor = $Path
     $first = $true
     while ($cursor) {
-        $item = Get-Item -LiteralPath $cursor -Force -ErrorAction SilentlyContinue
+        $item = $null
+        try { $item = Get-Item -LiteralPath $cursor -Force -ErrorAction Stop }
+        catch [System.Management.Automation.ItemNotFoundException] {
+            if (-not ($first -and $Absent)) { throw }
+        }
         if ($null -eq $item) {
             if (-not ($first -and $Absent)) { throw "Missing ancestor: $cursor" }
         } elseif ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
@@ -78,6 +87,26 @@ function New-ExclusiveDirectory([string]$Path) {
         throw "Cannot exclusively create directory (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error())): $Path"
     }
 }
+function Get-ObjectInfo([string]$Path) {
+    # FILE_READ_ATTRIBUTESとBACKUP_SEMANTICSで、監査権限なしにディレクトリのIDも読む。
+    $handle = [N4Uv.FileInfo]::CreateFileW($Path,0x80,7,[IntPtr]::Zero,3,0x02000000,[IntPtr]::Zero)
+    try {
+        $info = [N4Uv.FileInfo+Info]::new()
+        if ($handle.IsInvalid -or -not [N4Uv.FileInfo]::GetFileInformationByHandle($handle,[ref]$info)) {
+            throw "Cannot read object identity: $Path"
+        }
+        return $info
+    } finally { $handle.Dispose() }
+}
+function Get-Identity($Info) { '{0:X8}:{1:X8}{2:X8}' -f $Info.Volume,$Info.IndexHigh,$Info.IndexLow }
+function Get-ObservedTree($Tree) {
+    $copy = Get-Json $Tree | ConvertFrom-Json -AsHashtable
+    foreach ($node in $copy.nodes) { $null = $node.Remove('identity') }
+    return $copy
+}
+function Assert-Observed($Left, $Right, [string]$Message) {
+    Assert-Equal (Get-ObservedTree $Left) (Get-ObservedTree $Right) $Message
+}
 function Read-Node([string]$Path, [string]$Relative) {
     $item = Get-Item -LiteralPath $Path -Force
     $allowed = [IO.FileAttributes]::Directory -bor [IO.FileAttributes]::Hidden -bor
@@ -85,12 +114,8 @@ function Read-Node([string]$Path, [string]$Relative) {
     if (([int]$item.Attributes -band (-bnot [int]$allowed)) -ne 0) {
         throw "Unsupported attributes (readonly/reparse/compressed/encrypted/sparse): $Path"
     }
-    # Failure to read audit information is also unsupported; never elevate or drop it.
-    $audit = Get-Acl -LiteralPath $Path -Audit
-    if (@($audit.Audit).Count -ne 0 -or $audit.GetSecurityDescriptorSddlForm(
-            [Security.AccessControl.AccessControlSections]::Audit) -match 'S:') {
-        throw "SACL is unsupported: $Path"
-    }
+    $acl = Get-Acl -LiteralPath $Path
+    $objectInfo = Get-ObjectInfo $Path
     $streams = @(Get-Item -LiteralPath $Path -Stream * -ErrorAction Stop)
     if (@($streams | Where-Object { $_.Stream -ne ':$DATA' }).Count) { throw "ADS unsupported: $Path" }
     $hash = $null
@@ -102,13 +127,15 @@ function Read-Node([string]$Path, [string]$Relative) {
                 throw "Cannot inspect hardlinks: $Path"
             }
             if ($info.Links -ne 1) { throw "Hardlink unsupported: $Path" }
+            Assert-Equal (Get-Identity $info) (Get-Identity $objectInfo) "Object replaced during read: $Path"
             $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($handle))
         } finally { $handle.Dispose() }
     }
     @{
         relative = $Relative; kind = $(if ($item.PSIsContainer) { 'directory' } else { 'file' })
         hash = $hash; attributes = [int]$item.Attributes
-        sddl = $audit.GetSecurityDescriptorSddlForm($script:Sections)
+        sddl = $acl.GetSecurityDescriptorSddlForm($script:Sections)
+        sacl = 'unobserved'; identity = Get-Identity $objectInfo
         created = $item.CreationTimeUtc.Ticks; written = $item.LastWriteTimeUtc.Ticks
     }
 }
@@ -150,26 +177,40 @@ function Copy-Tree([string]$Source, [string]$Destination, $Expected) {
         $dest = if ($node.relative) { Join-Path $Destination $node.relative } else { $Destination }
         $src = if ($node.relative) { Join-Path $Source $node.relative } else { $Source }
         if ($node.kind -eq 'directory') { New-ExclusiveDirectory $dest }
-        else { [IO.File]::Copy($src, $dest, $false) }
+        else {
+            # 新規作成してバイト列だけを転送し、SACLは作成先の継承規則に従わせる。
+            $input = [IO.FileStream]::new($src,'Open','Read','Read')
+            try {
+                $output = [IO.FileStream]::new($dest,'CreateNew','Write','None')
+                try { $input.CopyTo($output); $output.Flush($true) } finally { $output.Dispose() }
+            } finally { $input.Dispose() }
+        }
     }
     # Children are created first so that copying does not disturb directory timestamps.
     foreach ($node in @($Expected.nodes | Sort-Object { $_.relative.Length } -Descending)) {
         Set-Node $(if ($node.relative) { Join-Path $Destination $node.relative } else { $Destination }) $node
     }
-    Assert-Equal (Read-Tree $Destination) $Expected "ACL/attribute/tree copy not reproducible: $Destination"
+    Assert-Observed (Read-Tree $Destination) $Expected "Observed metadata/tree copy not reproducible: $Destination"
     Assert-Equal (Read-Tree $Source) $Expected "Source changed during copy: $Source"
 }
 function Move-Tree([string]$Source, [string]$Destination, $Expected) {
     Assert-Equal (Read-Tree $Source) $Expected "Concurrent change: $Source"
     Assert-Path $Destination -Absent
     if (Test-Path -LiteralPath $Destination) { throw "Move destination exists: $Destination" }
-    if ($Expected.kind -eq 'directory') { [IO.Directory]::Move($Source, $Destination) }
-    elseif ($Expected.kind -eq 'file') { [IO.File]::Move($Source, $Destination, $false) }
-}
-function Assert-Known($Current, $Original, $After) {
-    if ((Get-Json $Current) -ceq (Get-Json $Original)) { return 'original' }
-    if ((Get-Json $Current) -ceq (Get-Json $After)) { return 'after' }
-    throw 'Unknown/concurrent state; refusing overwrite'
+    if ($Expected.kind -eq 'absent') { throw 'Cannot rename an absent object' }
+    $sourceInfo = Get-ObjectInfo $Source
+    $parentInfo = Get-ObjectInfo (Split-Path $Destination)
+    if ($sourceInfo.Volume -ne $parentInfo.Volume -or
+        [IO.Path]::GetPathRoot($Source) -ine [IO.Path]::GetPathRoot($Destination)) {
+        throw 'Rename requires the same local NTFS volume'
+    }
+    $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($Source))
+    if ($drive.DriveFormat -ne 'NTFS' -or $drive.DriveType -ne 'Fixed') { throw 'Local fixed NTFS required' }
+    # flags=0で、上書きとCOPY_ALLOWEDによるコピーへの切り替えを禁止する。
+    if (-not [N4Uv.FileInfo]::MoveFileExW($Source,$Destination,0)) {
+        throw "Rename failed (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error())): $Source"
+    }
+    Assert-Equal (Read-Tree $Destination) $Expected "Renamed object changed: $Destination"
 }
 function Invoke-Captured([string]$Exe, [string[]]$Arguments, [string]$Directory,
         [hashtable]$Environment = @{}, [string]$InputText = '', [switch]$AllowFailure) {

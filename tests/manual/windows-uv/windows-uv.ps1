@@ -39,78 +39,128 @@ function Get-IsolatedEnvironment($State) {
 function Assert-Originals($State) {
     foreach ($entry in $State.entries) {
         Assert-Equal (Read-Tree $entry.target) $entry.original "Concurrent change: $($entry.target)"
-        Assert-Equal (Read-Tree (Join-Path $Backup $entry.saved)) $entry.original "Damaged original backup: $($entry.saved)"
+        Assert-Observed (Read-Tree (Join-Path $Backup $entry.saved)) $entry.original "Damaged observation copy: $($entry.saved)"
     }
 }
 function Save-Event([string]$Name, $Value) { Write-NewJson (Join-Path $Backup ($Name + '.json')) $Value }
 function Save-Journal($Journal) {
     $stage = Join-Path $Backup ('journal-' + [guid]::NewGuid().ToString('N') + '.json')
     Write-NewJson $stage $Journal
-    [IO.File]::Move($stage, (Join-Path $Backup 'journal.json'), $true)
+    if (-not [N4Uv.FileInfo]::MoveFileExW($stage,(Join-Path $Backup 'journal.json'),9)) {
+        throw 'Cannot persist journal replacement; no further object moves allowed'
+    }
 }
 function Test-Absent($State) { $State.kind -eq 'absent' }
+function Set-CandidateMetadata([string]$Path, $Original) {
+    $tree = Read-Tree $Path
+    foreach ($node in $tree.nodes) {
+        $old = @($Original.nodes | Where-Object { $_.relative -ceq $node.relative -and $_.kind -eq $node.kind })
+        if ($old.Count -eq 1) {
+            $node.sddl = $old[0].sddl; $node.attributes = $old[0].attributes
+            # NTFSの同名置換で作成日時が引き継がれるため、候補を封印する前に一致させる。
+            if ($node.relative -eq '' -and $node.kind -eq 'file') { $node.created = $old[0].created }
+            Set-Node $(if ($node.relative) { Join-Path $Path $node.relative } else { $Path }) $node
+        }
+    }
+}
+function Get-EntryPosition($Entry, $Record, $After) {
+    $current = Read-Tree $Entry.target
+    if ($null -eq $Record) {
+        Assert-Equal $current $Entry.original "Unjournaled target changed: $($Entry.target)"
+        return 'untouched'
+    }
+    $nonce = $Record.nonce
+    if ($nonce -notmatch '^[a-f0-9]{32}$' -or
+        $Record.originalSource -cne (Join-Path $Backup ('retained-' + $nonce)) -or
+        $Record.discard -cne (Join-Path $Backup ('candidate-' + $nonce)) -or
+        $Record.stage -cne (Join-Path (Split-Path $Entry.target) ('.n4-uv-stage-' + $nonce)) -or
+        $Record.direction -notin @('apply','restore')) { throw 'Invalid retained-object record' }
+    Assert-Observed $Record.after $After 'Journal candidate differs from sealed plan'
+    $absent = @{kind='absent';nodes=@()}
+    $actual = @($current, (Read-Tree $Record.originalSource), (Read-Tree $Record.stage), (Read-Tree $Record.discard))
+    # 配列の順序は現在の対象、退避した元オブジェクト、未公開候補、退避した候補。
+    $positions = [ordered]@{
+        before = @($Entry.original,$absent,$Record.after,$absent)
+        evacuated = @($absent,$Entry.original,$Record.after,$absent)
+        published = @($Record.after,$Entry.original,$absent,$absent)
+    }
+    if ($Record.direction -eq 'restore') {
+        $positions['candidateEvacuated'] = @($absent,$Entry.original,$absent,$Record.after)
+        $positions['restored'] = @($Entry.original,$absent,$absent,$Record.after)
+    }
+    foreach ($name in $positions.Keys) {
+        if ((Get-Json $actual) -ceq (Get-Json $positions[$name])) { return $name }
+    }
+    throw "Unknown/concurrent object or identity; refusing overwrite: $($Entry.target)"
+}
 function Get-CurrentStates($State, $Plan, $Journal) {
     $result = @()
-    if ($Journal.pending -and ($Journal.pending.index -lt 0 -or $Journal.pending.index -ge $State.entries.Count)) {
-        throw 'Invalid pending target index'
+    foreach ($key in $Journal.records.Keys) {
+        if ($key -notmatch '^(0|[1-9][0-9]*)$' -or [long]$key -ge $State.entries.Count) { throw 'Invalid journal target index' }
     }
     for ($i = 0; $i -lt $State.entries.Count; $i++) {
         $entry = $State.entries[$i]
         $after = if ($null -ne $Plan) { $Plan.entries[$i].after } else { $entry.original }
-        $current = Read-Tree $entry.target
-        if ($Journal.pending -and $Journal.pending.index -eq $i) {
-            $p = $Journal.pending
-            $null=Assert-Known $p.before $entry.original $after
-            $null=Assert-Known $p.desired $entry.original $after
-            $nonce=[IO.Path]::GetFileName($p.quarantine) -replace '^evacuated-',''
-            if ($nonce -notmatch '^[a-f0-9]{32}$' -or
-                $p.quarantine -cne (Join-Path $Backup ('evacuated-' + $nonce)) -or
-                $p.stage -cne (Join-Path (Split-Path $entry.target) ('.n4-uv-stage-' + $nonce))) {
-                throw 'Invalid pending staging/quarantine path'
-            }
-            $savedCurrent = Read-Tree $p.quarantine
-            if (Test-Absent $current) {
-                # An absent live object is accepted only with the exact evacuated object.
-                Assert-Equal $savedCurrent $p.before 'Pending evacuation does not match journal'
-            } else {
-                $null = Assert-Known $current $p.before $p.desired
-                if (-not (Test-Absent $savedCurrent)) {
-                    Assert-Equal $savedCurrent $p.before 'Quarantine changed'
-                    Assert-Equal $current $p.desired 'Unexpected target after evacuation'
-                }
-            }
-        } else { $null = Assert-Known $current $entry.original $after }
-        $result += ,$current
+        $result += Get-EntryPosition $entry $Journal.records["$i"] $after
     }
     return ,$result
 }
-function Complete-Pending($State, $Journal) {
-    $p = $Journal.pending
-    $target = $State.entries[$p.index].target
-    $current = Read-Tree $target
-    if ((Get-Json $current) -ceq (Get-Json $p.desired)) {
-        $Journal.pending = $null; Save-Journal $Journal; return
+function Complete-Pending($State, $Journal, [int]$Index) {
+    $entry = $State.entries[$Index]
+    $record = $Journal.records["$Index"]
+    $position = Get-EntryPosition $entry $record $entry.after
+    if ($record.direction -eq 'apply') {
+        if ($position -eq 'published') { return }
+        if (-not (Test-Absent (Read-Tree $entry.target))) {
+            Move-Tree $entry.target $record.originalSource $entry.original
+        }
+        $null = Get-EntryPosition $entry $record $entry.after
+        if (-not (Test-Absent $record.after)) { Move-Tree $record.stage $entry.target $record.after }
+        Assert-Equal (Read-Tree $entry.target) $record.after 'Candidate publication verification failed'
+    } else {
+        if ((Get-Json (Read-Tree $entry.target)) -ceq (Get-Json $entry.original)) { return }
+        if (-not (Test-Absent (Read-Tree $entry.target))) {
+            Move-Tree $entry.target $record.discard $record.after
+        }
+        $null = Get-EntryPosition $entry $record $entry.after
+        if (-not (Test-Absent $entry.original)) {
+            Move-Tree $record.originalSource $entry.target $entry.original
+        }
+        Assert-Equal (Read-Tree $entry.target) $entry.original 'Original identity/observed metadata restoration failed'
     }
-    if (-not (Test-Absent $current)) { Move-Tree $target $p.quarantine $p.before }
-    if (-not (Test-Absent $p.desired)) { Move-Tree $p.stage $target $p.desired }
-    Assert-Equal (Read-Tree $target) $p.desired 'Publish verification failed'
-    $Journal.pending = $null; Save-Journal $Journal
+    $null = Get-EntryPosition $entry $record $entry.after
 }
-function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired) {
-    $target = $State.entries[$Index].target
-    $current = Read-Tree $target
-    $null=Assert-Known $current $State.entries[$Index].original $State.entries[$Index].after
-    if ((Get-Json $current) -ceq (Get-Json $Desired)) { return }
-    $nonce = [guid]::NewGuid().ToString('N')
-    # On the same volume, rename preserves the copied ACL and avoids recursive deletion.
-    $stage = Join-Path (Split-Path $target) ('.n4-uv-stage-' + $nonce)
-    $quarantine = Join-Path $Backup ('evacuated-' + $nonce)
-    Copy-Tree $Blob $stage $Desired
-    Assert-Equal (Read-Tree $target) $current 'Concurrent change before journal'
-    $Journal.pending = @{ index = $Index; before = $current; desired = $Desired
-        stage = $stage; quarantine = $quarantine }
-    Save-Journal $Journal
-    Complete-Pending $State $Journal
+function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [switch]$Restore) {
+    $entry = $State.entries[$Index]
+    $record = $Journal.records["$Index"]
+    $null = Get-EntryPosition $entry $record $entry.after
+    if ($Restore) {
+        Assert-Equal $Desired $entry.original 'Restore must select the original object'
+        if ($null -eq $record) { return }
+        # どちらのrenameよりも先に、選択済みの復元元と復元する意図を保存する。
+        $record.direction = 'restore'
+        Save-Journal $Journal
+    } else {
+        Assert-Equal $Desired $entry.after 'Apply must select the sealed candidate'
+        if ($null -eq $record) {
+            if ($entry.original.kind -eq 'file' -and $Desired.kind -eq 'file') {
+                Assert-Equal $Desired.nodes[0].created $entry.original.nodes[0].created `
+                    'Seal the candidate with original creation time before file replacement'
+            }
+            if ((Get-Json (Get-ObservedTree $entry.original)) -ceq (Get-Json (Get-ObservedTree $Desired))) { return }
+            $nonce = [guid]::NewGuid().ToString('N')
+            $stage = Join-Path (Split-Path $entry.target) ('.n4-uv-stage-' + $nonce)
+            Copy-Tree $Blob $stage $Desired
+            $record = @{ nonce=$nonce; direction='apply'; stage=$stage; after=(Read-Tree $stage)
+                originalSource=(Join-Path $Backup ('retained-' + $nonce))
+                discard=(Join-Path $Backup ('candidate-' + $nonce)) }
+            Assert-Observed $record.after $Desired 'Staged candidate changed'
+            $null = Get-EntryPosition $entry $record $entry.after
+            $Journal.records["$Index"] = $record
+            Save-Journal $Journal
+        } elseif ($record.direction -ne 'apply') { throw 'Cannot apply after restore has started' }
+    }
+    Complete-Pending $State $Journal $Index
 }
 
 if ($Command -eq 'Prepare') {
@@ -151,7 +201,7 @@ if ($Command -eq 'Prepare') {
     $mise = (Get-Command mise -CommandType Application -ErrorAction Stop).Source
     $chezmoi = (Get-Command chezmoi -CommandType Application -ErrorAction Stop).Source
     New-Directory $Backup
-    New-Directory (Join-Path $Backup 'original')
+    New-Directory (Join-Path $Backup 'observations')
     New-Directory (Join-Path $Backup 'work')
     New-Directory (Join-Path $Backup 'work\config')
     New-Directory (Join-Path $Backup 'work\data')
@@ -166,7 +216,7 @@ if ($Command -eq 'Prepare') {
     $entries = @()
     for ($i=0; $i -lt $targets.Count; $i++) {
         $original = Read-Tree $targets[$i]
-        $saved = "original\$i"
+        $saved = "observations\$i"
         Copy-Tree $targets[$i] (Join-Path $Backup $saved) $original
         $entries += @{ target=$targets[$i]; saved=$saved; original=$original }
     }
@@ -183,7 +233,8 @@ if ($Command -eq 'Prepare') {
     $cacheQuery=@{MISE_NO_HOOKS='1';MISE_AUTO_INSTALL='0';MISE_STATE_DIR=(Join-Path $work 'state')}
     $activeCache=(Invoke-Captured $mise @('cache','path') $work $cacheQuery).stdout.Trim()
     if ($activeCache -ine $Cache) { throw 'Input cache directory does not match mise cache path.' }
-    $state = @{ schema=1; config=$Config; data=$Data; cache=$Cache; home=$homeRoot
+    $state = @{ schema=2; sacl='unobserved'; rollback='same_volume_original_object'
+        config=$Config; data=$Data; cache=$Cache; home=$homeRoot
         entries=$entries; mise=$mise; miseHash=(Get-Hash $mise); chezmoi=$chezmoi
         scripts=@{}; sandboxSuccess=$false }
     $state.miseVersion=(Invoke-Captured $mise @('--version') $work $queryEnv).stdout.Trim()
@@ -226,7 +277,8 @@ if ($Command -eq 'Prepare') {
     }
     $stagedTargets = @(Get-Targets (Join-Path $work 'config\config.toml') (Join-Path $work 'data') (Join-Path $work 'cache'))
     for ($i=0; $i -lt $targets.Count; $i++) {
-        Copy-Tree (Join-Path $Backup $entries[$i].saved) $stagedTargets[$i] $entries[$i].original
+        $copySource = Join-Path $Backup $entries[$i].saved
+        Copy-Tree $copySource $stagedTargets[$i] (Read-Tree $copySource)
     }
     $envMap = Get-IsolatedEnvironment $state
     $oldTool = (Invoke-Captured $mise @('tool','uv','--json') $work $envMap).stdout | ConvertFrom-Json
@@ -262,13 +314,14 @@ if ($Command -eq 'Prepare') {
     $state.otherMetadata = Get-WithoutUv (ConvertFrom-Toml ([IO.File]::ReadAllText($targets[3])) $chezmoi $work)
     Assert-Originals $state
     Write-NewJson (Join-Path $Backup 'snapshot.json') $state
-    Write-NewJson (Join-Path $Backup 'journal.json') @{ phase='prepared'; pending=$null }
+    Write-NewJson (Join-Path $Backup 'journal.json') @{ phase='prepared'; records=@{} }
     @{ status='prepared_not_installed'; snapshotDigest=(Get-Hash (Join-Path $Backup 'snapshot.json')); backup=$Backup } | ConvertTo-Json
     exit 0
 }
 
 if (-not $SnapshotDigest -or (Get-Hash (Join-Path $Backup 'snapshot.json')) -cne $SnapshotDigest) { throw 'Snapshot digest mismatch; supply the separately recorded digest.' }
 $state = Read-Json (Join-Path $Backup 'snapshot.json')
+if ($state.schema -ne 2) { throw 'Unsupported snapshot schema; copy-based recovery cannot be resumed with this script.' }
 if ($state.home -ine $homeRoot) { throw 'Different target user.' }
 foreach ($file in $state.scripts.Keys) {
     if ((Get-Hash (Join-Path $Backup $file)) -cne $state.scripts[$file]) { throw 'Saved recovery script changed.' }
@@ -324,15 +377,7 @@ try {
         }
         $planEntries=@()
         for ($i=0; $i -lt $state.entries.Count; $i++) {
-            # Keep original ACL/attributes on matching nodes; new files retain the private staging ACL.
-            $tree=Read-Tree $stagedTargets[$i]
-            foreach ($node in $tree.nodes) {
-                $old=@($state.entries[$i].original.nodes | Where-Object { $_.relative -ceq $node.relative -and $_.kind -eq $node.kind })
-                if ($old.Count -eq 1) {
-                    $node.sddl=$old[0].sddl; $node.attributes=$old[0].attributes
-                    Set-Node $(if ($node.relative) { Join-Path $stagedTargets[$i] $node.relative } else { $stagedTargets[$i] }) $node
-                }
-            }
+            Set-CandidateMetadata $stagedTargets[$i] $state.entries[$i].original
             $tree=Read-Tree $stagedTargets[$i]
             foreach ($node in $tree.nodes | Where-Object { $_.kind -eq 'file' }) {
                 $file=if ($node.relative) { Join-Path $stagedTargets[$i] $node.relative } else { $stagedTargets[$i] }
@@ -361,24 +406,23 @@ try {
     for ($i=0; $i -lt $state.entries.Count; $i++) {
         $state.entries[$i].after=if ($null -ne $plan) { $plan.entries[$i].after } else { $state.entries[$i].original }
     }
-    foreach ($entry in $state.entries) { Assert-Equal (Read-Tree (Join-Path $Backup $entry.saved)) $entry.original 'Original backup damaged' }
     if ($Command -eq 'Apply') {
         foreach ($entry in $plan.entries) { Assert-Equal (Read-Tree $entry.blob) $entry.after 'Prepared output changed' }
     }
     $null=Get-CurrentStates $state $plan $journal
-    if ($journal.pending) {
-        # Finish only its previously sealed operation, even when switching to Restore.
-        Complete-Pending $state $journal
-    }
     $journal.phase=if ($Command -eq 'Apply') { 'applying' } else { 'restoring' }
     Save-Journal $journal
     for ($i=0; $i -lt $state.entries.Count; $i++) {
         $null=Get-CurrentStates $state $plan $journal
-        $blob=if ($Command -eq 'Apply') { $plan.entries[$i].blob } else { Join-Path $Backup $state.entries[$i].saved }
+        $blob=if ($Command -eq 'Apply') { $plan.entries[$i].blob } else { '' }
         $desired=if ($Command -eq 'Apply') { $plan.entries[$i].after } else { $state.entries[$i].original }
-        Publish-One $state $journal $i $blob $desired
+        Publish-One $state $journal $i $blob $desired -Restore:($Command -eq 'Restore')
     }
-    if ($Command -eq 'Restore') { Assert-Originals $state }
+    if ($Command -eq 'Restore') {
+        foreach ($entry in $state.entries) {
+            Assert-Equal (Read-Tree $entry.target) $entry.original 'Restored original identity/observed metadata mismatch'
+        }
+    }
     $journal.phase=if ($Command -eq 'Apply') { 'applied' } else { 'restored' }
     Save-Journal $journal
     if ($Command -eq 'Apply') {

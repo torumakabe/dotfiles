@@ -8,279 +8,423 @@ foreach ($file in @('uv-state.ps1','windows-uv.ps1','rehearse-windows-uv.ps1','r
     $tokens=$null; $errors=$null
     $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $file),[ref]$tokens,[ref]$errors)
     if ($errors.Count) { throw ($errors | Out-String) }
-    $results.Add(@{case="parser:$file"; status='passed'})
+    $auditCalls=@($ast.FindAll({
+        param($n)
+        $n -is [Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Get-Acl' -and
+        @($n.CommandElements | Where-Object {
+            $_ -is [Management.Automation.Language.CommandParameterAst] -and $_.ParameterName -eq 'Audit'
+        }).Count -gt 0
+    },$true))
+    if ($auditCalls.Count) { throw "Ordinary-user path requests audit privilege: $file" }
+    $results.Add(@{case="parser/no-audit:$file";status='passed';kind='static'})
 }
 . (Join-Path $PSScriptRoot 'uv-state.ps1')
 if (-not (Get-Command New-ExclusiveDirectory -CommandType Function -ErrorAction SilentlyContinue)) {
-    throw 'New-ExclusiveDirectory must be defined at script scope before any caller or mock runs.'
+    throw 'New-ExclusiveDirectory must be defined at script scope.'
 }
-$results.Add(@{case='function-export:New-ExclusiveDirectory';status='passed';kind='definition_not_native'})
+$results.Add(@{case='function-export:New-ExclusiveDirectory';status='passed';kind='static'})
 $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'windows-uv.ps1'),[ref]$tokens,[ref]$errors)
 foreach ($function in $ast.FindAll({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst]},$true)) {
-    if ($function.Name -in @('Get-CurrentStates','Complete-Pending','Publish-One','Test-Absent')) {
-        . ([scriptblock]::Create($function.Extent.Text))
-    }
+    . ([scriptblock]::Create($function.Extent.Text))
 }
 if (-not $MockOnly) {
     if (-not $IsWindows) {
-        @{status='unsupported_os_not_executed';parser=$results;nativeExecuted=$false} | ConvertTo-Json -Depth 10
+        @{status='unsupported_os_not_executed';cases=$results;nativeExecuted=$false} | ConvertTo-Json -Depth 10
         exit 2
     }
     Assert-Native
     Assert-Path $NativeRoot -Absent
-    if (Test-Path -LiteralPath $NativeRoot) { throw 'NativeRoot must not exist; never reuse an existing fixture.' }
+    if (Test-Path -LiteralPath $NativeRoot) { throw 'NativeRoot must not exist; never reuse evidence.' }
     Assert-Beneath $NativeRoot ([Environment]::GetFolderPath('UserProfile'))
-    if ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($NativeRoot)).DriveFormat -ne 'NTFS') { throw 'NTFS required.' }
-    $null=[IO.Directory]::CreateDirectory($NativeRoot)
-    $Backup=Join-Path $NativeRoot 'backup'
-    $null=[IO.Directory]::CreateDirectory($Backup)
-    $null=[IO.Directory]::CreateDirectory((Join-Path $Backup 'original'))
-    $live=Join-Path $NativeRoot 'uv'
-    $blob=Join-Path $Backup 'after'
-    $null=[IO.Directory]::CreateDirectory((Join-Path $live 'nested'))
-    [IO.File]::WriteAllText((Join-Path $live 'nested\uv.exe'),'old fixture, never executed')
-    $null=[IO.Directory]::CreateDirectory($blob)
-    [IO.File]::WriteAllText((Join-Path $blob 'uv.exe'),'new fixture, never executed')
-    function Save-Journal($Journal) {
-        Write-NewJson (Join-Path $Backup ('journal-observation-' + [guid]::NewGuid().ToString('N') + '.json')) $Journal
-    }
-    function Native-Check([string]$Name,[scriptblock]$Body) {
-        & $Body
-        $results.Add(@{case=$Name;status='passed';kind='native_fixture_not_install'})
-    }
-    function Native-Refusal([scriptblock]$Body) {
-        $failed=$false; try { & $Body | Out-Null } catch { $failed=$true }
-        if (-not $failed) { throw 'Expected native refusal.' }
-    }
-    try {
-        $old=Read-Tree $live; $after=Read-Tree $blob
-        $original=Join-Path $Backup 'original\0'
-        Native-Check 'directory snapshot with nested file, ACL, attributes and timestamps' {
-            Copy-Tree $live $original $old
-        }
-        Native-Check 'file snapshot' {
-            $file=Join-Path $blob 'uv.exe'
-            Copy-Tree $file (Join-Path $Backup 'single-file') (Read-Tree $file)
-        }
-        $state=@{entries=@(@{target=$live;saved='original\0';original=$old;after=$after})}
-        $plan=@{entries=@(@{blob=$blob;after=$after})}
-        $journal=@{phase='installed';pending=$null}
-        Native-Check 'directory publish and repeated apply no-op' {
-            $null=Get-CurrentStates $state $plan $journal
-            Publish-One $state $journal 0 $blob $after
-            Publish-One $state $journal 0 $blob $after
-            Assert-Equal (Read-Tree $live) $after 'native after'
-        }
-        Native-Check 'restore without external candidate and repeat restore' {
-            Publish-One $state $journal 0 $original $old
-            Publish-One $state $journal 0 $original $old
-            Assert-Equal (Read-Tree $live) $old 'native restore'
-        }
-        Native-Check 'interrupted after evacuation, then resume and offline restore' {
-            $nonce=[guid]::NewGuid().ToString('N')
-            $stage=Join-Path $NativeRoot ('.n4-uv-stage-' + $nonce)
-            $quarantine=Join-Path $Backup ('evacuated-' + $nonce)
-            Copy-Tree $blob $stage $after
-            $journal.pending=@{index=0;before=$old;desired=$after;stage=$stage;quarantine=$quarantine}
-            Save-Journal $journal
-            Move-Tree $live $quarantine $old
-            $null=Get-CurrentStates $state $plan $journal
-            Complete-Pending $state $journal
-            Publish-One $state $journal 0 $original $old
-            Assert-Equal (Read-Tree $live) $old 'native interrupted restore'
-        }
-        Native-Check 'unknown content rejected before publish' {
-            $path=Join-Path $live 'nested\uv.exe'
-            [IO.File]::WriteAllText($path,'concurrent fixture change')
-            Native-Refusal { Get-CurrentStates $state $plan $journal }
-        }
-        Native-Check 'readonly rejection without clearing managed attributes' {
-            $path=Join-Path $NativeRoot 'readonly-fixture'
-            [IO.File]::WriteAllText($path,'fixture')
-            [IO.File]::SetAttributes($path,[IO.FileAttributes]::ReadOnly)
-            Native-Refusal { Read-Tree $path }
-        }
-        Native-Check 'junction rejection before traversing' {
-            $path=Join-Path $NativeRoot 'junction-fixture'
-            $null=New-Item -ItemType Junction -Path $path -Target $blob
-            Native-Refusal { Read-Tree $path }
-        }
-        Native-Check 'hardlink rejection' {
-            $path=Join-Path $NativeRoot 'hardlink-source'
-            [IO.File]::WriteAllText($path,'fixture')
-            $null=New-Item -ItemType HardLink -Path (Join-Path $NativeRoot 'hardlink-alias') -Target $path
-            Native-Refusal { Read-Tree $path }
-        }
-        Native-Check 'alternate data stream rejection' {
-            $path=Join-Path $NativeRoot 'ads-fixture'
-            [IO.File]::WriteAllText($path,'fixture')
-            Set-Content -LiteralPath $path -Stream 'n4-test' -Value 'fixture stream'
-            Native-Refusal { Read-Tree $path }
-        }
-        Native-Check 'original absence restored without deletion of unknown content' {
-            $path=Join-Path $NativeRoot 'originally-absent'
-            $absent=Read-Tree $path
-            $s=@{entries=@(@{target=$path;original=$absent;after=$after})}
-            $j=@{phase='installed';pending=$null}
-            Publish-One $s $j 0 $blob $after
-            Publish-One $s $j 0 (Join-Path $Backup 'absent-blob') $absent
-            Assert-Equal (Read-Tree $path) $absent 'absent restore'
-        }
-        @{status='native_fixture_passed_not_install';nativeExecuted=$true;cases=$results;root=$NativeRoot
-            note='Fixtures deliberately preserved. This does not validate mise, ARM64 emulation, real shims, or sandbox.'} |
-            ConvertTo-Json -Depth 12
-    } catch {
-        @{status='native_failed_or_unsupported_do_not_apply';nativeExecuted=$true;cases=$results;root=$NativeRoot
-            error=$_.Exception.Message} | ConvertTo-Json -Depth 12
-        exit 1
-    }
-    exit 0
+    $drive=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($NativeRoot))
+    if ($drive.DriveFormat -ne 'NTFS' -or $drive.DriveType -ne 'Fixed') { throw 'Local fixed NTFS required.' }
+    New-ExclusiveDirectory $NativeRoot
 }
-$Backup='/mock/backup'
-$script:files=@{}
-$script:failure=''
-$script:moves=0
-function Read-Tree([string]$Path) {
-    if ($script:files.ContainsKey($Path)) { return (Get-Json $script:files[$Path] | ConvertFrom-Json -AsHashtable) }
-    return @{kind='absent';nodes=@()}
-}
-function Copy-Tree([string]$Source,[string]$Destination,$Expected) {
-    Assert-Equal (Read-Tree $Source) $Expected 'mock source changed'
-    if ((Read-Tree $Destination).kind -ne 'absent') { throw 'mock destination occupied' }
-    if ($Expected.kind -ne 'absent') { $script:files[$Destination]=$Expected }
+$script:fixtureNumber=0
+$script:identityNumber=0
+$script:moveImplementation=${function:Move-Tree}
+$script:saveImplementation=${function:Save-Journal}
+if ($MockOnly) {
+    function Read-Tree([string]$Path) {
+        if ($script:files.ContainsKey($Path)) { return (Get-Json $script:files[$Path] | ConvertFrom-Json -AsHashtable) }
+        return @{kind='absent';nodes=@()}
+    }
+    function Copy-Tree([string]$Source,[string]$Destination,$Expected) {
+        Assert-Equal (Read-Tree $Source) $Expected 'mock source changed'
+        if ((Read-Tree $Destination).kind -ne 'absent') { throw 'mock copy destination occupied' }
+        if ($Expected.kind -eq 'absent') { return }
+        $copy=Get-Json $Expected | ConvertFrom-Json -AsHashtable
+        foreach ($node in $copy.nodes) { $node.identity="volume:copy-$($script:identityNumber++)" }
+        $script:files[$Destination]=$copy
+    }
+    function Set-Node([string]$Path,$Node) {
+        foreach ($root in $script:files.Keys) {
+            foreach ($currentNode in $script:files[$root].nodes) {
+                $full = if ($currentNode.relative) { Join-Path $root $currentNode.relative } else { $root }
+                if ($full -ceq $Path) {
+                    foreach ($field in @('sddl','attributes','created','written')) { $currentNode[$field]=$Node[$field] }
+                    return
+                }
+            }
+        }
+        throw "Missing mock node: $Path"
+    }
+    $script:moveImplementation = {
+        param([string]$Source,[string]$Destination,$Expected)
+        Assert-Equal (Read-Tree $Source) $Expected 'mock move source changed'
+        if ((Read-Tree $Destination).kind -ne 'absent') { throw 'mock move destination occupied' }
+        if ($Expected.kind -eq 'absent') { throw 'mock cannot move absence' }
+        $script:files[$Destination]=$script:files[$Source]
+        $null=$script:files.Remove($Source)
+        if ($Expected.kind -eq 'file') {
+            if ($script:tunneled.ContainsKey($Destination)) {
+                $script:files[$Destination].nodes[0].created=$script:tunneled[$Destination]
+            }
+            $script:tunneled[$Source]=$Expected.nodes[0].created
+        }
+        Assert-Equal (Read-Tree $Destination) $Expected 'mock post-rename metadata changed'
+    }
+    $script:saveImplementation = { param($Journal) $script:durableJournal=Get-Json $Journal }
 }
 function Move-Tree([string]$Source,[string]$Destination,$Expected) {
-    Assert-Equal (Read-Tree $Source) $Expected 'mock source changed'
-    if ((Read-Tree $Destination).kind -ne 'absent') { throw 'mock destination occupied' }
-    if ($script:failure -eq 'before-evacuation') { $script:failure=''; throw 'injected before evacuation' }
-    $script:files[$Destination]=$Expected
-    $null=$script:files.Remove($Source)
+    $script:moveAttempts++
+    if ($script:failure -eq "before-move-$script:moveAttempts") { throw 'injected before rename' }
+    & $script:moveImplementation $Source $Destination $Expected
     $script:moves++
-    if ($script:failure -eq 'after-evacuation') { $script:failure=''; throw 'injected after evacuation' }
+    if ($script:failure -eq "after-move-$script:moveAttempts") { throw 'injected after rename' }
 }
-function Save-Journal($Journal) { $script:lastJournal=Get-Json $Journal }
+function Save-Journal($Journal) {
+    if ($script:failure -eq 'before-journal') { throw 'injected before journal save' }
+    & $script:saveImplementation $Journal
+    if ($script:failure -eq 'after-journal') { throw 'injected after durable journal save' }
+}
+function Reload-Journal($Fixture) {
+    $Fixture.journal=if ($MockOnly) { $script:durableJournal | ConvertFrom-Json -AsHashtable }
+        else { Read-Json (Join-Path $Backup 'journal.json') }
+    $script:failure=''; $script:moveAttempts=0
+}
 function Check([string]$Name,[scriptblock]$Body) {
     & $Body
-    $results.Add(@{case=$Name;status='passed';kind='mock_not_native'})
+    $results.Add(@{case=$Name;status='passed';kind=$(if ($MockOnly) { 'mock_not_native' } else { 'native_fixture_not_install' })})
 }
 function Must-Fail([scriptblock]$Body) {
     $failed=$false
     try { & $Body | Out-Null } catch { $failed=$true }
     if (-not $failed) { throw 'Expected refusal' }
 }
-function Fixture([switch]$Absent) {
-    $script:files=@{}; $script:moves=0; $script:failure=''
-    $old=@{kind='directory';nodes=@(@{relative='';kind='directory';sddl='owner:DACL';attributes=16;created=1;written=1},
-        @{relative='uv.exe';kind='file';hash='old-executable';sddl='owner:DACL';attributes=32;created=1;written=1})}
-    if ($Absent) { $old=@{kind='absent';nodes=@()} }
-    $new=@{kind='file';nodes=@(@{relative='';kind='file';hash='new-executable';sddl='owner:DACL';attributes=32;created=1;written=1})}
-    $script:files['/mock/live/uv']=$old
-    $script:files['/mock/backup/original/0']=$old
-    $script:files['/mock/backup/prepared/0']=$new
+function New-TestTree([string]$Path,[string]$Kind,[string]$Content) {
+    if ($Kind -eq 'absent') { return }
+    if ($MockOnly) {
+        $nodes=@(@{relative='';kind=$Kind;hash=$(if ($Kind -eq 'file') { $Content } else { $null })
+            sddl='owner:group:DACL';sacl='unobserved';attributes=$(if ($Kind -eq 'file') {32} else {16})
+            created=1;written=1;identity="volume:object-$($script:identityNumber++)"})
+        if ($Kind -eq 'directory') {
+            $nodes+=@{relative='uv.exe';kind='file';hash=$Content;sddl='owner:group:DACL';sacl='unobserved'
+                attributes=32;created=1;written=1;identity="volume:object-$($script:identityNumber++)"}
+        }
+        $script:files[$Path]=@{kind=$Kind;nodes=$nodes}
+    } elseif ($Kind -eq 'directory') {
+        New-ExclusiveDirectory $Path
+        New-ExclusiveDirectory (Join-Path $Path 'nested')
+        [IO.File]::WriteAllText((Join-Path $Path 'nested\uv.exe'),$Content)
+    } else { [IO.File]::WriteAllText($Path,$Content) }
+}
+function Fixture([string]$OldKind='directory',[string]$NewKind='file') {
+    $script:files=@{}; $script:tunneled=@{}; $script:moves=0; $script:moveAttempts=0; $script:failure=''
+    $script:fixtureNumber++
+    $root=if ($MockOnly) { '/mock' } else { Join-Path $NativeRoot "case-$script:fixtureNumber" }
+    $script:Backup=Join-Path $root 'backup'
+    if (-not $MockOnly) { New-ExclusiveDirectory $root; New-ExclusiveDirectory $Backup }
+    $live=Join-Path $root 'live'
+    $blob=Join-Path $Backup 'prepared'
+    $copy=Join-Path $Backup 'observation'
+    New-TestTree $live $OldKind 'old fixture, never executed'
+    New-TestTree $blob $NewKind 'new fixture, never executed'
+    if ($OldKind -eq 'file' -and $NewKind -eq 'file') {
+        foreach ($setting in @(@($live,2020),@($blob,2021))) {
+            $tree=Read-Tree $setting[0]
+            $tree.nodes[0].created=[datetime]::new($setting[1],1,1,0,0,0,[DateTimeKind]::Utc).Ticks
+            Set-Node $setting[0] $tree.nodes[0]
+        }
+    }
+    $old=Read-Tree $live; $unsealed=Read-Tree $blob
+    Set-CandidateMetadata $blob $old
+    $after=Read-Tree $blob
+    Copy-Tree $live $copy $old
+    $journal=@{phase='installed';records=@{}}
+    Save-Journal $journal
     @{
-        state=@{entries=@(@{target='/mock/live/uv';saved='original/0';original=$old;after=$new})}
-        plan=@{entries=@(@{blob='/mock/backup/prepared/0';after=$new})}
-        journal=@{phase='installed';pending=$null}; old=$old; new=$new
+        state=@{entries=@(@{target=$live;saved='observation';original=$old;after=$after})}
+        plan=@{entries=@(@{blob=$blob;after=$after})}
+        journal=$journal;old=$old;new=$after;unsealed=$unsealed;live=$live;blob=$blob;copy=$copy;root=$root
     }
 }
-Check 'stable comparison ignores dictionary key order, not values' {
-    Assert-Equal @{b=2;a=1} @{a=1;b=2} 'ordering'
-    Must-Fail { Assert-Equal @{a=1} @{a=2} 'different' }
+function Apply-Fixture($Fixture) {
+    $null=Get-CurrentStates $Fixture.state $Fixture.plan $Fixture.journal
+    Publish-One $Fixture.state $Fixture.journal 0 $Fixture.blob $Fixture.new
 }
-Check 'file, directory, absence are distinct' {
-    $f=Fixture
-    Must-Fail { Assert-Known @{kind='absent';nodes=@()} $f.old $f.new }
-    Assert-Equal (Assert-Known $f.old $f.old $f.new) 'original' 'old'
-    Assert-Equal (Assert-Known $f.new $f.old $f.new) 'after' 'new'
+function Restore-Fixture($Fixture) {
+    $null=Get-CurrentStates $Fixture.state $Fixture.plan $Fixture.journal
+    Publish-One $Fixture.state $Fixture.journal 0 '' $Fixture.old -Restore
+    Assert-Equal (Read-Tree $Fixture.live) $Fixture.old 'Exact original object/observed metadata not restored'
 }
-foreach ($field in @('hash','sddl','attributes','created','written')) {
-    Check "unknown $field refuses" {
+function Change-Object([string]$Path,[string]$Field) {
+    if ($MockOnly) {
+        $script:files[$Path].nodes[-1][$Field]='unknown'
+    } elseif ($Field -eq 'identity') {
+        $tree=Read-Tree $Path
+        $other=Join-Path (Split-Path $Path) ('replacement-' + [guid]::NewGuid().ToString('N'))
+        Copy-Tree $Path $other $tree
+        & $script:moveImplementation $Path ($other + '-retained') $tree
+        & $script:moveImplementation $other $Path (Read-Tree $other)
+        Assert-Observed (Read-Tree $Path) $tree 'Replacement should differ only in identity'
+    } else {
+        $node=(Read-Tree $Path).nodes[-1]
+        $file=if ($node.relative) { Join-Path $Path $node.relative } else { $Path }
+        $item=Get-Item -LiteralPath $file -Force
+        switch ($Field) {
+            'hash' { [IO.File]::WriteAllText($file,'unknown concurrent change') }
+            'created' { $item.CreationTimeUtc=$item.CreationTimeUtc.AddSeconds(-10) }
+            'written' { $item.LastWriteTimeUtc=$item.LastWriteTimeUtc.AddSeconds(-10) }
+            'attributes' { [IO.File]::SetAttributes($file,($item.Attributes -bxor [IO.FileAttributes]::Hidden)) }
+            'sddl' {
+                $acl=Get-Acl -LiteralPath $file
+                $acl.SetAccessRuleProtection(-not $acl.AreAccessRulesProtected,$true)
+                Set-Acl -LiteralPath $file -AclObject $acl
+            }
+            default { throw "Unsupported fixture mutation: $Field" }
+        }
+    }
+}
+try {
+    Check 'stable comparison ignores key order, not values' {
+        Assert-Equal @{b=2;a=1} @{a=1;b=2} 'ordering'
+        Must-Fail { Assert-Equal @{a=1} @{a=2} 'different' }
+    }
+    foreach ($pair in @(@('directory','file'),@('file','directory'),@('file','file'),@('absent','file'),@('directory','absent'),@('absent','absent'))) {
+        Check "apply/restore identity and idempotence: $($pair -join '/')" {
+            $f=Fixture $pair[0] $pair[1]
+            Apply-Fixture $f
+            Assert-Observed (Read-Tree $f.live) $f.new 'after observation'
+            $moves=$script:moves
+            Apply-Fixture $f
+            Assert-Equal $script:moves $moves 'apply must be no-op'
+            # コピーが壊れていても、元オブジェクトによる復元はコピーを参照しない。
+            if ($f.old.kind -ne 'absent') { Change-Object $f.copy 'hash' }
+            Restore-Fixture $f
+            Reload-Journal $f
+            $moves=$script:moves
+            Restore-Fixture $f
+            Assert-Equal $script:moves $moves 'restore must be no-op'
+            if ($f.journal.records.Count) {
+                Assert-Equal $f.journal.records['0'].direction 'restore' 'Original association lost'
+            }
+        }
+    }
+    Check 'file replacement seals original creation time without rewriting the original' {
+        $f=Fixture 'file' 'file'
+        if ($f.unsealed.nodes[0].created -eq $f.old.nodes[0].created) { throw 'Fixture must start with different creation times' }
+        Assert-Equal $f.new.nodes[0].created $f.old.nodes[0].created 'Candidate creation time not normalized'
+        Assert-Equal (Read-Tree $f.live) $f.old 'Original metadata changed while preparing candidate'
+        Apply-Fixture $f
+        Restore-Fixture $f
+    }
+    Check 'file candidate sealed with different creation time refuses before rename' {
+        $f=Fixture 'file' 'file'
+        Set-Node $f.blob $f.unsealed.nodes[0]
+        $f.new=Read-Tree $f.blob
+        $f.state.entries[0].after=$f.new; $f.plan.entries[0].after=$f.new
+        Must-Fail { Apply-Fixture $f }
+        Assert-Equal $script:moves 0 'Unnormalized candidate caused a rename'
+        Assert-Equal $f.journal.records.Count 0 'Unnormalized candidate journaled'
+    }
+    Check 'unchanged candidate leaves original identity and journal untouched' {
         $f=Fixture
-        $changed=Get-Json $f.new | ConvertFrom-Json -AsHashtable
-        $changed.nodes[0][$field]='unknown'
-        Must-Fail { Assert-Known $changed $f.old $f.new }
+        $f.plan.entries[0]=@{blob=$f.copy;after=(Read-Tree $f.copy)}
+        $f.new=$f.plan.entries[0].after; $f.blob=$f.copy; $f.state.entries[0].after=$f.new
+        Apply-Fixture $f
+        Restore-Fixture $f
+        Assert-Equal $script:moves 0 'unchanged target moved'
+        Assert-Equal $f.journal.records.Count 0 'unchanged target journaled'
     }
-}
-Check 'all-target preflight refuses later conflict before first write' {
-    $f=Fixture
-    $f.state.entries+=@{target='/mock/live/second';saved='original/1';original=$f.old}
-    $f.plan.entries+=@{blob='/mock/backup/prepared/1';after=$f.new}
-    $script:files['/mock/live/second']=@{kind='file';nodes=@(@{hash='concurrent'})}
-    Must-Fail { Get-CurrentStates $f.state $f.plan $f.journal }
-    Assert-Equal $script:moves 0 'Must not mutate first target'
-}
-Check 'apply and offline restore preserve directory tree; second restore no-op' {
-    $f=Fixture
-    $null=Get-CurrentStates $f.state $f.plan $f.journal
-    Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new
-    $null=$script:files.Remove('/mock/backup/prepared/0')
-    $null=Get-CurrentStates $f.state $f.plan $f.journal
-    Publish-One $f.state $f.journal 0 '/mock/backup/original/0' $f.old
-    Assert-Equal (Read-Tree '/mock/live/uv') $f.old 'offline original'
-    $moves=$script:moves
-    Publish-One $f.state $f.journal 0 '/mock/backup/original/0' $f.old
-    Assert-Equal $script:moves $moves 'restore no-op'
-}
-Check 'absent cache restored by evacuation, not recursive deletion' {
-    $f=Fixture -Absent
-    Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new
-    Publish-One $f.state $f.journal 0 '/mock/backup/original/0' $f.old
-    Assert-Equal (Read-Tree '/mock/live/uv').kind 'absent' 'absence'
-}
-foreach ($point in @('before-evacuation','after-evacuation')) {
-    Check "interruption $point resumes then restores without installer/network" {
-        $f=Fixture; $script:failure=$point
-        Must-Fail { Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new }
-        $null=Get-CurrentStates $f.state $f.plan $f.journal
-        Complete-Pending $f.state $f.journal
-        Publish-One $f.state $f.journal 0 '/mock/backup/original/0' $f.old
-        Assert-Equal (Read-Tree '/mock/live/uv') $f.old 'restoration'
+    foreach ($field in @('hash','sddl','attributes','created','written','identity')) {
+        Check "unknown original $field refuses before first rename" {
+            $f=Fixture
+            Change-Object $f.live $field
+            Must-Fail { Apply-Fixture $f }
+            Assert-Equal $script:moves 0 'Must not evacuate changed original'
+        }
     }
+    foreach ($oldKind in @('directory','file')) {
+      foreach ($point in @('before-journal','after-journal','before-move-1','after-move-1','before-move-2','after-move-2')) {
+        Check "interrupted $oldKind/file apply $point restores directly after journal reload" {
+            $f=Fixture $oldKind 'file'; $script:failure=$point
+            Must-Fail { Apply-Fixture $f }
+            Reload-Journal $f
+            $moves=$script:moves
+            Restore-Fixture $f
+            $expected=if ($point -eq 'after-move-2') {2}
+                elseif ($point -in @('after-move-1','before-move-2')) {1} else {0}
+            Assert-Equal ($script:moves-$moves) $expected 'Restore must not finish candidate publication'
+            Reload-Journal $f
+            Restore-Fixture $f
+        }
+      }
+      foreach ($point in @('before-journal','after-journal','before-move-1','after-move-1','before-move-2','after-move-2')) {
+        Check "interrupted $oldKind/file restore $point resumes after journal reload" {
+            $f=Fixture $oldKind 'file'
+            Apply-Fixture $f
+            $script:moveAttempts=0; $script:failure=$point
+            Must-Fail { Restore-Fixture $f }
+            Reload-Journal $f
+            Restore-Fixture $f
+            Reload-Journal $f
+            $moves=$script:moves
+            Restore-Fixture $f
+            Assert-Equal $script:moves $moves 'Repeated recovery moved original again'
+        }
+      }
+      foreach ($point in @('before-move-1','after-move-1','before-move-2','after-move-2')) {
+        Check "interrupted $oldKind/file apply $point can resume apply then restore" {
+            $f=Fixture $oldKind 'file'; $script:failure=$point
+            Must-Fail { Apply-Fixture $f }
+            Reload-Journal $f
+            Apply-Fixture $f
+            Restore-Fixture $f
+        }
+      }
+    }
+    foreach ($pair in @(@('absent','file'),@('directory','absent'))) {
+        foreach ($operation in @('apply','restore')) {
+            foreach ($point in @('before-move-1','after-move-1')) {
+                Check "absence interruption $($pair -join '/') $operation $point" {
+                    $f=Fixture $pair[0] $pair[1]
+                    if ($operation -eq 'restore') { Apply-Fixture $f }
+                    $script:moveAttempts=0; $script:failure=$point
+                    if ($operation -eq 'apply') { Must-Fail { Apply-Fixture $f } }
+                    else { Must-Fail { Restore-Fixture $f } }
+                    Reload-Journal $f
+                    Restore-Fixture $f
+                    Reload-Journal $f
+                    Restore-Fixture $f
+                }
+            }
+        }
+    }
+    foreach ($location in @('originalSource','stage','live','discard')) {
+        foreach ($field in @('hash','identity')) {
+            Check "unknown $location $field refuses recovery" {
+                $f=Fixture
+                if ($location -eq 'stage') {
+                    $script:failure='after-move-1'
+                    Must-Fail { Apply-Fixture $f }
+                } else { Apply-Fixture $f }
+                if ($location -eq 'discard') {
+                    $script:moveAttempts=0; $script:failure='after-move-1'
+                    Must-Fail { Restore-Fixture $f }
+                }
+                Reload-Journal $f
+                $path=if ($location -eq 'live') { $f.live } else { $f.journal.records['0'][$location] }
+                Change-Object $path $field
+                $moves=$script:moves
+                Must-Fail { Restore-Fixture $f }
+                Assert-Equal $script:moves $moves 'Unknown object was overwritten'
+            }
+        }
+    }
+    Check 'all-target preflight refuses later conflict before first rename' {
+        $f=Fixture
+        $other=Join-Path $f.root 'other'
+        New-TestTree $other 'file' 'concurrent'
+        $f.state.entries+=@{target=$other;original=$f.old;after=$f.new}
+        $f.plan.entries+=@{blob=$f.blob;after=$f.new}
+        Must-Fail { Apply-Fixture $f }
+        Assert-Equal $script:moves 0 'Must not mutate first target'
+    }
+    Check 'unknown live object after original evacuation is never adopted' {
+        $f=Fixture; $script:failure='after-move-1'
+        Must-Fail { Apply-Fixture $f }
+        Reload-Journal $f
+        New-TestTree $f.live 'file' 'concurrent'
+        Must-Fail { Restore-Fixture $f }
+    }
+    Check 'unknown desired state in journal refuses' {
+        $f=Fixture; Apply-Fixture $f
+        $f.journal.records['0'].after.nodes[0].written=0
+        Must-Fail { Restore-Fixture $f }
+    }
+    Check 'original source cannot be redirected to the observation copy' {
+        $f=Fixture; Apply-Fixture $f
+        $f.journal.records['0'].originalSource=$f.copy
+        Must-Fail { Restore-Fixture $f }
+    }
+    Check 'damaged installer output refuses before original evacuation' {
+        $f=Fixture
+        Change-Object $f.blob 'hash'
+        Must-Fail { Apply-Fixture $f }
+        Assert-Equal $script:moves 0 'Damaged candidate caused a rename'
+    }
+    Check 'failed install and original absence need no recovery moves' {
+        $f=Fixture
+        $f.plan=$null
+        Restore-Fixture $f
+        Assert-Equal $script:moves 0 'Untouched original moved'
+    }
+    Check 'missing retained original refuses without using the observation copy' {
+        $f=Fixture; Apply-Fixture $f
+        $source=$f.journal.records['0'].originalSource
+        & $script:moveImplementation $source ($source + '-missing') (Read-Tree $source)
+        $moves=$script:moves
+        Must-Fail { Restore-Fixture $f }
+        Assert-Equal $script:moves $moves 'Candidate moved despite missing original'
+    }
+    Check 'restore needs neither installer workspace nor observation copies' {
+        $f=Fixture; Apply-Fixture $f
+        foreach ($path in @($f.copy,$f.blob)) {
+            & $script:moveImplementation $path ($path + '-unavailable') (Read-Tree $path)
+        }
+        Reload-Journal $f
+        Restore-Fixture $f
+    }
+    Check 'unknown replacement after completed restore refuses repeat restore' {
+        $f=Fixture; Apply-Fixture $f; Restore-Fixture $f
+        Change-Object $f.live 'identity'
+        Reload-Journal $f
+        $moves=$script:moves
+        Must-Fail { Restore-Fixture $f }
+        Assert-Equal $script:moves $moves 'Replaced restored original was overwritten'
+    }
+    if (-not $MockOnly) {
+        Check 'readonly rejected without clearing attributes' {
+            $f=Fixture 'file'
+            [IO.File]::SetAttributes($f.live,[IO.FileAttributes]::ReadOnly)
+            Must-Fail { Read-Tree $f.live }
+        }
+        Check 'junction rejected before traversal' {
+            $f=Fixture
+            $path=Join-Path $f.root 'junction'
+            $null=New-Item -ItemType Junction -Path $path -Target $f.live
+            Must-Fail { Read-Tree $path }
+        }
+        Check 'hardlink rejected' {
+            $f=Fixture 'file'
+            $null=New-Item -ItemType HardLink -Path (Join-Path $f.root 'alias') -Target $f.live
+            Must-Fail { Read-Tree $f.live }
+        }
+        Check 'alternate data stream rejected' {
+            $f=Fixture 'file'
+            Set-Content -LiteralPath $f.live -Stream 'n4-test' -Value 'fixture stream'
+            Must-Fail { Read-Tree $f.live }
+        }
+    }
+    @{status=$(if ($MockOnly) {'mock_passed'} else {'native_fixture_passed_not_install'})
+        nativeExecuted=(-not $MockOnly);cases=$results;count=$results.Count;sacl='unobserved'
+        scope=$(if ($MockOnly) {'Parser and in-memory transitions only; no Windows API or installer.'}
+            else {'Dedicated retained fixtures only; no real install, ARM64 emulation or sandbox validation.'})} |
+        ConvertTo-Json -Depth 12
+} catch {
+    @{status=$(if ($MockOnly) {'mock_failed'} else {'native_failed_or_unsupported_do_not_apply'})
+        nativeExecuted=(-not $MockOnly);cases=$results;error=$_.Exception.Message
+        location=$_.ScriptStackTrace} | ConvertTo-Json -Depth 12
+    exit 1
 }
-Check 'unknown quarantined bytes after interruption refuses' {
-    $f=Fixture; $script:failure='after-evacuation'
-    Must-Fail { Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new }
-    $script:files[$f.journal.pending.quarantine]=$f.new
-    Must-Fail { Get-CurrentStates $f.state $f.plan $f.journal }
-}
-Check 'unknown target after interruption refuses' {
-    $f=Fixture; $script:failure='after-evacuation'
-    Must-Fail { Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new }
-    $script:files['/mock/live/uv']=@{kind='file';nodes=@(@{hash='concurrent'})}
-    Must-Fail { Get-CurrentStates $f.state $f.plan $f.journal }
-}
-Check 'damaged backup stops copy before target move' {
-    $f=Fixture
-    $script:files['/mock/backup/prepared/0']=$f.old
-    Must-Fail { Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new }
-    Assert-Equal $script:moves 0 'No evacuation'
-}
-Check 'unknown target between preflight and publish is not adopted as before' {
-    $f=Fixture
-    $null=Get-CurrentStates $f.state $f.plan $f.journal
-    $script:files['/mock/live/uv']=@{kind='file';nodes=@(@{hash='concurrent'})}
-    Must-Fail { Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new }
-    Assert-Equal $script:moves 0 'Do not adopt unknown live state'
-}
-Check 'pending journal cannot introduce an unknown desired state' {
-    $f=Fixture; $script:failure='after-evacuation'
-    Must-Fail { Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new }
-    $f.journal.pending.desired=@{kind='file';nodes=@(@{hash='unsealed'})}
-    Must-Fail { Get-CurrentStates $f.state $f.plan $f.journal }
-}
-Check 'pending journal cannot redirect quarantine outside backup' {
-    $f=Fixture; $script:failure='after-evacuation'
-    Must-Fail { Publish-One $f.state $f.journal 0 '/mock/backup/prepared/0' $f.new }
-    $f.journal.pending.quarantine='/mock/unrelated-object'
-    Must-Fail { Get-CurrentStates $f.state $f.plan $f.journal }
-}
-Check 'failed isolated install needs no live restoration' {
-    $f=Fixture
-    $null=$script:files.Remove('/mock/backup/prepared/0')
-    $null=Get-CurrentStates $f.state $null $f.journal
-    Publish-One $f.state $f.journal 0 '/mock/backup/original/0' $f.old
-    Assert-Equal $script:moves 0 'Original live install untouched'
-}
-@{status='mock_passed';nativeExecuted=$false;cases=$results;count=$results.Count
-    scope='Parser and in-memory state transitions only. No Windows API, ACL, installer or actual HOME operations.'} |
-    ConvertTo-Json -Depth 12
