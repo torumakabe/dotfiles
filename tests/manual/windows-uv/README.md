@@ -1,8 +1,8 @@
 # Windowsのuv復元用fixture試験とホスト移行手順
 
-この試験は、通常のmise、uv、profile、PATH、認証設定を変更しない。全件実行用の定義は専用ディレクトリ内の111ケースと5件の静的検査で、元オブジェクトの退避と復帰、中断からの復旧、NTFSの属性、拒否処理を確認する。実際のパッケージ導入や移行は実行しない。今回のACL契約変更はmacOS上の単体テストとインメモリmockで検査しており、変更後のWindowsネイティブ実行は未実施である。以前の80ケースの成功を、この変更のネイティブ検証結果として扱わない。
+この試験は、通常のmise、uv、profile、PATH、認証設定を変更しない。全件実行用の定義は専用ディレクトリ内の113ケースと5件の静的検査で、元オブジェクトの退避と復帰、中断からの復旧、NTFSの属性、拒否処理を確認する。実際のパッケージ導入や移行は実行しない。今回のACL契約と事後検証再開の変更はmacOS上の単体テストとインメモリmockで検査しており、変更後のWindowsネイティブ実行は未実施である。以前の80ケースの成功を、この変更のネイティブ検証結果として扱わない。
 
-`windows-uv.ps1`は試験対象の関数と、固定したGitコミットを入力とする移行の入口を提供する。**実環境でのInstall、Apply、Restoreは未実施であり、各操作には利用者の承認が必要である。** この手順の整備やfixtureの成功を実移行の承認として扱わない。Prepareも新しいバックアップ領域へ書き込む操作として承認範囲を確認する。
+`windows-uv.ps1`は試験対象の関数と、固定したGitコミットを入力とする移行の入口を提供する。**実環境でのInstall、VerifyInstall、Apply、Restoreには、それぞれ利用者の承認が必要である。** この手順の整備やfixtureの成功を実移行の承認として扱わない。Prepareも新しいバックアップ領域へ書き込む操作として承認範囲を確認する。
 
 導入、設定変更、更新、バックアップ、復元とfixtureは、Copilot sandboxの外にある通常権限のWindows PowerShellで行う。導入済みツールを使うワークロードの受け入れはsandbox内で行い、両者の結果を分けて記録する。sandboxやCopilotの設定を無効化しない。
 
@@ -30,6 +30,10 @@ planは非公開のインストーラー出力（`blobState`）と公開要件�
 
 対象の既存の親、バックアップ領域と観測コピーの親、作業対象の親について、ID、DACL、owner、group、属性もsnapshotに封印する。Prepareの終わり、Installの前後、Applyと公開用renameの前に再確認する。子の作成とrenameで変わる親の日時は対象外である。欠けている外側の親を自動作成しない。Restoreは作業領域や観測コピーを要求せず、元オブジェクトとjournalの候補を完全一致で照合してrenameする。
 
+成功した隔離インストーラーは`work\data\installs\uv`自体を置換する場合がある。この1ディレクトリに限り、終了コード0を記録した`install-started`から事後検証を始める時点で、同じボリューム内のID変更を許可する。SDDLの`AI`を含むID以外の全記録項目はsnapshotと完全一致を要求する。他の親、元ツリー、観測コピーのIDは除外しない。既存のパス検査とノード検査を通し、候補ツリー全体のreparse point、hardlink、未対応属性も実行ファイルの起動前に拒否する。
+
+検査した親のIDと検証コードのSHAをjournalの`validation`へ保存してから、残る事後検証を行う。以後のVerifyInstallはそのIDとの完全一致を要求し、再び置換された親を採用しない。成功時は同じ記録をplanへ含める。Applyとステージ作成、公開用renameの前の検査もこのIDを使う。snapshotの親情報、snapshot自身、保存済みスクリプトは書き換えない。
+
 継承計算は通常のAllow/Deny ACE、具体的なアクセスマスク、`OI`、`CI`、`NP`、`IO`、`ID`に限定する。ACEの順序とアクセスマスクを保持し、子の種類と伝播範囲に応じて継承フラグを計算する。親のNULL DACL、継承可能なACEがないDACL、汎用アクセスマスク、Creator Owner/Group、オブジェクトACE、条件付きACE、未対応のフラグは停止条件である。既定DACLや近似したACLで代用しない。必要なownerとgroupを通常権限で設定できない場合も停止する。元の既存ノードの公開ACLは継承計算で書き換えず、適用後のWindowsの値と照合する。
 
 新しいコピーや公開候補と要件の比較では、異なるファイルIDに加えて、DACL制御フラグの`AI`（`SE_DACL_AUTO_INHERITED`）だけを比較対象外とする。[WindowsがACLへ現在の自動継承モデルを適用すると、このフラグを設定する](https://learn.microsoft.com/en-us/windows/win32/secauthz/automatic-propagation-of-inheritable-aces)ためである。owner、group、ACEの内容と順序、ACEごとの継承フラグ、DACLの`P`と`AR`、通常メタデータは引き続き比較する。元オブジェクトの変更検出、封印済みコピーの検査、rename前後、復元後はIDと`AI`も含めた完全一致を要求する。公開要件と元の違いがIDと`AI`だけなら、その対象は置換しない。比較エラーには項目名を含め、設定本文、ハッシュ値、SDDL本文は出力しない。
@@ -38,7 +42,9 @@ planは非公開のインストーラー出力（`blobState`）と公開要件�
 
 `observations/`内のコピーは変更検出と隔離インストーラー用の入力であり、監査情報まで含むバックアップでも復元元でもない。復元はインストーラーの作業領域やコピーが使えなくても、保存済みのsnapshot、plan（作成済みの場合）、journalと退避した元オブジェクトで行う。Git、mise、chezmoiへの依存はない。
 
-この改訂のsnapshotとplanは**schema 3**である。schema 1と2の完成済みバックアップは新しいスクリプトで読み替えず拒否し、そのバックアップに保存された一致するスクリプトと当時の契約に従って扱う。旧領域へのスクリプト上書き、schema変更、失敗後の再基準化は行わない。snapshot未作成の部分的なPrepare領域も保持し、再開元として採用しない。
+この改訂のsnapshotは**schema 3**を維持し、新規planは**schema 4**とする。planにはsnapshotのdigest、事後検証済みの親、検証コードの完全なGit SHAと2スクリプトのハッシュを含める。schema 1と2のsnapshotは読み替えず拒否する。schema 3の旧planを持つ完成済みバックアップは、そのバックアップに保存された一致するスクリプトと当時の契約に従って扱う。旧領域へのスクリプト上書き、schema変更、失敗後の再基準化は行わない。snapshot未作成の部分的なPrepare領域も保持し、再開元として採用しない。
+
+旧schema 3のsnapshotから事後検証だけ再開する場合は、後述の`-VerificationOnlySource`で固定した改訂版を明示する。通常の入口はsnapshotに保存されたコードハッシュとの一致を要求する。この指定は異なる検証コードを使うための限定的な互換モードであり、PrepareとInstallは拒否する。**旧保存スクリプトのApplyとRestoreはschema 4のplanを拒否する。** 改訂版のplanを作成した後は、そのplanに封印した改訂版を保持し、ApplyとRestoreにも使用する。
 
 ## 中断時の動作
 
@@ -217,9 +223,49 @@ if ($LASTEXITCODE -ne 0) { throw 'Install停止。再試行せず、結果と保
 
 成功時の`isolated_install_verified_not_applied`と`planDigest`を別記録へ保存し、**Apply前に停止する。** backend、実行ファイル、PEのx64形式、版、他ツールの情報、隔離パスの混入を検査する。失敗時もコピーやログを消さない。`plan.json`が作られた後に中断し、digestを記録できなかった場合は、planの確認とdigestの確保が済むまで次の操作を止める。
 
+### 成功済みインストーラーの事後検証だけを再開する
+
+VerifyInstallはインストーラーを呼ばず、保存済みの出力に対してInstallと共通の事後検証を行う。対象はschema 3のsnapshotが完成済みで、journalが`install-started`、公開記録が空、planが未作成の場合だけである。`install-status.json`は数値の`exitCode: 0`、`isolated: true`、`output: "withheld_to_avoid_secrets"`、`sandboxSuccess: false`の一致を要求する。終了状態が不明、失敗、準備中、適用済み、復元済みの場合は採用しない。Installの再実行、新しいPrepare、snapshotや保存済みスクリプトの差し替えは行わない。
+
+この改訂で新規Prepareしたバックアップでは、保存済み入口の`-Command VerifyInstall`を使える。旧保存スクリプトにはこのコマンドがないため、旧schema 3からの再開には次の手順を使う。**修正版のcommitとpush、Windowsでの実行が別途承認され、完全なSHAが提示された後に限り実行する。**
+
+1. 「リモートブランチから取得する」の手順で提示された改訂版SHAを取得し、`$repo`、`$expected`、元ブランチの記録を保持する。元のPrepareに用いたSHAで代用しない。
+2. `$backup`と`$snapshotDigest`は、既存のPrepareで別記録した値をそのまま使う。既存の領域を改訂版コードの保存先にしない。
+3. 書き込み元の停止を確認して、次のVerifyInstallだけを実行する。
+
+```powershell
+$revisedEntry = Join-Path $repo 'tests\manual\windows-uv\windows-uv.ps1'
+$revised = @{
+    Backup=$backup; SnapshotDigest=$snapshotDigest; WritersStopped=$true
+    VerificationOnlySource=$true; Source=$repo; SourceCommit=$expected
+}
+pwsh -NoLogo -NoProfile -NonInteractive -File $revisedEntry -Command VerifyInstall @revised
+if ($LASTEXITCODE -ne 0) { throw '事後検証停止。保存物を変更せず、結果を確認してください。' }
+```
+
+入口は改訂版のGitルート、HEADの完全SHA、追跡済みと未追跡の変更の不在を検査し、既存の2保存スクリプトは元snapshotにあるハッシュと照合する。検証中も元ツリーと観測コピーを照合し、最後に入力コードを再確認する。GitHub認証の取得とforce installは行わない。miseの参照先と版の照会、uv/uvxの版の実行、私有候補のメタデータ調整とplan作成は行うため、単なる読み取り専用操作ではない。ライブ対象と保存済みの元データは変更しない。
+
+成功時の`planDigest`と改訂版の完全SHAを別記録し、Apply前に停止する。検証が途中で失敗しても、保存済み`validation`を消さない。同じ固定SHAから再検証する場合も、封印済み親のIDとメタデータの一致を要求する。planが既にあればVerifyInstallを拒否する。planの保存後、journalの`installed`更新前に中断した場合は、planとdigestを確認した後、同じ改訂版のApplyまたはRestoreを別途承認して使う。
+
+Applyの承認後は、旧保存入口の代わりに同じ固定SHAの入口を使う。
+
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File $revisedEntry -Command Apply @revised -PlanDigest $planDigest
+if ($LASTEXITCODE -ne 0) { throw 'Apply停止。対象とjournalを保持してください。' }
+```
+
+Restoreの承認後も、schema 4のplanがある場合は同じ改訂版を使う。
+
+```powershell
+pwsh -NoLogo -NoProfile -NonInteractive -File $revisedEntry -Command Restore @revised -PlanDigest $planDigest
+if ($LASTEXITCODE -ne 0) { throw 'Restore停止。対象とjournalを保持してください。' }
+```
+
+このRestoreは外部記録のPlanDigestでplanを確認し、指定した完全SHAと実行中の2スクリプトのハッシュをplanと照合する。ネットワークやGit、mise、chezmoiは呼ばず、作業領域や観測コピーも要求しない。ただし改訂版の2ファイルを保持したSourceは必要であり、元ブランチへ戻したcheckoutをそのまま使うことはできない。再取得が必要になる前に復元用コードを利用できる状態で保持する。plan作成前のRestoreには旧保存スクリプトを使える。改訂版の互換モードによるRestoreは、planが未作成なら拒否する。
+
 ### Applyとsandbox内の受け入れを分ける
 
-Applyの承認後、別記録の2つのdigestを使う。
+この改訂のPrepareで保存したスクリプトを使う場合は、Applyの承認後、別記録の2つのdigestを使う。旧snapshotを改訂版から検証した場合は、前節の固定SHAの入口を使う。
 
 ```powershell
 pwsh -NoLogo -NoProfile -NonInteractive -File $savedEntry -Command Apply `
@@ -233,7 +279,7 @@ Applyは対象の親ディレクトリに候補を作り、journalを保存し�
 
 ### 承認後にオフラインRestoreを実行する
 
-ネットワーク、Git、候補checkout、mise、chezmoiの実行は不要である。保存済みの2スクリプト、snapshot、存在する場合のplan、journal、退避した元オブジェクトと通常権限のPowerShellを使う。インストーラーの作業領域や`observations`のコピーを復元元にしない。SourceCommitの再指定も不要である。
+この改訂のPrepareで保存したスクリプトを使う場合、ネットワーク、Git、候補checkout、mise、chezmoiの実行は不要である。保存済みの2スクリプト、snapshot、存在する場合のplan、journal、退避した元オブジェクトと通常権限のPowerShellを使う。インストーラーの作業領域や`observations`のコピーを復元元にしない。SourceCommitの再指定も不要である。旧snapshotを改訂版から検証してschema 4のplanを作った場合は、前節の改訂版Restoreを使う。
 
 ```powershell
 $restore = @{
@@ -255,7 +301,7 @@ Windows X64、PowerShell 7.6.5で、`native-result-04`の77件、`native-result-
 
 ## 手元で行える確認
 
-macOSのPowerShellでも構文、通常権限でのAudit呼び出しの不在、関数定義、mockの状態遷移を確認できる。mockは107ケースと5件の静的検査を実行する。Windowsではこれらの107ケースで実際のファイル操作を使い、NTFS固有の拒否試験4ケースを加える。ACL契約の単体テストは合成SIDで6 ACEの元ツリーと3 ACEの非公開コピーを区別し、継承フラグ、新規子ノード、未対応ACEの拒否、コピー処理の親子作成順序と元ツリーの再照合を検査する。Windowsのセキュリティ記述子APIはmacOSのテストで呼び出さない。
+macOSのPowerShellでも構文、通常権限でのAudit呼び出しの不在、関数定義、mockの状態遷移を確認できる。mockは109ケースと5件の静的検査を実行する。Windowsではこれらの109ケースで実際のファイル操作を使い、NTFS固有の拒否試験4ケースを加える。ACL契約の単体テストは合成SIDで6 ACEの元ツリーと3 ACEの非公開コピーを区別し、継承フラグ、新規子ノード、未対応ACEの拒否、コピー処理の親子作成順序と元ツリーの再照合を検査する。Windowsのセキュリティ記述子APIはmacOSのテストで呼び出さない。
 
 ファイル同士の置換では元ファイルと候補を異なる作成日時で作り、候補の日時調整と公開前後の中断からの復元も対象とする。journal置換にはエラーコード5と32を注入し、コードの保持、再試行なし、元のjournalと対象を変更しないことを確認する。この注入試験は実機で発生したエラーコードの特定ではない。mockの成功をWindows API、SACLの一致、実際の移行成功とは扱わない。
 
@@ -265,6 +311,8 @@ pwsh -NoLogo -NoProfile -NonInteractive -File tests/manual/windows-uv/rehearse-w
 
 Git入力の検査は、実際の専用GitリポジトリとmacOSの既存PowerShellで実行できる。`tests/test_windows_uv_source.py`はASTから必要な関数だけを読み、Prepare本体を実行しない。PATH上にpwshがない場合は`PWSH`へ既存実行ファイルの絶対パスを指定する。新しい依存関係は導入しない。
 
+`tests/test_windows_uv_resume.py`は終了状態、親の変更範囲、journalへの封印、再検証時の変更拒否、schema 4のApplyとRestoreを検査する。実際のコマンド分岐をmockで実行し、VerifyInstallがインストーラーを呼ばないこと、通常Installが同じ事後検証を使うこと、snapshotと保存スクリプトのバイト列を変更しないことも確認する。固定SHAと保存コードの照合、改訂版RestoreでGitを呼ばない契約はGit入力の単体テストで扱う。対象単体テスト57件とmock109件、静的検査5件はmacOSで成功しているが、Windows上での改訂版VerifyInstallと実際の公開は未検証である。
+
 ```sh
-UV_PYTHON_DOWNLOADS=never uv run --no-project --offline python -m unittest discover -s tests -p test_windows_uv_source.py -v
+UV_PYTHON_DOWNLOADS=never uv run --no-project --offline python -m unittest discover -s tests -p 'test_windows_uv_*.py' -v
 ```

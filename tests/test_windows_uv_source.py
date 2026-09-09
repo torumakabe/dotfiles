@@ -24,13 +24,41 @@ foreach ($file in @('uv-state.ps1','windows-uv.ps1')) {
         param($n)
         $n -is [Management.Automation.Language.FunctionDefinitionAst] -and
         $n.Name -in @('Invoke-Captured','Get-SourceCommit','Assert-MiseEnvironment',
-            'ConvertTo-WindowsPath','Assert-Path','Get-Targets','Get-IsolatedEnvironment')
+            'ConvertTo-WindowsPath','Assert-Path','Get-Targets','Get-IsolatedEnvironment',
+            'Get-RecoveryExecution','Assert-Equal','Get-Json','ConvertTo-Stable')
     },$true)) {
-        . ([scriptblock]::Create($node.Extent.Text))
+        # Extracted functions have no script file; inject only that automatic location.
+        . ([scriptblock]::Create($node.Extent.Text.Replace('$PSScriptRoot','$TestScriptRoot')))
     }
 }
 try {
-    if ($env:TEST_MODE -eq 'isolated-env') {
+    if ($env:TEST_MODE -eq 'recovery') {
+        # Native path/node checks are covered separately; use real Git and file hashes here.
+        function ConvertTo-WindowsPath([string]$Path) { $Path }
+        function Assert-Path {}
+        function Get-ScriptHashes([string]$Directory) {
+            $hashes=@{}
+            foreach ($name in @('windows-uv.ps1','uv-state.ps1')) {
+                $hashes[$name]=(Get-FileHash (Join-Path $Directory $name)).Hash
+            }
+            $hashes
+        }
+        $Backup=$env:TEST_BACKUP
+        $Source=$env:TEST_SOURCE
+        $SourceCommit=$env:TEST_COMMIT
+        $TestScriptRoot=Join-Path $Source 'tests/manual/windows-uv'
+        $VerificationOnlySource=$env:TEST_REVISED -ne 'false'
+        $Command=if ($env:TEST_COMMAND) { $env:TEST_COMMAND } else { 'VerifyInstall' }
+        $state=Get-Content (Join-Path $Backup 'snapshot.json') -Raw | ConvertFrom-Json -AsHashtable
+        $plan=$null
+        if (Test-Path (Join-Path $Backup 'plan.json')) {
+            $plan=Get-Content (Join-Path $Backup 'plan.json') -Raw | ConvertFrom-Json -AsHashtable
+        }
+        if ($env:TEST_NO_GIT) {
+            function Get-SourceCommit { throw 'Restore must not invoke Git' }
+        }
+        Get-RecoveryExecution $state $plan | ConvertTo-Json -Compress -Depth 10
+    } elseif ($env:TEST_MODE -eq 'isolated-env') {
         $Backup = $env:TEST_BACKUP
         Get-IsolatedEnvironment @{} | ConvertTo-Json -Compress
     } elseif ($env:TEST_MODE -eq 'targets') {
@@ -328,6 +356,57 @@ class WindowsUvSourceTests(unittest.TestCase):
         self.assertIn("Expected uv 0.12.10 Windows executable.", text)
         self.assertIn("Input data directory does not match installed uv.", text)
         self.assertIn("Expected only aqua uv 0.12.10 locks.", text)
+
+    def prepare_recovery(self) -> dict:
+        import hashlib
+
+        saved = self.root / "immutable backup"
+        saved.mkdir()
+        hashes = {}
+        for name in ("windows-uv.ps1", "uv-state.ps1"):
+            (saved / name).write_bytes(b"old saved code")
+            hashes[name] = hashlib.sha256(b"old saved code").hexdigest().upper()
+            (self.repo / "tests/manual/windows-uv" / name).write_bytes(b"revised code")
+        snapshot = {"schema": 3, "sourceCommit": "b" * 40, "scripts": hashes}
+        (saved / "snapshot.json").write_text(json.dumps(snapshot), encoding="utf-8")
+        self.git("add", ".")
+        self.commit()
+        self.sha = self.git("rev-parse", "HEAD").stdout.strip()
+        return {"TEST_MODE": "recovery", "TEST_BACKUP": str(saved)}
+
+    def test_revised_source_requires_explicit_mode_and_preserves_saved_hashes(self) -> None:
+        env = self.prepare_recovery()
+        self.assert_rejected("explicit VerificationOnlySource", **env, TEST_REVISED="false")
+        result = self.identify(**env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["sourceCommit"], self.sha)
+        saved = Path(env["TEST_BACKUP"])
+        (saved / "uv-state.ps1").write_bytes(b"changed saved code")
+        self.assert_rejected("Saved recovery script changed", **env)
+
+    def test_revised_source_uses_full_clean_git_identity(self) -> None:
+        env = self.prepare_recovery()
+        self.assert_rejected("40-hex SourceCommit", **env, TEST_COMMIT=self.sha[:12])
+        self.assert_rejected("HEAD does not match", **env, TEST_COMMIT="c" * 40)
+        (self.repo / "tests/manual/windows-uv/uv-state.ps1").write_bytes(b"dirty code")
+        self.assert_rejected("tracked or untracked changes", **env)
+
+    def test_revised_restore_is_offline_and_requires_matching_plan_code(self) -> None:
+        env = self.prepare_recovery()
+        execution = json.loads(self.identify(**env).stdout)
+        saved = Path(env["TEST_BACKUP"])
+        restore_env = env | {"TEST_COMMAND": "Restore", "TEST_NO_GIT": "1"}
+        self.assert_rejected("sealed schema 4 plan", **restore_env)
+        plan = {"schema": 4, "validation": {"execution": execution}}
+        (saved / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        result = self.identify(**restore_env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), execution)
+        self.assert_rejected(
+            "differs from the digest-verified plan", **restore_env, TEST_COMMIT="c" * 40,
+        )
+        (self.repo / "tests/manual/windows-uv/uv-state.ps1").write_bytes(b"wrong code")
+        self.assert_rejected("differs from the digest-verified plan", **restore_env)
 
 
 if __name__ == "__main__":

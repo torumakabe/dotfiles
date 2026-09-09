@@ -228,6 +228,29 @@ try {
         Assert-Equal @{b=2;a=1} @{a=1;b=2} 'ordering'
         Must-Fail { Assert-Equal @{a=1} @{a=2} 'different' }
     }
+    foreach ($interruption in @('none','after-move-1')) {
+        Check "post-install parent seal through staging/publication: $interruption" {
+            $f=Fixture 'directory' 'directory'
+            $sealed=@{}; $sealed[$Backup]=Read-Parent $Backup
+            $baseline=Get-Json $sealed[$Backup] | ConvertFrom-Json -AsHashtable
+            $baseline.identity='different-pre-install-parent'
+            $f.state.parents[$Backup]=$baseline
+            Must-Fail { Assert-Parents $f.state }
+            Assert-Parents $f.state $sealed
+            if ($interruption -ne 'none') {
+                $script:failure=$interruption
+                Must-Fail {
+                    Publish-One $f.state $f.journal 0 $f.blob $f.new -PostInstallParents $sealed
+                }
+                Reload-Journal $f
+                $script:failure=''
+            }
+            Publish-One $f.state $f.journal 0 $f.blob $f.new -PostInstallParents $sealed
+            Assert-Observed (Read-Tree $f.live) $f.new 'Sealed-parent publication failed'
+            Restore-Fixture $f
+            Assert-Equal $f.state.parents[$Backup] $baseline 'Snapshot parent was overwritten'
+        }
+    }
     foreach ($pair in @(@('directory','file'),@('file','directory'),@('file','file'),@('absent','file'),@('directory','absent'),@('absent','absent'))) {
         Check "apply/restore identity and idempotence: $($pair -join '/')" {
             $f=Fixture $pair[0] $pair[1]

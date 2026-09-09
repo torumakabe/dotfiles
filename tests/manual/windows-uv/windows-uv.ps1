@@ -1,14 +1,19 @@
 #requires -Version 7.6
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('Prepare','Install','Apply','Restore')][string]$Command,
+    [Parameter(Mandatory)][ValidateSet('Prepare','Install','VerifyInstall','Apply','Restore')][string]$Command,
     [Parameter(Mandatory)][string]$Backup,
     [string]$Config, [string]$Data, [string]$Cache, [string]$Source, [string]$SourceCommit,
     [string]$SnapshotDigest, [string]$PlanDigest,
-    [switch]$WritersStopped, [switch]$UseExistingGitHubAuth
+    [switch]$WritersStopped, [switch]$UseExistingGitHubAuth,
+    [switch]$VerificationOnlySource
 )
 . (Join-Path $PSScriptRoot 'uv-state.ps1')
 Assert-Native
+if ($VerificationOnlySource -and $Command -notin @('VerifyInstall','Apply','Restore')) {
+    throw 'VerificationOnlySource cannot Prepare or run an installer.'
+}
+if ($UseExistingGitHubAuth -and $Command -ne 'Install') { throw 'Authentication is only used by Install.' }
 if (-not $WritersStopped) { throw 'Stop mise/chezmoi/editors/uv/background writers first; -WritersStopped is required.' }
 Assert-Path $Backup -Absent
 $homeRoot = [Environment]::GetFolderPath('UserProfile')
@@ -68,17 +73,107 @@ function Get-IsolatedEnvironment($State) {
         MISE_TRUSTED_CONFIG_PATHS = (Join-Path $Backup 'work\config\config.toml')
     }
 }
-function Assert-Originals($State) {
+function Assert-Originals($State, $PostInstallParents = @{}) {
     foreach ($entry in $State.entries) {
         Assert-Equal (Read-Tree $entry.target) $entry.original "Concurrent change: $($entry.target)"
         Assert-Equal (Read-Tree (Join-Path $Backup $entry.saved)) $entry.observation "Damaged observation copy: $($entry.saved)"
     }
-    Assert-Parents $State
+    Assert-Parents $State $PostInstallParents
 }
-function Assert-Parents($State) {
+function Assert-Parents($State, $PostInstallParents = @{}) {
     foreach ($path in $State.parents.Keys) {
-        Assert-Equal (Read-Parent $path) $State.parents[$path] "Parent identity/ACL/attributes changed: $path"
+        $expected = if ($PostInstallParents.ContainsKey($path)) { $PostInstallParents[$path] } else { $State.parents[$path] }
+        Assert-Equal (Read-Parent $path) $expected "Parent identity/ACL/attributes changed: $path"
     }
+}
+function Assert-InstallTransition($Journal, $Status, [bool]$PlanExists) {
+    if ($Journal.phase -cne 'install-started' -or $Journal.records.Count -ne 0 -or $PlanExists) {
+        throw 'Verification requires install-started, no publication records and no plan; never rerun Install.'
+    }
+    Assert-Equal $Status @{ exitCode=0; isolated=$true; output='withheld_to_avoid_secrets'; sandboxSuccess=$false } `
+        'Verification requires the recorded successful isolated install.'
+}
+function Assert-InstallReady($Journal) {
+    if ($Journal.phase -cne 'prepared' -or $Journal.records.Count -ne 0 -or
+        $Journal.ContainsKey('validation') -or (Test-Path -LiteralPath (Join-Path $Backup 'install-status.json'))) {
+        throw 'Install is one-shot; preserve existing work and status, do not retry force install.'
+    }
+}
+function Assert-PostInstallParents($State, $Parents) {
+    $path = Join-Path $Backup 'work\data\installs\uv'
+    Assert-Equal @($Parents.Keys) @($path) 'Only the isolated uv install parent may be resealed.'
+    if (-not $State.parents.ContainsKey($path)) { throw 'Snapshot lacks the isolated uv install parent.' }
+    $before = $State.parents[$path]
+    $after = $Parents[$path]
+    foreach ($node in @($before,$after)) {
+        if ($node.kind -cne 'directory' -or $node.identity -cnotmatch '^[0-9A-F]{8}:[0-9A-F]{16}$') {
+            throw 'Invalid isolated parent identity/kind.'
+        }
+    }
+    if ($before.identity.Split(':')[0] -cne $after.identity.Split(':')[0]) { throw 'Isolated parent volume changed.' }
+    $metadata = Get-Json $after | ConvertFrom-Json -AsHashtable
+    $metadata.identity = $before.identity
+    # 親の日時はRead-Parentの契約外。SDDLのAIを含め、ID以外は完全一致を要求する。
+    Assert-Equal $metadata $before 'Isolated parent nonidentity metadata changed.'
+}
+function Assert-ValidationSeal($State, $Seal, $Execution) {
+    Assert-Equal @($Seal.Keys | Sort-Object) @('execution','parents','schema') 'Invalid validation seal fields.'
+    if ($Seal.schema -ne 1) { throw 'Unsupported validation seal.' }
+    Assert-Equal $Seal.execution $Execution 'Use the same pinned validation scripts and SourceCommit.'
+    Assert-PostInstallParents $State $Seal.parents
+}
+function Start-InstallValidation($State, $Journal, $Execution) {
+    Assert-InstallTransition $Journal (Read-Json (Join-Path $Backup 'install-status.json')) `
+        (Test-Path -LiteralPath (Join-Path $Backup 'plan.json'))
+    if ($Journal.ContainsKey('validation')) {
+        Assert-ValidationSeal $State $Journal.validation $Execution
+        Assert-Originals $State $Journal.validation.parents
+    } else {
+        $parents = @{}
+        $path = Join-Path $Backup 'work\data\installs\uv'
+        $parents[$path] = Read-Parent $path
+        Assert-PostInstallParents $State $parents
+        Assert-Originals $State $parents
+        $Journal.validation = @{ schema=1; parents=$parents; execution=$Execution }
+        Save-Journal $Journal
+    }
+    return $Journal.validation
+}
+function Get-ScriptHashes([string]$Directory) {
+    $hashes = @{}
+    foreach ($file in @('windows-uv.ps1','uv-state.ps1')) {
+        $path = Join-Path $Directory $file
+        Assert-Path $path
+        $null = Read-Node $path ''
+        $hashes[$file] = Get-Hash $path
+    }
+    return $hashes
+}
+function Get-RecoveryExecution($State, $Plan) {
+    Assert-Equal (Get-ScriptHashes $Backup) $State.scripts 'Saved recovery script changed.'
+    $scripts = Get-ScriptHashes $PSScriptRoot
+    if (-not $VerificationOnlySource) {
+        Assert-Equal $scripts $State.scripts 'Different recovery code requires explicit VerificationOnlySource.'
+        return @{ sourceCommit=$State.sourceCommit; scripts=$scripts }
+    }
+    $sourceRoot = ConvertTo-WindowsPath $Source
+    Assert-Path $sourceRoot
+    if ($PSScriptRoot -ine (Join-Path $sourceRoot 'tests\manual\windows-uv')) {
+        throw 'Run verification from the pinned source entry.'
+    }
+    if ($sourceRoot -ieq $Backup -or $sourceRoot.StartsWith($Backup + '\',[StringComparison]::OrdinalIgnoreCase) -or
+        $Backup.StartsWith($sourceRoot.TrimEnd('\') + '\',[StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Verification source must be independent of the immutable backup.'
+    }
+    if ($Command -eq 'Restore') {
+        if ($null -eq $Plan -or $Plan.schema -ne 4 -or $SourceCommit -cnotmatch '^[0-9a-fA-F]{40}$') {
+            throw 'Revised-source offline Restore requires a sealed schema 4 plan and its SourceCommit.'
+        }
+        $execution = @{ sourceCommit=$SourceCommit.ToLowerInvariant(); scripts=$scripts }
+        Assert-Equal $execution $Plan.validation.execution 'Restore code differs from the digest-verified plan.'
+        return $execution
+    }
+    return @{ sourceCommit=(Get-SourceCommit $sourceRoot $SourceCommit); scripts=$scripts }
 }
 function Save-Event([string]$Name, $Value) { Write-NewJson (Join-Path $Backup ($Name + '.json')) $Value }
 function Save-Journal($Journal) {
@@ -150,17 +245,17 @@ function Get-CurrentStates($State, $Plan, $Journal) {
     }
     return ,$result
 }
-function Complete-Pending($State, $Journal, [int]$Index) {
+function Complete-Pending($State, $Journal, [int]$Index, $PostInstallParents = @{}) {
     $entry = $State.entries[$Index]
     $record = $Journal.records["$Index"]
     $position = Get-EntryPosition $entry $record $entry.after
     if ($record.direction -eq 'apply') {
         if ($position -eq 'published') { return }
-        Assert-Parents $State
+        Assert-Parents $State $PostInstallParents
         if (-not (Test-Absent (Read-Tree $entry.target))) {
             Move-Tree $entry.target $record.originalSource $entry.original
         }
-        Assert-Parents $State
+        Assert-Parents $State $PostInstallParents
         $null = Get-EntryPosition $entry $record $entry.after
         if (-not (Test-Absent $record.after)) { Move-Tree $record.stage $entry.target $record.after }
         Assert-Equal (Read-Tree $entry.target) $record.after 'Candidate publication verification failed'
@@ -177,7 +272,7 @@ function Complete-Pending($State, $Journal, [int]$Index) {
     }
     $null = Get-EntryPosition $entry $record $entry.after
 }
-function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [switch]$Restore) {
+function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [switch]$Restore, $PostInstallParents = @{}) {
     $entry = $State.entries[$Index]
     $record = $Journal.records["$Index"]
     $null = Get-EntryPosition $entry $record $entry.after
@@ -191,7 +286,7 @@ function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [sw
         }
     } else {
         Assert-Equal $Desired $entry.after 'Apply must select the sealed candidate'
-        Assert-Parents $State
+        Assert-Parents $State $PostInstallParents
         if ($null -eq $record) {
             if ($entry.original.kind -eq 'file' -and $Desired.kind -eq 'file') {
                 Assert-Equal $Desired.nodes[0].created $entry.original.nodes[0].created `
@@ -201,7 +296,7 @@ function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [sw
             $nonce = [guid]::NewGuid().ToString('N')
             $stage = Join-Path (Split-Path $entry.target) ('.n4-uv-stage-' + $nonce)
             Copy-Tree $Blob $stage $entry.blobState $Desired
-            Assert-Parents $State
+            Assert-Parents $State $PostInstallParents
             $record = @{ nonce=$nonce; direction='apply'; stage=$stage; after=(Read-Tree $stage)
                 originalSource=(Join-Path $Backup ('retained-' + $nonce))
                 discard=(Join-Path $Backup ('candidate-' + $nonce)) }
@@ -211,7 +306,7 @@ function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [sw
             Save-Journal $Journal
         } elseif ($record.direction -ne 'apply') { throw 'Cannot apply after restore has started' }
     }
-    Complete-Pending $State $Journal $Index
+    Complete-Pending $State $Journal $Index $PostInstallParents
 }
 
 if ($Command -eq 'Prepare') {
@@ -389,10 +484,7 @@ if (-not $SnapshotDigest -or (Get-Hash (Join-Path $Backup 'snapshot.json')) -cne
 $state = Read-Json (Join-Path $Backup 'snapshot.json')
 if ($state.schema -ne 3) { throw 'Unsupported snapshot schema; use the matching saved scripts for a complete older backup. Never upgrade or rebaseline it.' }
 if ($state.home -ine $homeRoot) { throw 'Different target user.' }
-foreach ($file in $state.scripts.Keys) {
-    if ((Get-Hash (Join-Path $Backup $file)) -cne $state.scripts[$file]) { throw 'Saved recovery script changed.' }
-}
-if ($Command -in @('Install','Apply')) { Assert-MiseEnvironment }
+if ($Command -in @('Install','VerifyInstall','Apply')) { Assert-MiseEnvironment }
 $lease = [IO.FileStream]::new((Join-Path $Backup 'operation.lock'),'OpenOrCreate','ReadWrite','None')
 try {
     $journal = Read-Json (Join-Path $Backup 'journal.json')
@@ -402,8 +494,25 @@ try {
     $work = Join-Path $Backup 'work'
     $stagedTargets = @(Get-Targets (Join-Path $work 'config\config.toml') (Join-Path $work 'data') (Join-Path $work 'cache'))
     $envMap = Get-IsolatedEnvironment $state
+    $plan=$null
+    if (Test-Path -LiteralPath (Join-Path $Backup 'plan.json')) {
+        if ($Command -in @('Install','VerifyInstall')) { throw 'An install plan already exists; verification must not replace it.' }
+        if (-not $PlanDigest -or (Get-Hash (Join-Path $Backup 'plan.json')) -cne $PlanDigest) { throw 'Plan digest required/mismatch.' }
+        $plan=Read-Json (Join-Path $Backup 'plan.json')
+        if ($plan.schema -notin @(3,4) -or $plan.entries.Count -ne $state.entries.Count) { throw 'Unsupported or incomplete plan' }
+    }
+    $execution = Get-RecoveryExecution $state $plan
+    $postInstallParents = @{}
+    if ($null -ne $plan -and $plan.schema -eq 4) {
+        Assert-Equal $plan.snapshotDigest $SnapshotDigest 'Plan belongs to a different snapshot.'
+        Assert-ValidationSeal $state $plan.validation $execution
+        Assert-Equal $journal.validation $plan.validation 'Journal validation differs from sealed plan.'
+        $postInstallParents = $plan.validation.parents
+    } elseif ($VerificationOnlySource -and $Command -eq 'Apply') {
+        throw 'Revised-source Apply requires its matching schema 4 validation plan.'
+    }
     if ($Command -eq 'Install') {
-        if ($journal.phase -ne 'prepared') { throw 'Install is one-shot; preserve failed work and restore, do not retry force install.' }
+        Assert-InstallReady $journal
         Assert-Originals $state
         for ($i=0; $i -lt $state.entries.Count; $i++) {
             Assert-Equal (Read-Tree $stagedTargets[$i]) $state.entries[$i].work 'Prepared private work changed'
@@ -423,9 +532,16 @@ try {
             $result = Invoke-Captured $state.mise @('--locked','install','--force','uv') $work $envMap -AllowFailure
         } finally { $null=$envMap.Remove('GITHUB_TOKEN'); $token=$null }
         Save-Event 'install-status' @{ exitCode=$result.exitCode; output='withheld_to_avoid_secrets'; isolated=$true; sandboxSuccess=$false }
-        Assert-Originals $state
-        if ($result.exitCode -ne 0) { throw 'Isolated install failed. Live originals remain intact; use Restore. Do not retry.' }
+    }
+    if ($Command -in @('Install','VerifyInstall')) {
+        $validation = Start-InstallValidation $state $journal $execution
+        $postInstallParents = $validation.parents
+        if ((Get-Hash $state.mise) -cne $state.miseHash) { throw 'mise executable changed.' }
+        # 実行前に全候補を走査し、reparse point、hardlink、未対応属性を拒否する。
+        foreach ($path in $stagedTargets) { $null = Read-Tree $path }
         Assert-Equal @((Get-Hash $stagedTargets[0]),(Get-Hash $stagedTargets[1])) $state.candidateHashes 'Install changed locked config/lock'
+        $configs = (Invoke-Captured $state.mise @('config','ls','--json') $work $envMap).stdout | ConvertFrom-Json
+        Assert-Equal @($configs | ForEach-Object { ConvertTo-WindowsPath $_.path }) @($stagedTargets[0]) 'Unexpected additional mise config'
         $meta = ConvertFrom-Toml ([IO.File]::ReadAllText($stagedTargets[3])) $state.chezmoi $work
         Assert-Equal (Get-WithoutUv $meta) $state.otherMetadata 'Install changed metadata for other tools'
         $tool = (Invoke-Captured $state.mise @('tool','uv','--json') $work $envMap).stdout | ConvertFrom-Json
@@ -466,19 +582,18 @@ try {
             $after=Get-CopyRequirements $tree $state.parents[(Split-Path $state.entries[$i].target)] $state.entries[$i].original -Publication
             $planEntries+=@{ blob=$stagedTargets[$i]; blobState=$tree; after=$after }
         }
-        Assert-Originals $state
-        Write-NewJson (Join-Path $Backup 'plan.json') @{ schema=3; entries=$planEntries; resolutions=$resolutions }
+        Assert-Originals $state $postInstallParents
+        Assert-Equal (Get-RecoveryExecution $state $null) $execution 'Validation source changed during verification.'
+        Assert-InstallTransition $journal (Read-Json (Join-Path $Backup 'install-status.json')) $false
+        Write-NewJson (Join-Path $Backup 'plan.json') @{ schema=4; snapshotDigest=$SnapshotDigest
+            validation=$validation; entries=$planEntries; resolutions=$resolutions }
         $journal.phase='installed'; Save-Journal $journal
         @{ status='isolated_install_verified_not_applied'; planDigest=(Get-Hash (Join-Path $Backup 'plan.json')); sandboxSuccess=$false } | ConvertTo-Json
         exit 0
     }
-    $plan=$null
-    if (Test-Path -LiteralPath (Join-Path $Backup 'plan.json')) {
-        if (-not $PlanDigest -or (Get-Hash (Join-Path $Backup 'plan.json')) -cne $PlanDigest) { throw 'Plan digest required/mismatch.' }
-        $plan=Read-Json (Join-Path $Backup 'plan.json')
-        if ($plan.schema -ne 3 -or $plan.entries.Count -ne $state.entries.Count) { throw 'Unsupported or incomplete plan' }
-    }
-    if ($Command -eq 'Apply' -and ($null -eq $plan -or $journal.phase -notin @('installed','applying','applied'))) { throw 'No completed install plan, or backup already restored.' }
+    $completedPlan = $null -ne $plan -and ($journal.phase -in @('installed','applying','applied') -or
+        ($plan.schema -eq 4 -and $journal.phase -eq 'install-started' -and $journal.records.Count -eq 0))
+    if ($Command -eq 'Apply' -and -not $completedPlan) { throw 'No completed install plan, or backup already restored.' }
     for ($i=0; $i -lt $state.entries.Count; $i++) {
         $state.entries[$i].after=if ($null -ne $plan) { $plan.entries[$i].after } else { $state.entries[$i].original }
         if ($null -ne $plan) {
@@ -490,7 +605,7 @@ try {
         }
     }
     if ($Command -eq 'Apply') {
-        Assert-Parents $state
+        Assert-Parents $state $postInstallParents
         foreach ($entry in $state.entries) {
             Assert-Equal (Read-Tree (Join-Path $Backup $entry.saved)) $entry.observation 'Damaged observation copy'
         }
@@ -502,11 +617,11 @@ try {
         $journal.phase=if ($Command -eq 'Apply') { 'applying' } else { 'restoring' }
         Save-Journal $journal
         for ($i=0; $i -lt $state.entries.Count; $i++) {
-            if ($Command -eq 'Apply') { Assert-Parents $state }
+            if ($Command -eq 'Apply') { Assert-Parents $state $postInstallParents }
             $null=Get-CurrentStates $state $plan $journal
             $blob=if ($Command -eq 'Apply') { $plan.entries[$i].blob } else { '' }
             $desired=if ($Command -eq 'Apply') { $plan.entries[$i].after } else { $state.entries[$i].original }
-            Publish-One $state $journal $i $blob $desired -Restore:($Command -eq 'Restore')
+            Publish-One $state $journal $i $blob $desired -Restore:($Command -eq 'Restore') -PostInstallParents $postInstallParents
         }
     }
     if ($Command -eq 'Restore') {
