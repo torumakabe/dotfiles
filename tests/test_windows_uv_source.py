@@ -24,13 +24,16 @@ foreach ($file in @('uv-state.ps1','windows-uv.ps1')) {
         param($n)
         $n -is [Management.Automation.Language.FunctionDefinitionAst] -and
         $n.Name -in @('Invoke-Captured','Get-SourceCommit','Assert-MiseEnvironment',
-            'ConvertTo-WindowsPath','Assert-Path','Get-Targets')
+            'ConvertTo-WindowsPath','Assert-Path','Get-Targets','Get-IsolatedEnvironment')
     },$true)) {
         . ([scriptblock]::Create($node.Extent.Text))
     }
 }
 try {
-    if ($env:TEST_MODE -eq 'targets') {
+    if ($env:TEST_MODE -eq 'isolated-env') {
+        $Backup = $env:TEST_BACKUP
+        Get-IsolatedEnvironment @{} | ConvertTo-Json -Compress
+    } elseif ($env:TEST_MODE -eq 'targets') {
         @(Get-Targets (Join-Path $env:TEST_LAYOUT 'config/config.toml') `
             (Join-Path $env:TEST_LAYOUT 'data') (Join-Path $env:TEST_LAYOUT 'cache')) |
             ConvertTo-Json -AsArray

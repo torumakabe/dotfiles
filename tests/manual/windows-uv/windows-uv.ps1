@@ -59,6 +59,8 @@ function Get-SourceCommit([string]$Source, [string]$SourceCommit) {
 function Get-IsolatedEnvironment($State) {
     @{
         MISE_GLOBAL_CONFIG_FILE = (Join-Path $Backup 'work\config\config.toml')
+        MISE_CONFIG_DIR = (Join-Path $Backup 'work\config')
+        MISE_CEILING_PATHS = $Backup
         MISE_DATA_DIR = (Join-Path $Backup 'work\data')
         MISE_CACHE_DIR = (Join-Path $Backup 'work\cache')
         MISE_STATE_DIR = (Join-Path $Backup 'work\state')
@@ -335,6 +337,8 @@ if ($Command -eq 'Prepare') {
         Copy-Tree $copySource $stagedTargets[$i] $entries[$i].observation
     }
     $envMap = Get-IsolatedEnvironment $state
+    $configs = (Invoke-Captured $mise @('config','ls','--json') $work $envMap).stdout | ConvertFrom-Json
+    Assert-Equal @($configs | ForEach-Object { ConvertTo-WindowsPath $_.path }) @($stagedTargets[0]) 'Unexpected additional mise config during Prepare'
     $oldTool = (Invoke-Captured $mise @('tool','uv','--json') $work $envMap).stdout | ConvertFrom-Json
     if ($oldTool.backend -cne 'aqua:astral-sh/uv') { throw 'Expected original aqua backend.' }
     Assert-Equal @($oldTool.active_versions) @('0.12.10') 'Expected existing version 0.12.10'

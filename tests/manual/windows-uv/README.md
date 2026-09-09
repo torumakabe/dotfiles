@@ -178,6 +178,8 @@ if (Test-Path -LiteralPath $backup) { throw '新規の保存先を指定して�
 
 通常の`mise activate pwsh`は`MISE_SHELL=pwsh`を設定するため、この識別子だけを許可する。config、data、cache、stateなどを変える変数や未知の`MISE_*`はPrepare、Install、Applyで拒否する。変数を消して既定パスへ誘導しない。環境変数の値、設定本文、認証情報を画面や返却ログへ出さない。Gitのリポジトリやindexを差し替える環境変数もSource確認時に拒否する。
 
+隔離した子プロセスには`MISE_GLOBAL_CONFIG_FILE`と`MISE_CONFIG_DIR`の両方を`work\config`に合わせて渡し、`MISE_CEILING_PATHS`をバックアップのルートに設定する。globalファイルだけの指定では、ホーム配下の作業ディレクトリから祖先を探索する際に通常の`~/.config/mise/config.toml`も見つかる。mise 2026.8.5の[設定探索処理](https://github.com/jdx/mise/blob/v2026.8.5/src/config/mod.rs)は、`MISE_CONFIG_DIR`を既定以外へ変更した場合に既定ディレクトリ内のconfigを除外し、ceilingに到達する前までの祖先だけを探索する。利用者の環境変数や通常設定は変更しない。Prepareで隔離用configを初めて利用する前とInstall前に、一覧が専用の1ファイルだけであることを照合する。work内の別のプロジェクトconfigなどが見つかった場合は停止し、追加configを無条件に許容しない。
+
 入口はPrepareの入力とmiseから取得したパスについて、`/`を`\`へ変換し、連続した区切りを一つにしてから検査や比較を行う。相対パス、UNC、デバイスパスは受け付けない。`..`などの要素は解決せずに残し、既存のパス検査で拒否する。リンクやADS、末尾の空白などに対する拒否条件は変更しない。
 
 対象は、既存の`aqua:astral-sh/uv`版uv 0.12.10が選択されている環境に限る。Prepareは31ツールの宣言とlock、共有インストール情報、実際のconfig、uv配置、cacheの一致を検査する。候補もuv 0.12.10を維持し、`github:astral-sh/uv`へ変更する。他の30ツールの宣言や設定、lock、共有情報を変更しないことを検査する。別バージョンの選択、複数config、対象内のreparse pointなどで停止したら、対象を消したり基準を書き換えたりしない。
