@@ -108,11 +108,34 @@ function Invoke-JournalRename([string]$Source, [string]$Destination) {
 }
 function Get-ObservedTree($Tree) {
     $copy = Get-Json $Tree | ConvertFrom-Json -AsHashtable
-    foreach ($node in $copy.nodes) { $null = $node.Remove('identity') }
+    foreach ($node in $copy.nodes) {
+        $null = $node.Remove('identity')
+        # 新規コピーのACL設定でWindowsが付けるDACLのAIだけを比較から除く。元の記録は変更しない。
+        $node.sddl = [regex]::Replace($node.sddl, '^([^()]*)D:((?:P|AR|AI)*)(?=\(|S:|$)', {
+            param($match)
+            $match.Groups[1].Value + 'D:' + $match.Groups[2].Value.Replace('AI','')
+        })
+    }
     return $copy
 }
 function Assert-Observed($Left, $Right, [string]$Message) {
-    Assert-Equal (Get-ObservedTree $Left) (Get-ObservedTree $Right) $Message
+    $actual = Get-ObservedTree $Left
+    $expected = Get-ObservedTree $Right
+    if ((Get-Json $actual) -ceq (Get-Json $expected)) { return }
+    $fields = [Collections.Generic.List[string]]::new()
+    foreach ($key in @(@($actual.Keys) + @($expected.Keys) | Sort-Object -Unique)) {
+        if ($key -ne 'nodes' -and (Get-Json $actual[$key]) -cne (Get-Json $expected[$key])) {
+            $fields.Add($key)
+        }
+    }
+    if ($actual.nodes.Count -ne $expected.nodes.Count) { $fields.Add('nodes.Count') }
+    for ($i = 0; $i -lt [Math]::Min($actual.nodes.Count,$expected.nodes.Count); $i++) {
+        $a = $actual.nodes[$i]; $b = $expected.nodes[$i]
+        foreach ($key in @(@($a.Keys) + @($b.Keys) | Sort-Object -Unique)) {
+            if ((Get-Json $a[$key]) -cne (Get-Json $b[$key])) { $fields.Add("nodes[$i].$key") }
+        }
+    }
+    throw "$Message (different fields: $($fields -join ', '))"
 }
 function Read-Node([string]$Path, [string]$Relative) {
     $item = Get-Item -LiteralPath $Path -Force
