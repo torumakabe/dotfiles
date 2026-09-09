@@ -46,6 +46,10 @@ namespace N4Uv {
     IntPtr security, uint disposition, uint flags, IntPtr template);
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
   public static extern bool MoveFileExW(string source, string destination, uint flags);
+  public static int MoveTree(string source, string destination) {
+   if (MoveFileExW(source, destination, 0)) return 0;
+   return Marshal.GetLastWin32Error();
+  }
   public static int ReplaceJournal(string source, string destination) {
    if (MoveFileExW(source, destination, 9)) return 0;
    return Marshal.GetLastWin32Error();
@@ -105,6 +109,16 @@ function Get-ObjectInfo([string]$Path) {
 function Get-Identity($Info) { '{0:X8}:{1:X8}{2:X8}' -f $Info.Volume,$Info.IndexHigh,$Info.IndexLow }
 function Invoke-JournalRename([string]$Source, [string]$Destination) {
     return [N4Uv.FileInfo]::ReplaceJournal($Source,$Destination)
+}
+function Invoke-TreeRename([string]$Source, [string]$Destination) {
+    $code = [N4Uv.FileInfo]::MoveTree($Source,$Destination)
+    if ($code -ne 0) {
+        $exception = [ComponentModel.Win32Exception]::new($code, "Rename failed (Win32 $code): $Source")
+        $exception.Data['operation'] = 'MoveFileExW: tree rename'
+        $exception.Data['source'] = $Source
+        $exception.Data['destination'] = $Destination
+        throw $exception
+    }
 }
 function Get-ObservedTree($Tree) {
     $copy = Get-Json $Tree | ConvertFrom-Json -AsHashtable
@@ -317,9 +331,7 @@ function Move-Tree([string]$Source, [string]$Destination, $Expected) {
     $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($Source))
     if ($drive.DriveFormat -ne 'NTFS' -or $drive.DriveType -ne 'Fixed') { throw 'Local fixed NTFS required' }
     # flags=0で、上書きとCOPY_ALLOWEDによるコピーへの切り替えを禁止する。
-    if (-not [N4Uv.FileInfo]::MoveFileExW($Source,$Destination,0)) {
-        throw "Rename failed (Win32 $([Runtime.InteropServices.Marshal]::GetLastWin32Error())): $Source"
-    }
+    Invoke-TreeRename $Source $Destination
     Assert-Equal (Read-Tree $Destination) $Expected "Renamed object changed: $Destination"
 }
 function Invoke-Captured([string]$Exe, [string[]]$Arguments, [string]$Directory,

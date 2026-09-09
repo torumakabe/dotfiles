@@ -295,6 +295,49 @@ if (Test-Path -LiteralPath (Join-Path $backup 'plan.json')) {
 
 planがまだ存在しない失敗ではPlanDigestを指定しない。候補の公開後は既知の候補を退避して元オブジェクトを戻し、未変更の対象は動かさない。未知の変更やID不一致は停止条件であり、コピーで置き換えない。Restore自体もホストの対象へ書き込む操作なので、承認なしに実行しない。`restored`と元IDの一致を確認しても、退避物と記録は自動削除しない。
 
+## 復元後の同名公開を偽ツリーで診断する
+
+`diagnose-windows-uv.ps1`は、元ディレクトリの退避直後に、その名前へ候補を公開する順序を一回だけ再現する。実際の`0.12.10`を移動せず、移行入口のPrepare、Install、VerifyInstall、Apply、Restoreも呼ばない。復元済みバックアップは読み取り専用の入力であり、診断結果から実Applyの再実行を許可しない。
+
+コードの公開とWindowsでの実行は別途承認を必要とする。承認後は固定SHAの変更のないGit checkoutを使い、保存済みスクリプトを差し替えない。次の引数を事前に設定する。
+
+| 引数 | 入力と条件 |
+|---|---|
+| `Backup` | 復元済みschema 3バックアップ。journalのphaseが`restored`で、schema 4のplanがあること |
+| `SnapshotDigest` / `PlanDigest` | 外部に保存済みのSHA256。バックアップから再計算した値を新たな基準にしない |
+| `ApprovedUvParent` | そのsnapshotに記録された`0.12.10`の親の絶対パス。ここへの新規診断ディレクトリ作成を明示的に承認する |
+| `FixtureRoot` | 同じローカル固定NTFSボリューム上、ユーザーホーム配下の未作成パス。既存の私有親を使い、Backup、ApprovedUvParent、Git checkout、snapshotの全実対象（不存在を含む）と包含関係を持たせない |
+| `SourceCommit` | 診断コードを含むcheckoutの完全な40桁SHA |
+| `WritersStopped` | 書き込み元を停止したことの明示。指定しない場合は書き込み前に拒否する |
+
+```powershell
+$diagnostic = @{
+    Backup=$backup; SnapshotDigest=$snapshotDigest; PlanDigest=$planDigest
+    ApprovedUvParent=$approvedUvParent
+    FixtureRoot=$newFixtureRoot; SourceCommit=$expected; WritersStopped=$true
+}
+pwsh -NoLogo -NoProfile -NonInteractive `
+    -File (Join-Path $repo 'tests\manual\windows-uv\diagnose-windows-uv.ps1') @diagnostic
+if ($LASTEXITCODE -ne 0) { throw '診断停止。再試行や削除をせず、全fixtureと結果を保持してください。' }
+```
+
+元データにはバックアップの観測コピー、候補にはplanに封印されたblobを使う。保存物とすべての実対象を検査した後、承認済み親にGUID付きの`.n4-uv-diagnostic-live-*`と`.n4-uv-diagnostic-stage-*`を新規作成する。バイト列、属性、作成日時、更新日時をコピーする。ACLは作成先の継承規則に従わせ、ownerとgroupは作成時の既定値を維持する。コピーの比較基準はsnapshotの元ツリーとplanの公開候補であり、除外する差は新規IDとDACLの`AI`だけである。権限が一致しなければ、設定し直さずrename前に停止する。
+
+両コピーが一致した場合だけ、次の4回のrenameを順番に試みる。各段階の前後で、4つの偽ツリーの存在状態、ID、内容、観測メタデータの完全一致を要求する。
+
+1. 偽liveを新規FixtureRoot内の`retained-original`へ退避する。
+2. 偽stageを、直前に空いた同じ偽live名へ公開する。
+3. 公開した偽候補をFixtureRoot内の`candidate`へ退避する。
+4. `retained-original`を偽live名へ戻す。
+
+一段階でも失敗したら、それ以降のrenameと自動復元を行わない。既存のprobe、残存stage、実際のuv、保存済みjournalを操作しない。成功時も偽liveと退避した偽候補を残す。FixtureRootとGUID付きディレクトリの再利用、リトライ、待機、置換フラグ、ACL変更は行わない。
+
+FixtureRootには`copy-original.json`、`copy-candidate.json`、`synthetic-state.json`、実行した段階の`phase-1.json`から`phase-4.json`、`result.json`を新規保存する。コピー途中の失敗では未到達のファイルは作られない。各コピーとrenameの記録にはphase、source、destination、経過ミリ秒、成否が含まれる。ネイティブrenameの失敗ではC#内で直ちに取得したWin32コードとoperationを記録し、PowerShellに戻ってからlast-errorを読み直さない。一般の検査失敗ではWin32コードはnullである。
+
+成功時のstatusは`synthetic_restored`、失敗時は`failed`であり、常に`simulated_only=true`、`sandboxSuccess=false`を出力する。失敗後もsnapshot、plan、既存journalと保存済みスクリプトのハッシュ、入力にした観測コピーと候補、snapshotの全実対象、既存のuv兄弟ツリー、uv親の日時以外のメタデータ、Git入力を検査する。診断入力ではないmiseの内部状態ディレクトリは走査しない。検査不一致は`invariantErrors`へすべて記録し、先の操作エラーも保持する。事前検査での拒否はfixtureを作らず、プロセス強制終了や記録先のI/O障害ではJSONの完成を保証しない。
+
+この診断は実データと観測メタデータ、同じ親、退避直後の名前再利用を扱う。元の`Copy-Tree`による明示的なSDDL設定、実際の`0.12.10`という名前、既存オブジェクトの履歴、過去のハンドルやフィルタードライバーの状態、SACLは再現しない。新規コピーの単純rename成功だけでも、この診断の成功だけでも、過去の失敗原因は確定しない。ロック、AV、親ACL、last-errorの値のいずれも原因とは断定しない。
+
 ## 検証結果の範囲
 
 Windows X64、PowerShell 7.6.5で、`native-result-04`の77件、`native-result-06`のADS 1件、通常権限のWindows Terminalでの`native-result-07`のjunction 1件と`native-result-08`のhardlink 1件に成功証跡がある。重複する静的検査5件を加算せず、異なるnativeケース80件を合算した結果である。sandboxとホストに分かれた実行の合算であり、全80件をホストだけで一括実行した結果ではない。`native-result-01`から`08`までを無視対象のまま保持する。この記録はfixtureの再実行依頼でも実移行の成功記録でもない。
@@ -311,7 +354,9 @@ pwsh -NoLogo -NoProfile -NonInteractive -File tests/manual/windows-uv/rehearse-w
 
 Git入力の検査は、実際の専用GitリポジトリとmacOSの既存PowerShellで実行できる。`tests/test_windows_uv_source.py`はASTから必要な関数だけを読み、Prepare本体を実行しない。PATH上にpwshがない場合は`PWSH`へ既存実行ファイルの絶対パスを指定する。新しい依存関係は導入しない。
 
-`tests/test_windows_uv_resume.py`は終了状態、親の変更範囲、journalへの封印、再検証時の変更拒否、schema 4のApplyとRestoreを検査する。実際のコマンド分岐をmockで実行し、VerifyInstallがインストーラーを呼ばないこと、通常Installが同じ事後検証を使うこと、snapshotと保存スクリプトのバイト列を変更しないことも確認する。固定SHAと保存コードの照合、改訂版RestoreでGitを呼ばない契約はGit入力の単体テストで扱う。対象単体テスト57件とmock109件、静的検査5件はmacOSで成功しているが、Windows上での改訂版VerifyInstallと実際の公開は未検証である。
+`tests/test_windows_uv_resume.py`は終了状態、親の変更範囲、journalへの封印、再検証時の変更拒否、schema 4のApplyとRestoreを検査する。実際のコマンド分岐をmockで実行し、VerifyInstallがインストーラーを呼ばないこと、通常Installが同じ事後検証を使うこと、snapshotと保存スクリプトのバイト列を変更しないことも確認する。固定SHAと保存コードの照合、改訂版RestoreでGitを呼ばない契約はGit入力の単体テストで扱う。対象単体テスト66件（診断用9件を含む）とmock109件、静的検査5件はmacOSで成功している。新しい診断入口のWindows実行は未検証である。
+
+`tests/test_windows_uv_diagnostic.py`は、C#の呼び出し先をstubにしたエラー取得、偽ツリーの4段階、同名公開失敗後の停止、読み取り入力と実対象への書き込み拒否、失敗後の全検査を扱う。Windows APIは呼ばないため、Windowsでのネイティブ診断結果とは区別する。
 
 ```sh
 UV_PYTHON_DOWNLOADS=never uv run --no-project --offline python -m unittest discover -s tests -p 'test_windows_uv_*.py' -v
