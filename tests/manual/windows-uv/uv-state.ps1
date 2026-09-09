@@ -188,21 +188,97 @@ function Read-Tree([string]$Path) {
     }
     @{ kind = $nodes[0].kind; nodes = @($nodes.ToArray()) }
 }
-function Set-Node([string]$Path, $Node) {
+function Get-SddlParts([string]$Sddl) {
+    if ($Sddl -cnotmatch '^O:([A-Za-z0-9-]+)G:([A-Za-z0-9-]+)D:((?:P|AR|AI)*)(.*)$') {
+        throw 'Unsupported owner/group/DACL descriptor; no ACL approximation is allowed'
+    }
+    @{ owner=$Matches[1]; group=$Matches[2]; flags=$Matches[3]; aces=$Matches[4] }
+}
+function Get-InheritedSddl([string]$ParentSddl, [string]$CreatorSddl, [string]$Kind) {
+    $parent = Get-SddlParts $ParentSddl
+    $creator = Get-SddlParts $CreatorSddl
+    $inherited = [Collections.Generic.List[string]]::new()
+    $aces = [regex]::Matches($parent.aces, '\([^()]*\)')
+    if (($aces.Value -join '') -cne $parent.aces) { throw 'Unsupported parent DACL syntax' }
+    foreach ($ace in $aces) {
+        $fields = $ace.Value.Trim('(',')').Split(';')
+        if ($fields.Count -ne 6 -or $fields[0] -cnotin @('A','D') -or
+            $fields[1] -cnotmatch '^(OI|CI|NP|IO|ID)*$' -or $fields[3] -or $fields[4] -or
+            $fields[5] -cin @('CO','CG','S-1-3-0','S-1-3-1','S-1-3-2','S-1-3-3') -or
+            $fields[2] -cmatch 'G[ARWX]') {
+            throw 'Unsupported parent ACE (only ordinary allow/deny, non-generic, non-creator ACEs are supported)'
+        }
+        if ($fields[2] -match '^0x' -and ([Convert]::ToUInt32($fields[2].Substring(2),16) -band 0xf0000000L)) {
+            throw 'Generic parent access mask is unsupported'
+        }
+        $flags = $fields[1]
+        $oi = $flags.Contains('OI'); $ci = $flags.Contains('CI'); $np = $flags.Contains('NP')
+        if ($Kind -eq 'file') {
+            if (-not $oi) { continue }
+            $fields[1] = 'ID'
+        } elseif ($Kind -eq 'directory') {
+            if (-not $ci -and (-not $oi -or $np)) { continue }
+            $fields[1] = $(if (-not $np) { $(if ($oi) {'OI'}) + $(if ($ci) {'CI'}) }) +
+                $(if (-not $ci) {'IO'}) + 'ID'
+        } else { throw 'Invalid inheritance child kind' }
+        $inherited.Add('(' + ($fields -join ';') + ')')
+    }
+    # 空DACLとNULL DACLの取り違え、および既定DACLへのフォールバックを許可しない。
+    if (-not $inherited.Count) { throw 'Parent has no supported inheritable ACEs' }
+    return "O:$($creator.owner)G:$($creator.group)D:AI$($inherited -join '')"
+}
+function Read-Parent([string]$Path) {
+    Assert-Path $Path
+    $node = Read-Node $Path ''
+    if ($node.kind -ne 'directory') { throw 'Expected existing publication/private parent directory' }
+    # 子の作成とrenameで変わる日時以外は、親のIDと権限も封印する。
+    $null = $node.Remove('created'); $null = $node.Remove('written')
+    return $node
+}
+function Get-CopyRequirements($Tree, $Parent, $Baseline, [switch]$Publication) {
+    $desired = Get-Json $Tree | ConvertFrom-Json -AsHashtable
+    $parents = @{''=$Parent}
+    foreach ($node in $desired.nodes) {
+        $relative = $node.relative.Replace('/','\')
+        $parentRelative = if ($relative.Contains('\')) { $relative.Substring(0,$relative.LastIndexOf('\')) } else { '' }
+        $parentNode = if (-not $relative) { $Parent } else { $parents[$parentRelative] }
+        if ($null -eq $parentNode) { throw 'Missing parent in candidate tree' }
+        $old = @($Baseline.nodes | Where-Object { $_.relative -ceq $node.relative -and $_.kind -eq $node.kind })
+        $creator = if ($old.Count -eq 1) { $old[0].sddl }
+            elseif ($Publication) { $node.sddl } else { $Parent.sddl }
+        $node.sddl = if ($Publication -and $old.Count -eq 1) { $old[0].sddl }
+            else { Get-InheritedSddl $parentNode.sddl $creator $node.kind }
+        $null = $node.Remove('identity')
+        if ($node.kind -eq 'directory') { $parents[$relative]=$node }
+    }
+    return $desired
+}
+function Set-Node([string]$Path, $Node, [switch]$KeepDacl) {
     $acl = if ($Node.kind -eq 'directory') { [Security.AccessControl.DirectorySecurity]::new() }
         else { [Security.AccessControl.FileSecurity]::new() }
-    $acl.SetSecurityDescriptorSddlForm($Node.sddl, $script:Sections)
+    $sections = if ($KeepDacl) {
+        [Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Group
+    } else { $script:Sections }
+    $acl.SetSecurityDescriptorSddlForm($Node.sddl, $sections)
     Set-Acl -LiteralPath $Path -AclObject $acl
     [IO.File]::SetAttributes($Path, [IO.FileAttributes]$Node.attributes)
     $item = Get-Item -LiteralPath $Path -Force
     $item.CreationTimeUtc = [datetime]::new([long]$Node.created, [DateTimeKind]::Utc)
     $item.LastWriteTimeUtc = [datetime]::new([long]$Node.written, [DateTimeKind]::Utc)
 }
-function Copy-Tree([string]$Source, [string]$Destination, $Expected) {
+function Copy-Tree([string]$Source, [string]$Destination, $Expected, $Publication = $null) {
     Assert-Equal (Read-Tree $Source) $Expected "Source changed: $Source"
     Assert-Path $Destination -Absent
     if (Test-Path -LiteralPath $Destination) { throw "Destination exists: $Destination" }
     if ($Expected.kind -eq 'absent') { return }
+    $parentPath = Split-Path $Destination
+    $parent = Read-Parent $parentPath
+    $desired = if ($null -ne $Publication) { $Publication }
+        else { Get-CopyRequirements $Expected $parent $Expected }
+    # 内容と通常メタデータを別の候補へ差し替えることは許可しない。
+    $contentCheck = Get-Json $desired | ConvertFrom-Json -AsHashtable
+    for ($i=0; $i -lt $contentCheck.nodes.Count; $i++) { $contentCheck.nodes[$i].sddl=$Expected.nodes[$i].sddl }
+    Assert-Observed $contentCheck $Expected 'Copy requirements changed non-ACL metadata'
     foreach ($node in $Expected.nodes) {
         $dest = if ($node.relative) { Join-Path $Destination $node.relative } else { $Destination }
         $src = if ($node.relative) { Join-Path $Source $node.relative } else { $Source }
@@ -215,12 +291,16 @@ function Copy-Tree([string]$Source, [string]$Destination, $Expected) {
                 try { $input.CopyTo($output); $output.Flush($true) } finally { $output.Dispose() }
             } finally { $input.Dispose() }
         }
+        $metadata = @($desired.nodes | Where-Object { $_.relative -ceq $node.relative })[0]
+        # 公開候補の親ACLを先に設定してから子を作り、実際のWindows継承を照合する。
+        Set-Node $dest $metadata -KeepDacl:($null -eq $Publication)
     }
     # Children are created first so that copying does not disturb directory timestamps.
-    foreach ($node in @($Expected.nodes | Sort-Object { $_.relative.Length } -Descending)) {
-        Set-Node $(if ($node.relative) { Join-Path $Destination $node.relative } else { $Destination }) $node
+    foreach ($node in @($desired.nodes | Sort-Object { $_.relative.Length } -Descending)) {
+        Set-Node $(if ($node.relative) { Join-Path $Destination $node.relative } else { $Destination }) $node -KeepDacl
     }
-    Assert-Observed (Read-Tree $Destination) $Expected "Observed metadata/tree copy not reproducible: $Destination"
+    Assert-Observed (Read-Tree $Destination) $desired "Copy does not meet destination ACL/metadata requirements: $Destination"
+    Assert-Equal (Read-Parent $parentPath) $parent 'Copy parent changed'
     Assert-Equal (Read-Tree $Source) $Expected "Source changed during copy: $Source"
 }
 function Move-Tree([string]$Source, [string]$Destination, $Expected) {

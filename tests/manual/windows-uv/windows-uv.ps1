@@ -69,7 +69,13 @@ function Get-IsolatedEnvironment($State) {
 function Assert-Originals($State) {
     foreach ($entry in $State.entries) {
         Assert-Equal (Read-Tree $entry.target) $entry.original "Concurrent change: $($entry.target)"
-        Assert-Observed (Read-Tree (Join-Path $Backup $entry.saved)) $entry.original "Damaged observation copy: $($entry.saved)"
+        Assert-Equal (Read-Tree (Join-Path $Backup $entry.saved)) $entry.observation "Damaged observation copy: $($entry.saved)"
+    }
+    Assert-Parents $State
+}
+function Assert-Parents($State) {
+    foreach ($path in $State.parents.Keys) {
+        Assert-Equal (Read-Parent $path) $State.parents[$path] "Parent identity/ACL/attributes changed: $path"
     }
 }
 function Save-Event([string]$Name, $Value) { Write-NewJson (Join-Path $Backup ($Name + '.json')) $Value }
@@ -93,10 +99,10 @@ function Set-CandidateMetadata([string]$Path, $Original) {
     foreach ($node in $tree.nodes) {
         $old = @($Original.nodes | Where-Object { $_.relative -ceq $node.relative -and $_.kind -eq $node.kind })
         if ($old.Count -eq 1) {
-            $node.sddl = $old[0].sddl; $node.attributes = $old[0].attributes
+            $node.attributes = $old[0].attributes
             # NTFSの同名置換で作成日時が引き継がれるため、候補を封印する前に一致させる。
             if ($node.relative -eq '' -and $node.kind -eq 'file') { $node.created = $old[0].created }
-            Set-Node $(if ($node.relative) { Join-Path $Path $node.relative } else { $Path }) $node
+            Set-Node $(if ($node.relative) { Join-Path $Path $node.relative } else { $Path }) $node -KeepDacl
         }
     }
 }
@@ -148,9 +154,11 @@ function Complete-Pending($State, $Journal, [int]$Index) {
     $position = Get-EntryPosition $entry $record $entry.after
     if ($record.direction -eq 'apply') {
         if ($position -eq 'published') { return }
+        Assert-Parents $State
         if (-not (Test-Absent (Read-Tree $entry.target))) {
             Move-Tree $entry.target $record.originalSource $entry.original
         }
+        Assert-Parents $State
         $null = Get-EntryPosition $entry $record $entry.after
         if (-not (Test-Absent $record.after)) { Move-Tree $record.stage $entry.target $record.after }
         Assert-Equal (Read-Tree $entry.target) $record.after 'Candidate publication verification failed'
@@ -181,6 +189,7 @@ function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [sw
         }
     } else {
         Assert-Equal $Desired $entry.after 'Apply must select the sealed candidate'
+        Assert-Parents $State
         if ($null -eq $record) {
             if ($entry.original.kind -eq 'file' -and $Desired.kind -eq 'file') {
                 Assert-Equal $Desired.nodes[0].created $entry.original.nodes[0].created `
@@ -189,7 +198,8 @@ function Publish-One($State, $Journal, [int]$Index, [string]$Blob, $Desired, [sw
             if ((Get-Json (Get-ObservedTree $entry.original)) -ceq (Get-Json (Get-ObservedTree $Desired))) { return }
             $nonce = [guid]::NewGuid().ToString('N')
             $stage = Join-Path (Split-Path $entry.target) ('.n4-uv-stage-' + $nonce)
-            Copy-Tree $Blob $stage $Desired
+            Copy-Tree $Blob $stage $entry.blobState $Desired
+            Assert-Parents $State
             $record = @{ nonce=$nonce; direction='apply'; stage=$stage; after=(Read-Tree $stage)
                 originalSource=(Join-Path $Backup ('retained-' + $nonce))
                 discard=(Join-Path $Backup ('candidate-' + $nonce)) }
@@ -251,11 +261,17 @@ if ($Command -eq 'Prepare') {
         [IO.File]::Copy((Join-Path $PSScriptRoot $file),(Join-Path $Backup $file),$false)
     }
     $entries = @()
+    $parents = @{}
+    foreach ($path in @($targets | ForEach-Object { Split-Path $_ }) +
+        @($Backup,(Join-Path $Backup 'observations'))) {
+        $parents[$path] = Read-Parent $path
+    }
     for ($i=0; $i -lt $targets.Count; $i++) {
         $original = Read-Tree $targets[$i]
         $saved = "observations\$i"
         Copy-Tree $targets[$i] (Join-Path $Backup $saved) $original
-        $entries += @{ target=$targets[$i]; saved=$saved; original=$original }
+        $entries += @{ target=$targets[$i]; saved=$saved; original=$original
+            observation=(Read-Tree (Join-Path $Backup $saved)) }
     }
     foreach ($i in @(0,1,3)) { if ($entries[$i].original.kind -ne 'file') { throw 'Config, lock and shared install manifest must exist as regular files.' } }
     if ($entries[2].original.kind -ne 'directory') { throw 'Old uv install must be a directory.' }
@@ -270,10 +286,10 @@ if ($Command -eq 'Prepare') {
     $cacheQuery=@{MISE_NO_HOOKS='1';MISE_AUTO_INSTALL='0';MISE_STATE_DIR=(Join-Path $work 'state')}
     $activeCache=ConvertTo-WindowsPath (Invoke-Captured $mise @('cache','path') $work $cacheQuery).stdout.Trim()
     if ($activeCache -ine $Cache) { throw 'Input cache directory does not match mise cache path.' }
-    $state = @{ schema=2; sacl='unobserved'; rollback='same_volume_original_object'
+    $state = @{ schema=3; sacl='unobserved'; rollback='same_volume_original_object'
         sourceCommit=$verifiedCommit
         config=$Config; data=$Data; cache=$Cache; home=$homeRoot
-        entries=$entries; mise=$mise; miseHash=(Get-Hash $mise); chezmoi=$chezmoi
+        entries=$entries; parents=$parents; mise=$mise; miseHash=(Get-Hash $mise); chezmoi=$chezmoi
         scripts=@{}; sandboxSuccess=$false }
     $state.miseVersion=(Invoke-Captured $mise @('--version') $work $queryEnv).stdout.Trim()
     foreach ($file in @('windows-uv.ps1','uv-state.ps1')) { $state.scripts[$file] = Get-Hash (Join-Path $Backup $file) }
@@ -312,9 +328,12 @@ if ($Command -eq 'Prepare') {
         }
     }
     $stagedTargets = @(Get-Targets (Join-Path $work 'config\config.toml') (Join-Path $work 'data') (Join-Path $work 'cache'))
+    foreach ($path in @($stagedTargets | ForEach-Object { Split-Path $_ })) {
+        $state.parents[$path] = Read-Parent $path
+    }
     for ($i=0; $i -lt $targets.Count; $i++) {
         $copySource = Join-Path $Backup $entries[$i].saved
-        Copy-Tree $copySource $stagedTargets[$i] (Read-Tree $copySource)
+        Copy-Tree $copySource $stagedTargets[$i] $entries[$i].observation
     }
     $envMap = Get-IsolatedEnvironment $state
     $oldTool = (Invoke-Captured $mise @('tool','uv','--json') $work $envMap).stdout | ConvertFrom-Json
@@ -348,6 +367,12 @@ if ($Command -eq 'Prepare') {
     Assert-Equal (ConvertFrom-Toml ([IO.File]::ReadAllText($stagedTargets[1])) $chezmoi $work) $expectedLock 'Non-uv lock change'
     $state.candidateHashes=@((Get-Hash $stagedTargets[0]),(Get-Hash $stagedTargets[1]))
     $state.otherMetadata = Get-WithoutUv (ConvertFrom-Toml ([IO.File]::ReadAllText($targets[3])) $chezmoi $work)
+    for ($i=0; $i -lt $targets.Count; $i++) {
+        $tree = Read-Tree $stagedTargets[$i]
+        $requirements = Get-CopyRequirements $tree $state.parents[(Split-Path $stagedTargets[$i])] $entries[$i].original
+        Assert-Observed $tree $requirements 'Prepared work ACL/owner/group differs from private copy policy'
+        $entries[$i].work = $tree
+    }
     Assert-Originals $state
     Assert-Path $Source
     $null = Get-SourceCommit $Source $verifiedCommit
@@ -359,7 +384,7 @@ if ($Command -eq 'Prepare') {
 
 if (-not $SnapshotDigest -or (Get-Hash (Join-Path $Backup 'snapshot.json')) -cne $SnapshotDigest) { throw 'Snapshot digest mismatch; supply the separately recorded digest.' }
 $state = Read-Json (Join-Path $Backup 'snapshot.json')
-if ($state.schema -ne 2) { throw 'Unsupported snapshot schema; copy-based recovery cannot be resumed with this script.' }
+if ($state.schema -ne 3) { throw 'Unsupported snapshot schema; use the matching saved scripts for a complete older backup. Never upgrade or rebaseline it.' }
 if ($state.home -ine $homeRoot) { throw 'Different target user.' }
 foreach ($file in $state.scripts.Keys) {
     if ((Get-Hash (Join-Path $Backup $file)) -cne $state.scripts[$file]) { throw 'Saved recovery script changed.' }
@@ -377,6 +402,9 @@ try {
     if ($Command -eq 'Install') {
         if ($journal.phase -ne 'prepared') { throw 'Install is one-shot; preserve failed work and restore, do not retry force install.' }
         Assert-Originals $state
+        for ($i=0; $i -lt $state.entries.Count; $i++) {
+            Assert-Equal (Read-Tree $stagedTargets[$i]) $state.entries[$i].work 'Prepared private work changed'
+        }
         if ((Get-Hash $state.mise) -cne $state.miseHash) { throw 'mise executable changed.' }
         Assert-Equal @((Get-Hash $stagedTargets[0]),(Get-Hash $stagedTargets[1])) $state.candidateHashes 'Prepared config/lock changed'
         $configs = (Invoke-Captured $state.mise @('config','ls','--json') $work $envMap).stdout | ConvertFrom-Json
@@ -416,6 +444,9 @@ try {
         }
         $planEntries=@()
         for ($i=0; $i -lt $state.entries.Count; $i++) {
+            $tree=Read-Tree $stagedTargets[$i]
+            $privateRequirements=Get-CopyRequirements $tree $state.parents[(Split-Path $stagedTargets[$i])] $state.entries[$i].work
+            Assert-Observed $tree $privateRequirements 'Installer changed private ACL/owner/group policy'
             Set-CandidateMetadata $stagedTargets[$i] $state.entries[$i].original
             $tree=Read-Tree $stagedTargets[$i]
             foreach ($node in $tree.nodes | Where-Object { $_.kind -eq 'file' }) {
@@ -429,9 +460,11 @@ try {
                     }
                 }
             }
-            $planEntries+=@{ blob=$stagedTargets[$i]; after=$tree }
+            $after=Get-CopyRequirements $tree $state.parents[(Split-Path $state.entries[$i].target)] $state.entries[$i].original -Publication
+            $planEntries+=@{ blob=$stagedTargets[$i]; blobState=$tree; after=$after }
         }
-        Write-NewJson (Join-Path $Backup 'plan.json') @{ entries=$planEntries; resolutions=$resolutions }
+        Assert-Originals $state
+        Write-NewJson (Join-Path $Backup 'plan.json') @{ schema=3; entries=$planEntries; resolutions=$resolutions }
         $journal.phase='installed'; Save-Journal $journal
         @{ status='isolated_install_verified_not_applied'; planDigest=(Get-Hash (Join-Path $Backup 'plan.json')); sandboxSuccess=$false } | ConvertTo-Json
         exit 0
@@ -440,13 +473,25 @@ try {
     if (Test-Path -LiteralPath (Join-Path $Backup 'plan.json')) {
         if (-not $PlanDigest -or (Get-Hash (Join-Path $Backup 'plan.json')) -cne $PlanDigest) { throw 'Plan digest required/mismatch.' }
         $plan=Read-Json (Join-Path $Backup 'plan.json')
+        if ($plan.schema -ne 3 -or $plan.entries.Count -ne $state.entries.Count) { throw 'Unsupported or incomplete plan' }
     }
     if ($Command -eq 'Apply' -and ($null -eq $plan -or $journal.phase -notin @('installed','applying','applied'))) { throw 'No completed install plan, or backup already restored.' }
     for ($i=0; $i -lt $state.entries.Count; $i++) {
         $state.entries[$i].after=if ($null -ne $plan) { $plan.entries[$i].after } else { $state.entries[$i].original }
+        if ($null -ne $plan) {
+            $entry=$plan.entries[$i]
+            Assert-Equal $entry.blob $stagedTargets[$i] 'Unexpected candidate blob path'
+            $requirements=Get-CopyRequirements $entry.blobState $state.parents[(Split-Path $state.entries[$i].target)] $state.entries[$i].original -Publication
+            Assert-Equal $entry.after $requirements 'Publication requirements differ from sealed original/parent policy'
+            $state.entries[$i].blobState=$entry.blobState
+        }
     }
     if ($Command -eq 'Apply') {
-        foreach ($entry in $plan.entries) { Assert-Equal (Read-Tree $entry.blob) $entry.after 'Prepared output changed' }
+        Assert-Parents $state
+        foreach ($entry in $state.entries) {
+            Assert-Equal (Read-Tree (Join-Path $Backup $entry.saved)) $entry.observation 'Damaged observation copy'
+        }
+        foreach ($entry in $plan.entries) { Assert-Equal (Read-Tree $entry.blob) $entry.blobState 'Prepared output changed' }
     }
     $null=Get-CurrentStates $state $plan $journal
     $alreadyRestored=$Command -eq 'Restore' -and $journal.phase -eq 'restored'
@@ -454,6 +499,7 @@ try {
         $journal.phase=if ($Command -eq 'Apply') { 'applying' } else { 'restoring' }
         Save-Journal $journal
         for ($i=0; $i -lt $state.entries.Count; $i++) {
+            if ($Command -eq 'Apply') { Assert-Parents $state }
             $null=Get-CurrentStates $state $plan $journal
             $blob=if ($Command -eq 'Apply') { $plan.entries[$i].blob } else { '' }
             $desired=if ($Command -eq 'Apply') { $plan.entries[$i].after } else { $state.entries[$i].original }

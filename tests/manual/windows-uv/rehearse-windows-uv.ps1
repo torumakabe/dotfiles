@@ -49,24 +49,33 @@ $script:activeCase=$null
 $script:selectedCases=0
 $script:failure=''
 if ($MockOnly) {
+    function Read-Parent([string]$Path) {
+        $sddl = if ($Path.StartsWith($Backup)) { 'O:SYG:SYD:AI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)' }
+            else { 'O:SYG:SYD:AI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;S-1-15-2-101)' }
+        @{relative='';kind='directory';hash=$null;sddl=$sddl;sacl='unobserved';attributes=16;identity="parent:$Path"}
+    }
     function Read-Tree([string]$Path) {
         if ($script:files.ContainsKey($Path)) { return (Get-Json $script:files[$Path] | ConvertFrom-Json -AsHashtable) }
         return @{kind='absent';nodes=@()}
     }
-    function Copy-Tree([string]$Source,[string]$Destination,$Expected) {
+    function Copy-Tree([string]$Source,[string]$Destination,$Expected,$Publication=$null) {
         Assert-Equal (Read-Tree $Source) $Expected 'mock source changed'
         if ((Read-Tree $Destination).kind -ne 'absent') { throw 'mock copy destination occupied' }
         if ($Expected.kind -eq 'absent') { return }
-        $copy=Get-Json $Expected | ConvertFrom-Json -AsHashtable
+        $copy=if ($null -ne $Publication) { Get-Json $Publication | ConvertFrom-Json -AsHashtable }
+            else { Get-CopyRequirements $Expected (Read-Parent (Split-Path $Destination)) $Expected }
         foreach ($node in $copy.nodes) { $node.identity="volume:copy-$($script:identityNumber++)" }
         $script:files[$Destination]=$copy
     }
-    function Set-Node([string]$Path,$Node) {
+    function Set-Node([string]$Path,$Node,[switch]$KeepDacl) {
         foreach ($root in $script:files.Keys) {
             foreach ($currentNode in $script:files[$root].nodes) {
                 $full = if ($currentNode.relative) { Join-Path $root $currentNode.relative } else { $root }
                 if ($full -ceq $Path) {
-                    foreach ($field in @('sddl','attributes','created','written')) { $currentNode[$field]=$Node[$field] }
+                    foreach ($field in @('sddl','attributes','created','written')) {
+                        if ($field -eq 'sddl' -and $KeepDacl) { continue }
+                        $currentNode[$field]=$Node[$field]
+                    }
                     return
                 }
             }
@@ -129,10 +138,12 @@ function New-TestTree([string]$Path,[string]$Kind,[string]$Content) {
     if ($Kind -eq 'absent') { return }
     if ($MockOnly) {
         $nodes=@(@{relative='';kind=$Kind;hash=$(if ($Kind -eq 'file') { $Content } else { $null })
-            sddl='owner:group:DACL';sacl='unobserved';attributes=$(if ($Kind -eq 'file') {32} else {16})
+            sddl=(Get-InheritedSddl (Read-Parent (Split-Path $Path)).sddl 'O:SYG:SYD:' $Kind)
+            sacl='unobserved';attributes=$(if ($Kind -eq 'file') {32} else {16})
             created=1;written=1;identity="volume:object-$($script:identityNumber++)"})
         if ($Kind -eq 'directory') {
-            $nodes+=@{relative='uv.exe';kind='file';hash=$Content;sddl='owner:group:DACL';sacl='unobserved'
+            $nodes+=@{relative='uv.exe';kind='file';hash=$Content
+                sddl=(Get-InheritedSddl $nodes[0].sddl 'O:SYG:SYD:' 'file');sacl='unobserved'
                 attributes=32;created=1;written=1;identity="volume:object-$($script:identityNumber++)"}
         }
         $script:files[$Path]=@{kind=$Kind;nodes=$nodes}
@@ -163,13 +174,15 @@ function Fixture([string]$OldKind='directory',[string]$NewKind='file') {
     }
     $old=Read-Tree $live; $unsealed=Read-Tree $blob
     Set-CandidateMetadata $blob $old
-    $after=Read-Tree $blob
+    $blobState=Read-Tree $blob
+    $after=Get-CopyRequirements $blobState (Read-Parent $root) $old -Publication
     Copy-Tree $live $copy $old
     $journal=@{phase='installed';records=@{}}
     Save-Journal $journal
     @{
-        state=@{entries=@(@{target=$live;saved='observation';original=$old;after=$after})}
-        plan=@{entries=@(@{blob=$blob;after=$after})}
+        state=@{entries=@(@{target=$live;saved='observation';original=$old;after=$after;blobState=$blobState
+            observation=(Read-Tree $copy);work=$blobState});parents=@{}}
+        plan=@{entries=@(@{blob=$blob;blobState=$blobState;after=$after})}
         journal=$journal;old=$old;new=$after;unsealed=$unsealed;live=$live;blob=$blob;copy=$copy;root=$root
     }
 }
@@ -188,7 +201,7 @@ function Change-Object([string]$Path,[string]$Field) {
     } elseif ($Field -eq 'identity') {
         $tree=Read-Tree $Path
         $other=Join-Path (Split-Path $Path) ('replacement-' + [guid]::NewGuid().ToString('N'))
-        Copy-Tree $Path $other $tree
+        Copy-Tree $Path $other $tree $tree
         & $script:moveImplementation $Path ($other + '-retained') $tree
         & $script:moveImplementation $other $Path (Read-Tree $other)
         Assert-Observed (Read-Tree $Path) $tree 'Replacement should differ only in identity'
@@ -258,12 +271,69 @@ try {
     }
     Check 'unchanged candidate leaves original identity and journal untouched' {
         $f=Fixture
-        $f.plan.entries[0]=@{blob=$f.copy;after=(Read-Tree $f.copy)}
+        $copy=Read-Tree $f.copy
+        $desired=Get-CopyRequirements $copy (Read-Parent $f.root) $f.old -Publication
+        $f.plan.entries[0]=@{blob=$f.copy;blobState=$copy;after=$desired}
         $f.new=$f.plan.entries[0].after; $f.blob=$f.copy; $f.state.entries[0].after=$f.new
+        $f.state.entries[0].blobState=$copy
         Apply-Fixture $f
         Restore-Fixture $f
         Assert-Equal $script:moves 0 'unchanged target moved'
         Assert-Equal $f.journal.records.Count 0 'unchanged target journaled'
+    }
+    Check 'private observation and published ACL have independent seals' {
+        $f=Fixture 'directory' 'directory'
+        Assert-Originals $f.state
+        $copy=Read-Tree $f.copy
+        $requirements=Get-CopyRequirements $f.old (Read-Parent $Backup) $f.old
+        Assert-Observed $copy $requirements 'Observation must use private inheritance'
+        if ($MockOnly) {
+            if ($copy.nodes[0].sddl -ceq $f.old.nodes[0].sddl) { throw 'Fixture did not model distinct parents' }
+            Must-Fail { Assert-Observed $copy $f.old 'Private copy cannot have live ACL' }
+        }
+        Apply-Fixture $f
+        Assert-Observed (Read-Tree $f.live) $f.new 'Published ACL does not meet original policy'
+        Assert-Equal (Read-Tree $f.copy) $copy 'Publication changed the private observation'
+        Restore-Fixture $f
+    }
+    foreach ($field in @('hash','sddl','attributes','created','written','identity')) {
+        Check "sealed private observation $field change is rejected" {
+            $f=Fixture
+            Change-Object $f.copy $field
+            Must-Fail { Assert-Originals $f.state }
+            Assert-Equal $script:moves 0 'Observation damage caused an original move'
+        }
+        Check "sealed private blob $field change is rejected before publication" {
+            $f=Fixture
+            Change-Object $f.blob $field
+            Must-Fail { Apply-Fixture $f }
+            Assert-Equal $script:moves 0 'Private blob damage caused an original move'
+        }
+    }
+    Check 'new installer ACL cannot become a publication requirement' {
+        $f=Fixture 'directory' 'directory'
+        $blob=Read-Tree $f.blob
+        $expected=Get-CopyRequirements $blob (Read-Parent $Backup) $blob
+        Assert-Observed $blob $expected 'Fixture must start with private inherited ACL'
+        Change-Object $f.blob 'sddl'
+        $changed=Read-Tree $f.blob
+        $expected=Get-CopyRequirements $changed (Read-Parent $Backup) $blob
+        Must-Fail { Assert-Observed $changed $expected 'Unexpected installer ACL' }
+        Assert-Equal (Read-Tree $f.live) $f.old 'Installer ACL validation changed original'
+    }
+    Check 'publication parent identity change refuses before original move' {
+        $f=Fixture
+        $sealed=Read-Parent $f.root
+        $f.state.parents[$f.root]=$sealed
+        & {
+            function Read-Parent([string]$Path) {
+                $changed=Get-Json $sealed | ConvertFrom-Json -AsHashtable
+                $changed.identity='changed-parent'
+                return $changed
+            }
+            Must-Fail { Apply-Fixture $f }
+        }
+        Assert-Equal $script:moves 0 'Changed publication parent caused a move'
     }
     foreach ($field in @('hash','sddl','attributes','created','written','identity')) {
         Check "unknown original $field refuses before first rename" {
@@ -334,7 +404,7 @@ try {
         }
     }
     foreach ($location in @('originalSource','stage','live','discard')) {
-        foreach ($field in @('hash','identity')) {
+        foreach ($field in @('hash','identity','sddl','attributes','created','written')) {
             Check "unknown $location $field refuses recovery" {
                 $f=Fixture
                 if ($location -eq 'stage') {
