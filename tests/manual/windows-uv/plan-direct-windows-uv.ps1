@@ -29,7 +29,7 @@ function Assert-DirectEnvironment {
         }
     }
 }
-function Assert-DirectSource([string]$Root, [string]$Commit) {
+function Assert-DirectSource([string]$Root, [string]$Commit, [string]$ScriptRoot = $PSScriptRoot) {
     if ($Commit -cnotmatch '^[0-9a-fA-F]{40}$') { throw 'SourceCommit requires the full Git SHA.' }
     Assert-DirectEnvironment
     $git = (Get-Command git -CommandType Application -TotalCount 1 -ErrorAction Stop).Source
@@ -41,7 +41,7 @@ function Assert-DirectSource([string]$Root, [string]$Commit) {
     foreach ($name in @('plan-direct-windows-uv.ps1','uv-state.ps1')) {
         $pinned = Join-Path $Root "tests\manual\windows-uv\$name"
         Assert-Path $pinned
-        Assert-Equal (Get-Hash $pinned) (Get-Hash (Join-Path $PSScriptRoot $name)) 'Running script differs from pinned source.'
+        Assert-Equal (Get-Hash $pinned) (Get-Hash (Join-Path $ScriptRoot $name)) 'Running script differs from pinned source.'
     }
 }
 function Assert-DirectCleanSource([string]$Git, [string]$Root) {

@@ -354,7 +354,7 @@ function Initialize-DirectRecovery {
         $inventoryReport.installerInvoked -ne $false -or $inventoryReport.originalsMoved -ne $false) {
         throw 'Unsupported original inventory contract.'
     }
-    Assert-DirectSource $Source $SourceCommit
+    Assert-DirectSource $Source $SourceCommit $PSScriptRoot
     Assert-Equal (Get-DirectScripts $PSScriptRoot) (Get-DirectScripts (Join-Path $Source 'tests\manual\windows-uv')) 'Running source hash mismatch.'
     $roots=$inventoryReport.roots
     Assert-Equal $Recovery $roots.recovery 'Use the fresh recovery path bound by the inventory.'
@@ -487,7 +487,7 @@ function Initialize-DirectRecovery {
     }
     Assert-DirectGuards $state
     foreach ($entry in $state.entries) { Assert-Equal (Read-Tree $entry.target) $entry.original 'Original changed during Prepare.' }
-    Assert-DirectSource $Source $SourceCommit
+    Assert-DirectSource $Source $SourceCommit $PSScriptRoot
     Assert-DirectHash $Report $ReportDigest
     foreach ($path in $state.toolHashes.Keys) { Assert-DirectHash $path $state.toolHashes[$path] }
     Write-NewJson (Join-Path $Recovery 'direct-snapshot.json') $state

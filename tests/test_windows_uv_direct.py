@@ -332,6 +332,40 @@ try {
 
 @unittest.skipUnless(PWSH, "existing PowerShell required")
 class WindowsUvDirectTests(unittest.TestCase):
+    def test_plan_function_loader_keeps_explicit_source_directory(self):
+        harness = r"""
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+. (Join-Path $env:TEST_ENTRY 'uv-state.ps1')
+$tokens=$null; $errors=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $env:TEST_ENTRY 'plan-direct-windows-uv.ps1'),[ref]$tokens,[ref]$errors)
+if ($errors.Count) { throw ($errors | Out-String) }
+foreach ($node in $ast.FindAll({
+    param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst]
+},$false)) {
+    . ([scriptblock]::Create($node.Extent.Text))
+}
+function Assert-DirectEnvironment {}
+function Assert-Path {}
+function ConvertTo-DirectPath([string]$Path) { $Path }
+function Invoke-Captured($Executable, $Arguments, $Directory) {
+    if ($Arguments -contains '--show-toplevel') { return @{stdout=$env:TEST_SOURCE} }
+    if ($Arguments -contains 'HEAD') { return @{stdout=('a'*40)} }
+    if ($Arguments -contains 'status' -or $Arguments -contains 'ls-files') { return @{stdout=''} }
+    throw 'Unexpected Git operation.'
+}
+Assert-DirectSource $env:TEST_SOURCE ('a'*40) $env:TEST_ENTRY
+'source_verified'
+"""
+        result = subprocess.run(
+            [PWSH, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", harness],
+            cwd=ROOT, env=os.environ | {"TEST_ENTRY": str(ENTRY.parent), "TEST_SOURCE": str(ROOT)},
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "source_verified")
+
     def run_mode(self, mode, error=None, value=None):
         with tempfile.TemporaryDirectory(prefix=".windows-uv-transaction-", dir=ROOT) as directory:
             root = Path(directory)
@@ -511,6 +545,11 @@ class WindowsUvDirectTests(unittest.TestCase):
 
 
 class DirectBoundaries(unittest.TestCase):
+    def test_prepare_passes_running_script_directory_to_imported_source_guard(self):
+        self.assertEqual(ENTRY.read_text().count(
+            "Assert-DirectSource $Source $SourceCommit $PSScriptRoot"
+        ), 2)
+
     def test_direct_install_no_force_no_recursive_deletion_or_binary_promotion(self):
         text = ENTRY.read_text()
         self.assertIn("@('install','--locked','uv')", text)
