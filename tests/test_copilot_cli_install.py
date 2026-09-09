@@ -18,11 +18,11 @@ SHELL_SETUP_PATH = REPO_ROOT / "home/run_once_after_10-setup-shell.sh.tmpl"
 COPILOT_RELEASES = {
     "amd64": (
         "copilot-linux-x64.tar.gz",
-        "039933c9247686131c4406abb1d439bdbf68103edc1ff585bd70d5b0dc940f72",
+        "ffbe1c429664b8a05efed67ecdb467123e40fcaa3c6c14ef9a98ba74da4687b7",
     ),
     "arm64": (
         "copilot-linux-arm64.tar.gz",
-        "3ed85e711955e13be523bf492bc6c93b40b69925bcb7f817c9d08abf4839cf89",
+        "213b3a267042dbac3cd8ae22c82f5ea04ff3cabc008108c0f895055d46be4473",
     ),
 }
 AZD_RELEASES = {
@@ -98,7 +98,7 @@ class CopilotCliInstallTests(unittest.TestCase):
         self.assertNotRegex(self.bootstrap, r"command -v copilot")
 
     def test_copilot_uses_pinned_verified_release(self) -> None:
-        self.assertIn('COPILOT_VERSION="1.0.80"', self.bootstrap)
+        self.assertIn('COPILOT_VERSION="1.0.83"', self.bootstrap)
         block = _case_block(self.bootstrap, "COPILOT_VERSION")
         self.assertEqual(
             _parse_archives_and_checksums(block),
