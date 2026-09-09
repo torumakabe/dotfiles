@@ -74,6 +74,107 @@ macOS と Linux は、`home/run_once_before_20-install-mise.sh.tmpl` が固定�
 
 macOS に Homebrew formula の mise がある場合、現在解決される mise が formula の実体であるか、mise が未解決のときだけ、導入スクリプトは検証済みの公式バイナリを原子的に配置する。現在 `command -v mise` で解決される formula 以外の mise、または標準配置先 `~/.local/bin/mise` にある実行可能な mise は置き換えない。PATH 外の任意の場所は探索しない。現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、導入スクリプトは formula を削除しない。Homebrew 版の activation を読み込んだ既存のシェルをすべて終了し、新しいシェルで `command -v mise` が導入スクリプトの案内したパスを返すことを確認してから、`brew uninstall mise` を手動で実行する。
 
+### 実体環境への切替
+
+mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定し、Copilot の全5 command hook は host 上で `MISE_ENABLE_TOOLS=uv mise exec -- uv run ...` を使う。Windows は既存の PowerShell activation から実体環境を継承する。
+
+切替の受け入れ条件は、Copilot の sandbox 内で宣言済みの mise 管理ツールがすべて shim を経由せず実体から解決することである。uv は command hook が必要とするため確認の起点になるが、条件は uv だけに限らない。設定に宣言していないツールの shim は過去の導入の残骸であり、shim 経由でも版を解決できないため、この条件の対象から除く。
+
+変更対象の profile と `~/.copilot/hooks/hooks.json` を、端末内の専用作業ディレクトリへ属性とリンクを保持して退避する。CLI 実体を更新する場合はその実体も、uv backend を変更する場合は次節の対象も退避する。元の不在と変更前後の内容を記録し、並行変更を復元で上書きしない。
+
+Unix では `.profile`、`.zprofile`、`.zshenv` を一組として反映する。新しい親ターミナルから CLI を起動し、GUI は通常の起動方法で別に確認する。古い環境や login snapshot を持つアプリと CLI を再起動し、同じプロセス内で子シェルだけを作って反映済みとは判断しない。最初の hook で mise 自体と uv の解決先を確認する。通常 agent shell から見つかることは、hook の親 PATH から見つかる証拠にはならない。
+
+受け入れ条件は、各環境の sandbox 内で shim ディレクトリの名前を総当たりし、解決先が shim ディレクトリの外にあることで確認する。zsh と bash では次を実行する。
+
+```sh
+for shim in "${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims"/*; do
+    name=$(basename "$shim")
+    resolved=$(command -v "$name") || { printf '%s\n' "unresolved: $name"; continue; }
+    case "$resolved" in
+        */shims/*) printf '%s\n' "via shim: $name -> $resolved" ;;
+    esac
+done
+```
+
+PowerShell では次を実行する。
+
+```powershell
+$shims = Join-Path $env:LOCALAPPDATA 'mise\shims'
+$extensions = $env:PATHEXT -split ';'
+Get-ChildItem -LiteralPath $shims -File | ForEach-Object {
+    $extension = [IO.Path]::GetExtension($_.Name)
+    if ($extensions -contains $extension) { $_.Name.Substring(0, $_.Name.Length - $extension.Length) }
+    else { $_.Name }
+} | Sort-Object -Unique | ForEach-Object {
+    $resolved = (Get-Command $_ -ErrorAction SilentlyContinue).Source
+    if (-not $resolved) { "unresolved: $_" }
+    elseif ($resolved -like "$shims*") { "via shim: $_ -> $resolved" }
+}
+```
+
+出力が空であれば条件を満たす。出力がある名前は `mise which <名前>` で区別し、active なツールが shim へ落ちる場合だけ切替の失敗として扱う。active でない名前は宣言していないツールの残骸であり、切替の前後で動作が変わらない。
+
+Linux の CLI 初回導入版は1.0.83である。既存 CLI は初回導入処理では更新されないため、1.0.80以前の場合は導入元の標準更新方法を使う。GUI 同梱 runtime は別に版と login-shell 環境取得の有無を確認する。
+
+失敗時は変更後の対象を保存してから、退避した profile、hook、更新した CLI 実体を復元し、新しい親プロセスから旧コマンドを起動する。新規作成したファイルは、変更後の内容から変わっていない場合だけ除去して元の不在へ戻す。既存ファイルに別の変更があれば上書きせず停止する。uv の復元は次節に従う。
+
+macOS の shim リンクと Windows User PATH の shim 登録は、この変更では撤去しない。後で撤去する場合は、macOS の対象リンク、リンク先、管理state（`${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-links`）、Windows User PATH の変更部分を追加で退避する。Windows は変更した要素の位置を記録し、他の PATH 要素を巻き戻さずに復元する。並行変更で安全に復元できない場合は停止する。登録を撤去する前に復元手順を確認する。
+
+実体と依存先の解決、更新と復元の結果は、sandbox 内の実作業結果と分けて記録する。Windows の uv rename/persist 障害や Linux/WSL の cache アクセス方針を、この切替の停止理由にはしない。新たな失敗は変更との関係を切り分け、未実行の処理を成功と推定しない。
+
+### uv の backend 移行
+
+uv は `github:astral-sh/uv` backend で管理する。新規環境は通常の導入でよい。既存の aqua install は、同じ版のまま backend を変更しても再導入されないことがあるため、一度だけ `--force` で入れ直す。以後は通常の `mise-upgrade` で更新し、毎回の force reinstall や PATH の手動同期は行わない。
+
+移行時は版と backend を同時に変更しない。global config と隣接 lock の両方を使い、uv の版、各対象の URL/checksum、provenance が従来と一致することを確認する。alias だけを変更して旧 lock を残すと、旧 backend が復元される場合がある。ソース名 `home/dot_config/mise/private_mise.lock` は、端末では `~/.config/mise/mise.lock` になる。
+
+1. 運用者は対象端末の uv/uvx を使う処理、Copilot、他の mise 更新と chezmoi apply を止める。プロジェクト設定が混ざらない作業ディレクトリで `mise config ls`、`mise tool uv --json`、`mise where uv`、`mise cache path` を確認する。
+2. 運用者は端末内の専用ディレクトリに config/lock、`installs/uv`、`installs/.mise-installs.toml`、shims 内の uv/uvx 関連ファイル、mise の `cache/uv` を退避する。Windows の拡張子付き shim、metadata、runtime link も対象にし、リンクはリンクとして保持する。不在だった対象も記録し、保存先のアクセス権を元より広げない。
+3. config と lock の uv 以外に端末固有の変更がない場合は、下記の対象限定 apply で両ファイルを反映する。固有変更がある場合は先に差分を整理し、uv の宣言、alias、uv の lock entry 群だけを反映する。
+4. 運用者は既存の GitHub 認証を使って、下記の `mise --locked install --force uv` を一度実行する。`uv@<version>` ではなく設定と同じ `uv` を要求し、版は lock で固定する。`--force` は途中で旧実体を削除するため、退避前に実行しない。通常の同期フックや `reshim` はこの操作の代用にならない。
+5. 運用者は `mise tool uv --json`、`mise ls uv`、`mise which uv`、`mise which uvx` で backend が GitHub、missing なし、実体のディレクトリが選ばれることを確認する。その後、新しい親ターミナルから起動した Copilot で `command -v uv`（PowerShell は `Get-Command uv`）、uv/uvx の版表示を確認する。実体への到達と cache を使う処理の成否は区別する。
+
+設定ファイルだけの反映（全 OS 共通。更新済みの source を使う）:
+
+```sh
+chezmoi apply --exclude=scripts "$HOME/.config/mise/config.toml" "$HOME/.config/mise/mise.lock"
+```
+
+macOS / Linux / WSL の通常ターミナル:
+
+```sh
+(
+    set -e
+    token=$(gh auth token)
+    if [ -z "$token" ]; then
+        printf '%s\n' "Existing GitHub authentication is unavailable" >&2
+        exit 1
+    fi
+    GITHUB_TOKEN="$token" mise --locked install --force uv
+)
+```
+
+Windows の通常 PowerShell:
+
+```powershell
+$previousToken = $env:GITHUB_TOKEN
+try {
+    $token = gh auth token
+    if ($LASTEXITCODE -ne 0 -or -not $token) { throw "Existing GitHub authentication is unavailable" }
+    $env:GITHUB_TOKEN = $token
+    mise --locked install --force uv
+    if ($LASTEXITCODE -ne 0) { throw "uv backend migration failed; restore the backup" }
+}
+finally {
+    $env:GITHUB_TOKEN = $previousToken
+    $token = $null
+}
+```
+
+失敗した場合、運用者は失敗後の uv 関連ファイルを退避し、保存した config/lock、uv の実体、metadata、shim、cache を元へ復元する。共有 manifest 全体を戻してよいのは、uv 以外に並行変更がない場合だけである。別の編集があれば上書きせず、差分を確認する。新しいターミナルで旧構成の uv/uvx が起動するまでバックアップを残し、再ダウンロードだけを復元手段にしない。
+
+lock の更新では、終了コード0だけで完了と判定しない。指定した5対象、各 options に対応する entry、`latest` を含む specifiers、URL/checksum と provenance を確認する。API 制限で対象が skipped になる場合は、既存認証をコマンドへ渡してから再生成する。uv 固有の配置と Windows ARM64 の扱いは [構造の説明](architecture.md#uv-の実体配置) を参照する。
+
 ### `mise-self-upgrade`
 
 Windows で mise 本体を winget 管理として更新する。

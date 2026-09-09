@@ -74,6 +74,8 @@ gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 
 すべての command Hook は `cwd: "."` でリポジトリルートから起動する。guard は許可対象ツールの絶対パスをそのルートに対して判定し、audit Hook は同じルートを操作元として記録する。PreToolUse 入力の `cwd` は、Copilot Workspace セッションで GitHub Copilot のインストール先になる場合があるため、判定には使わない。
 
+各 Hook は host 上の `MISE_ENABLE_TOOLS=uv mise exec -- uv run ...` で実行する。PowerShell も同等であり、shim を使わずに uv を選択する。Hook は通常 agent shell の login-shell 環境補完を共有しないため、runtime の親 PATH から mise 自体を解決できる必要がある。環境構築は [構造の説明](architecture.md#copilot-の通常-shell-と-command-hook)、切替と復元は [運用手順](operations.md#実体環境への切替) を参照する。
+
 Copilot CLI は Hook 設定をセッション開始時に読み込む。`hooks.json` を配備した後、既存セッションへ `cwd` の変更を反映するにはセッションを再起動する。ただし、Copilot Workspace が再開したセッションでは、再起動後も `cwd: "."` が GitHub Copilot のインストール先へ解決される場合がある。この状態では guard が対象ファイルをプロジェクト外と判定して拒否する。別のリポジトリにある同名ファイルを許可しないため、対象パスからプロジェクトルートを推測せず、新規 Workspace セッションへ移行する。
 
 動作確認:

@@ -11,8 +11,8 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json"
-EXPECTED_BASH_PREFIX = "MISE_ENABLE_TOOLS=uv uv run "
-EXPECTED_POWERSHELL_PREFIX = "$env:MISE_ENABLE_TOOLS='uv'; uv run "
+EXPECTED_BASH_PREFIX = "MISE_ENABLE_TOOLS=uv mise exec -- uv run "
+EXPECTED_POWERSHELL_PREFIX = "$env:MISE_ENABLE_TOOLS='uv'; mise exec -- uv run "
 
 
 def _commands() -> list[dict[str, object]]:
@@ -40,64 +40,92 @@ class CopilotHooksConfigTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("bash"), "bash is required")
     @unittest.skipIf(os.name == "nt", "the POSIX stub requires a POSIX shell")
     def test_bash_exports_uv_allowlist_to_hook_process(self) -> None:
-        command = _commands()[0]["bash"]
-
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             capture = root / "capture.txt"
-            stub = root / "uv"
+            stub = root / "mise"
             stub.write_text(
-                '#!/bin/sh\nprintf "%s" "$MISE_ENABLE_TOOLS" > "$HOOK_ENV_CAPTURE"\n',
+                '#!/bin/sh\n'
+                '{ printf "%s\\n" "$MISE_ENABLE_TOOLS" "$PWD" "$@"; cat; }'
+                ' > "$HOOK_ENV_CAPTURE"\nexit "${HOOK_EXIT_CODE:-0}"\n',
                 encoding="utf-8",
             )
             stub.chmod(0o755)
             env = dict(os.environ)
             env["HOOK_ENV_CAPTURE"] = str(capture)
             env["PATH"] = f"{root}{os.pathsep}{env['PATH']}"
+            env["HOME"] = str(root / "home with spaces")
 
-            result = subprocess.run(
-                ["bash", "-c", command],
-                check=False,
-                capture_output=True,
-                text=True,
-                env=env,
-            )
-
-            self.assertEqual(
-                result.returncode,
-                0,
-                msg=f"stdout={result.stdout!r} stderr={result.stderr!r}",
-            )
-            self.assertEqual(capture.read_text(encoding="utf-8"), "uv")
+            for command in _commands():
+                for exit_code in (0, 23):
+                    with self.subTest(command=command["bash"], exit_code=exit_code):
+                        env["HOOK_EXIT_CODE"] = str(exit_code)
+                        result = subprocess.run(
+                            ["bash", "--noprofile", "--norc", "-c", command["bash"]],
+                            input='{"toolName":"test"}\n',
+                            cwd=root,
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            env=env,
+                        )
+                        self.assertEqual(result.returncode, exit_code, result.stderr)
+                        self.assertEqual(result.stdout, "")
+                        lines = capture.read_text(encoding="utf-8").splitlines()
+                        self.assertEqual(
+                            lines[:6],
+                            ["uv", str(root.resolve()), "exec", "--", "uv", "run"],
+                        )
+                        expected_script = command["bash"].split('"')[1].replace(
+                            "$HOME", env["HOME"]
+                        )
+                        self.assertEqual(lines[6], expected_script)
+                        self.assertEqual(lines[7:], ['{"toolName":"test"}'])
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_exports_uv_allowlist_to_hook_process(self) -> None:
-        command = _commands()[0]["powershell"]
-
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             capture = root / "capture.txt"
-            stub = root / "uv.ps1"
+            stub = root / "mise.ps1"
             stub.write_text(
-                "Set-Content -NoNewline -LiteralPath "
-                "$env:HOOK_ENV_CAPTURE -Value $env:MISE_ENABLE_TOOLS\n",
+                "@($env:MISE_ENABLE_TOOLS, (Get-Location).Path) + "
+                "@($args | Where-Object { $_ -ne '--' }) + "
+                "@([Console]::In.ReadToEnd().TrimEnd()) | "
+                "Set-Content -LiteralPath $env:HOOK_ENV_CAPTURE\n"
+                "exit ([int]$env:HOOK_EXIT_CODE)\n",
                 encoding="utf-8",
             )
             env = dict(os.environ)
             env["HOOK_ENV_CAPTURE"] = str(capture)
             env["PATH"] = f"{root}{os.pathsep}{env['PATH']}"
 
-            result = subprocess.run(
-                ["pwsh", "-NoProfile", "-Command", command],
-                check=False,
-                capture_output=True,
-                text=True,
-                env=env,
-            )
-
-            self.assertEqual(
-                result.returncode,
-                0,
-                msg=f"stdout={result.stdout!r} stderr={result.stderr!r}",
-            )
-            self.assertEqual(capture.read_text(encoding="utf-8"), "uv")
+            for command in _commands():
+                for exit_code in (0, 23):
+                    with self.subTest(command=command["powershell"], exit_code=exit_code):
+                        env["HOOK_EXIT_CODE"] = str(exit_code)
+                        result = subprocess.run(
+                            ["pwsh", "-NoProfile", "-Command", command["powershell"]],
+                            input='{"toolName":"test"}\n',
+                            cwd=root,
+                            check=False,
+                            capture_output=True,
+                            text=True,
+                            env=env,
+                        )
+                        # pwsh -Command maps a failing native/script command to 1.
+                        self.assertEqual(
+                            result.returncode, 0 if exit_code == 0 else 1,
+                            result.stderr,
+                        )
+                        self.assertEqual(result.stdout, "")
+                        lines = capture.read_text(encoding="utf-8-sig").splitlines()
+                        self.assertEqual(lines[:2], ["uv", str(root.resolve())])
+                        # Normalize the delimiter in the script stub; the prefix
+                        # assertion pins the literal token passed to native mise.
+                        self.assertEqual(lines[2:5], ["exec", "uv", "run"])
+                        script_name = command["powershell"].rsplit("\\", 1)[1][:-1]
+                        self.assertTrue(
+                            lines[5].endswith("\\.copilot\\hooks\\scripts\\" + script_name)
+                        )
+                        self.assertEqual(lines[6:], ['{"toolName":"test"}'])

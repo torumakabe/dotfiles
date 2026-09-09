@@ -6,13 +6,10 @@ zsh は全起動 (login/非login/interactive/非interactive) で .zshenv を読�
 読まれないため、brew / GOPATH / PATH が揃わない。実際に ~/.zshrc から
 brew を参照する箇所 (az completion など) が壊れていた。
 
-~/.profile 側に共通 env を集約する設計を維持したまま、ここから source
-することでそのギャップを埋める。.profile 内の __DOTFILES_PROFILE_LOADED
-ガードが再実行を抑止するため、login zsh で ~/.zprofile 経由でも読まれる
-ケースや、同一プロセスツリーの nested zsh でもコストは 1 回だけ。
-
-cold コスト実測 (macOS, brew shellenv 含む): 約 30ms
-  env -i HOME=$HOME PATH=/usr/bin:/bin ZDOTDIR=/tmp zsh -c true
+~/.profile 側に共通 env を集約し、ここから source する。
+Homebrew 等の初期化は __DOTFILES_PROFILE_LOADED で抑止する。
+mise の環境生成は PATH が変わった場合だけ行い、macOS の path_helper 後も
+実体を選択する。同じ PATH を継承した子シェルでは mise を再実行しない。
 */ -}}
 {{ if ne .chezmoi.os "windows" -}}
 [ -r "$HOME/.profile" ] && . "$HOME/.profile"

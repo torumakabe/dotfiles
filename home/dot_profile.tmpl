@@ -13,8 +13,7 @@
 #   zsh(interactive)         -> ~/.zshrc        (parent env is already set)
 #
 # ~/.zshenv がこのファイルを source することで、VS Code 統合ターミナル等の
-# 非login zsh からも brew / GOPATH / mise shims を解決できる。
-# __DOTFILES_PROFILE_LOADED ガードで同一プロセスツリー内の二重実行を抑止する。
+# 非login zsh からも brew / GOPATH / mise 管理ツールの実体を解決できる。
 
 # Idempotency guard: avoid double-appending PATH on re-entry.
 # Wrap the body in a conditional instead of `return` at top level, which is
@@ -22,7 +21,7 @@
 if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
   # `export` so nested login shells (zsh -l inside bash -l, etc.) and
   # zsh -c children inherit the guard and skip re-running brew shellenv
-  # (Ruby subprocess, ~30ms on macOS) and the PATH bootstrap.
+  # (Ruby subprocess, ~30ms on macOS) and the user-bin bootstrap.
   export __DOTFILES_PROFILE_LOADED=1
 
 {{ if eq .chezmoi.os "darwin" }}
@@ -49,7 +48,6 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
   #   1. ~/go/bin
   #   2. ~/.cargo/bin
   #   3. ~/.local/bin
-  #   4. ~/.local/share/mise/shims  (mise-managed tools take precedence)
   __add_path() {
     case ":${PATH}:" in
       *":$1:"*) ;;
@@ -59,9 +57,32 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
   __add_path "${HOME}/go/bin"
   __add_path "${HOME}/.cargo/bin"
   __add_path "${HOME}/.local/bin"
-  __add_path "${HOME}/.local/share/mise/shims"
   unset -f __add_path
 
   export PATH
+fi
+
+# path_helper may reorder PATH after .zshenv, even with the bootstrap guard
+# inherited. Refresh only when PATH changed; unchanged children need no mise.
+if [ "${__DOTFILES_MISE_PATH:-}" != "${PATH}" ]; then
+  if command -v mise >/dev/null 2>&1; then
+    if __mise_env="$(mise env --shell bash)"; then
+      if eval "$__mise_env"; then
+        unset __mise_env
+        export __DOTFILES_MISE_PATH="$PATH"
+      else
+        unset __mise_env
+        printf '%s\n' 'error: could not apply mise environment' >&2
+        false
+      fi
+    else
+      unset __mise_env
+      printf '%s\n' 'error: could not generate mise environment' >&2
+      false
+    fi
+  else
+    printf '%s\n' 'error: mise is not on PATH; cannot generate mise environment' >&2
+    false
+  fi
 fi
 {{ end -}}

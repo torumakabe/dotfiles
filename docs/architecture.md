@@ -11,7 +11,7 @@ home/                           ← chezmoi source
 ├── .chezmoiremove              ← 不要ファイルの削除
 ├── dot_gitconfig*.tmpl         ← Git 設定
 ├── dot_zshrc.tmpl              ← 対話 zsh
-├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
+├── dot_profile.tmpl            ← 共通 env（PATH, brew shellenv, mise env）
 ├── dot_{zprofile,zshenv,bash_profile,bashrc}.tmpl ← 全て ~/.profile を source
 ├── dot_config/git/templates/hooks/executable_pre-commit  ← gitleaks (init.templateDir 経由)
 ├── dot_local/bin/executable_gitleaks-pre-commit          ← gitleaks (設定ベースフック経由)
@@ -43,7 +43,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 5. `git commit` の明示承認
 
 パス比較前に `\` を `/` へ正規化する。`allowed-files.txt` は、ワイルドカードのない単一のプロジェクト相対パスを `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。読み取り専用の `rg` と `glob` にも例外を適用するが、検索フィルターはワイルドカードのない許可パスに限定し、明示された検索ルートがすべてプロジェクト内にあることを確認する。シンボリックリンク、ジャンクション、file URI、`..` を含むパス、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
-各 command hook は mise shim 経由の `uv run` で起動する。起動時に `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象をフックが必要とする `uv` だけに限定する。これにより `uv` の未導入版は mise が自動導入できる一方、dotnet など無関係な missing ツールの導入失敗はフックの終了状態へ影響しない。
+各 command hook は host 上で `MISE_ENABLE_TOOLS=uv mise exec -- uv run ...` を実行する。PowerShell も同じ環境変数と引数を使う。mise の解決対象を `uv` だけに限定し、shim を使わずに起動する。hook の cwd と標準入力はそのまま渡す。mise の実行と必要な導入は host 側であり、通常の sandbox shell 内で行う処理ではない。hook を起動する runtime の親 PATH に mise 自体が必要である。
 
 Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
 
@@ -98,30 +98,40 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 | OS | 仕込み先 | 内容 |
 |----|---------|------|
-| Unix 共通 | `~/.profile` | brew shellenv、`GOPATH`、`~/.local/bin` / `~/go/bin` / `~/.cargo/bin`、mise shims。`__DOTFILES_PROFILE_LOADED` で再実行抑止 |
+| Unix 共通 | `~/.profile` | brew shellenv、`GOPATH`、`~/.local/bin` / `~/go/bin` / `~/.cargo/bin`、公式 `mise env --shell bash` による実体 PATH と SDK 環境 |
 | Unix 共通 | `~/.zprofile` / `~/.zshenv` / `~/.bash_profile` / `~/.bashrc` | いずれも `~/.profile` を source（login / 非login / 対話 bash を網羅） |
-| macOS のみ | `~/.local/bin/<tool>` への mise shim symlink | `run_onchange_after_21-link-mise-shims.sh` が自動生成 |
-| Windows | ユーザー環境変数 `Path` | `run_once_after_05` が `%LOCALAPPDATA%\mise\shims` を先頭追記 |
+| macOS のみ | `~/.local/bin/<tool>` への mise shim symlink | 既存の GUI 用登録を保持。実際の利用への影響を確認してから撤去する |
+| Windows | PowerShell profile とユーザー環境変数 `Path` | 既存の `mise activate pwsh` が実体環境を子へ渡す。User PATH の shim 登録は保持 |
 
 ### 各シェルの読み込み経路
 
 `sh` / `bash(login)` は `.profile` を直接、`zsh(login)` は `.zprofile`、`zsh(非login)` は `.zshenv`、`bash(interactive non-login)` は `.bashrc` のみ読む。いずれからも `~/.profile` に誘導することで PATH が揃う。`bash -c` 等の非対話は親から env 継承する。
 
-ただし macOS の login zsh では、並び順までは揃わない。`~/.zshenv` が `~/.profile` を読んだ後に `/etc/zprofile` が `path_helper` を実行し、`/etc/paths` に載るシステムディレクトリを先頭へ、それ以外を末尾へ移す。`~/.profile` は `__DOTFILES_PROFILE_LOADED` により再実行されないため、`~/.local/bin` や mise shims は `/usr/bin` より後ろに置かれたままになる。
+`__DOTFILES_PROFILE_LOADED` は Homebrew とユーザー bin の初期化だけを抑止する。mise の環境生成に成功した後の PATH は、export した `__DOTFILES_MISE_PATH` に保持する。再度 profile を読んだ時点の PATH と異なる場合だけ環境を再生成する。同じ PATH を継承した子では mise を呼ばない。この値はプロセス環境だけに保持し、版付き PATH の一覧をファイルへ保存しない。環境生成に失敗した場合は stderr に通知し、成功時の値を更新しない。
 
-`~/.zprofile` はこのうち `/opt/homebrew/opt/git/bin` だけを先頭へ戻す。gitleaks の設定ベースフックが git 2.54 以降を必要とするためである（ADR-020）。他のディレクトリを戻さないのは、システムツール全般を shadow したときの影響範囲を限定するためである。
+macOS の login zsh では、`~/.zshenv` の後に `/etc/zprofile` の `path_helper` が PATH を並べ替える。`~/.zprofile` は `/opt/homebrew/opt/git/bin` を優先させてから共有 profile を読み、mise の実体 PATH を再構成する。Git の処理は、設定ベースフックが git 2.54 以降を必要とするためである（ADR-020）。対話 activation がない非対話 login zsh でも同じ構成を使う。
 
-### macOS GUI アプリ経由の PATH 注入
+### Copilot の通常 shell と command hook
 
-Dock / Spotlight / GitHub Desktop から起動された子プロセスは launchd 既定 PATH しか継承しない。特に **GitHub Desktop の Copilot SDK は `bash --norc --noprofile` で bash を spawn し、親が独自の hardcoded PATH を組む**ため、`.bashrc` / `BASH_ENV` / `launchctl setenv` では PATH 注入不可。唯一 **`~/.local/bin` だけは確実に含まれる**ため、`run_onchange_after_21-link-mise-shims.sh` が mise shims をそこへ symlink する。
+Copilot CLI 1.0.81 以降の Unix の通常 agent shell は、host 上で非対話 login bash の環境を取得し、親環境へ merge してから sandbox shell を作る。共有 profile の `mise env` はこの host 側で実行され、通常の agent command shell は `--norc --noprofile` で実体環境を使う。環境取得時の cwd は HOME なので、project-local の版切替はこの構成の保証に含めない。Linux の初回導入には、この機能を含む CLI 1.0.83 を使う。
 
-- 言語ランタイム本体と実行可能な補助ファイルは除外する。対象はスクリプト内の `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` を正本とする。Rust は mise の管理外であり、`cargo` / `rust` の shim は除外対象に含めない（ADR-016）
-- 作成 symlink は state file (`${XDG_STATE_HOME}/chezmoi-dotfiles/mise-shim-links`) に記録され、管理対象だった symlink のみ自動掃除。手動で作ったものには触れない
-- darwin 限定。Linux は `~/.profile` 経由、Windows は `run_once_after_05` で解決済み
+command hook はこの環境補完を共有せず、runtime の親環境を使うため、各 hook で host 側の `mise exec` を実行する。SDK の `session.shell.exec` も通常 agent shell の補完を共有しない別 API である。利用未確認の API への対応は要求せず、実際に使う CLI／GUI の起動と最初の hook を区別して確認する。
 
-### mise shims の制約
+この区分の根拠は [runtime bd85d404 の環境取得](https://github.com/github/copilot-agent-runtime/blob/bd85d40405b59a8f2088da47f7a1e833f7291624/src/runtime/src/tools/session_shell_driver.rs#L594-L620) と [hook の親環境](https://github.com/github/copilot-agent-runtime/blob/bd85d40405b59a8f2088da47f7a1e833f7291624/src/runtime/src/session/services/hook_processor_service.rs#L468-L477) である。GUI 同梱 runtime の版と起動環境は、PATH 上の単体 CLI とは別に扱う。公式 `.github/github-app.yml` に汎用 PATH 注入項目は確認できず、setup script の export で親アプリを変更する構成にはしない。
 
-mise は shims と `mise activate` を併用する。対話 zsh では `mise activate zsh` が shims を除去して自前挿入し、`[env]` / hooks が効く。非対話シェルでは shims のみで解決する。shims では `[env]` / `hooks` / `_.file` が動かないが、本 repo の `config.toml` は `[tools]` / `[settings]` のみ使用するため影響なし（必要時は `mise exec -- <cmd>`）。詳細: <https://mise.jdx.dev/dev-tools/shims.html>
+### 残している shim 登録
+
+macOS の `run_onchange_after_21-link-mise-shims.sh` は、以前の GUI 固定 PATH 対策として `~/.local/bin` に shim をリンクする（ADR-002）。言語ランタイム等の除外対象はスクリプトの `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` で定義し、自作リンクだけを `${XDG_STATE_HOME:-~/.local/state}/chezmoi-dotfiles/mise-shim-links` で管理する。Windows では `run_once_after_05` が User PATH に shim ディレクトリを登録する。
+
+これらの登録と `mise reshim` は残すが、共有 profile は shim ディレクトリを追加しない。実際に使う CLI／GUI、hook、非対話起動での依存を確認する前に登録を削除しない。撤去と復元の対象は [運用手順](operations.md#実体環境への切替) を参照する。shim が存在することと、通常実行が shim を選ぶことは区別する。
+
+### uv の実体配置
+
+uv は全対象 OS で mise の `github:astral-sh/uv` backend を使う。公式アーカイブの選択、展開、uv/uvx を含むディレクトリの PATH 検出は backend に任せ、独自 wrapper や `filter_bins` は指定しない。Windows ARM64 だけは従来の x64 配布物を `asset_pattern` で明示し、エミュレーションで使う。
+
+`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、uv/uvx を直接解決できる。shim と `.mise-bins` 内の実体へのリンクは別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。uv の cache 書き込み許可は変更しない。
+
+lock は `latest` を要求として保持し、Windows ARM64 の option により uv が複数 entry に分かれる。checksum と GitHub artifact attestation の検証機能を利用するが、aqua recipe が指定していた署名元 workflow の限定は行わない。既存 install の移行は [運用手順](operations.md#uv-の-backend-移行) を参照する。
 
 ### TypeScript language server の依存配置
 
