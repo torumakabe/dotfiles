@@ -31,7 +31,7 @@ Planは渡されたConfig、Data、Cacheを読む。**これらが通常のmise�
 
 ## Prepareとソースの信頼
 
-以下は実行手順であり、今回の実装作業ではWindowsコマンドを実行していない。書き込み元を停止した通常権限のPowerShellで使用する。Reportの`roots.recovery`に記録した未作成パスを使い、旧復元済みjournalや旧recovery checkoutは指定しない。
+書き込み元を停止した通常権限のPowerShellで使用する。Recoveryには、Reportの`roots.recovery`と同じ観測済み親ディレクトリの下で、未使用の名前を明示する。既存のRecovery、snapshot、journalは再利用も上書きもしない。既存Reportは変更せず、元環境がReportの内容とIDに一致することを再度要求するため、失敗後の再準備には先に原物のRestoreが必要になる。
 
 この実装を含む信頼済みの完全なコミットSHAを`SourceCommit`へ渡す。Report取得時のSHAと一致する必要はない。新ソースのHEAD、実行中の3ファイルのハッシュ、Reportのdigest、Reportが封印したテンプレートとlockのハッシュを別々に照合する。追跡対象の変更を拒否し、未追跡ファイルは`tests/manual/windows-uv/native-result-NN/`（数字2桁以上）配下だけを許可する。既存の結果は読み込まず、削除もしない。PrepareはGitをソース確認、chezmoiをTOML変換に使い、miseを起動しない。
 
@@ -42,7 +42,7 @@ $parameters = @{
     Command = 'Prepare'
     Source = '<この実装を含むクリーンなリポジトリルート>'
     SourceCommit = '<信頼済みの新ソースの40文字SHA>'
-    Recovery = '<既存Reportのroots.recovery>'
+    Recovery = '<既存Reportと同じ観測済み親の下の未作成パス>'
     Report = 'C:\Users\tomakabe\windows-uv-direct-inventory-777d610c52b8471183b25eeb4820721a.json'
     ReportDigest = '72F7C61F39FEF910A804B27E90943442AF6FF618E7EC619F1E90F1FD84F0BD4C'
     WritersStopped = $true
@@ -62,16 +62,19 @@ Prepareは専用Recoveryへ実行スクリプト3個、設定候補、独立し�
 ```
 
 1. ハッシュで固定したmiseの`--version`を専用環境で確認する。2026.8.5以外なら停止する。
+   元オブジェクトを動かす前に、既存の`GH_TOKEN`、`GITHUB_TOKEN`、または`gh auth token --hostname github.com`から認証をメモリ内で取得する。その認証で、lockが指定するWindows assetのSHA-256に対応したGitHubのattestation APIをGETし、HTTP 200と証明の存在を要求する。これは到達性と認証の事前確認であり、mise自身の証明検証は省略しない。新規ログインや認証設定の書換えはしない。
 2. 元の0.12.10、共有manifest、uv backend、4個のpointer、実cacheのuv、downloadsのuv、他27個のmetadataを同一NTFSボリュームのRecoveryへrenameする。metadataには元バイト列の新規コピーを供給する。元オブジェクトの上書き、削除、コピーによる再構成はしない。
 3. 実cacheに`uv/0.12.10/incomplete`を新規作成する。子プロセスの汎用cacheとlockfile cacheはRecovery内へ隔離するが、通常のmiseが参照する実cacheにもmarkerを維持する。
 4. `mise install --locked uv`を一度だけ実行する。導入先は空になった実dataの`installs/uv/0.12.10`であり、私有領域からバイナリをコピー、昇格しない。`--force`は使わない。
-5. 終了コードと出力を非公開の`installer-result.json`へ保存し、新規出力の観測値をjournalへ封印する。失敗時はここで停止し、再試行も自動Restoreもしない。
+5. 終了コードと出力を非公開の`installer-result.json`へ保存し、新規出力の観測値をjournalへ封印する。miseの終了コードが非0の場合は標準エラーと標準出力も端末に表示する。失敗時はここで停止し、再試行も自動Restoreもしない。
 6. 成功時は`mise which uv`、`mise which uvx`、canonicalの両実行ファイルの`--version`、metadataの意味内容、pointer、元8版と親の不変性を確認する。他27個のmetadataはコピーをquarantineへ退避し、元オブジェクトを戻す。
 7. 元configとlockをrenameで保存し、封印済み候補を公開する。最後に実cacheのmarker用ディレクトリをquarantineへrenameし、成功した子cacheのuvを実cacheへrenameする。バイナリの場所は変えない。
 
-検証結果は`verification.json`へ保存する。停止理由は保存先の権限が安全な場合だけ`failure-<識別子>.json`へ保存し、端末にはphaseと処理中の操作の有無だけを表示する。これらのログは端末内のパスや出力を含むため公開しない。
+検証結果は`verification.json`へ保存する。停止理由は保存先の権限が安全な場合だけ`failure-<識別子>.json`へ保存する。端末にはphase、処理中の操作の有無、記録済みのmise終了コード、例外メッセージ、発生行と呼び出し履歴を表示する。これらのログや表示には端末内のパスとコマンド出力を含むため、公開リポジトリへ載せない。
 
-子プロセスの環境変数は明示的な許可リストから構成する。OSの基本パスだけを引き継ぎ、token、proxy、activationの内部変数、任意の`MISE_*`は暗黙に引き継がない。認証が必要な場合に秘密情報を引き継ぐオプションは実装していない。親のPATH、profile、sandbox設定は変更しない。
+子プロセスの環境変数は明示的な許可リストから構成する。OSの基本パスだけを引き継ぎ、proxy、activationの内部変数、任意の`MISE_*`は暗黙に引き継がない。取得したGitHub認証だけを、公式`mise install --locked uv`の子プロセスの`GITHUB_TOKEN`へ渡す。`mise which`や導入後のuv実行には渡さない。認証文字列はsnapshotやjournalへ保存せず、子の出力に現れた場合は保存と表示の前に伏せる。終了時には子の環境マップから削除する。親の環境変数、PATH、profile、sandbox設定は変更しない。
+
+17:01に受領した失敗ログでは、ダウンロードとchecksum確認の後、attestation APIが未認証アクセスの上限超過でHTTP 403を返していた。元の直接導入入口が認証環境を引き継がなかったため、上記の明示的な認証取得と退避前のAPI確認を追加した。miseは`gh`を実行して認証を取得するのではなく、既定では`hosts.yml`を直接読む。資格情報ストアに保存された認証を使うため、ここでは`gh auth token`を明示的に呼ぶ。失敗した既存Recoveryの保存コードは変更しない。API事前確認の成功後にも通信障害や制限超過は起こり得るため、Installの失敗記録とRestoreは引き続き必要である。
 
 `MISE_GLOBAL_CONFIG_FILE`、`MISE_CONFIG_DIR`、`MISE_GLOBAL_CONFIG_ROOT`、`MISE_CEILING_PATHS`、system configの指定で設定探索を限定する。子configはuvだけを宣言し、公開configは他30ツールを保持する。`MISE_ENABLE_TOOLS=uv`、`MISE_NO_HOOKS=1`、`MISE_NO_ENV=1`、`MISE_YES=1`、`MISE_AUTO_INSTALL=0`を指定する。shims、state、plugins、system data、作業用ファイルはRecovery内へ置く。共有installディレクトリは使用しない。
 

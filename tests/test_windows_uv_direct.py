@@ -35,6 +35,24 @@ if ($env:TEST_MODE -eq 'toml-roundtrip') {
     @{accepted=$true} | ConvertTo-Json -Compress
     exit 0
 }
+if ($env:TEST_MODE -like 'auth-api-*') {
+    function Invoke-WebRequest {
+        param($Uri,$Method,$Headers,$UserAgent,[switch]$SkipHttpErrorCheck,$MaximumRedirection,$TimeoutSec)
+        if ($Headers.Authorization -cne 'Bearer fixture-secret' -or
+            $Uri -cne ('https://api.github.com/repos/astral-sh/uv/attestations/sha256:'+('b'*64)) -or
+            $MaximumRedirection -ne 0 -or $Method -cne 'Get') { throw 'Wrong authenticated preflight request.' }
+        switch ($env:TEST_MODE) {
+            'auth-api-denied' { return @{StatusCode=403;Content='rate limit fixture-secret'} }
+            'auth-api-empty' { return @{StatusCode=200;Content='{"attestations":[]}'} }
+            default { return @{StatusCode=200;Content='{"attestations":[{"bundle":{}}]}'} }
+        }
+    }
+    try {
+        Assert-DirectGitHubAccess 'fixture-secret' ('sha256:'+('b'*64))
+        '{"accepted":true}'
+    } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+    exit 0
+}
 $script:ids=@{}
 $script:nextId=0
 $script:restoring=$false
@@ -103,8 +121,17 @@ function Assert-DirectEnvironment {}
 function Assert-Path {}
 $script:crashed=$false
 $script:installCalls=0
-function Invoke-DirectChild($State,$Executable,$Arguments) {
+function Get-DirectGitHubToken($Work) {
+    if ($env:TEST_MODE -eq 'auth-unavailable') { throw 'Existing GitHub authentication unavailable; no login attempted.' }
+    return 'fixture-secret'
+}
+function Assert-DirectGitHubAccess($Token,$Digest) {
+    if ($Token -cne 'fixture-secret' -or $Digest -cnotmatch '^sha256:[0-9a-f]{64}$') { throw 'Wrong auth preflight inputs.' }
+    if ($env:TEST_MODE -eq 'auth-denied') { throw 'GitHub attestation preflight failed (HTTP 403). Originals have not been moved.' }
+}
+function Invoke-DirectChild($State,$Executable,$Arguments,[string]$GitHubToken='') {
     if ($Arguments[0] -eq '--version') {
+        if ($GitHubToken) { throw 'Credential passed to version executable.' }
         $text=if ($Executable -eq $State.mise) {'2026.8.5 windows-x64'} else {
             (Split-Path $Executable -LeafBase)+' 0.12.10'
         }
@@ -112,9 +139,11 @@ function Invoke-DirectChild($State,$Executable,$Arguments) {
     }
     $canonical=(Get-DirectEntry $State 'version').target
     if ($Arguments[0] -eq 'which') {
+        if ($GitHubToken) { throw 'Credential passed to which subprocess.' }
         return @{exitCode=0;stdout=(Join-Path $canonical ($Arguments[1]+'.exe'));stderr=''}
     }
     Assert-Equal $Arguments @('install','--locked','uv') 'Not an official direct install invocation.'
+    Assert-Equal $GitHubToken 'fixture-secret' 'Official installer did not receive GitHub authentication.'
     $script:installCalls++
     if (Test-Path $canonical) { throw 'Canonical destination was not vacant.' }
     foreach ($name in @('uv','uvx')) { Put (Join-Path $canonical "$name.exe") "official-$name" }
@@ -231,6 +260,7 @@ try {
     Put (Join-Path $recovery 'publish/config.toml') 'candidate-config'
     Put (Join-Path $recovery 'publish/mise.lock') 'candidate-lock'
     $state=@{digest=('A'*64);recovery=$recovery;roots=@{data=$data;cache=$cache;config=$config}
+        attestationDigest=('sha256:'+('b'*64))
         entries=$entries;guards=$guards;parents=$parents;sealed=@{};toolHashes=@{};mise='mock-mise';chezmoi='mock-chezmoi'
         uvNames=@($versions)+@('0','0.11','0.12','latest','.mise.backend.toml')+@(0..3 | ForEach-Object {".n4-evidence-$_"})
         outsideScopeNames=@(0..3 | ForEach-Object {".n4-evidence-$_"})
@@ -239,7 +269,7 @@ try {
         publication=@{config=(Read-Tree (Join-Path $recovery 'publish/config.toml'));lock=(Read-Tree (Join-Path $recovery 'publish/mise.lock'))}
     }
     $journal=@{sequence=0;previous=$state.digest;phase='prepared';pending=$null;current=$current;saved=$saved}
-    if ($env:TEST_MODE -eq 'prepare-success') {
+    if ($env:TEST_MODE -in @('prepare-success','prepare-fresh-sibling')) {
         $Source=Join-Path $root 'source'; $SourceCommit='a'*40
         $candidateLock=Read-Json (Join-Path $root 'input.json')
         $oldLock=Get-Json $candidateLock | ConvertFrom-Json -AsHashtable
@@ -275,14 +305,26 @@ try {
             proposedConfigDigest=(Get-DirectDigest (Get-DirectCandidateConfig $configuration $declaration))
             proposedLockDigest=(Get-DirectDigest (Assert-DirectLock $oldLock $candidateLock '0.12.10'))
         }
+        if ($env:TEST_MODE -eq 'prepare-fresh-sibling') {
+            $previousRecovery=Join-Path $root 'previous-recovery'
+            Put (Join-Path $previousRecovery 'direct-snapshot.json') 'retained previous recovery'
+            $reportValue.roots.recovery=$previousRecovery
+        }
         Write-NewJson $Report $reportValue; $ReportDigest=Get-Hash $Report
         $state=Initialize-DirectRecovery
+        Assert-DirectHash $Report $ReportDigest
+        if ($env:TEST_MODE -eq 'prepare-fresh-sibling') {
+            Assert-Equal ([IO.File]::ReadAllText((Join-Path $previousRecovery 'direct-snapshot.json'))) `
+                'retained previous recovery' 'Previous recovery changed.'
+            Assert-Equal $state.roots.recovery $Recovery 'New recovery root not bound into snapshot.'
+        }
         $recovery=$Recovery
         $journal=Read-DirectJournal $state
     } else { Save-DirectEvent $state $journal }
     $failure=''
     try { Install-Direct $state $journal } catch { $failure=$_.Exception.Message + "`n" + $_.ScriptStackTrace }
     $phase=$journal.phase
+    $savedAfterInstall=@($journal.saved.Values | Where-Object { $_ }).Count
     $marker=Test-Path (Join-Path $cache 'uv/0.12.10/incomplete')
     if ($env:TEST_MODE -eq 'success' -and $failure) { throw "Unexpected install failure: $failure" }
     if ($env:TEST_MODE -eq 'unexpected') { Put (Join-Path $installs 'uv/0.12.2/uv.exe') 'external edit' }
@@ -322,6 +364,7 @@ try {
     @{phase=$phase;failure=$failure;restoreFailure=$restoreFailure;final=$journal.phase
         installerCalls=$script:installCalls;markerAfterInstall=$marker;retained=$retained
         sourceConfig=[IO.File]::ReadAllText($config);entries=$entries.Count
+        savedAfterInstall=$savedAfterInstall
         disposition=$disposition;unknownRetained=@($unknown | ForEach-Object {[IO.File]::ReadAllText($_.FullName)})} | ConvertTo-Json -Compress
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message + "`n" + $_.ScriptStackTrace)
@@ -382,8 +425,14 @@ Assert-DirectSource $env:TEST_SOURCE ('a'*40) $env:TEST_ENTRY
             if error:
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(error, result.stderr)
+                if mode.startswith("auth-api-"):
+                    self.assertNotIn("fixture-secret", result.stderr)
                 return
             self.assertEqual(result.returncode, 0, result.stderr)
+            if mode == "installer-fail":
+                self.assertIn("mise install exit: 9", result.stderr)
+                self.assertIn("private failure", result.stderr)
+                self.assertIn("private output", result.stderr)
             return json.loads(result.stdout)
 
     def test_success_and_offline_identity_restore_all_scopes(self):
@@ -396,12 +445,33 @@ Assert-DirectSource $env:TEST_SOURCE ('a'*40) $env:TEST_ENTRY
         self.assertEqual(result["entries"], 38)
         self.assertGreater(result["retained"], 27)
 
+    def test_authentication_failure_stops_before_any_original_is_moved(self):
+        for mode in ("auth-unavailable", "auth-denied"):
+            with self.subTest(mode=mode):
+                result = self.run_mode(mode)
+                self.assertEqual(result["phase"], "prepared")
+                self.assertEqual(result["installerCalls"], 0)
+                self.assertEqual(result["savedAfterInstall"], 0)
+                self.assertEqual(result["sourceConfig"], "original-config")
+                self.assertEqual(result["final"], "restored")
+
+    def test_preflight_checks_pinned_attestation_endpoint_with_authentication(self):
+        self.assertTrue(self.run_mode("auth-api-success")["accepted"])
+        self.run_mode("auth-api-denied", "HTTP 403")
+        self.run_mode("auth-api-empty", "no attestations")
+
     def test_prepare_install_restore_from_synthetic_original_report(self):
         lock = tomllib.loads((ROOT / "home/dot_config/mise/private_mise.lock").read_text())
         result = self.run_mode("prepare-success", value=lock)
         self.assertEqual(result["phase"], "installed", result["failure"])
         self.assertEqual(result["final"], "restored", result["restoreFailure"])
         self.assertEqual(json.loads(result["sourceConfig"])["tools"]["uv"], "latest")
+
+    def test_original_report_can_prepare_fresh_sibling_without_overwriting_previous_recovery(self):
+        lock = tomllib.loads((ROOT / "home/dot_config/mise/private_mise.lock").read_text())
+        result = self.run_mode("prepare-fresh-sibling", value=lock)
+        self.assertEqual(result["phase"], "installed", result["failure"])
+        self.assertEqual(result["final"], "restored", result["restoreFailure"])
 
     def test_installer_failure_remains_incomplete_until_explicit_restore(self):
         result = self.run_mode("installer-fail")
@@ -545,6 +615,29 @@ Assert-DirectSource $env:TEST_SOURCE ('a'*40) $env:TEST_ENTRY
 
 
 class DirectBoundaries(unittest.TestCase):
+    def test_credentials_are_scoped_to_installer_and_removed_from_output(self):
+        text = ENTRY.read_text()
+        self.assertIn("$psi.Environment['GITHUB_TOKEN']=$GitHubToken", text)
+        self.assertIn("$psi.Environment.Remove('GITHUB_TOKEN')", text)
+        self.assertIn("$stdout.Replace($GitHubToken,'[REDACTED]')", text)
+        self.assertIn("$stderr.Replace($GitHubToken,'[REDACTED]')", text)
+        self.assertIn("@('auth','token','--hostname','github.com')", text)
+        self.assertNotIn("@('auth','login'", text)
+        self.assertLess(text.index("Assert-DirectGitHubAccess $token"), text.index("$Journal.phase='preserving'"))
+
+    def test_failure_output_includes_cause_location_and_installer_diagnostics(self):
+        text = ENTRY.read_text()
+        for output in (
+            "[Console]::Error.WriteLine($failure.Exception.Message)",
+            "[Console]::Error.WriteLine($failure.InvocationInfo.PositionMessage)",
+            "[Console]::Error.WriteLine($failure.ScriptStackTrace)",
+            "[Console]::Error.WriteLine($result.stderr)",
+            "[Console]::Error.WriteLine($result.stdout)",
+            'mise install exit: $($journal.exitCode)',
+        ):
+            self.assertIn(output, text)
+        self.assertNotIn("Details withheld.", text)
+
     def test_prepare_passes_running_script_directory_to_imported_source_guard(self):
         self.assertEqual(ENTRY.read_text().count(
             "Assert-DirectSource $Source $SourceCommit $PSScriptRoot"

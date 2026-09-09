@@ -155,9 +155,43 @@ function Get-DirectEnvironment($State) {
         MISE_TRUSTED_CONFIG_PATHS=(Join-Path $work 'config\config.toml')
     }
 }
-function Invoke-DirectChild($State, [string]$Executable, [string[]]$Arguments) {
+function Get-DirectGitHubToken([string]$Work) {
+    $token = if ($env:GH_TOKEN) { $env:GH_TOKEN } elseif ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN }
+        else {
+            $gh=(Get-Command gh -CommandType Application -TotalCount 1 -ErrorAction Stop).Source
+            (Invoke-Captured $gh @('auth','token','--hostname','github.com') $Work).stdout.Trim()
+        }
+    if ([string]::IsNullOrWhiteSpace($token)) { throw 'Existing GitHub authentication unavailable; no login attempted.' }
+    return $token
+}
+function Assert-DirectGitHubAccess([string]$Token, [string]$Digest) {
+    if ($Digest -cnotmatch '^sha256:[0-9a-f]{64}$') { throw 'Invalid pinned attestation digest.' }
+    $headers=@{Authorization="Bearer $Token";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
+    try {
+        $response=Invoke-WebRequest -Uri "https://api.github.com/repos/astral-sh/uv/attestations/$Digest" `
+            -Method Get -Headers $headers -UserAgent 'dotfiles-uv-migration' -SkipHttpErrorCheck `
+            -MaximumRedirection 0 -TimeoutSec 30
+        if ($response.StatusCode -ne 200) {
+            throw "GitHub attestation preflight failed (HTTP $($response.StatusCode)). Originals have not been moved. $($response.Content)"
+        }
+        $body=$response.Content | ConvertFrom-Json -AsHashtable
+        if (-not $body.ContainsKey('attestations') -or @($body.attestations).Count -eq 0) {
+            throw 'GitHub attestation preflight returned no attestations for the pinned asset. Originals have not been moved.'
+        }
+    } catch {
+        throw [InvalidOperationException]::new($_.Exception.Message.Replace($Token,'[REDACTED]'))
+    } finally {
+        $headers.Remove('Authorization')
+        $Token=$null
+    }
+}
+function Invoke-DirectChild($State, [string]$Executable, [string[]]$Arguments, [string]$GitHubToken = '') {
     if ($State.toolHashes.ContainsKey($Executable)) { Assert-DirectHash $Executable $State.toolHashes[$Executable] }
-    # activation、token、proxy等を暗黙に継承しない。ネットワーク認証の引継ぎはこの入口の対象外。
+    if ($GitHubToken -and ($Executable -cne $State.mise -or
+        (Get-Json $Arguments) -cne (Get-Json @('install','--locked','uv')))) {
+        throw 'GitHub credentials are restricted to the official install subprocess.'
+    }
+    # 環境全体は引き継がず、取得した認証だけを公式Installの子プロセスへ渡す。
     $psi=[Diagnostics.ProcessStartInfo]::new($Executable)
     $psi.UseShellExecute=$false
     $psi.WorkingDirectory=Join-Path $State.recovery 'work'
@@ -171,14 +205,27 @@ function Invoke-DirectChild($State, [string]$Executable, [string[]]$Arguments) {
     $psi.Environment['TEMP']=Join-Path $State.recovery 'work\temp'
     $psi.Environment['TMP']=$psi.Environment['TEMP']
     foreach ($pair in (Get-DirectEnvironment $State).GetEnumerator()) { $psi.Environment[$pair.Key]=$pair.Value }
+    if ($GitHubToken) { $psi.Environment['GITHUB_TOKEN']=$GitHubToken }
     foreach ($arg in $Arguments) { $psi.ArgumentList.Add($arg) }
-    $process=[Diagnostics.Process]::Start($psi)
+    $process=$null
     try {
+        $process=[Diagnostics.Process]::Start($psi)
         $out=$process.StandardOutput.ReadToEndAsync(); $err=$process.StandardError.ReadToEndAsync()
         $process.WaitForExit()
         if ($State.toolHashes.ContainsKey($Executable)) { Assert-DirectHash $Executable $State.toolHashes[$Executable] }
-        return @{exitCode=$process.ExitCode; stdout=$out.GetAwaiter().GetResult(); stderr=$err.GetAwaiter().GetResult()}
-    } finally { $process.Dispose() }
+        $stdout=$out.GetAwaiter().GetResult(); $stderr=$err.GetAwaiter().GetResult()
+        if ($GitHubToken) {
+            $stdout=$stdout.Replace($GitHubToken,'[REDACTED]'); $stderr=$stderr.Replace($GitHubToken,'[REDACTED]')
+        }
+        return @{exitCode=$process.ExitCode;stdout=$stdout;stderr=$stderr}
+    } catch {
+        if ($GitHubToken) { throw [InvalidOperationException]::new($_.Exception.Message.Replace($GitHubToken,'[REDACTED]')) }
+        throw
+    } finally {
+        if ($null -ne $process) { $process.Dispose() }
+        $null=$psi.Environment.Remove('GITHUB_TOKEN')
+        $GitHubToken=$null
+    }
 }
 function Save-DirectEvent($State, $Journal) {
     $Journal.sequence++
@@ -356,8 +403,9 @@ function Initialize-DirectRecovery {
     }
     Assert-DirectSource $Source $SourceCommit $PSScriptRoot
     Assert-Equal (Get-DirectScripts $PSScriptRoot) (Get-DirectScripts (Join-Path $Source 'tests\manual\windows-uv')) 'Running source hash mismatch.'
-    $roots=$inventoryReport.roots
-    Assert-Equal $Recovery $roots.recovery 'Use the fresh recovery path bound by the inventory.'
+    $roots=Get-Json $inventoryReport.roots | ConvertFrom-Json -AsHashtable
+    Assert-Equal (Split-Path $Recovery) (Split-Path $roots.recovery) 'Fresh recovery must use the same inventoried parent.'
+    $roots.recovery=$Recovery
     Assert-DirectFreshRecoveryParent $Recovery
     if (Test-Path -LiteralPath $Recovery) { throw 'Recovery must be new.' }
     foreach ($path in @($Source,(Split-Path $roots.config),$roots.data,$roots.cache,$Report)) {
@@ -482,6 +530,7 @@ function Initialize-DirectRecovery {
         outsideScopeNames=$inventory.outsideScopeNames
         installNames=@(Get-ChildItem -LiteralPath $installs -Force -Directory | ForEach-Object Name | Sort-Object)
         metadata=$inventoryReport.metadata;mise=$mise;chezmoi=$chezmoi;toolHashes=$inventoryReport.toolHashes
+        attestationDigest=(@($candidateLock.tools.uv | Where-Object { $_.ContainsKey('platforms.windows-x64') })[0]['platforms.windows-x64'].checksum)
         publication=@{config=(Read-Tree (Join-Path $Recovery 'publish\config.toml'));lock=(Read-Tree (Join-Path $Recovery 'publish\mise.lock'))}
         upstreamCommit='a51a56b70b5172610e860ca356e3033e3b67c595';sacl='unobserved'
     }
@@ -507,6 +556,14 @@ function Install-Direct($State, $Journal) {
     $version=Invoke-DirectChild $State $State.mise @('--version')
     if ($version.exitCode -ne 0 -or $version.stdout -notmatch '^2026\.8\.5(?:\s|$)') { throw 'Only mise 2026.8.5 is supported.' }
     Assert-DirectCurrent $State $Journal
+    $token=Get-DirectGitHubToken (Join-Path $State.recovery 'work')
+    try {
+        Assert-DirectGitHubAccess $token $State.attestationDigest
+        Assert-DirectCurrent $State $Journal
+        Install-DirectAuthenticated $State $Journal $token
+    } finally { $token=$null }
+}
+function Install-DirectAuthenticated($State, $Journal, [string]$Token) {
     $Journal.phase='preserving'; Save-DirectEvent $State $Journal
     foreach ($entry in $State.entries | Where-Object { $_.role -notin @('config','lock') }) {
         if ($entry.original.kind -ne 'absent') {
@@ -527,7 +584,7 @@ function Install-Direct($State, $Journal) {
     }
     Assert-DirectCurrent $State $Journal
     $Journal.phase='installer-started'; Save-DirectEvent $State $Journal
-    $result=Invoke-DirectChild $State $State.mise @('install','--locked','uv')
+    $result=Invoke-DirectChild $State $State.mise @('install','--locked','uv') $Token
     # 出力は非公開Recoveryへだけ保存し、失敗内容を端末へ展開しない。
     Write-NewJson (Join-Path $State.recovery 'installer-result.json') $result
     foreach ($entry in $State.entries | Where-Object { $_.role -notin @('config','lock','cache') }) {
@@ -536,7 +593,12 @@ function Install-Direct($State, $Journal) {
     $Journal.exitCode=$result.exitCode
     $Journal.phase='installer-exited'; Save-DirectEvent $State $Journal
     Assert-DirectCurrent $State $Journal
-    if ($result.exitCode -ne 0) { throw 'Official install failed. Outputs retained and sealed; run offline Restore, not Install.' }
+    if ($result.exitCode -ne 0) {
+        [Console]::Error.WriteLine("mise install exit: $($result.exitCode)")
+        [Console]::Error.WriteLine($result.stderr)
+        [Console]::Error.WriteLine($result.stdout)
+        throw 'Official install failed. Outputs retained and sealed; run offline Restore, not Install.'
+    }
     Confirm-DirectInstall $State $Journal
     foreach ($entry in $State.entries | Where-Object role -CEQ 'legacy') {
         Move-DirectRecorded $State $Journal $entry.target (Join-Path $State.recovery "quarantine\legacy-$($entry.id)") `
@@ -636,7 +698,12 @@ if ($Command -ceq 'Prepare') {
         } catch {
             [Console]::Error.WriteLine('Failure details could not be saved. Preserve this console output and the recovery directory.')
         }
-        [Console]::Error.WriteLine("Direct migration stopped; phase=$($journal.phase); pending=$($null -ne $journal.pending). Preserve recovery and use offline Restore. Details withheld.")
+        [Console]::Error.WriteLine("Direct migration stopped; phase=$($journal.phase); pending=$($null -ne $journal.pending).")
+        if ($journal.ContainsKey('exitCode')) { [Console]::Error.WriteLine("mise install exit: $($journal.exitCode)") }
+        [Console]::Error.WriteLine($failure.Exception.Message)
+        [Console]::Error.WriteLine($failure.InvocationInfo.PositionMessage)
+        [Console]::Error.WriteLine($failure.ScriptStackTrace)
+        [Console]::Error.WriteLine("Recovery retained: $Recovery")
         exit 1
     }
 }
