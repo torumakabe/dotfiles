@@ -11,8 +11,8 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json"
-EXPECTED_BASH_PREFIX = "MISE_ENABLE_TOOLS=uv uv run "
-EXPECTED_POWERSHELL_PREFIX = "$env:MISE_ENABLE_TOOLS='uv'; uv run "
+EXPECTED_BASH_PREFIX = "uv run "
+EXPECTED_POWERSHELL_PREFIX = "uv run "
 
 
 def _commands() -> list[dict[str, object]]:
@@ -41,14 +41,14 @@ class CopilotHooksConfigTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("bash"), "bash is required")
     @unittest.skipIf(os.name == "nt", "the POSIX stub requires a POSIX shell")
-    def test_bash_exports_uv_allowlist_to_hook_process(self) -> None:
+    def test_bash_preserves_cwd_stdin_and_exit_code(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             capture = root / "capture.txt"
             stub = root / "uv"
             stub.write_text(
                 '#!/bin/sh\n'
-                '{ printf "%s\\n" "$MISE_ENABLE_TOOLS" "$PWD" "$@"; cat; }'
+                '{ printf "%s\\n" "$PWD" "$@"; cat; }'
                 ' > "$HOOK_ENV_CAPTURE"\nexit "${HOOK_EXIT_CODE:-0}"\n',
                 encoding="utf-8",
             )
@@ -75,23 +75,23 @@ class CopilotHooksConfigTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "")
                         lines = capture.read_text(encoding="utf-8").splitlines()
                         self.assertEqual(
-                            lines[:3],
-                            ["uv", str(root.resolve()), "run"],
+                            lines[:2],
+                            [str(root.resolve()), "run"],
                         )
                         expected_script = command["bash"].split('"')[1].replace(
                             "$HOME", env["HOME"]
                         )
-                        self.assertEqual(lines[3], expected_script)
-                        self.assertEqual(lines[4:], ['{"toolName":"test"}'])
+                        self.assertEqual(lines[2], expected_script)
+                        self.assertEqual(lines[3:], ['{"toolName":"test"}'])
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
-    def test_powershell_exports_uv_allowlist_to_hook_process(self) -> None:
+    def test_powershell_preserves_cwd_stdin_and_exit_code(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             capture = root / "capture.txt"
             stub = root / "uv.ps1"
             stub.write_text(
-                "@($env:MISE_ENABLE_TOOLS, (Get-Location).Path) + @($args) + "
+                "@((Get-Location).Path) + @($args) + "
                 "@([Console]::In.ReadToEnd().TrimEnd()) | "
                 "Set-Content -LiteralPath $env:HOOK_ENV_CAPTURE\n"
                 "exit ([int]$env:HOOK_EXIT_CODE)\n",
@@ -121,10 +121,10 @@ class CopilotHooksConfigTests(unittest.TestCase):
                         )
                         self.assertEqual(result.stdout, "")
                         lines = capture.read_text(encoding="utf-8-sig").splitlines()
-                        self.assertEqual(lines[:2], ["uv", str(root.resolve())])
-                        self.assertEqual(lines[2], "run")
+                        self.assertEqual(lines[0], str(root.resolve()))
+                        self.assertEqual(lines[1], "run")
                         script_name = command["powershell"].rsplit("\\", 1)[1][:-1]
                         self.assertTrue(
-                            lines[3].endswith("\\.copilot\\hooks\\scripts\\" + script_name)
+                            lines[2].endswith("\\.copilot\\hooks\\scripts\\" + script_name)
                         )
-                        self.assertEqual(lines[4:], ['{"toolName":"test"}'])
+                        self.assertEqual(lines[3:], ['{"toolName":"test"}'])

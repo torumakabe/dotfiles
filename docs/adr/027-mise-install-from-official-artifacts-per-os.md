@@ -17,7 +17,7 @@ Homebrew 版の `mise activate zsh` が親シェルに定義した `_mise_hook` 
 - 保持対象は、bootstrap 実行時に `command -v mise` で解決される非 formula 版の実体と、formula が解決される場合に標準配置先 `~/.local/bin/mise` で明示的に確認する非 formula 版の実体に限定する。いずれも対象のパスを直接実行確認できたときに限り保持し、それ以外の PATH 外にある未知の mise を探索して保持する契約は持たない。安全に保持できないときは異常終了して formula を残す。
 - 新規に取得した公式バイナリの標準配置先は `~/.local/bin/mise` とする。配置先と同じディレクトリで実行確認し、検証済みファイルを最終パスへ原子的に配置する。非 formula 版の既存 mise は置換しない。
 - bootstrap 中は formula を自動削除しない。公式バイナリの配置または既存の非 formula 版の実行確認後も formula を残す。移行確認では、新しい login shell における `mise` の解決先が、新規配置の場合は `~/.local/bin/mise`、既存の非 formula 版を保持する場合は保持対象として確認した実体のパスであることを確認する。bootstrap 前に `~/.local/bin` が存在しなかった場合は、継承された `__DOTFILES_PROFILE_LOADED` による PATH 再構築の省略を避けるため、ガードを解除して新しい login shell を開始する。
-- formula を手動削除する前に、Homebrew 版の activation を読み込んだ既存 shell をすべて終了する。既存 shell で公式バイナリの activation を読み直して継続利用する選択肢は設けない。新しい login shell は zsh activation を使わず、共有 profile の公式 `mise env` を使う。新しい shell を一つ開始しただけでは、Homebrew の絶対パスを hook に保持する他の既存 shell は安全にならない。cleanup の失敗を警告扱いにする従来の判断は、自動 cleanup 自体を廃止するこの判断で置き換える。
+- formula を手動削除する前に、Homebrew 版の activation を読み込んだ既存 shell をすべて終了するか、検証済みの公式 mise 実体から `mise activate zsh` を読み直す。新しい login shell も公式 `mise activate zsh` を使い、共有 global config の `activate_shims = false` により shim farm を `PATH` へ追加しない。共有 profile の公式 `mise env` は、非対話 shell と login 時の環境取得に使う。既存 shell を一つ更新しても、Homebrew の絶対パスを hook に保持する他の shell は安全にならない。cleanup の失敗を警告扱いにする従来の判断は、自動 cleanup 自体を廃止するこの判断で置き換える。
 - 移行確認や復旧の具体的なコマンドは ADR に置かず、operations と troubleshooting の文書で管理する。復旧時に使う実体パスは標準配置先に固定せず、bootstrap が保持対象として確認した実体、または bootstrap が新規に配置した実体のパスのいずれかとする。
 - Windows は winget/DSC による導入を維持する。
 - 全 OS の mise 版を同期する仕組みや共通インストーラーは追加しない。公式成果物を使うことを一貫性の境界とし、OS ごとの導入機構を維持する。
@@ -27,6 +27,6 @@ Homebrew 版の `mise activate zsh` が親シェルに定義した `_mise_hook` 
 
 Unix 系では upstream の最適化済みバイナリを利用でき、取得物の完全性と版を明示的に検証できる。検証済みバイナリを原子的に配置するため、移行途中の失敗で mise を壊すことはない。保持対象として確認された非 formula 版の mise は、自動移行のために置換されない。保持対象は `command -v mise` が解決する実体、または formula 解決時に明示確認する `~/.local/bin/mise` に限られ、それ以外のパスにある未知の mise は bootstrap の対象外のままになる。
 
-bootstrap 中に formula を削除しないため、親シェルに残る絶対パス参照を即座に壊さずに移行できる。一方、formula を手動削除するまでは両者が併存し、移行の完了には、保持対象または新規配置先に応じた解決先の確認と、Homebrew 版の activation を読み込んだ全既存 shell の終了が必要になる。新しい login shell は共有 profile の実体環境を使い、zsh activation は読み込まない。bootstrap 前に `~/.local/bin` が存在しない環境では、継承されたプロファイルガードを解除して login shell を開始しなければ、新規の標準配置先が PATH に反映されない場合がある。障害時の復旧は標準パスに固定せず、bootstrap が保持対象として確認した実体、または新規配置先の実体パスのいずれかを用いる。これらの操作と障害時の復旧手順の具体的なコマンドは operations と troubleshooting の責務になる。Windows を含む全 OS で公式成果物を使う一方、導入経路と版の更新時期は OS 間で異なり得る。
+bootstrap 中に formula を削除しないため、親シェルに残る絶対パス参照を即座に壊さずに移行できる。一方、formula を手動削除するまでは両者が併存し、移行の完了には、保持対象または新規配置先に応じた解決先の確認と、Homebrew 版の activation を読み込んだ全既存 shell の終了または activation の再読込が必要になる。公式 mise から activation を読み直した shell は継続利用できるが、他の既存 shell に残る絶対パス参照は更新されない。新しい login shell は公式 activation によるディレクトリ変更時のバージョン切替を維持し、`activate_shims = false` により実体パスを使う。bootstrap 前に `~/.local/bin` が存在しない環境では、継承されたプロファイルガードを解除して login shell を開始しなければ、新規の標準配置先が PATH に反映されない場合がある。障害時の復旧は標準パスに固定せず、bootstrap が保持対象として確認した実体、または新規配置先の実体パスのいずれかを用いる。これらの操作と障害時の復旧手順の具体的なコマンドは operations と troubleshooting の責務になる。Windows を含む全 OS で公式成果物を使う一方、導入方法と版の更新時期は OS 間で異なり得る。
 
 Homebrew formula の移行分岐は永続的な通常処理ではなく、既存端末を移行するための暫定処理である。撤去条件と対象範囲は `.github/copilot-instructions.md` の「ワークアラウンド（定期チェック対象）」を参照し、本 ADR には重複して記載しない。

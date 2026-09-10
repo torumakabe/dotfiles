@@ -67,7 +67,7 @@ function Invoke-MiseSelfUpgrade {
 
             if ($miseProcesses) {
                 Write-Warning ($miseProcesses | Format-Table -AutoSize | Out-String)
-                throw "mise.exe を使っているプロセスがあります。Copilot CLI など mise shim 経由のプロセスを閉じてから再実行してください"
+                throw "mise.exe を使っているプロセスがあります。Copilot CLI など mise 管理ツールを使うプロセスを閉じてから再実行してください"
             }
         }
 

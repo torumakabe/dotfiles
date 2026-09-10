@@ -43,7 +43,7 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 5. `git commit` の明示承認
 
 パス比較前に `\` を `/` へ正規化する。`allowed-files.txt` は、ワイルドカードのない単一のプロジェクト相対パスを `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。読み取り専用の `rg` と `glob` にも例外を適用するが、検索フィルターはワイルドカードのない許可パスに限定し、明示された検索ルートがすべてプロジェクト内にあることを確認する。シンボリックリンク、ジャンクション、file URI、`..` を含むパス、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
-各 command hook は host 上で `MISE_ENABLE_TOOLS=uv uv run ...` を実行する。PowerShell も同じ環境変数と引数を使う。hook の cwd と標準入力はそのまま渡し、runtime の親 PATH から uv の実体を直接起動する。mise による導入と更新は host 側で行い、通常の sandbox shell 内では実行しない。
+各 command hook は host 上で `uv run ...` を実行する。PowerShell も同じ引数を使う。hook の cwd と標準入力はそのまま渡し、runtime の親 PATH から uv の実体を直接起動する。mise による導入と更新は host 側で行い、通常の sandbox shell 内では実行しない。
 
 Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
 
@@ -111,7 +111,7 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 macOS の login zsh では、`~/.zshenv` の後に `/etc/zprofile` の `path_helper` が PATH を並べ替える。`~/.zprofile` は `/opt/homebrew/opt/git/bin` を優先させてから共有 profile を読み、mise の実体 PATH を再構成する。Git の処理は、設定ベースフックが git 2.54 以降を必要とするためである（ADR-020）。対話 activation がない非対話 login zsh でも同じ構成を使う。
 
-対話 zsh でも `mise activate zsh` は実行しない。activation は shim ディレクトリを PATH の先頭へ追加するため、共有 profile が生成した実体 PATH より shim が優先される。Unix の対話シェルと非対話シェルは同じ実体 PATH を使い、ディレクトリ移動時の自動バージョン切替は保証しない。プロジェクト単位の動的な版切替が必要になった場合は ADR-028 の条件に従って再評価する。
+対話 zsh と PowerShell は公式の `mise activate` を維持し、ディレクトリ移動時の版切替を利用できるようにする。共通設定の `activate_shims = false` により、full activation は shim farm を PATH へ追加しない。対話シェルと、そこから起動する Copilot CLI は、同じ実体 PATH を使う。Windows のユーザー PATH に登録する shim は非対話環境との互換性のため残るため、実体 PATH の契約は PowerShell profile を読み込んだターミナルから Copilot CLI を起動する場合に適用する。
 
 ### Copilot の通常 shell と command hook
 

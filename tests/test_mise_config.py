@@ -306,10 +306,13 @@ class MiseConfigTests(unittest.TestCase):
         self.assertIn("_mise_hook: no such file or directory", troubleshooting)
         self.assertIn("unset __DOTFILES_PROFILE_LOADED", troubleshooting)
         self.assertIn(
-            "そのシェルを終了して新しい login shell を起動する",
+            'mise_path="$HOME/.local/bin/mise"',
             troubleshooting,
         )
-        self.assertNotIn("activate zsh)", troubleshooting)
+        self.assertIn(
+            'eval "$("$mise_path" activate zsh)"',
+            troubleshooting,
+        )
 
     def test_mise_bootstrap_renders_cleanly_for_unix_platforms(self) -> None:
         chezmoi = shutil.which("chezmoi")
@@ -423,6 +426,11 @@ class MiseConfigTests(unittest.TestCase):
             },
             set(MISE_LOCK_PLATFORMS),
         )
+
+    def test_full_activation_excludes_shim_farm(self) -> None:
+        config = _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))
+
+        self.assertIs(config["settings"]["activate_shims"], False)
 
     def test_typescript_language_server_uses_stable_typescript_path(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")

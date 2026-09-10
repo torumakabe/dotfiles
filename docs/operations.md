@@ -76,7 +76,7 @@ macOS に Homebrew formula の mise がある場合、現在解決される mise
 
 ### 実体環境への切替
 
-mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定し、対話 zsh でも `mise activate zsh` は実行しない。Copilot の全5 command hook は host 上で `MISE_ENABLE_TOOLS=uv uv run ...` を使う。Windows は既存の PowerShell activation から実体環境を継承する。
+mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定する。対話 zsh と PowerShell は公式の `mise activate` を維持し、共通設定の `activate_shims = false` で shim farm を PATH から除外する。Copilot の全5 command hook は host 上で `uv run ...` を使う。Windows ではユーザー PATH の shim 登録を非対話環境との互換性のため維持するため、Copilot CLI は PowerShell profile を読み込んだターミナルから起動する。
 
 切替の受け入れ条件は、Copilot の sandbox 内で宣言済みの mise 管理ツールがすべて shim を経由せず実体から解決することである。uv は command hook が必要とするため確認の起点になるが、条件は uv だけに限らない。設定に宣言していないツールの shim は過去の導入の残骸であり、shim 経由でも版を解決できないため、この条件の対象から除く。
 
@@ -172,7 +172,7 @@ mise-self-upgrade
 
 このコマンドは `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、更新があった場合は続けて `mise reshim` を実行する。更新がない場合は正常終了する。winget portable package の symlink 判定により通常の upgrade が「変更済み」と誤検知されることがあるため、mise 本体の更新ではこの関数を使う。
 
-Copilot CLI など mise shim 経由のプロセスが動いていると winget が `mise.exe` を削除できないため、実行前に検出して停止を促す。
+Copilot CLI など mise の実体または shim から起動したプロセスが動いていると winget が `mise.exe` を削除できないため、実行前に検出して停止を促す。
 
 ### `mise-upgrade`
 

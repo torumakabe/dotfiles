@@ -228,6 +228,59 @@ class ShellEnvironmentTests(unittest.TestCase):
                     str(node_bin / "node"), "spaces and 'quotes'", str(node_bin / "node"),
                 ])
 
+    @unittest.skipUnless(
+        shutil.which("mise") and shutil.which("zsh"),
+        "mise and zsh are required for activation behavior",
+    )
+    def test_real_mise_activation_honors_activate_shims(self) -> None:
+        mise = pathlib.Path(shutil.which("mise")).resolve()
+        data = self.root / "data"
+        shims = data / "shims"
+        install_bin = data / "installs/node/1.2.3/bin"
+        install_bin.mkdir(parents=True)
+        shims.mkdir()
+        self.write_executable(install_bin / "node", "#!/bin/sh\nexit 0\n")
+        self.write_executable(shims / "node", "#!/bin/sh\nexit 99\n")
+        env = self.env | {
+            "PATH": f"{self.bin}:{shims}:/usr/bin:/bin",
+            "MISE_CONFIG_DIR": str(self.root / "config"),
+            "MISE_DATA_DIR": str(data),
+            "MISE_CACHE_DIR": str(self.root / "cache"),
+            "MISE_STATE_DIR": str(self.root / "state"),
+            "MISE_TRUSTED_CONFIG_PATHS": str(self.root),
+            "MISE_AUTO_INSTALL": "1",
+        }
+        config = self.root / "mise.toml"
+
+        for activate_shims, expected_count in ((True, "1"), (False, "0")):
+            with self.subTest(activate_shims=activate_shims):
+                config.write_text(
+                    '[tools]\nnode = "1.2.3"\n'
+                    f"[settings]\nactivate_shims = {str(activate_shims).lower()}\n",
+                    encoding="utf-8",
+                )
+                result = subprocess.run(
+                    [
+                        shutil.which("zsh"),
+                        "-dfc",
+                        f'eval "$({mise} activate zsh)"; '
+                        'command -v node; '
+                        'printf "%s\\n" "$MISE_SHELL"; '
+                        'print -r -- "$PATH" | tr : "\\n" | '
+                        'grep -c "$MISE_DATA_DIR/shims" || true',
+                    ],
+                    cwd=self.root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assert_success(result)
+                self.assertEqual(result.stdout.splitlines(), [
+                    str(install_bin / "node"), "zsh", expected_count,
+                ])
+
 
 class ShimResolutionCheckTests(unittest.TestCase):
     """Run the documented acceptance check so the published command stays usable."""
