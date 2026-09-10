@@ -349,7 +349,7 @@ class PlatformParityTests(unittest.TestCase):
                 self.assertIn('__DOTFILES_MISE_PATH="$PATH"', profile)
                 self.assertNotIn('__add_path "${HOME}/.local/share/mise/shims"', profile)
         self.assertIn("mise activate pwsh", self.powershell)
-        self.assertIn("mise activate zsh", self.zshrc)
+        self.assertNotIn("mise activate zsh", self.zshrc)
 
     def test_copilot_hook_direct_uv_is_shared_by_all_platforms(self) -> None:
         hooks = json.loads(

@@ -111,6 +111,8 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 macOS の login zsh では、`~/.zshenv` の後に `/etc/zprofile` の `path_helper` が PATH を並べ替える。`~/.zprofile` は `/opt/homebrew/opt/git/bin` を優先させてから共有 profile を読み、mise の実体 PATH を再構成する。Git の処理は、設定ベースフックが git 2.54 以降を必要とするためである（ADR-020）。対話 activation がない非対話 login zsh でも同じ構成を使う。
 
+対話 zsh でも `mise activate zsh` は実行しない。activation は shim ディレクトリを PATH の先頭へ追加するため、共有 profile が生成した実体 PATH より shim が優先される。Unix の対話シェルと非対話シェルは同じ実体 PATH を使い、ディレクトリ移動時の自動バージョン切替は保証しない。プロジェクト単位の動的な版切替が必要になった場合は ADR-028 の条件に従って再評価する。
+
 ### Copilot の通常 shell と command hook
 
 Copilot CLI 1.0.81 以降の Unix の通常 agent shell は、host 上で非対話 login bash の環境を取得し、親環境へ merge してから sandbox shell を作る。共有 profile の `mise env` はこの host 側で実行され、通常の agent command shell は `--norc --noprofile` で実体環境を使う。環境取得時の cwd は HOME なので、project-local の版切替はこの構成の保証に含めない。Linux の初回導入には、この機能を含む CLI 1.0.83 を使う。

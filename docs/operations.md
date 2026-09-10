@@ -76,7 +76,7 @@ macOS に Homebrew formula の mise がある場合、現在解決される mise
 
 ### 実体環境への切替
 
-mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定し、Copilot の全5 command hook は host 上で `MISE_ENABLE_TOOLS=uv uv run ...` を使う。Windows は既存の PowerShell activation から実体環境を継承する。
+mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定し、対話 zsh でも `mise activate zsh` は実行しない。Copilot の全5 command hook は host 上で `MISE_ENABLE_TOOLS=uv uv run ...` を使う。Windows は既存の PowerShell activation から実体環境を継承する。
 
 切替の受け入れ条件は、Copilot の sandbox 内で宣言済みの mise 管理ツールがすべて shim を経由せず実体から解決することである。uv は command hook が必要とするため確認の起点になるが、条件は uv だけに限らない。設定に宣言していないツールの shim は過去の導入の残骸であり、shim 経由でも版を解決できないため、この条件の対象から除く。
 

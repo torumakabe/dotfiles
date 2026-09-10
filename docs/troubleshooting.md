@@ -120,7 +120,7 @@ macOS / Linux: mise self-update
 Windows:       mise-self-upgrade
 ```
 
-macOS の移行では、現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、formula を自動削除しない。Homebrew 版の activation を読み込んだターミナルやシェルをすべて終了する。現在のシェルを継続して使う場合は、profile の再実行ガードを解除して login shell を起動し直す。
+macOS の移行では、現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、formula を自動削除しない。Homebrew 版の activation を読み込んだターミナルやシェルをすべて終了する。Unix の現行構成は `mise activate zsh` を使わないため、既存シェルへ activation を読み直して継続利用しない。
 
 ```bash
 unset __DOTFILES_PROFILE_LOADED
@@ -134,13 +134,7 @@ command -v mise   # ~/.local/bin/mise
 brew uninstall mise
 ```
 
-formula をすでに削除し、`_mise_hook: no such file or directory: /opt/homebrew/bin/mise` が出る場合は、影響を受ける各シェルで公式バイナリの hook を読み直すか、そのシェルを終了する。
-
-```bash
-mise_path="$HOME/.local/bin/mise" # 導入スクリプトが別のパスを案内した場合は置き換える
-eval "$("$mise_path" activate zsh)"
-rehash
-```
+formula をすでに削除し、`_mise_hook: no such file or directory: /opt/homebrew/bin/mise` が出る場合は、そのシェルを終了して新しい login shell を起動する。
 
 mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。
 

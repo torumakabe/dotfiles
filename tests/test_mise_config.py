@@ -306,13 +306,10 @@ class MiseConfigTests(unittest.TestCase):
         self.assertIn("_mise_hook: no such file or directory", troubleshooting)
         self.assertIn("unset __DOTFILES_PROFILE_LOADED", troubleshooting)
         self.assertIn(
-            'mise_path="$HOME/.local/bin/mise"',
+            "そのシェルを終了して新しい login shell を起動する",
             troubleshooting,
         )
-        self.assertIn(
-            'eval "$("$mise_path" activate zsh)"',
-            troubleshooting,
-        )
+        self.assertNotIn("activate zsh)", troubleshooting)
 
     def test_mise_bootstrap_renders_cleanly_for_unix_platforms(self) -> None:
         chezmoi = shutil.which("chezmoi")

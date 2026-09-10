@@ -30,12 +30,8 @@ setopt autopushd
 export LC_ALL=C.UTF-8
 export LANG=C.UTF-8
 export EDITOR=vim
-# PATH / GOPATH / brew shellenv / mise shims は ~/.profile に集約し、
+# PATH / GOPATH / brew shellenv / mise の実体環境は ~/.profile に集約し、
 # ~/.zprofile 経由で login 時に source される（非対話シェルは env 継承）。
-
-# 対話 zsh で必要なツール連携を現在のシェルプロセスに適用する。
-# eval ではなく process substitution + source を使い、出力をスクリプトとして評価する。
-command -v mise >/dev/null && source <(mise activate zsh)
 
 alias k=kubectl
 alias ll='ls -ahl'
