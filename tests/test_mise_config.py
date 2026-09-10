@@ -427,10 +427,11 @@ class MiseConfigTests(unittest.TestCase):
             set(MISE_LOCK_PLATFORMS),
         )
 
-    def test_full_activation_excludes_shim_farm(self) -> None:
+    def test_full_activation_prioritizes_real_paths_without_shims(self) -> None:
         config = _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))
 
         self.assertIs(config["settings"]["activate_shims"], False)
+        self.assertIs(config["settings"]["activate_aggressive"], True)
 
     def test_typescript_language_server_uses_stable_typescript_path(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")

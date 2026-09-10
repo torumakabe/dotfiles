@@ -111,7 +111,7 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 macOS の login zsh では、`~/.zshenv` の後に `/etc/zprofile` の `path_helper` が PATH を並べ替える。`~/.zprofile` は `/opt/homebrew/opt/git/bin` を優先させてから共有 profile を読み、mise の実体 PATH を再構成する。Git の処理は、設定ベースフックが git 2.54 以降を必要とするためである（ADR-020）。対話 activation がない非対話 login zsh でも同じ構成を使う。
 
-対話 zsh と PowerShell は公式の `mise activate` を維持し、ディレクトリ移動時の版切替を利用できるようにする。共通設定の `activate_shims = false` により、full activation は shim farm を PATH へ追加しない。対話シェルと、そこから起動する Copilot CLI は、同じ実体 PATH を使う。Windows のユーザー PATH に登録する shim は非対話環境との互換性のため残るため、実体 PATH の契約は PowerShell profile を読み込んだターミナルから Copilot CLI を起動する場合に適用する。
+対話 zsh と PowerShell は公式の `mise activate` を維持し、ディレクトリ移動時の版切替を利用できるようにする。共通設定の `activate_shims = false` により、full activation は shim farm を PATH へ追加しない。`activate_aggressive = true` は、OS や他のパッケージ管理ツールが提供する同名コマンドより mise の実体 PATH を前方に保つ。対話シェルと、そこから起動する Copilot CLI は、同じ実体 PATH を使う。Windows のユーザー PATH に登録する shim は非対話環境との互換性のため残るため、実体 PATH の契約は PowerShell profile を読み込んだターミナルから Copilot CLI を起動する場合に適用する。
 
 ### Copilot の通常 shell と command hook
 

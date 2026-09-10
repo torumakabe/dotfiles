@@ -352,6 +352,7 @@ class PlatformParityTests(unittest.TestCase):
         self.assertIn("mise activate zsh", self.zshrc)
         config = (REPO_ROOT / "home/dot_config/mise/config.toml.tmpl").read_text()
         self.assertIn("activate_shims = false", config)
+        self.assertIn("activate_aggressive = true", config)
 
     def test_copilot_hook_direct_uv_is_shared_by_all_platforms(self) -> None:
         hooks = json.loads(

@@ -281,6 +281,61 @@ class ShellEnvironmentTests(unittest.TestCase):
                     str(install_bin / "node"), "zsh", expected_count,
                 ])
 
+    @unittest.skipUnless(
+        shutil.which("mise") and shutil.which("zsh"),
+        "mise and zsh are required for activation behavior",
+    )
+    def test_real_mise_activation_honors_activate_aggressive(self) -> None:
+        mise = pathlib.Path(shutil.which("mise")).resolve()
+        data = self.root / "data"
+        install_bin = data / "installs/node/1.2.3/bin"
+        shadow_bin = self.root / "shadow"
+        install_bin.mkdir(parents=True)
+        shadow_bin.mkdir()
+        self.write_executable(install_bin / "node", "#!/bin/sh\nexit 0\n")
+        self.write_executable(shadow_bin / "node", "#!/bin/sh\nexit 99\n")
+        env = self.env | {
+            "MISE_CONFIG_DIR": str(self.root / "config"),
+            "MISE_DATA_DIR": str(data),
+            "MISE_CACHE_DIR": str(self.root / "cache"),
+            "MISE_STATE_DIR": str(self.root / "state"),
+            "MISE_TRUSTED_CONFIG_PATHS": str(self.root),
+            "MISE_AUTO_INSTALL": "1",
+        }
+        config = self.root / "mise.toml"
+
+        for aggressive, expected in (
+            (False, shadow_bin / "node"),
+            (True, install_bin / "node"),
+        ):
+            with self.subTest(activate_aggressive=aggressive):
+                config.write_text(
+                    '[tools]\nnode = "1.2.3"\n'
+                    "[settings]\nactivate_shims = false\n"
+                    f"activate_aggressive = {str(aggressive).lower()}\n",
+                    encoding="utf-8",
+                )
+                result = subprocess.run(
+                    [
+                        shutil.which("zsh"),
+                        "-dfc",
+                        f'eval "$({mise} activate zsh)"; '
+                        f'PATH="{shadow_bin}:$PATH"; export PATH; '
+                        f'eval "$({mise} hook-env --force -s zsh)"; '
+                        'command -v node; '
+                        'print -r -- "$PATH" | tr : "\\n" | '
+                        'grep -c "$MISE_DATA_DIR/shims" || true',
+                    ],
+                    cwd=self.root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assert_success(result)
+                self.assertEqual(result.stdout.splitlines(), [str(expected), "0"])
+
 
 class ShimResolutionCheckTests(unittest.TestCase):
     """Run the documented acceptance check so the published command stays usable."""
