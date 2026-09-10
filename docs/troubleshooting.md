@@ -432,6 +432,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
 
-本リポジトリの command hook は `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象を `uv` に限定する。`uv` の未導入版は自動導入されるが、dotnet など他ツールの missing 状態は hook 起動時に解決しない。標準エラーに他ツールのインストールログが出る場合は、`~/.copilot/hooks/hooks.json` が最新か確認し、`chezmoi apply` で配り直す。
+本リポジトリの command hook は、runtime の親 PATH にある `uv` を直接起動する。hook 実行時の自動導入は行わない。標準エラーが `uv: command not found` または同等の内容なら、sandbox 外の通常ターミナルで `mise install uv` を実行し、新しい親ターミナルから Copilot CLI を起動する。標準エラーに `mise exec` や他ツールのインストールログが出る場合は、`~/.copilot/hooks/hooks.json` が最新か確認し、`chezmoi apply` で配り直す。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

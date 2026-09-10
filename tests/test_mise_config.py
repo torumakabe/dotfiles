@@ -378,6 +378,22 @@ class MiseConfigTests(unittest.TestCase):
             install_script,
         )
 
+    def test_devcontainer_lock_sync_defers_only_without_github_auth(self) -> None:
+        sync_script = SYNC_SH_PATH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "{{ if and .devcontainer (not .codespaces) -}}",
+            sync_script,
+        )
+        guarded = sync_script.split(
+            "{{ if and .devcontainer (not .codespaces) -}}", 1
+        )[1].split("{{ end -}}", 1)[0]
+        self.assertIn("gh auth token", guarded)
+        self.assertIn('GH_TOKEN:-}', guarded)
+        self.assertIn("skipping mise lockfile sync", guarded)
+        self.assertIn("exit 0", guarded)
+        self.assertNotRegex(guarded, r"(?m)^\s*mise install")
+
     def test_dotnet_alias_matches_lock_backend(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")
         lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
@@ -393,6 +409,23 @@ class MiseConfigTests(unittest.TestCase):
         self.assertIn('{{ if eq .chezmoi.os "windows" -}}', config)
         self.assertIn("install_env = { DOTNET_ROOT =", config)
         self.assertIn(r"\mise\dotnet-root;$PATH", config)
+
+    def test_uv_uses_aqua_backend_on_all_platforms(self) -> None:
+        config = _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))
+        entries = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))["tools"]["uv"]
+        self.assertEqual(config["tools"]["uv"], "latest")
+        self.assertNotIn("uv", config.get("tool_alias", {}))
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["backend"], "aqua:astral-sh/uv")
+        self.assertEqual(entries[0]["specifiers"], ["latest"])
+        self.assertEqual(
+            {
+                key.removeprefix("platforms.")
+                for key in entries[0]
+                if key.startswith("platforms.")
+            },
+            set(MISE_LOCK_PLATFORMS),
+        )
 
     def test_typescript_language_server_uses_stable_typescript_path(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")

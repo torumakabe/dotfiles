@@ -1,4 +1,4 @@
-"""Verify Copilot hooks isolate mise resolution to uv on every shell."""
+"""Verify Copilot hooks invoke the resolved uv executable on every shell."""
 
 import json
 import os
@@ -11,8 +11,8 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json"
-EXPECTED_BASH_PREFIX = "MISE_ENABLE_TOOLS=uv mise exec -- uv run "
-EXPECTED_POWERSHELL_PREFIX = "$env:MISE_ENABLE_TOOLS='uv'; mise exec -- uv run "
+EXPECTED_BASH_PREFIX = "MISE_ENABLE_TOOLS=uv uv run "
+EXPECTED_POWERSHELL_PREFIX = "$env:MISE_ENABLE_TOOLS='uv'; uv run "
 
 
 def _commands() -> list[dict[str, object]]:
@@ -21,7 +21,7 @@ def _commands() -> list[dict[str, object]]:
 
 
 class CopilotHooksConfigTests(unittest.TestCase):
-    def test_all_commands_limit_mise_to_uv(self) -> None:
+    def test_all_commands_invoke_uv_directly(self) -> None:
         commands = _commands()
         self.assertEqual(len(commands), 5)
 
@@ -31,6 +31,8 @@ class CopilotHooksConfigTests(unittest.TestCase):
                 self.assertTrue(
                     command["powershell"].startswith(EXPECTED_POWERSHELL_PREFIX)
                 )
+                self.assertNotIn("mise exec", command["bash"])
+                self.assertNotIn("mise exec", command["powershell"])
 
     def test_all_commands_run_from_repository_root(self) -> None:
         for command in _commands():
@@ -43,7 +45,7 @@ class CopilotHooksConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             capture = root / "capture.txt"
-            stub = root / "mise"
+            stub = root / "uv"
             stub.write_text(
                 '#!/bin/sh\n'
                 '{ printf "%s\\n" "$MISE_ENABLE_TOOLS" "$PWD" "$@"; cat; }'
@@ -73,24 +75,23 @@ class CopilotHooksConfigTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "")
                         lines = capture.read_text(encoding="utf-8").splitlines()
                         self.assertEqual(
-                            lines[:6],
-                            ["uv", str(root.resolve()), "exec", "--", "uv", "run"],
+                            lines[:3],
+                            ["uv", str(root.resolve()), "run"],
                         )
                         expected_script = command["bash"].split('"')[1].replace(
                             "$HOME", env["HOME"]
                         )
-                        self.assertEqual(lines[6], expected_script)
-                        self.assertEqual(lines[7:], ['{"toolName":"test"}'])
+                        self.assertEqual(lines[3], expected_script)
+                        self.assertEqual(lines[4:], ['{"toolName":"test"}'])
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_exports_uv_allowlist_to_hook_process(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             capture = root / "capture.txt"
-            stub = root / "mise.ps1"
+            stub = root / "uv.ps1"
             stub.write_text(
-                "@($env:MISE_ENABLE_TOOLS, (Get-Location).Path) + "
-                "@($args | Where-Object { $_ -ne '--' }) + "
+                "@($env:MISE_ENABLE_TOOLS, (Get-Location).Path) + @($args) + "
                 "@([Console]::In.ReadToEnd().TrimEnd()) | "
                 "Set-Content -LiteralPath $env:HOOK_ENV_CAPTURE\n"
                 "exit ([int]$env:HOOK_EXIT_CODE)\n",
@@ -121,11 +122,9 @@ class CopilotHooksConfigTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "")
                         lines = capture.read_text(encoding="utf-8-sig").splitlines()
                         self.assertEqual(lines[:2], ["uv", str(root.resolve())])
-                        # Normalize the delimiter in the script stub; the prefix
-                        # assertion pins the literal token passed to native mise.
-                        self.assertEqual(lines[2:5], ["exec", "uv", "run"])
+                        self.assertEqual(lines[2], "run")
                         script_name = command["powershell"].rsplit("\\", 1)[1][:-1]
                         self.assertTrue(
-                            lines[5].endswith("\\.copilot\\hooks\\scripts\\" + script_name)
+                            lines[3].endswith("\\.copilot\\hooks\\scripts\\" + script_name)
                         )
-                        self.assertEqual(lines[6:], ['{"toolName":"test"}'])
+                        self.assertEqual(lines[4:], ['{"toolName":"test"}'])

@@ -43,13 +43,13 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 5. `git commit` の明示承認
 
 パス比較前に `\` を `/` へ正規化する。`allowed-files.txt` は、ワイルドカードのない単一のプロジェクト相対パスを `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。読み取り専用の `rg` と `glob` にも例外を適用するが、検索フィルターはワイルドカードのない許可パスに限定し、明示された検索ルートがすべてプロジェクト内にあることを確認する。シンボリックリンク、ジャンクション、file URI、`..` を含むパス、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
-各 command hook は host 上で `MISE_ENABLE_TOOLS=uv mise exec -- uv run ...` を実行する。PowerShell も同じ環境変数と引数を使う。mise の解決対象を `uv` だけに限定し、shim を使わずに起動する。hook の cwd と標準入力はそのまま渡す。mise の実行と必要な導入は host 側であり、通常の sandbox shell 内で行う処理ではない。hook を起動する runtime の親 PATH に mise 自体が必要である。
+各 command hook は host 上で `MISE_ENABLE_TOOLS=uv uv run ...` を実行する。PowerShell も同じ環境変数と引数を使う。hook の cwd と標準入力はそのまま渡し、runtime の親 PATH から uv の実体を直接起動する。mise による導入と更新は host 側で行い、通常の sandbox shell 内では実行しない。
 
 Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
 
 `copilot-guardrails --allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。MCP と LSP は sandbox 対象外である。backend は macOS の Seatbelt、Linux、WSL、Codespaces、Dev Container の bubblewrap、Windows の ProcessContainer である。Linux 系の診断は `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap を確認し、`false` の場合は probe を省略する。診断は利用可否を報告するものであり、sandbox 外での再実行方法が提示されることを保証しない。
 
-コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトを正本とする。
+コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。Dev Container と Codespaces のツールは、通常の Linux と同じ mise config、lockfile、導入スクリプト、更新手順で管理する。Dev Container は作成時の GitHub 未認証を避けるため、同じ config と lockfile を使う `mise install --yes` だけを起動後に実行する。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトを正本とする。
 
 ## git pre-commit フック
 
@@ -115,7 +115,7 @@ macOS の login zsh では、`~/.zshenv` の後に `/etc/zprofile` の `path_hel
 
 Copilot CLI 1.0.81 以降の Unix の通常 agent shell は、host 上で非対話 login bash の環境を取得し、親環境へ merge してから sandbox shell を作る。共有 profile の `mise env` はこの host 側で実行され、通常の agent command shell は `--norc --noprofile` で実体環境を使う。環境取得時の cwd は HOME なので、project-local の版切替はこの構成の保証に含めない。Linux の初回導入には、この機能を含む CLI 1.0.83 を使う。
 
-command hook はこの環境補完を共有せず、runtime の親環境を使うため、各 hook で host 側の `mise exec` を実行する。SDK の `session.shell.exec` も通常 agent shell の補完を共有しない別 API である。利用未確認の API への対応は要求せず、実際に使う CLI／GUI の起動と最初の hook を区別して確認する。
+command hook はこの環境補完を共有せず、runtime の親環境を使う。各 hook は、その親 PATH にある uv の実体を `uv run` で直接起動する。SDK の `session.shell.exec` も通常 agent shell の補完を共有しない別 API である。利用未確認の API への対応は要求せず、実際に使う CLI／GUI の起動と最初の hook を区別して確認する。
 
 この区分の根拠は [runtime bd85d404 の環境取得](https://github.com/github/copilot-agent-runtime/blob/bd85d40405b59a8f2088da47f7a1e833f7291624/src/runtime/src/tools/session_shell_driver.rs#L594-L620) と [hook の親環境](https://github.com/github/copilot-agent-runtime/blob/bd85d40405b59a8f2088da47f7a1e833f7291624/src/runtime/src/session/services/hook_processor_service.rs#L468-L477) である。GUI 同梱 runtime の版と起動環境は、PATH 上の単体 CLI とは別に扱う。公式 `.github/github-app.yml` に汎用 PATH 注入項目は確認できず、setup script の export で親アプリを変更する構成にはしない。
 
@@ -127,11 +127,11 @@ macOS の `run_onchange_after_21-link-mise-shims.sh` は、以前の GUI 固定 
 
 ### uv の実体配置
 
-uv は全対象 OS で mise の `github:astral-sh/uv` backend を使う。公式アーカイブの選択、展開、uv/uvx を含むディレクトリの PATH 検出は backend に任せ、独自 wrapper や `filter_bins` は指定しない。Windows ARM64 だけは従来の x64 配布物を `asset_pattern` で明示し、エミュレーションで使う。
+uv は全対象 OS で mise の `aqua:astral-sh/uv` backend を使う。Windows ARM64 では、lockfile が指定する x64 配布物を従来どおりエミュレーションで使う。独自 wrapper、常設 updater、PATH 同期処理は追加しない。
 
-`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、uv/uvx を直接解決できる。shim と `.mise-bins` 内の実体へのリンクは別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。uv の cache 書き込み許可は変更しない。
+`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、aqua backend の uv/uvx を直接解決できる。shim と実体 PATH は別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。uv の cache 書き込み許可は変更しない。
 
-lock は `latest` を要求として保持し、Windows ARM64 の option により uv が複数 entry に分かれる。checksum と GitHub artifact attestation の検証機能を利用するが、aqua recipe が指定していた署名元 workflow の限定は行わない。既存 install の移行は [運用手順](operations.md#uv-の-backend-移行) を参照する。
+lock は `latest` を要求として保持し、uv 0.12.10 の単一 entry に5対象プラットフォームの配布物と checksum、provenance を固定する。
 
 ### TypeScript language server の依存配置
 

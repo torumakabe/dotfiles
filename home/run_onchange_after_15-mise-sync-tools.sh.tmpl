@@ -23,6 +23,16 @@ if ! command -v mise >/dev/null 2>&1; then
   exit 0
 fi
 
+{{ if and .devcontainer (not .codespaces) -}}
+if [ -z "${MISE_GITHUB_TOKEN:-}" ] && [ -z "${GITHUB_API_TOKEN:-}" ] \
+  && [ -z "${GITHUB_TOKEN:-}" ] && [ -z "${GH_TOKEN:-}" ] \
+  && { ! command -v gh >/dev/null 2>&1 || ! gh auth token >/dev/null 2>&1; }; then
+  echo 'Dev container without GitHub authentication; skipping mise lockfile sync.'
+  echo 'Run GITHUB_TOKEN=$(gh auth token) mise install --yes after gh auth login.'
+  exit 0
+fi
+{{ end -}}
+
 if [ -z "${MISE_GITHUB_TOKEN:-}" ] && [ -z "${GITHUB_API_TOKEN:-}" ] && [ -z "${GITHUB_TOKEN:-}" ]; then
   if [ -n "${GH_TOKEN:-}" ]; then
     MISE_GITHUB_TOKEN="$GH_TOKEN"

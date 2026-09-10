@@ -102,7 +102,7 @@ PLATFORM_CONTRACT = {
     "shell:ll": _implemented_everywhere(),
     "shell:copilot-guardrails": _implemented_everywhere(),
     "shell:mise-executable-environment": _implemented_everywhere(),
-    "shell:copilot-hook-mise-exec": _implemented_everywhere(),
+    "shell:copilot-hook-direct-uv": _implemented_everywhere(),
     "shell:copilot-winget-launcher": _windows_only(
         "exception: docs/troubleshooting.md WindowsApps execution alias workaround"
     ),
@@ -351,7 +351,7 @@ class PlatformParityTests(unittest.TestCase):
         self.assertIn("mise activate pwsh", self.powershell)
         self.assertIn("mise activate zsh", self.zshrc)
 
-    def test_copilot_hook_mise_exec_is_shared_by_all_platforms(self) -> None:
+    def test_copilot_hook_direct_uv_is_shared_by_all_platforms(self) -> None:
         hooks = json.loads(
             (REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json").read_text()
         )["hooks"]
@@ -360,7 +360,8 @@ class PlatformParityTests(unittest.TestCase):
                 for platform in PLATFORMS:
                     with self.subTest(platform=platform, command=command):
                         key = "powershell" if platform == "windows-powershell" else "bash"
-                        self.assertIn("mise exec -- uv run ", command[key])
+                        self.assertIn("uv run ", command[key])
+                        self.assertNotIn("mise exec", command[key])
                         self.assertEqual(command["cwd"], ".")
 
     def test_gh_stack_contract_components_exist_for_each_platform(self) -> None:
@@ -529,7 +530,7 @@ class PlatformParityTests(unittest.TestCase):
                 self.assertEqual(config["tools"]["lefthook"], "latest")
 
     @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
-    def test_uv_backend_and_lock_options_cover_every_platform(self) -> None:
+    def test_uv_aqua_lock_covers_every_platform(self) -> None:
         entries = tomllib.loads(
             (REPO_ROOT / "home/dot_config/mise/private_mise.lock").read_text(
                 encoding="utf-8"
@@ -564,18 +565,15 @@ class PlatformParityTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 config = tomllib.loads(result.stdout)
-                uv = config["tools"]["uv"]
-                self.assertEqual(uv["version"], "latest")
-                self.assertEqual(config["tool_alias"]["uv"], "github:astral-sh/uv")
-                options = uv["platforms"].get(lock_platform, {})
+                self.assertEqual(config["tools"]["uv"], "latest")
+                self.assertNotIn("uv", config.get("tool_alias", {}))
                 matches = [
                     entry for entry in entries
-                    if entry.get("options", {}) == options
-                    and f"platforms.{lock_platform}" in entry
+                    if f"platforms.{lock_platform}" in entry
                 ]
                 self.assertEqual(len(matches), 1)
-                self.assertEqual(matches[0]["backend"], config["tool_alias"]["uv"])
-                self.assertIn(uv["version"], matches[0]["specifiers"])
+                self.assertEqual(matches[0]["backend"], "aqua:astral-sh/uv")
+                self.assertIn(config["tools"]["uv"], matches[0]["specifiers"])
 
     def test_powershell_completion_cache_executes_generated_sources(self) -> None:
         pwsh = shutil.which("pwsh")

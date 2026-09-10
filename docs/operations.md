@@ -76,22 +76,57 @@ macOS に Homebrew formula の mise がある場合、現在解決される mise
 
 ### 実体環境への切替
 
-mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定し、Copilot の全5 command hook は host 上で `MISE_ENABLE_TOOLS=uv mise exec -- uv run ...` を使う。Windows は既存の PowerShell activation から実体環境を継承する。
+mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定し、Copilot の全5 command hook は host 上で `MISE_ENABLE_TOOLS=uv uv run ...` を使う。Windows は既存の PowerShell activation から実体環境を継承する。
 
 切替の受け入れ条件は、Copilot の sandbox 内で宣言済みの mise 管理ツールがすべて shim を経由せず実体から解決することである。uv は command hook が必要とするため確認の起点になるが、条件は uv だけに限らない。設定に宣言していないツールの shim は過去の導入の残骸であり、shim 経由でも版を解決できないため、この条件の対象から除く。
 
-変更対象の profile と `~/.copilot/hooks/hooks.json` を、端末内の専用作業ディレクトリへ属性とリンクを保持して退避する。CLI 実体を更新する場合はその実体も、uv backend を変更する場合は次節の対象も退避する。元の不在と変更前後の内容を記録し、並行変更を復元で上書きしない。
+変更対象の profile と `~/.copilot/hooks/hooks.json` を、端末内の専用作業ディレクトリへ属性とリンクを保持して退避する。CLI 実体を更新する場合はその実体も退避する。元の不在と変更前後の内容を記録し、並行変更を復元で上書きしない。
 
-Unix では `.profile`、`.zprofile`、`.zshenv` を一組として反映する。新しい親ターミナルから CLI を起動し、GUI は通常の起動方法で別に確認する。古い環境や login snapshot を持つアプリと CLI を再起動し、同じプロセス内で子シェルだけを作って反映済みとは判断しない。最初の hook で mise 自体と uv の解決先を確認する。通常 agent shell から見つかることは、hook の親 PATH から見つかる証拠にはならない。
+Unix では `.profile`、`.zprofile`、`.zshenv` を一組として反映する。新しい親ターミナルから CLI を起動し、GUI は通常の起動方法で別に確認する。古い環境や login snapshot を持つアプリと CLI を再起動し、同じプロセス内で子シェルだけを作って反映済みとは判断しない。最初の hook で uv の解決先を確認する。通常 agent shell から見つかることは、hook の親 PATH から見つかる証拠にはならない。
 
-受け入れ条件は、各環境の sandbox 内で shim ディレクトリの名前を総当たりし、解決先が shim ディレクトリの外にあることで確認する。zsh と bash では次を実行する。
+受け入れ条件は、各環境の sandbox 内で確認する。対象の名前は `mise bin-paths` が返す実体ディレクトリの実行ファイルから取る。名前の出所を宣言側に置くことで、shim の有無に依存せず、宣言していないツールの残骸も混ざらない。
+
+確認は host と sandbox の2段に分ける。Windows の sandbox 内では mise が global config を読めず `mise bin-paths` が空を返すため、名前の一覧は host 側で作る。まず host のターミナルで一覧を作る。
 
 ```sh
-for shim in "${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims"/*; do
-    name=$(basename "$shim")
+mise bin-paths | while read -r dir; do
+    for file in "$dir"/*; do
+        [ -x "$file" ] && [ ! -d "$file" ] &&
+            printf '%s\t%s\n' "$(basename "$file")" "$file"
+    done
+done | awk -F '\t' '!seen[$1]++' > "$HOME/mise-tool-paths.tsv"
+wc -l < "$HOME/mise-tool-paths.tsv"
+```
+
+```powershell
+$extensions = $env:PATHEXT -split ';'
+$seen = @{}
+& mise bin-paths | ForEach-Object {
+    Get-ChildItem -LiteralPath $_ -File -ErrorAction SilentlyContinue |
+        Where-Object { $extensions -contains [IO.Path]::GetExtension($_.Name) } |
+        ForEach-Object {
+            $extension = [IO.Path]::GetExtension($_.Name)
+            $name = $_.Name.Substring(0, $_.Name.Length - $extension.Length)
+            if (-not $seen.ContainsKey($name)) { $seen[$name] = $_.FullName }
+        }
+}
+$seen.GetEnumerator() | Sort-Object Name | ForEach-Object {
+    "{0}`t{1}" -f $_.Name, $_.Value
+} | Set-Content -LiteralPath (Join-Path $env:USERPROFILE 'mise-tool-paths.tsv')
+```
+
+次に sandbox 内で解決先を確認する。zsh と bash では次を実行する。
+
+```sh
+entries=$(cat "$HOME/mise-tool-paths.tsv")
+[ -n "$entries" ] || printf '%s\n' "no entries: the host list is empty"
+printf '%s\n' "$entries" | while IFS="$(printf '\t')" read -r name expected; do
+    [ -n "$name" ] && [ -n "$expected" ] || continue
     resolved=$(command -v "$name") || { printf '%s\n' "unresolved: $name"; continue; }
     case "$resolved" in
-        */shims/*) printf '%s\n' "via shim: $name -> $resolved" ;;
+        "$expected") ;;
+        */shims/*) printf '%s\n' "via shim: $name -> $resolved (expected $expected)" ;;
+        *) printf '%s\n' "outside mise bin paths: $name -> $resolved (expected $expected)" ;;
     esac
 done
 ```
@@ -99,81 +134,33 @@ done
 PowerShell では次を実行する。
 
 ```powershell
-$shims = Join-Path $env:LOCALAPPDATA 'mise\shims'
-$extensions = $env:PATHEXT -split ';'
-Get-ChildItem -LiteralPath $shims -File | ForEach-Object {
-    $extension = [IO.Path]::GetExtension($_.Name)
-    if ($extensions -contains $extension) { $_.Name.Substring(0, $_.Name.Length - $extension.Length) }
-    else { $_.Name }
-} | Sort-Object -Unique | ForEach-Object {
-    $resolved = (Get-Command $_ -ErrorAction SilentlyContinue).Source
-    if (-not $resolved) { "unresolved: $_" }
-    elseif ($resolved -like "$shims*") { "via shim: $_ -> $resolved" }
+$entries = Get-Content -LiteralPath (Join-Path $env:USERPROFILE 'mise-tool-paths.tsv')
+if (-not $entries) { 'no entries: the host list is empty' }
+$entries | ForEach-Object {
+    $name, $expected = $_ -split "`t", 2
+    $resolved = (Get-Command $name -ErrorAction SilentlyContinue).Source
+    if (-not $resolved) { "unresolved: $name" }
+    elseif ($resolved -like '*\shims\*') {
+        "via shim: $name -> $resolved (expected $expected)"
+    }
+    elseif (-not [IO.Path]::GetFullPath($resolved).Equals(
+        [IO.Path]::GetFullPath($expected),
+        [StringComparison]::OrdinalIgnoreCase
+    )) {
+        "outside mise bin paths: $name -> $resolved (expected $expected)"
+    }
 }
 ```
 
-出力が空であれば条件を満たす。出力がある名前は `mise which <名前>` で区別し、active なツールが shim へ落ちる場合だけ切替の失敗として扱う。active でない名前は宣言していないツールの残骸であり、切替の前後で動作が変わらない。
+出力が空であれば条件を満たす。一覧が空のときは `no entries` を出す。空の一覧は該当なしと区別できず、確認できていない状態だからである。shim だけでなく、system や Homebrew の同名コマンドが mise の実体より先に選ばれた場合も報告する。Windows の sandbox 内では `LOCALAPPDATA` がパッケージ配下へリダイレクトされるため、host 側で記録した実体パスとの比較を使う。出力がある名前は切替の失敗として扱う。確認後は一覧のファイルを削除する。
 
 Linux の CLI 初回導入版は1.0.83である。既存 CLI は初回導入処理では更新されないため、1.0.80以前の場合は導入元の標準更新方法を使う。GUI 同梱 runtime は別に版と login-shell 環境取得の有無を確認する。
 
-失敗時は変更後の対象を保存してから、退避した profile、hook、更新した CLI 実体を復元し、新しい親プロセスから旧コマンドを起動する。新規作成したファイルは、変更後の内容から変わっていない場合だけ除去して元の不在へ戻す。既存ファイルに別の変更があれば上書きせず停止する。uv の復元は次節に従う。
+失敗時は変更後の対象を保存してから、退避した profile、hook、更新した CLI 実体を復元し、新しい親プロセスから旧コマンドを起動する。新規作成したファイルは、変更後の内容から変わっていない場合だけ除去して元の不在へ戻す。既存ファイルに別の変更があれば上書きせず停止する。
 
 macOS の shim リンクと Windows User PATH の shim 登録は、この変更では撤去しない。後で撤去する場合は、macOS の対象リンク、リンク先、管理state（`${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-links`）、Windows User PATH の変更部分を追加で退避する。Windows は変更した要素の位置を記録し、他の PATH 要素を巻き戻さずに復元する。並行変更で安全に復元できない場合は停止する。登録を撤去する前に復元手順を確認する。
 
-実体と依存先の解決、更新と復元の結果は、sandbox 内の実作業結果と分けて記録する。Windows の uv rename/persist 障害や Linux/WSL の cache アクセス方針を、この切替の停止理由にはしない。新たな失敗は変更との関係を切り分け、未実行の処理を成功と推定しない。
-
-### uv の backend 移行
-
-uv は `github:astral-sh/uv` backend で管理する。新規環境は通常の導入でよい。既存の aqua install は、同じ版のまま backend を変更しても再導入されないことがあるため、一度だけ `--force` で入れ直す。以後は通常の `mise-upgrade` で更新し、毎回の force reinstall や PATH の手動同期は行わない。
-
-移行時は版と backend を同時に変更しない。global config と隣接 lock の両方を使い、uv の版、各対象の URL/checksum、provenance が従来と一致することを確認する。alias だけを変更して旧 lock を残すと、旧 backend が復元される場合がある。ソース名 `home/dot_config/mise/private_mise.lock` は、端末では `~/.config/mise/mise.lock` になる。
-
-1. 運用者は対象端末の uv/uvx を使う処理、Copilot、他の mise 更新と chezmoi apply を止める。プロジェクト設定が混ざらない作業ディレクトリで `mise config ls`、`mise tool uv --json`、`mise where uv`、`mise cache path` を確認する。
-2. 運用者は端末内の専用ディレクトリに config/lock、`installs/uv`、`installs/.mise-installs.toml`、shims 内の uv/uvx 関連ファイル、mise の `cache/uv` を退避する。Windows の拡張子付き shim、metadata、runtime link も対象にし、リンクはリンクとして保持する。不在だった対象も記録し、保存先のアクセス権を元より広げない。
-3. config と lock の uv 以外に端末固有の変更がない場合は、下記の対象限定 apply で両ファイルを反映する。固有変更がある場合は先に差分を整理し、uv の宣言、alias、uv の lock entry 群だけを反映する。
-4. 運用者は既存の GitHub 認証を使って、下記の `mise --locked install --force uv` を一度実行する。`uv@<version>` ではなく設定と同じ `uv` を要求し、版は lock で固定する。`--force` は途中で旧実体を削除するため、退避前に実行しない。通常の同期フックや `reshim` はこの操作の代用にならない。
-5. 運用者は `mise tool uv --json`、`mise ls uv`、`mise which uv`、`mise which uvx` で backend が GitHub、missing なし、実体のディレクトリが選ばれることを確認する。その後、新しい親ターミナルから起動した Copilot で `command -v uv`（PowerShell は `Get-Command uv`）、uv/uvx の版表示を確認する。実体への到達と cache を使う処理の成否は区別する。
-
-設定ファイルだけの反映（全 OS 共通。更新済みの source を使う）:
-
-```sh
-chezmoi apply --exclude=scripts "$HOME/.config/mise/config.toml" "$HOME/.config/mise/mise.lock"
-```
-
-macOS / Linux / WSL の通常ターミナル:
-
-```sh
-(
-    set -e
-    token=$(gh auth token)
-    if [ -z "$token" ]; then
-        printf '%s\n' "Existing GitHub authentication is unavailable" >&2
-        exit 1
-    fi
-    GITHUB_TOKEN="$token" mise --locked install --force uv
-)
-```
-
-Windows の通常 PowerShell:
-
-```powershell
-$previousToken = $env:GITHUB_TOKEN
-try {
-    $token = gh auth token
-    if ($LASTEXITCODE -ne 0 -or -not $token) { throw "Existing GitHub authentication is unavailable" }
-    $env:GITHUB_TOKEN = $token
-    mise --locked install --force uv
-    if ($LASTEXITCODE -ne 0) { throw "uv backend migration failed; restore the backup" }
-}
-finally {
-    $env:GITHUB_TOKEN = $previousToken
-    $token = $null
-}
-```
-
-失敗した場合、運用者は失敗後の uv 関連ファイルを退避し、保存した config/lock、uv の実体、metadata、shim、cache を元へ復元する。共有 manifest 全体を戻してよいのは、uv 以外に並行変更がない場合だけである。別の編集があれば上書きせず、差分を確認する。新しいターミナルで旧構成の uv/uvx が起動するまでバックアップを残し、再ダウンロードだけを復元手段にしない。
-
-lock の更新では、終了コード0だけで完了と判定しない。指定した5対象、各 options に対応する entry、`latest` を含む specifiers、URL/checksum と provenance を確認する。API 制限で対象が skipped になる場合は、既存認証をコマンドへ渡してから再生成する。uv 固有の配置と Windows ARM64 の扱いは [構造の説明](architecture.md#uv-の実体配置) を参照する。
+実体と依存先の解決、更新と復元の結果は、sandbox 内の実作業結果と分けて記録する。新たな失敗は変更との関係を切り分け、未実行の処理を成功と推定しない。
 
 ### `mise-self-upgrade`
 
@@ -328,6 +315,8 @@ sed '/^[[:space:]]*{{/d' home/run_once_after_30-install-tools.sh.tmpl | bash -n
 dotfiles は `devcontainer.json` から適用しない。VS Code の Dotfiles ユーザ設定は `README.md` の「Dev Container (ローカル)」節に従う。この設定がないコンテナにはテストに必要なツールが入らない。
 
 VS Code の Dev Containers 拡張は Dotfiles セットアップコマンドへ `REMOTE_CONTAINERS=true` を渡す。chezmoi は初期化時にこの値を `.devcontainer` として設定へ保存する。統合ターミナルでは `REMOTE_CONTAINERS` が未設定の場合があるため、ターミナルの環境変数だけで初期化時の判定を再検証しない。
+
+Dev Container と Codespaces の Copilot sandbox は受け入れ条件に含めない。ツール管理は通常の Linux と同じ `home/dot_config/mise/config.toml.tmpl`、`private_mise.lock`、mise 導入スクリプト、更新手順を使う。Dev Container だけは作成時の GitHub 未認証を避けるため、同じ config と lockfileによるツール導入を起動後へ遅らせる。
 
 ```bash
 devcontainer up --workspace-folder .
