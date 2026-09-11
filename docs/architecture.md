@@ -135,11 +135,11 @@ macOS の `run_onchange_after_21-link-mise-shims.sh` は、以前の GUI 固定 
 
 ### uv の実体配置
 
-uv は全対象 OS で mise の `aqua:astral-sh/uv` backend を使う。Windows ARM64 では、lockfile が指定する x64 配布物を従来どおりエミュレーションで使う。独自 wrapper、常設 updater、PATH 同期処理は追加しない。
+uv は全対象 OS で mise の `github:astral-sh/uv` backend を使う。公式アーカイブの選択、展開、uv/uvx を含むディレクトリの PATH 検出は backend に任せ、独自 wrapper や `filter_bins` は指定しない。Windows ARM64 だけは従来の x64 配布物を `asset_pattern` で明示し、エミュレーションで使う。
 
-`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、aqua backend の uv/uvx を直接解決できる。shim と実体 PATH は別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。通常の sandbox shell が使う Copilot 専用 uv cache だけは ADR-030 に従って書き込みを許可する。
+`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、uv/uvx を直接解決できる。shim と `.mise-bins` 内の実体へのリンクは別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。通常の sandbox shell が使う Copilot 専用 uv cache だけは ADR-030 に従って書き込みを許可する。
 
-lock は `latest` を要求として保持し、uv 0.12.10 の単一 entry に5対象プラットフォームの配布物と checksum、provenance を固定する。
+lock は `latest` を要求として保持し、Windows ARM64 の option により uv が複数 entry に分かれる。checksum と GitHub artifact attestation の検証機能を利用するが、aqua recipe が指定していた署名元 workflow の限定は行わない。既存 install の移行は [運用手順](operations.md#uv-の-backend-移行) を参照する。
 
 ### TypeScript language server の依存配置
 

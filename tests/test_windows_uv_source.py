@@ -1,0 +1,413 @@
+"""Check the host handoff's Git identity without executing top-level Prepare."""
+
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+
+ROOT = Path(__file__).resolve().parent.parent
+ENTRY = ROOT / "tests/manual/windows-uv/windows-uv.ps1"
+PWSH = os.environ.get("PWSH") or shutil.which("pwsh")
+HARNESS = r"""
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+foreach ($file in @('uv-state.ps1','windows-uv.ps1')) {
+    $tokens=$null; $errors=$null
+    $ast=[Management.Automation.Language.Parser]::ParseFile(
+        (Join-Path $env:TEST_ENTRY $file),[ref]$tokens,[ref]$errors)
+    if ($errors.Count) { throw ($errors | Out-String) }
+    foreach ($node in $ast.FindAll({
+        param($n)
+        $n -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $n.Name -in @('Invoke-Captured','Get-SourceCommit','Assert-MiseEnvironment',
+            'ConvertTo-WindowsPath','Assert-Path','Get-Targets','Get-IsolatedEnvironment',
+            'Get-RecoveryExecution','Assert-Equal','Get-Json','ConvertTo-Stable')
+    },$true)) {
+        # Extracted functions have no script file; inject only that automatic location.
+        . ([scriptblock]::Create($node.Extent.Text.Replace('$PSScriptRoot','$TestScriptRoot')))
+    }
+}
+try {
+    if ($env:TEST_MODE -eq 'recovery') {
+        # Native path/node checks are covered separately; use real Git and file hashes here.
+        function ConvertTo-WindowsPath([string]$Path) { $Path }
+        function Assert-Path {}
+        function Get-ScriptHashes([string]$Directory) {
+            $hashes=@{}
+            foreach ($name in @('windows-uv.ps1','uv-state.ps1')) {
+                $hashes[$name]=(Get-FileHash (Join-Path $Directory $name)).Hash
+            }
+            $hashes
+        }
+        $Backup=$env:TEST_BACKUP
+        $Source=$env:TEST_SOURCE
+        $SourceCommit=$env:TEST_COMMIT
+        $TestScriptRoot=Join-Path $Source 'tests/manual/windows-uv'
+        $VerificationOnlySource=$env:TEST_REVISED -ne 'false'
+        $Command=if ($env:TEST_COMMAND) { $env:TEST_COMMAND } else { 'VerifyInstall' }
+        $state=Get-Content (Join-Path $Backup 'snapshot.json') -Raw | ConvertFrom-Json -AsHashtable
+        $plan=$null
+        if (Test-Path (Join-Path $Backup 'plan.json')) {
+            $plan=Get-Content (Join-Path $Backup 'plan.json') -Raw | ConvertFrom-Json -AsHashtable
+        }
+        if ($env:TEST_NO_GIT) {
+            function Get-SourceCommit { throw 'Restore must not invoke Git' }
+        }
+        Get-RecoveryExecution $state $plan | ConvertTo-Json -Compress -Depth 10
+    } elseif ($env:TEST_MODE -eq 'isolated-env') {
+        $Backup = $env:TEST_BACKUP
+        Get-IsolatedEnvironment @{} | ConvertTo-Json -Compress
+    } elseif ($env:TEST_MODE -eq 'targets') {
+        @(Get-Targets (Join-Path $env:TEST_LAYOUT 'config/config.toml') `
+            (Join-Path $env:TEST_LAYOUT 'data') (Join-Path $env:TEST_LAYOUT 'cache')) |
+            ConvertTo-Json -AsArray
+    } elseif ($env:TEST_MODE -eq 'path') {
+        $path = ConvertTo-WindowsPath $env:TEST_PATH
+        if ($env:TEST_REJECT_PATH) {
+            function Get-Item { throw 'Unexpected filesystem lookup' }
+            Assert-Path $path
+        }
+        @{path=$path} | ConvertTo-Json -Compress
+    } elseif ($env:TEST_MODE -eq 'environment') {
+        if ($env:TEST_ENV_NAME) {
+            [Environment]::SetEnvironmentVariable($env:TEST_ENV_NAME,$env:TEST_ENV_VALUE)
+        }
+        Assert-MiseEnvironment
+        @{accepted=$true} | ConvertTo-Json -Compress
+    } else {
+        if ($env:TEST_GIT_DIR) { $env:GIT_DIR=$env:TEST_GIT_DIR }
+        $commit=Get-SourceCommit $env:TEST_SOURCE $env:TEST_COMMIT
+        @{sourceCommit=$commit} | ConvertTo-Json -Compress
+    }
+} catch {
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
+"""
+
+
+@unittest.skipUnless(PWSH and shutil.which("git"), "pwsh and git are required")
+class WindowsUvSourceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory(prefix=".windows-uv-source-", dir=ROOT)
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.repo = self.root / "source with spaces"
+        self.repo.mkdir()
+        self.env = {
+            key: value for key, value in os.environ.items()
+            if not key.upper().startswith(("GIT_", "MISE_", "__MISE_", "TEST_"))
+        }
+        self.env.update({
+            "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "HOME": str(self.root), "XDG_CONFIG_HOME": str(self.root),
+            "TEST_ENTRY": str(ENTRY.parent), "TEST_SOURCE": str(self.repo),
+        })
+        self.git("init", "--quiet")
+        (self.repo / "tracked.txt").write_text("original\n", encoding="utf-8")
+        fixture = self.repo / "tests/manual/windows-uv"
+        fixture.mkdir(parents=True)
+        shutil.copyfile(ENTRY.parent / ".gitignore", fixture / ".gitignore")
+        self.git("add", ".")
+        self.commit()
+        self.sha = self.git("rev-parse", "HEAD").stdout.strip()
+
+    def git(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", "-c", "core.hooksPath=" + str(self.root / "no-hooks"), *args],
+            cwd=self.repo, env=self.env, capture_output=True, text=True, check=True,
+        )
+
+    def commit(self) -> None:
+        self.git(
+            "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+            "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "fixture",
+        )
+
+    def identify(self, **env: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [PWSH, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", HARNESS],
+            cwd=self.root, env=self.env | {"TEST_COMMIT": self.sha} | env,
+            capture_output=True, text=True, check=False,
+        )
+
+    def assert_rejected(self, message: str, **env: str) -> None:
+        result = self.identify(**env)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn(message, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_identifies_clean_root_and_normalizes_sha(self) -> None:
+        result = self.identify(TEST_COMMIT=self.sha.upper())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"sourceCommit": self.sha})
+        self.assertEqual(self.git("status", "--porcelain").stdout, "")
+
+    def test_missing_or_bad_commit(self) -> None:
+        for value in ("", self.sha[:12], "g" * 40, self.sha + "0"):
+            with self.subTest(value=value):
+                self.assert_rejected("40-hex SourceCommit", TEST_COMMIT=value)
+
+    def test_different_head(self) -> None:
+        (self.repo / "tracked.txt").write_text("new commit\n", encoding="utf-8")
+        self.git("add", "tracked.txt")
+        self.commit()
+        self.assert_rejected("HEAD does not match")
+
+    def test_modified_tracked_file(self) -> None:
+        (self.repo / "tracked.txt").write_text("modified\n", encoding="utf-8")
+        self.assert_rejected("tracked or untracked changes")
+
+    def test_staged_tracked_file(self) -> None:
+        (self.repo / "tracked.txt").write_text("staged\n", encoding="utf-8")
+        self.git("add", "tracked.txt")
+        self.assert_rejected("tracked or untracked changes")
+
+    def test_unexpected_untracked_file(self) -> None:
+        (self.repo / "unexpected.txt").write_text("unexpected\n", encoding="utf-8")
+        self.assert_rejected("tracked or untracked changes")
+
+    def test_subdirectory_is_not_source_root(self) -> None:
+        self.assert_rejected("worktree root", TEST_SOURCE=str(self.repo / "tests"))
+
+    def test_non_repository_is_rejected(self) -> None:
+        # Disable discovery of the enclosing project, without modifying its config.
+        self.assert_rejected(
+            "Child failed", TEST_SOURCE=str(self.root),
+            GIT_CEILING_DIRECTORIES=str(ROOT),
+        )
+
+    def test_ignored_native_evidence_is_retained(self) -> None:
+        evidence = self.repo / "tests/manual/windows-uv/native-result-08/result.json"
+        evidence.parent.mkdir()
+        evidence.write_text('{"retained":true}', encoding="utf-8")
+        result = self.identify()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["sourceCommit"], self.sha)
+        self.assertEqual(evidence.read_text(encoding="utf-8"), '{"retained":true}')
+
+    def test_git_directory_override_is_rejected(self) -> None:
+        self.assert_rejected("GIT_DIR overrides", TEST_GIT_DIR=str(self.repo / ".git"))
+
+    def test_recheck_rejects_later_edits(self) -> None:
+        self.assertEqual(self.identify().returncode, 0)
+        (self.repo / "tracked.txt").write_text("concurrent\n", encoding="utf-8")
+        self.assert_rejected("tracked or untracked changes")
+
+    def test_official_pwsh_marker_is_allowed(self) -> None:
+        for env in ({}, {"TEST_ENV_NAME": "MISE_SHELL", "TEST_ENV_VALUE": "pwsh"}):
+            with self.subTest(env=env):
+                result = self.identify(TEST_MODE="environment", **env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_overrides_remain_rejected(self) -> None:
+        for name, value in (
+            ("MISE_GLOBAL_CONFIG_FILE", "other.toml"), ("MISE_CONFIG_DIR", "other"),
+            ("MISE_DATA_DIR", "other"), ("MISE_CACHE_DIR", "other"),
+            ("MISE_STATE_DIR", "other"), ("MISE_ENV", "production"),
+            ("MISE_UNKNOWN", "1"), ("MISE_SHELL", "unexpected"),
+        ):
+            with self.subTest(name=name):
+                self.assert_rejected(
+                    f"Existing {name} override", TEST_MODE="environment",
+                    TEST_ENV_NAME=name, TEST_ENV_VALUE=value,
+                )
+
+    def test_source_checks_bracket_prepare_only(self) -> None:
+        text = ENTRY.read_text(encoding="utf-8")
+        prepare = text.split("if ($Command -eq 'Prepare') {", 1)[1]
+        prepare, saved = prepare.split("if (-not $SnapshotDigest", 1)
+        self.assertLess(
+            prepare.index("Get-SourceCommit $Source $SourceCommit"),
+            prepare.index("New-Directory $Backup"),
+        )
+        self.assertIn("sourceCommit=$verifiedCommit", prepare)
+        self.assertLess(
+            prepare.index("Get-SourceCommit $Source $verifiedCommit"),
+            prepare.index("Write-NewJson (Join-Path $Backup 'snapshot.json')"),
+        )
+        self.assertNotIn("Get-SourceCommit", saved)
+        self.assertNotIn("$SourceCommit", saved)
+        self.assertNotIn("candidate-manifest", text)
+
+    def test_mise_path_separators_are_normalized(self) -> None:
+        expected = r"C:\Users\tomakabe\.config\mise\config.toml"
+        for path in (
+            expected, "C:/Users/tomakabe/.config/mise/config.toml",
+            r"C:\Users\tomakabe\.config/mise/config.toml",
+            r"C:\\Users\\tomakabe\\\.config/mise/config.toml",
+        ):
+            with self.subTest(path=path):
+                result = self.identify(TEST_MODE="path", TEST_PATH=path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), {"path": expected})
+
+    def test_normalization_preserves_valid_path_components(self) -> None:
+        for path, expected in (
+            ("C:/Users/First Last/.config/mise/config.toml",
+             r"C:\Users\First Last\.config\mise\config.toml"),
+            ("D:/", "D:\\"),
+        ):
+            with self.subTest(path=path):
+                result = self.identify(TEST_MODE="path", TEST_PATH=path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), {"path": expected})
+
+    def test_non_local_or_relative_paths_are_not_reinterpreted(self) -> None:
+        for path in (
+            "", "config.toml", "C:config.toml", "/config.toml",
+            r"\\server\share\config.toml", "//server/share/config.toml",
+            r"\\?\C:\config.toml", r"\\.\C:\config.toml",
+        ):
+            with self.subTest(path=path):
+                self.assert_rejected(
+                    "Unsupported local absolute path", TEST_MODE="path", TEST_PATH=path,
+                )
+
+    def test_normalization_does_not_bypass_lexical_rejections(self) -> None:
+        for path in (
+            "C:/Users/../config.toml", "C:/Users/./config.toml",
+            "C:/Users/config.toml:stream", "C:/Users /config.toml",
+            "C:/Users./config.toml", "C:/Users/config.toml ",
+            "C:/Users/CON.txt", "C:/Users/NUl/config.toml",
+            "C:/Users/*.toml", 'C:/Users/"config.toml',
+        ):
+            with self.subTest(path=path):
+                self.assert_rejected(
+                    "Unsupported local absolute path", TEST_MODE="path",
+                    TEST_PATH=path, TEST_REJECT_PATH="1",
+                )
+
+    def test_path_normalization_covers_input_and_mise_queries(self) -> None:
+        text = ENTRY.read_text(encoding="utf-8")
+        prepare = text.split("if ($Command -eq 'Prepare') {", 1)[1]
+        for name in ("Config", "Data", "Cache", "Source"):
+            self.assertLess(
+                prepare.index(f"${name} = ConvertTo-WindowsPath ${name}"),
+                prepare.index("foreach ($path in @($Config,$Data,$Cache,$Source))"),
+            )
+        for name in ("activeConfigs", "configs"):
+            self.assertIn(
+                f"@(${name} | ForEach-Object {{ ConvertTo-WindowsPath $_.path }})", text,
+            )
+        for name in ("where", "activeCache", "exe"):
+            self.assertRegex(text, rf"\${name}\s*=\s*ConvertTo-WindowsPath")
+
+    def test_active_install_target_leaves_eight_sibling_versions_untouched(self) -> None:
+        layout = self.root / "layout"
+        installs = layout / "data/installs/uv"
+        versions = (
+            "0.11.29", "0.11.31", "0.12.0", "0.12.10", "0.12.2",
+            "0.12.5", "0.12.7", "0.12.8", "0.12.9",
+        )
+        before = {}
+        for version in versions:
+            directory = installs / version
+            directory.mkdir(parents=True)
+            binary = directory / "uv.exe"
+            binary.write_text(f"fixture-{version}", encoding="utf-8")
+            before[version] = (directory.stat().st_ino, binary.stat().st_ino, binary.read_bytes())
+        result = self.identify(TEST_MODE="targets", TEST_LAYOUT=str(layout))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        targets = [Path(value) for value in json.loads(result.stdout)]
+        active = installs / "0.12.10"
+        self.assertEqual(targets[2], active)
+        self.assertEqual(len(targets), 14)
+        self.assertEqual(targets[3], layout / "data/installs/.mise-installs.toml")
+        for version in versions:
+            if version != "0.12.10":
+                self.assertFalse(any((installs / version).is_relative_to(t) for t in targets))
+        # Exercise the selected path with temporary directories, not Windows ACLs or an installer.
+        retained = self.root / "retained-active"
+        targets[2].rename(retained)
+        active.mkdir()
+        (active / "uv.exe").write_text("fixture-candidate", encoding="utf-8")
+        for version in versions:
+            if version != "0.12.10":
+                directory = installs / version
+                binary = directory / "uv.exe"
+                self.assertEqual(
+                    (directory.stat().st_ino, binary.stat().st_ino, binary.read_bytes()),
+                    before[version],
+                )
+        active.rename(self.root / "discard-candidate")
+        retained.rename(targets[2])
+        for version in versions:
+            directory = installs / version
+            binary = directory / "uv.exe"
+            self.assertEqual(
+                (directory.stat().st_ino, binary.stat().st_ino, binary.read_bytes()),
+                before[version],
+            )
+
+    def test_prepare_supports_siblings_and_creates_selected_work_parent(self) -> None:
+        text = ENTRY.read_text(encoding="utf-8")
+        self.assertNotIn("Additional uv versions", text)
+        self.assertNotIn("$versions.Count -ne 1", text)
+        self.assertLess(
+            text.index("New-Directory (Join-Path $Backup 'work\\data\\installs\\uv')"),
+            text.index("$stagedTargets = @(Get-Targets"),
+        )
+        self.assertIn("Expected uv 0.12.10 Windows executable.", text)
+        self.assertIn("Input data directory does not match installed uv.", text)
+        self.assertIn("Expected only aqua uv 0.12.10 locks.", text)
+
+    def prepare_recovery(self) -> dict:
+        import hashlib
+
+        saved = self.root / "immutable backup"
+        saved.mkdir()
+        hashes = {}
+        for name in ("windows-uv.ps1", "uv-state.ps1"):
+            (saved / name).write_bytes(b"old saved code")
+            hashes[name] = hashlib.sha256(b"old saved code").hexdigest().upper()
+            (self.repo / "tests/manual/windows-uv" / name).write_bytes(b"revised code")
+        snapshot = {"schema": 3, "sourceCommit": "b" * 40, "scripts": hashes}
+        (saved / "snapshot.json").write_text(json.dumps(snapshot), encoding="utf-8")
+        self.git("add", ".")
+        self.commit()
+        self.sha = self.git("rev-parse", "HEAD").stdout.strip()
+        return {"TEST_MODE": "recovery", "TEST_BACKUP": str(saved)}
+
+    def test_revised_source_requires_explicit_mode_and_preserves_saved_hashes(self) -> None:
+        env = self.prepare_recovery()
+        self.assert_rejected("explicit VerificationOnlySource", **env, TEST_REVISED="false")
+        result = self.identify(**env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["sourceCommit"], self.sha)
+        saved = Path(env["TEST_BACKUP"])
+        (saved / "uv-state.ps1").write_bytes(b"changed saved code")
+        self.assert_rejected("Saved recovery script changed", **env)
+
+    def test_revised_source_uses_full_clean_git_identity(self) -> None:
+        env = self.prepare_recovery()
+        self.assert_rejected("40-hex SourceCommit", **env, TEST_COMMIT=self.sha[:12])
+        self.assert_rejected("HEAD does not match", **env, TEST_COMMIT="c" * 40)
+        (self.repo / "tests/manual/windows-uv/uv-state.ps1").write_bytes(b"dirty code")
+        self.assert_rejected("tracked or untracked changes", **env)
+
+    def test_revised_restore_is_offline_and_requires_matching_plan_code(self) -> None:
+        env = self.prepare_recovery()
+        execution = json.loads(self.identify(**env).stdout)
+        saved = Path(env["TEST_BACKUP"])
+        restore_env = env | {"TEST_COMMAND": "Restore", "TEST_NO_GIT": "1"}
+        self.assert_rejected("sealed schema 4 plan", **restore_env)
+        plan = {"schema": 4, "validation": {"execution": execution}}
+        (saved / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        result = self.identify(**restore_env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), execution)
+        self.assert_rejected(
+            "differs from the digest-verified plan", **restore_env, TEST_COMMIT="c" * 40,
+        )
+        (self.repo / "tests/manual/windows-uv/uv-state.ps1").write_bytes(b"wrong code")
+        self.assert_rejected("differs from the digest-verified plan", **restore_env)
+
+
+if __name__ == "__main__":
+    unittest.main()

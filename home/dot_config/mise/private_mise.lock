@@ -765,8 +765,11 @@ provenance = "cosign"
 
 [[tools.uv]]
 version = "0.12.10"
-backend = "aqua:astral-sh/uv"
-specifiers = ["latest"]
+backend = "github:astral-sh/uv"
+specifiers = [
+    "0.12.10",
+    "latest",
+]
 
 [tools.uv."platforms.linux-arm64"]
 checksum = "sha256:9ff6b9d4665edcdd3a88dcc73cd1eb641754deb927f14e8c62ebfde6bf4f5f5e"
@@ -785,14 +788,26 @@ checksum = "sha256:51c6170e8e3a01cef9f33b94f582b7b81ac65046f55d40afb35f9cff5a68c
 url = "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-aarch64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/545034336"
 provenance = "github-attestations"
+provenance_verified = true
 
-[tools.uv."platforms.windows-arm64"]
+[tools.uv."platforms.windows-x64"]
 checksum = "sha256:f65744f94072152b1f86ba2aace4d01f1124d9a8ecb235805039e3718c36cac2"
 url = "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/545034461"
 provenance = "github-attestations"
 
-[tools.uv."platforms.windows-x64"]
+[[tools.uv]]
+version = "0.12.10"
+backend = "github:astral-sh/uv"
+specifiers = [
+    "0.12.10",
+    "latest",
+]
+
+[tools.uv.options]
+asset_pattern = "uv-x86_64-pc-windows-msvc.zip"
+
+[tools.uv."platforms.windows-arm64"]
 checksum = "sha256:f65744f94072152b1f86ba2aace4d01f1124d9a8ecb235805039e3718c36cac2"
 url = "https://github.com/astral-sh/uv/releases/download/0.12.10/uv-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/545034461"

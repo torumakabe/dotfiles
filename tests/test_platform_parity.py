@@ -540,7 +540,7 @@ class PlatformParityTests(unittest.TestCase):
                 self.assertEqual(config["tools"]["lefthook"], "latest")
 
     @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
-    def test_uv_aqua_lock_covers_every_platform(self) -> None:
+    def test_uv_backend_and_lock_options_cover_every_platform(self) -> None:
         entries = tomllib.loads(
             (REPO_ROOT / "home/dot_config/mise/private_mise.lock").read_text(
                 encoding="utf-8"
@@ -575,15 +575,18 @@ class PlatformParityTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 config = tomllib.loads(result.stdout)
-                self.assertEqual(config["tools"]["uv"], "latest")
-                self.assertNotIn("uv", config.get("tool_alias", {}))
+                uv = config["tools"]["uv"]
+                self.assertEqual(uv["version"], "latest")
+                self.assertEqual(config["tool_alias"]["uv"], "github:astral-sh/uv")
+                options = uv["platforms"].get(lock_platform, {})
                 matches = [
                     entry for entry in entries
-                    if f"platforms.{lock_platform}" in entry
+                    if entry.get("options", {}) == options
+                    and f"platforms.{lock_platform}" in entry
                 ]
                 self.assertEqual(len(matches), 1)
-                self.assertEqual(matches[0]["backend"], "aqua:astral-sh/uv")
-                self.assertIn(config["tools"]["uv"], matches[0]["specifiers"])
+                self.assertEqual(matches[0]["backend"], config["tool_alias"]["uv"])
+                self.assertIn(uv["version"], matches[0]["specifiers"])
 
     def test_powershell_completion_cache_executes_generated_sources(self) -> None:
         pwsh = shutil.which("pwsh")

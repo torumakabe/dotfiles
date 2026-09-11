@@ -410,22 +410,68 @@ class MiseConfigTests(unittest.TestCase):
         self.assertIn("install_env = { DOTNET_ROOT =", config)
         self.assertIn(r"\mise\dotnet-root;$PATH", config)
 
-    def test_uv_uses_aqua_backend_on_all_platforms(self) -> None:
+    def test_uv_uses_native_github_asset_discovery(self) -> None:
         config = _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))
-        entries = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))["tools"]["uv"]
-        self.assertEqual(config["tools"]["uv"], "latest")
-        self.assertNotIn("uv", config.get("tool_alias", {}))
-        self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0]["backend"], "aqua:astral-sh/uv")
-        self.assertEqual(entries[0]["specifiers"], ["latest"])
+
+        self.assertEqual(config["tool_alias"]["uv"], "github:astral-sh/uv")
         self.assertEqual(
+            config["tools"]["uv"],
             {
-                key.removeprefix("platforms.")
-                for key in entries[0]
-                if key.startswith("platforms.")
+                "version": "latest",
+                "platforms": {
+                    "windows-arm64": {
+                        "asset_pattern": "uv-x86_64-pc-windows-msvc.zip",
+                    },
+                },
             },
-            set(MISE_LOCK_PLATFORMS),
         )
+
+    def test_uv_lock_matches_platform_options_and_release_assets(self) -> None:
+        entries = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))["tools"]["uv"]
+        assets = {
+            "linux-x64": "uv-x86_64-unknown-linux-gnu.tar.gz",
+            "linux-arm64": "uv-aarch64-unknown-linux-gnu.tar.gz",
+            "macos-arm64": "uv-aarch64-apple-darwin.tar.gz",
+            "windows-x64": "uv-x86_64-pc-windows-msvc.zip",
+            "windows-arm64": "uv-x86_64-pc-windows-msvc.zip",
+        }
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(len({entry["version"] for entry in entries}), 1)
+        seen = set()
+        for entry in entries:
+            self.assertEqual(entry["backend"], "github:astral-sh/uv")
+            self.assertIn("latest", entry["specifiers"])
+            platforms = {
+                key.removeprefix("platforms."): value
+                for key, value in entry.items()
+                if key.startswith("platforms.")
+            }
+            options = entry.get("options", {})
+            if options:
+                self.assertEqual(options, {"asset_pattern": assets["windows-arm64"]})
+                self.assertEqual(set(platforms), {"windows-arm64"})
+            else:
+                self.assertEqual(set(platforms), set(assets) - {"windows-arm64"})
+            for platform, asset in platforms.items():
+                with self.subTest(platform=platform):
+                    self.assertNotIn(platform, seen)
+                    seen.add(platform)
+                    self.assertEqual(
+                        asset["url"],
+                        f"https://github.com/astral-sh/uv/releases/download/"
+                        f"{entry['version']}/{assets[platform]}",
+                    )
+                    self.assertRegex(asset["checksum"], r"^sha256:[0-9a-f]{64}$")
+                    self.assertEqual(asset["provenance"], "github-attestations")
+        self.assertEqual(seen, set(MISE_LOCK_PLATFORMS))
+
+    def test_uv_migration_documents_reinstall_and_recovery(self) -> None:
+        operations = OPERATIONS_PATH.read_text(encoding="utf-8")
+        section = operations.split("### uv の backend 移行\n", 1)[1].split("\n### ", 1)[0]
+        self.assertIn("mise --locked install --force uv", section)
+        self.assertIn("installs/.mise-installs.toml", section)
+        self.assertIn("cache/uv", section)
+        self.assertIn("復元", section)
 
     def test_full_activation_prioritizes_real_paths_without_shims(self) -> None:
         config = _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))
