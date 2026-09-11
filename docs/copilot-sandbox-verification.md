@@ -319,13 +319,13 @@ $env:UV_CACHE_DIR = $null
 uv run --no-project -- python --version
 ```
 
-終了コード0で Python の version が表示された場合、その環境では専用 cache を使わずに通常の `uv run` が動作している。Windows、macOS、native Linux、WSL2 のすべてで個別に成功した場合に限り、`.github/copilot-instructions.md` に列挙した ADR-030 の実装を一括して撤去する。一つでも失敗した場合は回避策を維持し、終了コードと標準エラーを検証記録へ残す。
+終了コード0で Python の version が表示された場合、その環境では専用 cache を使わずに通常の `uv run` が動作している。撤去時点で Copilot local sandbox を利用している管理対象の Windows、macOS、Linux、WSL2 端末すべてで個別に成功した場合に限り、`.github/copilot-instructions.md` に列挙した ADR-030 の実装を一括して撤去する。一つでも失敗した場合は回避策を維持し、終了コードと標準エラーを検証記録へ残す。
 
 | 環境 | 専用 cache 適用後 | 撤去判定プローブ |
 |---|---|---|
 | WSL2 | 成功 | 成功 |
 | macOS | 成功 | 成功 |
-| native Linux | 未実施 | 未実施 |
+| 通常の Linux | 対象端末なし | 対象端末なし |
 | Windows ProcessContainer | 成功 | 失敗。回避策を維持 |
 
 ## 検証記録

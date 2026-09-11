@@ -39,6 +39,6 @@ hook 設定は session 開始時に読み込まれるため、適用後は Copil
 - host の uv cache と設定は変更せず、sandbox shell だけが専用 cache を使う。
 - shell command 全体へ環境変数を設定するため、command 内で間接的に uv を起動する場合にも同じ cache を使う。command 自身が後から `UV_CACHE_DIR` を変更した場合は、その指定が優先される。PowerShell tool call は、同じ PowerShell 実体を一つ追加で起動する。
 - 通常運用では古い Copilot 専用 uv cache path の entry を自動削除しない。この回避策を撤去するときは、リポジトリが管理する namespaced literal の完全一致 entry を削除する policy migration を実施する。
-- WSL2 では commit `0c35b02` の適用後、43コマンドがすべて期待する mise 実体へ解決し、Copilot 専用 cache を使う実行と `UV_CACHE_DIR` を解除する撤去判定プローブがともに終了コード0で成功した。macOS 26.6.2 と Copilot CLI 1.0.84-4 でも、専用 cache を使う実行と撤去判定プローブがともに終了コード0で成功した。Windows ProcessContainer では、専用 cache を使う実行が終了コード0で成功した。専用 cache を解除した実行は AppContainer 内の uv cache への書き込みを拒否され、子 PowerShell 方式はこの失敗を終了コード1として tool call へ返した。両方の実行で command hook エラーは発生しなかった。native Linux は利用できる検証端末がなく、未確認である。
+- WSL2 では commit `0c35b02` の適用後、43コマンドがすべて期待する mise 実体へ解決し、Copilot 専用 cache を使う実行と `UV_CACHE_DIR` を解除する撤去判定プローブがともに終了コード0で成功した。macOS 26.6.2 と Copilot CLI 1.0.84-4 でも、専用 cache を使う実行と撤去判定プローブがともに終了コード0で成功した。Windows ProcessContainer では、専用 cache を使う実行が終了コード0で成功した。専用 cache を解除した実行は AppContainer 内の uv cache への書き込みを拒否され、子 PowerShell 方式はこの失敗を終了コード1として tool call へ返した。両方の実行で command hook エラーは発生しなかった。通常の Linux 端末は現在利用していないため、実機確認の対象外である。撤去までに利用を開始した場合は、その端末も撤去判定プローブの対象へ加える。
 
 この回避策の撤去条件と対象範囲は、`.github/copilot-instructions.md` の「ワークアラウンド（定期チェック対象）」を参照し、本 ADR には重複して記載しない。
