@@ -89,46 +89,28 @@ git diff --check
 
 ## 設定同期を隔離して確認する
 
-この確認は、実ユーザーの設定を変更せず、レンダリング済み POSIX スクリプトが `sandbox.enabled=false` を保持することを検査する。
+実ユーザーの設定を変更せず、レンダリング済みスクリプトによる `sandbox.enabled` の保持を検査する。
 
 ```bash
-repo_root="$(git rev-parse --show-toplevel)"
-test_root="${repo_root}/.sandbox-verification-work"
-test ! -e "${test_root}"
-rendered="${test_root}/configure-sandbox.sh"
-mkdir -p "${test_root}/copilot"
-printf '%s\n' '{"sandbox":{"enabled":false}}' \
-  >"${test_root}/copilot/settings.json"
-
-case "$(uname -s)" in
-  Darwin) chezmoi_os='darwin' ;;
-  Linux) chezmoi_os='linux' ;;
-  *) echo 'Unsupported OS for this verification' >&2; exit 1 ;;
-esac
-
-case "$(uname -m)" in
-  x86_64) chezmoi_arch='amd64' ;;
-  arm64|aarch64) chezmoi_arch='arm64' ;;
-  *) echo 'Unsupported architecture for this verification' >&2; exit 1 ;;
-esac
-
-chezmoi --source "${repo_root}/home" execute-template \
-  --override-data "{\"chezmoi\":{\"os\":\"${chezmoi_os}\",\"arch\":\"${chezmoi_arch}\"}}" \
-  --file "${repo_root}/home/run_onchange_after_35-configure-copilot-sandbox.sh.tmpl" \
-  >"${rendered}"
-
-COPILOT_HOME="${test_root}/copilot" bash "${rendered}"
-jq -e '.sandbox.enabled == false' "${test_root}/copilot/settings.json"
-case "$(uname -s)" in
-  Darwin)
-    test "$(stat -f '%Lp' "${test_root}/copilot/settings.json")" = '600'
-    ;;
-  Linux)
-    test "$(stat -c '%a' "${test_root}/copilot/settings.json")" = '600'
-    ;;
-esac
-rm -rf "${test_root}"
+uv run -m unittest \
+  tests.test_copilot_sandbox_config.CopilotSandboxEnabledPreservationTests -v
 ```
+
+## 実 CLI でキャッシュの永続化を比較する
+
+通常の HOME とツール構成を使い、インストール済みの CLI で比較する。Copilot 設定は一時ディレクトリへ複製し、実ユーザーの設定ファイルは変更しない。専用キャッシュには実際に書き込み、検証用の一意なファイルだけを終了時に削除する。
+
+```bash
+COPILOT_UV_PROBE_PATH="$PATH" COPILOT_UV_PROBE_VIRTUAL_ENV="${VIRTUAL_ENV-}" \
+  COPILOT_CLI_INTEGRATION=1 PYTHONDONTWRITEBYTECODE=1 \
+  uv run -m unittest tests.test_copilot_sandbox_cli -v
+```
+
+localhost の固定応答 provider が uv コマンドを選び、実 CLI が sandbox を構築する。外部モデルとログインは不要である。毎回新しい CLI プロセスと隔離設定を使い、`allowDevToolAccess=true`、`allowBypass=false` を維持する。`--allow-all-tools` / `--allow-all-paths` は承認省略のためであり、OS sandbox は無効にしない。
+
+一時リポジトリに配布対象の preToolUse hook 一式を登録し、実際にコマンドの変更が返されたことも確認する。テスト起動前の PATH と仮想環境指定を CLI へ渡し、テストランナーの `uv run` が選んだ Python を自動許可の根拠にしない。検査対象の Python を `--python` で指定せず、テスト専用の Python RO も追加しない。既存の RO / deny を維持し、専用キャッシュに対する RW の有無を比較する。
+
+許可なしでは、一意な検証ファイルがホストへ作成されないことを確認する。許可ありでは、uv の成功、ホスト側の `CACHEDIR.TAG`、検証ファイルの内容一致を要求する。既存キャッシュの有無やプロセスの終了コードだけを成功条件にしない。この試験は Python の新規ダウンロードを許可しない。
 
 ## dotfiles を適用する
 
@@ -143,6 +125,10 @@ chezmoi --source "${repo_root}/home" apply
 Linux 系では `sandbox.enabled` が `true` または未設定の場合に bubblewrap 診断が実行される。`false` の場合は probe を省略する。warning が出た場合は、後述の確認結果とともに記録する。
 
 ## Copilot CLI の対話動作を確認する
+
+uv の書き込み許可は、通常の `uv cache dir` と sandbox 内の出力を比較し、`uv run` 後にホスト側へファイルが残ることまで確認する。`/sandbox policy` の表示だけでは成功と扱わない。プロジェクト固有のキャッシュ設定がある場合は、ユーザー共通設定との差も記録する。
+
+`tests.test_copilot_sandbox_config` の backend テストは、単純な OS 書き込み制限下で、許可なしの uv が失敗し、生成した実体パスへの許可ありで成功することを確認する。Copilot CLI が組み立てた実効ポリシーの試験ではないため、CLI と WSL の実機確認を代替しない。
 
 ### 初期状態
 
@@ -313,3 +299,24 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 | 2026-08-16 | Codespaces、commit `1ec7eee`で隔離した設定ディレクトリを使用 | Linux 6.8.0-1052-azure、x86_64 | 実体の配置を確認。version取得は未完了 | 2.72.0 | miseとuvが未導入のため未実施 | 未導入 | `CODESPACES=true`を検出し、初期値`false`、ファイルモード`600`、既存boolean値の維持を確認した。`~/.copilot/settings.json`は未作成で、`/sandbox`と自動テストは未実施 |
 | 2026-08-16 | WSL2、対話ターミナルと自動テスト | Ubuntu 22.04.5、x86_64、kernel 6.18.35.2-microsoft-standard-WSL2 | version未記録 | version未記録 | 未記録 | 0.6.1、probe成功 | 対象33テストが成功し、4テストをskip。全363テストが成功し、18テストをskip。隔離した設定同期、`chezmoi apply`、手動enableとdisableの値が再起動後と再適用後も維持されることを確認した。backend名の表示はなかった |
 | 2026-08-16 | Windows native | Windows build 26200、architecture 未記録 | 1.0.81-0 | 未記録 | 未確認 | N/A | 単体テストと WinGet Configuration 構文は成功。対話的な enable、disable は未実施 |
+
+### uv キャッシュ許可の実 CLI 検証（2026-09-11）
+
+以下は、採用しなかった `uv.toml` 方式の調査結果であり、現在の hook 方式の合格記録ではない。Copilot CLI `1.0.84-4`、uv `0.12.12` で、一時 HOME、user uv.toml、キャッシュを使って比較した。Python は明示指定し、その読み取りを許可した。両環境とも dev-tool access は有効、sandbox の bypass は禁止した。
+
+| 環境 | キャッシュ RW なし | キャッシュ RW あり |
+|---|---|---|
+| macOS、arm64 | `CACHEDIR.TAG` 作成が拒否され、uv は終了コード 2。ホストのキャッシュは空 | uv は終了コード 0。ホストにキャッシュタグと確認用ファイルの一致する内容が残った |
+| WSL2、x86_64、kernel `6.18.40.1-microsoft-standard-WSL2`。利用者が WSL 端末で実行 | 指定した保存先で uv と確認用ファイルの作成が成功して終了コード 0。ただしホストのキャッシュは空 | uv は終了コード 0。ホストにキャッシュタグと確認用ファイルの一致する内容が残った |
+
+macOS では user uv.toml のファイル RO を追加する前、sandbox 内の uv が指定先ではなく既定キャッシュを選んだ。ファイル RO を追加した後は指定先を選び、キャッシュ RW によって永続化できた。また、`UV_CACHE_DIR` を CLI 起動環境に export した比較では、明示 RW を加えてもキャッシュ書き込みに失敗した。
+
+この比較はホストへの永続化を判定する必要性を示すが、通常の Python 自動探索は証明しない。WSL の具体的な一時 filesystem、配布 CLI が同梱する MXC の commit、Windows の自動許可の内訳は未確定である。
+
+その後、macOS の直接読み取りと Windows / WSL の利用者による診断で、3環境とも配布済み `uv-enforcer.py` に旧キャッシュ切替処理がなく、旧専用キャッシュの RW 許可だけが残っていることを確認した。macOS / WSL は通常シェルで `~/.cache/uv` を選び、Windows は `%LOCALAPPDATA%\uv\cache` を選んだ。CLI 起動元の `UV_CACHE_DIR` は全環境で未設定だった。Windows で動作するとの利用者報告は維持するが、旧hookの効果とは説明しない。
+
+現在の実装は POSIX のコマンド内で専用キャッシュを選び、通常シェルの uv 設定は変更しない。commit `34b6fba` の配布対象 hook、通常 HOME と PATH、Python 自動探索を使い、検証専用の Python RO を追加せず比較した。
+
+macOS では、RW なしの場合に専用キャッシュの初期化が `Operation not permitted` で失敗し、uv は終了コード2、検証ファイルは残らなかった。RW ありでは管理下の Python 3.14を自動選択し、uv は終了コード0となり、`CACHEDIR.TAG` と検証ファイルがホストへ残った。通常設定へ適用後、新しい Copilot CLI プロセスを localhost の固定応答 provider で起動し、hookが `~/Library/Caches/github-copilot/uv` を選択することと、検証ファイルのホスト永続化を確認した。適用前のファイルは `~/.cache/copilot-uv-deploy.5hv61N` へ保存した。
+
+WSL2 では、RW なしでも uv は終了コード0となったが、検証ファイルはホストへ残らなかった。RW ありでは `/usr/bin/python3` を自動選択し、uv は終了コード0となり、`CACHEDIR.TAG` と検証ファイルがホストへ残った。commit `34b6fba` を通常設定へ適用した後、再起動した Copilot CLI で hook が `~/.cache/github-copilot/uv` を選択し、通常の WSL 端末から検証ファイルを読み取れることを確認した。適用前のファイルは `~/.cache/copilot-uv-deploy.sOzKbf/backup` へ保存した。

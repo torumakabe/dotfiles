@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import unittest
 
+from tests._helpers import run_hook
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json"
@@ -21,6 +22,35 @@ def _commands() -> list[dict[str, object]]:
 
 
 class CopilotHooksConfigTests(unittest.TestCase):
+    def test_all_guards_run_before_the_argument_rewriter(self) -> None:
+        hooks = json.loads(HOOKS_PATH.read_text())["hooks"]["preToolUse"]
+        expected = ("copilot-guard.py", "node-global-enforcer.py", "uv-enforcer.py")
+        for hook, script in zip(hooks, expected, strict=True):
+            for shell in ("bash", "powershell"):
+                self.assertIn(script, hook[shell])
+
+    def test_guard_chain_checks_original_command_before_rewriting(self) -> None:
+        scripts = REPO_ROOT / "home/private_dot_copilot/hooks/scripts"
+        for command, denying_script in (
+            ("npm install --global example", "node-global-enforcer.py"),
+            ("python script.py", "uv-enforcer.py"),
+        ):
+            with self.subTest(command=command):
+                args = {"command": command}
+                seen = []
+                for name in ("copilot-guard.py", "node-global-enforcer.py", "uv-enforcer.py"):
+                    seen.append(args["command"])
+                    result = run_hook(scripts / f"executable_{name}", {"toolName": "bash", "toolArgs": args})
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    output = json.loads(result.stdout) if result.stdout.strip() else {}
+                    if output.get("permissionDecision") == "deny":
+                        self.assertEqual(name, denying_script)
+                        break
+                    args = output.get("modifiedArgs", args)
+                else:
+                    self.fail("guard chain did not deny the command")
+                self.assertTrue(all(value == command for value in seen))
+
     def test_all_commands_limit_mise_to_uv(self) -> None:
         commands = _commands()
         self.assertEqual(len(commands), 5)

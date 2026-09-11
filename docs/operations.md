@@ -43,7 +43,7 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を保持する。文字列、数値、真偽値、オブジェクトなどの非配列値は、設定ファイルを書き換える前にエラーとして拒否する。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。既存のパス指定は保持し、POSIX では下記の uv キャッシュ許可を追加する。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 
@@ -56,6 +56,29 @@ gh extension upgrade gh-stack --dry-run
 更新後は Copilot CLI を再起動し、`/sandbox` の General、Auth、Filesystem、Network の各タブを確認する。Linux 系では `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap 診断が実行され、`false` の場合は probe が省略される。
 
 WSL2、macOS、Codespaces、Dev Container でリモートブランチを検証するときは、[Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) に従う。ホストからの非対話起動だけでスラッシュコマンドや backend を確認済みと扱わない。
+
+### uv 専用キャッシュの書き込み許可
+
+この設定は Copilot CLI の uv キャッシュ書き込みに対する**ワークアラウンド**であり、CLI または MXC の改善で不要になる可能性がある。対象と撤去判断は、[コーディングエージェント向け指示のワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)に集約する。
+
+macOS と Linux（WSL を含む）では、`uv-enforcer.py` が許可された Bash tool のコマンドへ `UV_CACHE_DIR` の設定を追加する。CLI 起動前の環境変数には設定せず、コマンドの実行時に専用キャッシュを選ぶ。既存の拒否チェックはコマンドを変更する前に実施する。
+
+| 環境 | 専用キャッシュ |
+|---|---|
+| macOS | `~/Library/Caches/github-copilot/uv` |
+| Linux、WSL | `${XDG_CACHE_HOME:-$HOME/.cache}/github-copilot/uv` |
+
+`run_after_35-configure-copilot-sandbox.sh.tmpl` は毎回の apply で専用キャッシュを作成し、必要な `readwritePaths` を追加する。既存の RO、deny、利用者が追加した RW は削除しない。`uv.toml`、通常シェルの環境変数、通常の uv キャッシュは変更しない。設定ファイルへの追加 RO も行わない。
+
+CLI 起動環境へ `UV_CACHE_DIR` を export しない。hook が設定した後でも、元のコマンド内の明示的な環境変数設定や `--cache-dir` は uv の優先規則に従う。その保存先を自動許可することはない。hook は Bash tool に適用されるため、Copilot で sandbox を無効にした場合も専用キャッシュを選ぶ。
+
+相対パスや不正な保存先、既存の RO / deny との競合は、許可を広げて解消しない。エラーの原因を確認してから再適用する。`XDG_CACHE_HOME` などを変更した場合も、以前の RW 許可の所有者を推測して自動削除しない。不要な許可は、実際の配布状態と利用状況を確認して整理する。
+
+Copilot を終了してから apply し、設定の同時編集を避ける。hook と RW 許可の両方を適用してから再起動する。キャッシュ許可だけが残り、hook が古い場合は、uv が別のキャッシュを選んで失敗し得る。
+
+Windows は現在の利用環境で動作するとの報告があるため、このキャッシュ切替と RW 追加の対象外とする。Windows 全般で対処不要という意味ではない。配布済み hook にも旧キャッシュ切替はなく、現在の成功を旧hookや自動RW許可の効果とは断定しない。既存の Windows 設定は保持する。
+
+実 CLI の比較結果は[検証記録](copilot-sandbox-verification.md#uv-キャッシュ許可の実-cli-検証2026-09-11)、対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
 ## chezmoi での編集
 

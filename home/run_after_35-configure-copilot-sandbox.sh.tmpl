@@ -1,0 +1,185 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# Copilot CLI local sandbox 設定 (Linux/macOS)
+# Dedicated uv cache workaround: scope/removal conditions are in
+# .github/copilot-instructions.md「ワークアラウンド」.
+#
+# Copilot sandbox policy version: 7
+
+set -euo pipefail
+umask 077
+
+sandbox_default_enabled={{ if or .codespaces .devcontainer }}false{{ else }}true{{ end }}
+
+fail() {
+  echo "Error: Copilot sandbox settings: $*" >&2
+  exit 1
+}
+
+command -v jq >/dev/null 2>&1 || fail "jq not found on PATH."
+
+# Keep this selection/validation aligned with uv-enforcer.py:copilot_uv_cache_dir().
+single_line() {
+  case "$1" in *$'\r'*|*$'\n'*) fail "path must be single-line." ;; esac
+}
+
+canonical_path() {
+  local path="$1" part
+  local -a parts
+  single_line "${path}"
+  case "${path}" in
+  \~) path="${home_dir}" ;;
+  \~/*) path="${home_dir}/${path:2}" ;;
+  esac
+  case "${path}" in /*) ;; *) fail "policy path must be absolute or start with ~/: ${path}." ;; esac
+  IFS=/ read -r -a parts <<<"${path}"
+  REPLY=/
+  for part in "${parts[@]}"; do
+    case "${part}" in
+    ""|.) continue ;;
+    ..) REPLY="${REPLY%/*}"; REPLY="${REPLY:-/}" ;;
+    *)
+      REPLY="${REPLY%/}/${part}"
+      if [ -d "${REPLY}" ]; then
+        REPLY="$(cd -P -- "${REPLY}" && pwd -P && printf '\001')"
+        REPLY="${REPLY%$'\001'}"
+        REPLY="${REPLY%$'\n'}"
+        single_line "${REPLY}"
+      elif [ -L "${REPLY}" ]; then
+        fail "cannot resolve policy symlink ${REPLY}."
+      fi
+      ;;
+    esac
+  done
+}
+
+if [ "${UV_CACHE_DIR+x}" = x ]; then
+  fail "unset launch-environment UV_CACHE_DIR before applying settings and starting Copilot; command-local overrides remain supported."
+fi
+single_line "${HOME}"
+case "${HOME}" in /*) ;; *) fail "HOME must be absolute." ;; esac
+case "${HOME%/}/" in *//*|*/./*|*/../*) fail "HOME must not contain redundant separators or '.'/'..' components." ;; esac
+[ -d "${HOME}" ] || fail "HOME must be a directory."
+home_dir=""
+canonical_path "${HOME}"
+home_dir="${REPLY}"
+[ "${home_dir}" != / ] || fail "HOME must not resolve to the filesystem root."
+
+{{ if eq .chezmoi.os "darwin" -}}
+cache_home="${home_dir}/Library/Caches"
+{{ else -}}
+cache_home="${XDG_CACHE_HOME:-${home_dir}/.cache}"
+{{ end -}}
+single_line "${cache_home}"
+case "${cache_home}" in /*) ;; *) fail "XDG_CACHE_HOME must be absolute." ;; esac
+case "/${cache_home}/" in */../*) fail "XDG_CACHE_HOME must contain no '..' components." ;; esac
+IFS=/ read -r -a components <<<"${cache_home}"
+cache_home=""
+for component in "${components[@]}"; do
+  case "${component}" in ""|.) continue ;; esac
+  cache_home="${cache_home}/${component}"
+done
+cache_home="${cache_home:-/}"
+case "${cache_home}" in
+"${HOME%/}") cache_home="${home_dir}" ;;
+"${HOME%/}/"*) cache_home="${home_dir}/${cache_home#"${HOME%/}/"}" ;;
+esac
+
+IFS=/ read -r -a components <<<"${cache_home}/github-copilot/uv"
+uv_cache_dir=""
+for component in "${components[@]}"; do
+  case "${component}" in ""|.) continue ;; esac
+  uv_cache_dir="${uv_cache_dir}/${component}"
+  [ ! -L "${uv_cache_dir}" ] ||
+    fail "cache path must not contain symlinks: ${uv_cache_dir}."
+  if [ -e "${uv_cache_dir}" ] && [ ! -d "${uv_cache_dir}" ]; then
+    fail "cache path must not contain non-directories: ${uv_cache_dir}."
+  fi
+done
+[ "${uv_cache_dir}" != /github-copilot/uv ] || fail "XDG_CACHE_HOME must not be the filesystem root."
+
+copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
+settings_path="${copilot_home}/settings.json"
+settings_dir="$(dirname "${settings_path}")"
+[ ! -L "${settings_path}" ] || fail "refusing a settings.json symlink."
+input='{}'
+if [ -e "${settings_path}" ]; then input="$(cat "${settings_path}")"; fi
+jq -e 'type == "object"' <<<"${input}" >/dev/null || fail "settings must be a JSON object."
+
+desired="$(cat <<'JSON'
+{{ include ".chezmoitemplates/copilot-user-settings.json" }}
+JSON
+)"
+
+# Preserve explicit /sandbox disable, including false (jq // would replace it).
+enabled_present="$(jq -r '(.sandbox // {}) | has("enabled")' <<<"${input}")"
+existing_enabled="${sandbox_default_enabled}"
+if [ "${enabled_present}" = true ]; then
+  enabled_type="$(jq -r '.sandbox.enabled | type' <<<"${input}")"
+  [ "${enabled_type}" = boolean ] ||
+    fail "${settings_path} has a non-boolean sandbox.enabled (${enabled_type}); fix or remove it and re-run chezmoi apply."
+  existing_enabled="$(jq -c '.sandbox.enabled' <<<"${input}")"
+fi
+
+cache_covered=false
+for path_name in readwritePaths readonlyPaths deniedPaths; do
+  path_type="$(jq -r --arg name "${path_name}" '
+    (.sandbox.userPolicy.filesystem // {}) as $fs
+    | if ($fs | has($name)) then ($fs[$name] | type) else "missing" end
+  ' <<<"${input}")"
+  case "${path_type}" in
+  missing|null|array) ;;
+  *) fail "${settings_path} has a non-array sandbox.userPolicy.filesystem.${path_name} (${path_type}); fix or remove it and re-run chezmoi apply." ;;
+  esac
+  jq -e --arg name "${path_name}" '
+    (.sandbox.userPolicy.filesystem[$name] // [])
+    | all(type == "string" and length > 0 and (test("[\\r\\n]") | not))
+  ' <<<"${input}" >/dev/null || fail "${path_name} must contain nonempty, single-line path strings."
+  while IFS= read -r encoded; do
+    rule="$(jq -r . <<<"${encoded}")"
+    canonical_path "${rule}"
+    resolved_rule="${REPLY}"
+    case "${uv_cache_dir}/" in
+    "${resolved_rule%/}/"*)
+      if [ "${path_name}" = readwritePaths ]; then
+        cache_covered=true
+      else
+        fail "uv cache ${uv_cache_dir} conflicts with ${path_name} rule ${rule}; no permission was changed."
+      fi
+      ;;
+    esac
+    if [ "${path_name}" != readwritePaths ]; then
+      case "${resolved_rule}/" in
+      "${uv_cache_dir}/"*)
+        fail "uv cache ${uv_cache_dir} contains ${path_name} rule ${rule}; no permission was changed."
+        ;;
+      esac
+    fi
+  done < <(jq -c --arg name "${path_name}" '.sandbox.userPolicy.filesystem[$name] // [] | .[]' <<<"${input}")
+done
+
+mkdir -p "${uv_cache_dir}" "${settings_dir}"
+settings_tmp="${settings_dir}/.settings.json.$$"
+(set -o noclobber; : >"${settings_tmp}") || fail "cannot create private settings staging file."
+chmod 0600 "${settings_tmp}"
+trap 'rm -f "${settings_tmp}"' EXIT
+
+jq --argjson desired "${desired}" --argjson enabled "${existing_enabled}" \
+  --arg cache "${uv_cache_dir}" --argjson covered "${cache_covered}" '
+  . * $desired
+  | .sandbox.enabled = $enabled
+  | .sandbox.userPolicy |= (
+    del(.version)
+    | .filesystem |= (
+      .readwritePaths = ((.readwritePaths // []) + (if $covered then [] else [$cache] end))
+      | .readonlyPaths = (.readonlyPaths // [])
+      | .deniedPaths = (.deniedPaths // [])
+      | .clearPolicyOnExit = false
+    )
+    | .network |= del(.allowedHosts, .blockedHosts)
+  )
+' <<<"${input}" >"${settings_tmp}"
+jq -e . "${settings_tmp}" >/dev/null
+mv -f "${settings_tmp}" "${settings_path}"
+echo "Configured Copilot CLI local sandbox in ${settings_path}"
+{{- end -}}

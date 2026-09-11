@@ -106,6 +106,12 @@ PLATFORM_CONTRACT = {
     ),
     "shell:zoxide": _implemented_everywhere(),
     "feature:copilot-local-sandbox": _implemented_everywhere(),
+    "feature:copilot-uv-cache-grant": _zsh_only(
+        "exception: docs/operations.md Windows cache writes already work in the reported environment"
+    ),
+    "feature:copilot-uv-cache-hook": _zsh_only(
+        "exception: docs/operations.md Windows cache selection remains unchanged"
+    ),
     "skill:gh-stack": _implemented_everywhere(),
     "completion:azure-cli": _implemented_everywhere(),
     "completion:kubectl": _implemented_everywhere(),
@@ -246,6 +252,8 @@ SOURCE_INITIALIZERS = {
 }
 
 EXCEPTION_DOCUMENT_IDENTIFIERS = {
+    "feature:copilot-uv-cache-grant": ("Windows", "uv", "readwritePaths"),
+    "feature:copilot-uv-cache-hook": ("Windows", "uv-enforcer.py", "UV_CACHE_DIR"),
     "shell:edit-shortcut": ("Microsoft Edit",),
     "shell:mise-self-upgrade": ("mise-self-upgrade",),
     "shell:copilot-winget-launcher": ("WindowsApps", "WinGet", "macOS/Linux/WSL"),
@@ -332,6 +340,33 @@ class PlatformParityTests(unittest.TestCase):
                     self.assertTrue(
                         status == "implemented" or status.startswith("exception: docs/"),
                         status,
+                    )
+
+    @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
+    def test_uv_dedicated_cache_matches_platform_contract(self) -> None:
+        from tests.test_copilot_sandbox_config import POSIX_SCRIPT_PATH, _render
+
+        self.assertFalse(
+            (REPO_ROOT / "home/dot_config/uv/modify_private_uv.toml").exists()
+        )
+        for platform in PLATFORMS:
+            os_name = "windows" if platform == "windows-powershell" else (
+                "darwin" if platform == "macos-zsh" else "linux"
+            )
+            with self.subTest(platform=platform):
+                script = _render(POSIX_SCRIPT_PATH, os_name)
+                if platform == "windows-powershell":
+                    self.assertEqual(script.strip(), "")
+                    self.assertTrue(
+                        PLATFORM_CONTRACT["feature:copilot-uv-cache-hook"][platform]
+                        .startswith("exception:")
+                    )
+                else:
+                    self.assertIn("github-copilot/uv", script)
+                    self.assertIn("readwritePaths", script)
+                    self.assertEqual(
+                        PLATFORM_CONTRACT["feature:copilot-uv-cache-hook"][platform],
+                        "implemented",
                     )
 
     def test_gh_stack_contract_components_exist_for_each_platform(self) -> None:
