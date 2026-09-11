@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # Copilot CLI local sandbox 設定 (Linux/macOS)
 #
-# Copilot sandbox policy version: 3
+# Copilot sandbox policy version: 5
 
 set -euo pipefail
 
@@ -16,7 +16,27 @@ fi
 copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
 settings_path="${copilot_home}/settings.json"
 settings_dir="$(dirname "${settings_path}")"
+mise_data_dir="${MISE_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/mise}"
+mise_installs="${MISE_INSTALLS_DIR:-${mise_data_dir}/installs}"
+{{ if eq .chezmoi.os "darwin" -}}
+# ADR-030 keeps this repo-owned cache separate from runtime-discovered uv caches.
+copilot_uv_cache_home="${HOME}/Library/Caches"
+{{ else -}}
+# ADR-030 keeps this repo-owned cache separate from runtime-discovered uv caches.
+copilot_uv_cache_home="${XDG_CACHE_HOME:-${HOME}/.cache}"
+{{ end -}}
+copilot_uv_cache_parent="${copilot_uv_cache_home}/github-copilot"
+copilot_uv_cache_dir="${copilot_uv_cache_parent}/uv"
 mkdir -p "${settings_dir}"
+
+case "${mise_installs}" in
+"${mise_data_dir}"|"${mise_data_dir%/}"/*)
+  external_mise_installs=""
+  ;;
+*)
+  external_mise_installs="${mise_installs}"
+  ;;
+esac
 
 tmp_dir="$(mktemp -d)"
 merged="${tmp_dir}/merged.json"
@@ -79,7 +99,92 @@ for path_name in readwritePaths readonlyPaths deniedPaths; do
   esac
 done
 
-jq --slurpfile desired "${desired}" '
+jq \
+  --arg home "${HOME}" \
+  --arg mise_data_dir "${mise_data_dir}" \
+  --arg external_mise_installs "${external_mise_installs}" \
+  --arg copilot_uv_cache_dir "${copilot_uv_cache_dir}" \
+  --slurpfile desired "${desired}" '
+  def expand_home:
+    if type != "string" then
+      .
+    elif . == "~" then
+      $home
+    elif startswith("~/") then
+      $home + .[1:]
+    else
+      .
+    end;
+
+  def normalize_path:
+    expand_home
+    | if type != "string" then
+        .
+      else
+        . as $path
+        | ($path | startswith("/")) as $absolute
+        | reduce ($path | split("/")[]) as $part
+            ([];
+              if $part == "" or $part == "." then
+                .
+              elif $part == ".." then
+                if length > 0 and .[-1] != ".." then
+                  .[0:-1]
+                elif $absolute then
+                  .
+                else
+                  . + [$part]
+                end
+              else
+                . + [$part]
+              end
+            )
+        | join("/")
+        | if $absolute then "/" + . else . end
+        | if . == "" and $absolute then "/" else . end
+      end;
+
+  def contains_path($paths; $path):
+    any($paths[]?;
+      type == "string" and
+      (normalize_path == ($path | normalize_path))
+    );
+
+  def contains_or_is_parent($paths; $path):
+    ($path | normalize_path) as $normalized_path
+    | any($paths[]?;
+        type == "string" and (
+          (normalize_path) as $candidate
+          | $candidate != "" and (
+              $candidate == $normalized_path or
+              $candidate == "/" or
+              ($normalized_path | startswith($candidate + "/"))
+            )
+        )
+      );
+
+  def append_managed_readonly($path):
+    if $path == "" then
+      .
+    elif contains_or_is_parent(.deniedPaths; $path) then
+      error("sandbox.userPolicy.filesystem.deniedPaths conflicts with managed mise path: \($path)")
+    elif contains_path(.readwritePaths; $path) or contains_path(.readonlyPaths; $path) then
+      .
+    else
+      .readonlyPaths += [$path]
+    end;
+
+  def append_managed_readwrite($path):
+    if contains_or_is_parent(.deniedPaths; $path) then
+      error("sandbox.userPolicy.filesystem.deniedPaths conflicts with managed Copilot uv cache path: \($path)")
+    elif contains_or_is_parent(.readonlyPaths; $path) then
+      error("sandbox.userPolicy.filesystem.readonlyPaths conflicts with managed Copilot uv cache path: \($path)")
+    elif contains_path(.readwritePaths; $path) then
+      .
+    else
+      .readwritePaths += [$path]
+    end;
+
   . * $desired[0]
   | .sandbox = (
     (.sandbox // {})
@@ -91,6 +196,9 @@ jq --slurpfile desired "${desired}" '
         | .readwritePaths = (.readwritePaths // [])
         | .readonlyPaths = (.readonlyPaths // [])
         | .deniedPaths = (.deniedPaths // [])
+        | append_managed_readonly($mise_data_dir)
+        | append_managed_readonly($external_mise_installs)
+        | append_managed_readwrite($copilot_uv_cache_dir)
         | .clearPolicyOnExit = false
       )
       | .network = (
@@ -101,9 +209,23 @@ jq --slurpfile desired "${desired}" '
   )
 ' "${input_path}" >"${merged}"
 
+for managed_cache_path in "${copilot_uv_cache_parent}" "${copilot_uv_cache_dir}"; do
+  if [ -L "${managed_cache_path}" ]; then
+    echo "Error: managed Copilot uv cache path is a symbolic link: ${managed_cache_path}" >&2
+    exit 1
+  fi
+done
+mkdir -p "${mise_data_dir}" "${mise_installs}" "${copilot_uv_cache_dir}"
+for managed_cache_path in "${copilot_uv_cache_parent}" "${copilot_uv_cache_dir}"; do
+  if [ -L "${managed_cache_path}" ]; then
+    echo "Error: managed Copilot uv cache path is a symbolic link: ${managed_cache_path}" >&2
+    exit 1
+  fi
+done
+
 jq --argjson enabled "${existing_enabled}" '.sandbox.enabled = $enabled' "${merged}" >"${settings_tmp}"
 
 jq -e . "${settings_tmp}" >/dev/null
 mv -f "${settings_tmp}" "${settings_path}"
-echo "Configured Copilot CLI local sandbox in ${settings_path}"
+echo "Updated Copilot CLI sandbox policy in ${settings_path} (sandbox.enabled=${existing_enabled})"
 {{- end -}}

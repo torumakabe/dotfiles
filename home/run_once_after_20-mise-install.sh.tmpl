@@ -35,6 +35,39 @@ if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then
   fi
 fi
 
+lockfile="${HOME}/.config/mise/mise.lock"
+lockfile_backup=""
+
+restore_lockfile() {
+  status=$?
+  trap - EXIT
+  if [ -n "${lockfile_backup}" ]; then
+    if ! cmp -s "${lockfile_backup}" "${lockfile}"; then
+      if cp -p "${lockfile_backup}" "${lockfile}"; then
+        echo 'Restored managed mise lockfile after installation.'
+      else
+        echo "ERROR: failed to restore managed mise lockfile: ${lockfile}" >&2
+        status=1
+      fi
+    fi
+    rm -f "${lockfile_backup}"
+  fi
+  exit "${status}"
+}
+
+if [ -f "${lockfile}" ]; then
+  if ! lockfile_backup="$(mktemp)"; then
+    echo 'ERROR: failed to create mise lockfile backup.' >&2
+    exit 1
+  fi
+  if ! cp -p "${lockfile}" "${lockfile_backup}"; then
+    rm -f "${lockfile_backup}"
+    echo 'ERROR: failed to back up managed mise lockfile.' >&2
+    exit 1
+  fi
+  trap restore_lockfile EXIT
+fi
+
 max_attempts=3
 attempt=1
 wait_sec=10
@@ -70,7 +103,8 @@ done
 
 # 最終チェック
 if ! missing_tools="$(mise ls --missing 2>/dev/null)"; then
-  echo "Warning: failed to inspect final mise installation status. Run 'mise ls --missing' manually." >&2
+  echo "ERROR: failed to inspect final mise installation status." >&2
+  exit 1
 elif echo "$missing_tools" | grep -F -q "$missing_marker"; then
   echo "" >&2
   echo "========================================" >&2
@@ -80,5 +114,6 @@ elif echo "$missing_tools" | grep -F -q "$missing_marker"; then
   echo "" >&2
   echo "リトライ: mise install" >&2
   echo "========================================" >&2
+  exit 1
 fi
 {{ end -}}

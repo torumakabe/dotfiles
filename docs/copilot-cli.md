@@ -6,7 +6,7 @@
 
 ### カスタム指示とエージェント
 
-| 正本 | 適用範囲と読み込み |
+| 管理元 | 適用範囲と読み込み |
 | --- | --- |
 | [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) | このリポジトリでの作業に適用する。開発環境への配布対象ではない |
 | [`.github/agents/manage-adr.agent.md`](../.github/agents/manage-adr.agent.md)、[`.github/agents/review-repo.agent.md`](../.github/agents/review-repo.agent.md) | このリポジトリで選択して使うカスタムエージェント。ユーザー共通のエージェントとしては配布しない |
@@ -45,7 +45,7 @@ Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilo
 
 ## プラグインとスキル
 
-プラグインの登録と有効化は [`home/.chezmoitemplates/copilot-user-settings.json`](../home/.chezmoitemplates/copilot-user-settings.json) を正本とし、既存の `settings.json` へマージする。登録外の既存プラグインも保持するため、排他的な許可リストではない。Copilot CLI が導入とセッション開始時の更新を担当し、スキル本文の正本は提供元にある。
+プラグインの登録と有効化は [`home/.chezmoitemplates/copilot-user-settings.json`](../home/.chezmoitemplates/copilot-user-settings.json) で管理し、既存の `settings.json` へマージする。登録外の既存プラグインも保持するため、排他的な許可リストではない。Copilot CLI が導入とセッション開始時の更新を担当し、スキル本文は提供元が管理する。
 
 プラグインに含めない外部 skill は `gh skill` で管理し、自作 skill と公式の導入コマンドを持たない skill だけを `~/.copilot/skills/` から chezmoi へ取り込む。
 
@@ -56,14 +56,14 @@ gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 
 `personal-skills@torumakabe-agent-plugins` は `agentfinder`、`japanese-technical-writing`、`lsp-setup` を提供する。利用時はスキル名を指定する。`agentfinder` が返した候補は、ユーザーが明示的に選ぶまで自動インストールしない。
 
-`gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。提案条件は[配布用カスタム指示](../home/private_dot_copilot/copilot-instructions.md#エージェント行動規範)、操作方法は公式 skill を正本とする。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
+`gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。提案条件は[配布用カスタム指示](../home/private_dot_copilot/copilot-instructions.md#エージェント行動規範)に従い、操作方法は公式 skill を参照する。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
 
 ## セキュリティフック
 
-`preToolUse` で以下を検査する。設計は [`architecture.md`](architecture.md#copilot-guard-の設計) を参照。
+`preToolUse` で以下を検査し、必要なcommand変更を適用する。実行順は`node-global-enforcer.py`、`copilot-guard.py`、`uv-enforcer.py`で固定する。設計は [`architecture.md`](architecture.md#copilot-guard-の設計) と [ADR-030](adr/030-copilot-sandbox-readwrite-uv-cache.md) を参照。
 
 - `copilot-guard.py`: ファイル操作と読み取り専用検索のプロジェクト相対パス例外 (`allowed-files.txt`) / 秘匿ファイル (`blocked-files.txt`) / 確認付き (`ask-files.txt`) / 機微な環境変数の読み取り / `git commit` の明示承認
-- `uv-enforcer.py`: `python` / `pip` の直接実行を抑止
+- `uv-enforcer.py`: `python` / `pip` の直接実行を抑止し、許可したshell commandへCopilot専用`UV_CACHE_DIR`を付与
 - `node-global-enforcer.py`: `npm` / `yarn` / `pnpm` のグローバルインストールを抑止
 
 パターンファイルは 1 行 1 パターン、`#` でコメント。パス比較は `\` → `/` に正規化する。判定の優先度は `deny > ask > no opinion（空出力）` とし、`allow` は出力しない（[ADR-006](adr/006-pretooluse-hook-no-allow.md)）。
@@ -74,7 +74,7 @@ gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 
 すべての command Hook は `cwd: "."` でリポジトリルートから起動する。guard は許可対象ツールの絶対パスをそのルートに対して判定し、audit Hook は同じルートを操作元として記録する。PreToolUse 入力の `cwd` は、Copilot Workspace セッションで GitHub Copilot のインストール先になる場合があるため、判定には使わない。
 
-各 Hook は host 上の `MISE_ENABLE_TOOLS=uv mise exec -- uv run ...` で実行する。PowerShell も同等であり、shim を使わずに uv を選択する。Hook は通常 agent shell の login-shell 環境補完を共有しないため、runtime の親 PATH から mise 自体を解決できる必要がある。環境構築は [構造の説明](architecture.md#copilot-の通常-shell-と-command-hook)、切替と復元は [運用手順](operations.md#実体環境への切替) を参照する。
+各 Hook は host 上の `uv run ...` で実行する。PowerShell も同等であり、runtime の親 PATH から uv の実体を直接起動する。Hook は通常 agent shell の login-shell 環境補完を共有しないため、CLI または GUI の起動元が実体 PATH を継承している必要がある。Windows でこの契約を満たすには、PowerShell profile を読み込んだターミナルから Copilot CLI を起動する。環境構築は [構造の説明](architecture.md#copilot-の通常-shell-と-command-hook)、切替と復元は [運用手順](operations.md#実体環境への切替) を参照する。
 
 Copilot CLI は Hook 設定をセッション開始時に読み込む。`hooks.json` を配備した後、既存セッションへ `cwd` の変更を反映するにはセッションを再起動する。ただし、Copilot Workspace が再開したセッションでは、再起動後も `cwd: "."` が GitHub Copilot のインストール先へ解決される場合がある。この状態では guard が対象ファイルをプロジェクト外と判定して拒否する。別のリポジトリにある同名ファイルを許可しないため、対象パスからプロジェクトルートを推測せず、新規 Workspace セッションへ移行する。
 
@@ -93,7 +93,7 @@ uv run -m unittest tests.test_copilot_guard -v
 
 - `--allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。
 - local sandbox は shell command と filesystem policy を対象とする。MCP と LSP は対象外であり、Copilot CLI 組み込みファイルツールの filesystem policy は software-only safeguard である。
-- `run_onchange_after_35-configure-copilot-sandbox.*` は `~/.copilot/settings.json` の他のキーと既存 filesystem path rules を保ったまま設定を更新する。投入値は `home/.chezmoitemplates/copilot-user-settings.json` を正本とする。
+- `run_onchange_after_35-configure-copilot-sandbox.*` は `~/.copilot/settings.json` の他のキーと既存 filesystem path rules を保ったまま設定を更新する。投入値は `home/.chezmoitemplates/copilot-user-settings.json` で定義する。
 - `sandbox.enabled` の初回値、設定保持、組織管理設定との優先関係は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) に記録する。
 - Linux 系の bubblewrap 診断は `sandbox.enabled` が `true` または未設定の場合に実行し、`false` の場合は probe を省略する。
 - `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。

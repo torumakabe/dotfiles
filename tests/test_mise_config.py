@@ -171,16 +171,16 @@ class MiseConfigTests(unittest.TestCase):
         )
         archives = {
             "macos-arm64.tar.gz": (
-                "ac6ed53215e70abfb220524aed121bf02"
-                "dbd3fbd4a19355032dd1c5a108fb212"
+                "989fa96f2c9eba80e0cc35b0887d69b8"
+                "f5b25c17f54bc8676aa520e93450425f"
             ),
             "linux-x64.tar.gz": (
-                "e013fe11a0a9055fe78d2546baa85eba"
-                "90a56e6445c431021b4fe328e6910fe2"
+                "2f4489c8e57e7d0fc1ad155691bacac"
+                "5ed0c613c5e3acec2e42ecad8ace5ce3f"
             ),
             "linux-arm64.tar.gz": (
-                "5fd8a9ffb312b47e29f642d377ad4fa"
-                "9093962b47061ef5c15665086904e1046"
+                "18303fdb59095acf0c50b0d23819b871"
+                "82516988f9eb2ec016b52f8814916904"
             ),
         }
         for archive, checksum in archives.items():
@@ -378,6 +378,22 @@ class MiseConfigTests(unittest.TestCase):
             install_script,
         )
 
+    def test_devcontainer_lock_sync_defers_only_without_github_auth(self) -> None:
+        sync_script = SYNC_SH_PATH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "{{ if and .devcontainer (not .codespaces) -}}",
+            sync_script,
+        )
+        guarded = sync_script.split(
+            "{{ if and .devcontainer (not .codespaces) -}}", 1
+        )[1].split("{{ end -}}", 1)[0]
+        self.assertIn("gh auth token", guarded)
+        self.assertIn('GH_TOKEN:-}', guarded)
+        self.assertIn("skipping mise lockfile sync", guarded)
+        self.assertIn("exit 0", guarded)
+        self.assertNotRegex(guarded, r"(?m)^\s*mise install")
+
     def test_dotnet_alias_matches_lock_backend(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")
         lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
@@ -456,6 +472,12 @@ class MiseConfigTests(unittest.TestCase):
         self.assertIn("installs/.mise-installs.toml", section)
         self.assertIn("cache/uv", section)
         self.assertIn("復元", section)
+
+    def test_full_activation_prioritizes_real_paths_without_shims(self) -> None:
+        config = _config_toml(CONFIG_PATH.read_text(encoding="utf-8"))
+
+        self.assertIs(config["settings"]["activate_shims"], False)
+        self.assertIs(config["settings"]["activate_aggressive"], True)
 
     def test_typescript_language_server_uses_stable_typescript_path(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")
@@ -569,6 +591,32 @@ class MiseConfigTests(unittest.TestCase):
             self.assertIn("chezmoi apply", script)
             self.assertNotIn("chezmoi apply --force", script)
             self.assertNotIn("次回 chezmoi apply 時に再試行", script)
+
+    def test_install_paths_restore_managed_lockfile(self) -> None:
+        sync_shell = SYNC_SH_PATH.read_text(encoding="utf-8")
+        install_shell = INSTALL_SH_PATH.read_text(encoding="utf-8")
+        sync_powershell = SYNC_PS1_PATH.read_text(encoding="utf-8")
+
+        for script in (sync_shell, install_shell):
+            self.assertIn('lockfile="${HOME}/.config/mise/mise.lock"', script)
+            self.assertIn("trap restore_lockfile EXIT", script)
+            self.assertIn('cp -p "${lockfile_backup}" "${lockfile}"', script)
+
+        self.assertIn("$lockfileBackup = [System.IO.Path]::GetTempFileName()", sync_powershell)
+        self.assertIn(
+            "Copy-Item -LiteralPath $lockfileBackup -Destination $lockfile",
+            sync_powershell,
+        )
+
+    def test_initial_mise_install_fails_when_tools_remain_missing(self) -> None:
+        install_script = INSTALL_SH_PATH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "ERROR: failed to inspect final mise installation status.",
+            install_script,
+        )
+        warning = install_script.index("WARNING: mise install が一部失敗しました")
+        self.assertIn("exit 1", install_script[warning:])
 
     def _check_mise_warnings(self, log: str) -> subprocess.CompletedProcess[str]:
         if shutil.which("zsh") is None:

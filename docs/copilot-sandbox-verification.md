@@ -25,6 +25,12 @@ WSL1 は対象外とする。Windows native の ProcessContainer は Windows 側
 export TEST_BRANCH='<検証対象ブランチ>'
 ```
 
+新規環境で`install.sh`から初回導入全体を検証する場合は、同じbranchを`CHEZMOI_INIT_BRANCH`へ渡す。未設定時の`install.sh`はリポジトリの既定branchを使用する。
+
+```bash
+CHEZMOI_INIT_BRANCH="${TEST_BRANCH}" ./install.sh
+```
+
 chezmoi のソースリポジトリへ移動する。
 
 ```bash
@@ -302,6 +308,32 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 
 失敗時は、実行コマンド、終了コード、標準エラー、`/sandbox` の各画面の表示を残す。認証情報や機密性のある環境変数の値は記録へ含めない。
 
+## ADR-030 の撤去判定
+
+Copilot CLI または MXC の更新後は、issue の状態や版番号だけで ADR-030 の回避策を撤去しない。sandbox を有効にした新規 Copilot CLI セッションで、hook が設定した `UV_CACHE_DIR` を同じ tool call 内で解除し、uv の既定 cache を使う操作が成功するか確認する。
+
+Bash tool では次を実行する。
+
+```bash
+env -u UV_CACHE_DIR uv run --no-project -- python --version
+```
+
+PowerShell tool では次を実行する。
+
+```powershell
+$env:UV_CACHE_DIR = $null
+uv run --no-project -- python --version
+```
+
+終了コード0で Python の version が表示された場合、その環境では専用 cache を使わずに通常の `uv run` が動作している。撤去時点で Copilot local sandbox を利用している管理対象の Windows、macOS、Linux、WSL2 端末すべてで個別に成功した場合に限り、`.github/copilot-instructions.md` に列挙した ADR-030 の実装を一括して撤去する。一つでも失敗した場合は回避策を維持し、終了コードと標準エラーを検証記録へ残す。
+
+| 環境 | 専用 cache 適用後 | 撤去判定プローブ |
+|---|---|---|
+| WSL2 | 成功 | 成功 |
+| macOS | 成功 | 成功 |
+| 通常の Linux | 対象端末なし | 対象端末なし |
+| Windows ProcessContainer | 成功 | 失敗。回避策を維持 |
+
 ## 検証記録
 
 変化しやすい実測値は、この表へ追記する。環境内の対話確認を実施していない結果は、dotfiles 契約の合格として扱わない。
@@ -313,3 +345,13 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 | 2026-08-16 | Codespaces、commit `1ec7eee`で隔離した設定ディレクトリを使用 | Linux 6.8.0-1052-azure、x86_64 | 実体の配置を確認。version取得は未完了 | 2.72.0 | miseとuvが未導入のため未実施 | 未導入 | `CODESPACES=true`を検出し、初期値`false`、ファイルモード`600`、既存boolean値の維持を確認した。`~/.copilot/settings.json`は未作成で、`/sandbox`と自動テストは未実施 |
 | 2026-08-16 | WSL2、対話ターミナルと自動テスト | Ubuntu 22.04.5、x86_64、kernel 6.18.35.2-microsoft-standard-WSL2 | version未記録 | version未記録 | 未記録 | 0.6.1、probe成功 | 対象33テストが成功し、4テストをskip。全363テストが成功し、18テストをskip。隔離した設定同期、`chezmoi apply`、手動enableとdisableの値が再起動後と再適用後も維持されることを確認した。backend名の表示はなかった |
 | 2026-08-16 | Windows native | Windows build 26200、architecture 未記録 | 1.0.81-0 | 未記録 | 未確認 | N/A | 単体テストと WinGet Configuration 構文は成功。対話的な enable、disable は未実施 |
+| 2026-09-11 | Windows native、profile 読み込み済み PowerShell 7.6.5 から WinGet 本体を起動し、built-in PowerShell で直接確認 | build、architecture 未記録 | 1.0.83 | 未記録 | host の実体 PATH を sandbox が保持 | N/A | host の `copilot` alias は `%LOCALAPPDATA%\Microsoft\WinGet\Links\copilot.exe` を指した。sandbox 内で `uv`、`uvx`、`node`、`npm`、`npx`、`corepack`、`tsc`、`dotnet`、`jq` はすべて mise 実体へ解決し、各 `--version` が終了コード0で成功した。shim は実体 PATH 群より後ろだった。sandbox 内の `LOCALAPPDATA` はパッケージ配下へリダイレクトされた。新しい read-only grant の適用、profile を読む子 shell、GUI または profile なしの起動、5 hook 全体の確認は未実施 |
+| 2026-09-11 | WSL2、新規Copilot CLIセッションのbuilt-in Bashへ検証scriptを直接渡して確認 | OS、architecture未記録 | 1.0.83 | 未記録 | commit `78f8937`のmise read-only grantを適用 | 未記録 | manifestの43コマンドはすべて期待するmise実体へ解決した。`uv`、`uvx`、`node`、`npm`、`npx`、`corepack`、`tsc`、`dotnet`、`jq`の実行は終了コード0だった。`uv run --no-project -- python --version`は`~/.cache/uv/.tmp...`への一時ファイル作成がread-only filesystemで失敗し、単独tool callでも同じ終了コード2となった。ADR-030のuv cache write grant適用後の再検証は未実施 |
+| 2026-09-11 | WSL2、commit `0c35b02` 適用後の新規Copilot CLIセッションでbuilt-in Bashへ検証scriptを直接渡して確認 | OS、architecture未記録 | 1.0.83 | 未記録 | Copilot専用uv cacheのread-write grantとcommand内`UV_CACHE_DIR`を適用 | 未記録 | `UV_CACHE_DIR`は`/home/tomakabe/.cache/github-copilot/uv`だった。manifestの43コマンドは不一致0で、`uv`、`uvx`、`jq`、`node`、`npm`、`corepack`、`npx`、`tsc`、`typescript-language-server`はすべて期待するmise実体から終了コード0で実行された。`uv run --no-project -- python --version`はPython 3.10.12を返して終了コード0で成功し、command hookエラーは発生しなかった |
+| 2026-09-11 | macOS、commit `6a88175` 適用後の新規Copilot CLIセッションでbuilt-in Bashを使用 | macOS 26.6.2、arm64 | 1.0.84-4 | 未記録 | Copilot専用uv cacheのread-write grantとcommand内`UV_CACHE_DIR`を適用 | N/A | `UV_CACHE_DIR`は`/Users/tomakabe/Library/Caches/github-copilot/uv`、`uv`はmise管理下の0.12.10だった。専用cacheを使う`uv run --no-project -- python --version`はPython 3.14.6を返して終了コード0で成功した。同じtool call内で`UV_CACHE_DIR`を解除した撤去判定プローブもPython 3.14.6を返して終了コード0で成功し、command hookエラーは発生しなかった |
+| 2026-09-11 | Windows native、commit `7ef5d73` 適用後の新規Copilot CLIセッションでbuilt-in PowerShellを使用 | build、architecture未記録 | version未記録 | 未記録 | Copilot専用uv cacheのread-write grantとcommand内`UV_CACHE_DIR`を適用 | N/A | `UV_CACHE_DIR`は`C:\Users\tomakabe\AppData\Local\GitHubCopilot\uv`、`uv`はmise管理下の0.12.10だった。専用cacheを使う`uv run --no-project -- python --version`はPython 3.14.5を返して成功した。専用cacheを解除した撤去判定プローブはAppContainer配下のuv cacheへの一時ファイル保存をアクセス拒否されて失敗したため、回避策を維持する。適用時のPowerShell wrapperはnative commandの失敗をtool callの終了コードへ反映せず、両tool callが終了コード0と報告された。子PowerShellで終了コードを維持する修正版の再検証は未実施 |
+| 2026-09-11 | Windows native、commit `417b22f` 適用後の新規Copilot CLIセッションでbuilt-in PowerShellを使用 | build、architecture未記録 | version未記録 | 未記録 | Copilot専用uv cacheのread-write grant、command内`UV_CACHE_DIR`、子PowerShellによる終了コード伝播を適用 | N/A | `UV_CACHE_DIR`は`C:\Users\tomakabe\AppData\Local\GitHubCopilot\uv`、`uv`はmise管理下の0.12.10だった。専用cacheを使う`uv run --no-project -- python --version`はPython 3.14.5を返し、tool callは終了コード0で成功した。専用cacheを解除した撤去判定プローブはAppContainer配下のuv cacheへの一時ファイル保存をアクセス拒否され、tool callは終了コード1を返した。標準エラーは通常のtextで、両方の実行にcommand hookエラーはなかったため、Windowsでは回避策を維持する |
+| 2026-09-11 | WSL2、新規Copilot CLIセッションのbuilt-in Bashで撤去判定プローブを実行 | OS、architecture未記録 | version未記録 | 未記録 | commit `0c35b02` のCopilot専用uv cache回避策を適用済み | 未記録 | `env -u UV_CACHE_DIR uv run --no-project -- python --version`はPython 3.10.12を返し、tool callは終了コード0で成功した。標準エラーとcommand hookエラーは発生しなかった |
+| 2026-09-11 | Dev Container、Docker 29.7.2から非対話検証。commit `89fbd06`を基点に本変更を適用 | Ubuntu 26.04.1 LTS、arm64 | 1.0.83 | 2.72.0 | mise 2026.9.4。npm registry proxyを設定して30ツールを導入し、missing 0 | 0.11.1、probe失敗 | `devcontainer=true`、`codespaces=false`、初期`sandbox.enabled=false`を確認した。uv 0.12.10、Python 3.14.4、Node.js 24.20.0、TypeScript 7.0.2、typescript-language-server 6.0.0はmise実体から実行できた。公式Linux ARM64 archiveのSHA-256検証を含む初回mise導入と全479テストが成功した。導入済み状態での`mise install --yes`はlockfileを変更しなかった。初回の実ツール導入時に生じたauto-lock差分は`chezmoi apply --force ~/.config/mise/mise.lock`で復旧した。user namespace probeは権限不足で終了コード1となった。Copilot CLIの対話画面は未確認であり、dotfilesのsandbox契約の合格とは扱わない |
+| 2026-09-11 | Codespaces、GUIで新規作成した2-core環境の統合ターミナルでcommit `875f49e`を確認 | Linux、x86_64。OS詳細未記録 | version未記録 | 2.72.0 | mise 2026.9.4、missing 0 | 未確認 | 回復後の構成確認であり、初回導入の通し成功ではない。最初の`install.sh`はchezmoi取得中に停止し、`CHEZMOI_INSTALL_ONLY=1`で再実行した。最初の`chezmoi init --apply`は終了コード130となり、再実行で完了した。さらに、Codespaceの認証tokenが公開`github/gh-stack`へのAPI要求をSAML enforcementにより拒否したため、一時的な資格情報なしの`GH_CONFIG_DIR`で公式`gh`コマンドを手動再実行した。回復後は`sandbox.enabled=false`と`activate_shims=false`を維持し、gh 2.100.0、uv 0.12.10、Python 3.14.4、Node.js 24.20.0、TypeScript 7.0.2、typescript-language-server 6.0.0をmise実体から実行できた。全自動テストと`git diff --check`は成功した。初回導入の合否、Copilot CLIの対話画面、user namespace probeは未確認である |
+| 2026-09-11 | Codespaces、GUIで新規作成した2-core環境の統合ターミナルで初回導入を確認 | Linux、x86_64。OS詳細未記録 | version未記録 | 2.72.0 | mise 2026.9.4、missing 0 | 未確認 | 未初期化のHOMEでcommit `0f3c76b`を指定し、`install.sh`を1回だけ実行して終了コード0を確認した。aptによるLibreOffice取得は約25分間出力が止まった後に再開したが、再実行や手動復旧は行っていない。配布後の`mise.lock`はsourceと一致し、`sandbox.enabled=false`、`activate_shims=false`を確認した。gh-stack extension 0.1.1とskillを自動導入し、gh 2.100.0、uv 0.12.10、Node.js 24.20.0はmiseのinstall directoryから実行された。全490テストが成功し、1テストをskipした。その後、同じ環境のworkspaceとsourceをaptのタイムアウト、再試行、進捗表示を追加したcommit `795cb33`へfast-forwardし、Linux用テンプレートの`bash -n`と全492テストが成功した。commit `795cb33`を未初期化HOMEへ導入する試験は実施していない |

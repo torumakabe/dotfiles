@@ -1,4 +1,4 @@
-"""Verify Copilot hooks isolate mise resolution to uv on every shell."""
+"""Verify Copilot hooks invoke the resolved uv executable on every shell."""
 
 import json
 import os
@@ -8,11 +8,16 @@ import subprocess
 import tempfile
 import unittest
 
+from tests._helpers import run_hook
+
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json"
-EXPECTED_BASH_PREFIX = "MISE_ENABLE_TOOLS=uv mise exec -- uv run "
-EXPECTED_POWERSHELL_PREFIX = "$env:MISE_ENABLE_TOOLS='uv'; mise exec -- uv run "
+HOOK_SCRIPTS = REPO_ROOT / "home/private_dot_copilot/hooks/scripts"
+UV_ENFORCER_PATH = HOOK_SCRIPTS / "executable_uv-enforcer.py"
+COPILOT_GUARD_PATH = HOOK_SCRIPTS / "executable_copilot-guard.py"
+EXPECTED_BASH_PREFIX = "uv run "
+EXPECTED_POWERSHELL_PREFIX = "uv run "
 
 
 def _commands() -> list[dict[str, object]]:
@@ -21,7 +26,84 @@ def _commands() -> list[dict[str, object]]:
 
 
 class CopilotHooksConfigTests(unittest.TestCase):
-    def test_all_commands_limit_mise_to_uv(self) -> None:
+    def test_cache_mutation_runs_after_enforcers_and_guard(self) -> None:
+        pre_tool_use = json.loads(HOOKS_PATH.read_text(encoding="utf-8"))["hooks"][
+            "preToolUse"
+        ]
+        self.assertIn("node-global-enforcer.py", pre_tool_use[0]["bash"])
+        self.assertIn("copilot-guard.py", pre_tool_use[1]["bash"])
+        self.assertIn("uv-enforcer.py", pre_tool_use[2]["bash"])
+
+    def test_guard_checks_original_command_before_cache_mutation(self) -> None:
+        for tool_name in ("bash", "powershell"):
+            with self.subTest(tool_name=tool_name):
+                payload = {
+                    "toolName": tool_name,
+                    "toolArgs": {"command": "git commit -m test"},
+                }
+                guarded = run_hook(
+                    COPILOT_GUARD_PATH,
+                    payload,
+                    cwd=REPO_ROOT,
+                )
+                self.assertEqual(guarded.returncode, 0, guarded.stderr)
+                decision = json.loads(guarded.stdout)
+                self.assertEqual(decision["permissionDecision"], "ask")
+                self.assertIn("git commit", decision["permissionDecisionReason"])
+
+                mutation = run_hook(UV_ENFORCER_PATH, payload, cwd=REPO_ROOT)
+                self.assertEqual(mutation.returncode, 0, mutation.stderr)
+                self.assertIn("modifiedArgs", json.loads(mutation.stdout))
+
+    def test_guard_denies_environment_dump_before_cache_mutation(self) -> None:
+        for tool_name in ("bash", "powershell"):
+            for command in ("printenv", "env"):
+                with self.subTest(tool_name=tool_name, command=command):
+                    guarded = run_hook(
+                        COPILOT_GUARD_PATH,
+                        {
+                            "toolName": tool_name,
+                            "toolArgs": {"command": command},
+                        },
+                        cwd=REPO_ROOT,
+                    )
+                    self.assertEqual(guarded.returncode, 0, guarded.stderr)
+                    decision = json.loads(guarded.stdout)
+                    self.assertEqual(decision["permissionDecision"], "deny")
+                    self.assertIn(
+                        "env dump",
+                        decision["permissionDecisionReason"],
+                    )
+
+    def test_guard_allows_safe_command_before_cache_mutation(self) -> None:
+        for tool_name, command in (
+            ("bash", "printf ok"),
+            ("powershell", "Write-Output ok"),
+        ):
+            with self.subTest(tool_name=tool_name):
+                guarded = run_hook(
+                    COPILOT_GUARD_PATH,
+                    {
+                        "toolName": tool_name,
+                        "toolArgs": {"command": command},
+                    },
+                    cwd=REPO_ROOT,
+                )
+                self.assertEqual(guarded.returncode, 0, guarded.stderr)
+                self.assertEqual(guarded.stdout.strip(), "")
+
+                mutation = run_hook(
+                    UV_ENFORCER_PATH,
+                    {
+                        "toolName": tool_name,
+                        "toolArgs": {"command": command},
+                    },
+                    cwd=REPO_ROOT,
+                )
+                self.assertEqual(mutation.returncode, 0, mutation.stderr)
+                self.assertIn("modifiedArgs", json.loads(mutation.stdout))
+
+    def test_all_commands_invoke_uv_directly(self) -> None:
         commands = _commands()
         self.assertEqual(len(commands), 5)
 
@@ -31,6 +113,8 @@ class CopilotHooksConfigTests(unittest.TestCase):
                 self.assertTrue(
                     command["powershell"].startswith(EXPECTED_POWERSHELL_PREFIX)
                 )
+                self.assertNotIn("mise exec", command["bash"])
+                self.assertNotIn("mise exec", command["powershell"])
 
     def test_all_commands_run_from_repository_root(self) -> None:
         for command in _commands():
@@ -39,14 +123,14 @@ class CopilotHooksConfigTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("bash"), "bash is required")
     @unittest.skipIf(os.name == "nt", "the POSIX stub requires a POSIX shell")
-    def test_bash_exports_uv_allowlist_to_hook_process(self) -> None:
+    def test_bash_preserves_cwd_stdin_and_exit_code(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             capture = root / "capture.txt"
-            stub = root / "mise"
+            stub = root / "uv"
             stub.write_text(
                 '#!/bin/sh\n'
-                '{ printf "%s\\n" "$MISE_ENABLE_TOOLS" "$PWD" "$@"; cat; }'
+                '{ printf "%s\\n" "$PWD" "$@"; cat; }'
                 ' > "$HOOK_ENV_CAPTURE"\nexit "${HOOK_EXIT_CODE:-0}"\n',
                 encoding="utf-8",
             )
@@ -73,24 +157,23 @@ class CopilotHooksConfigTests(unittest.TestCase):
                         self.assertEqual(result.stdout, "")
                         lines = capture.read_text(encoding="utf-8").splitlines()
                         self.assertEqual(
-                            lines[:6],
-                            ["uv", str(root.resolve()), "exec", "--", "uv", "run"],
+                            lines[:2],
+                            [str(root.resolve()), "run"],
                         )
                         expected_script = command["bash"].split('"')[1].replace(
                             "$HOME", env["HOME"]
                         )
-                        self.assertEqual(lines[6], expected_script)
-                        self.assertEqual(lines[7:], ['{"toolName":"test"}'])
+                        self.assertEqual(lines[2], expected_script)
+                        self.assertEqual(lines[3:], ['{"toolName":"test"}'])
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
-    def test_powershell_exports_uv_allowlist_to_hook_process(self) -> None:
+    def test_powershell_preserves_cwd_stdin_and_exit_code(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             capture = root / "capture.txt"
-            stub = root / "mise.ps1"
+            stub = root / "uv.ps1"
             stub.write_text(
-                "@($env:MISE_ENABLE_TOOLS, (Get-Location).Path) + "
-                "@($args | Where-Object { $_ -ne '--' }) + "
+                "@((Get-Location).Path) + @($args) + "
                 "@([Console]::In.ReadToEnd().TrimEnd()) | "
                 "Set-Content -LiteralPath $env:HOOK_ENV_CAPTURE\n"
                 "exit ([int]$env:HOOK_EXIT_CODE)\n",
@@ -120,12 +203,10 @@ class CopilotHooksConfigTests(unittest.TestCase):
                         )
                         self.assertEqual(result.stdout, "")
                         lines = capture.read_text(encoding="utf-8-sig").splitlines()
-                        self.assertEqual(lines[:2], ["uv", str(root.resolve())])
-                        # Normalize the delimiter in the script stub; the prefix
-                        # assertion pins the literal token passed to native mise.
-                        self.assertEqual(lines[2:5], ["exec", "uv", "run"])
+                        self.assertEqual(lines[0], str(root.resolve()))
+                        self.assertEqual(lines[1], "run")
                         script_name = command["powershell"].rsplit("\\", 1)[1][:-1]
                         self.assertTrue(
-                            lines[5].endswith("\\.copilot\\hooks\\scripts\\" + script_name)
+                            lines[2].endswith("\\.copilot\\hooks\\scripts\\" + script_name)
                         )
-                        self.assertEqual(lines[6:], ['{"toolName":"test"}'])
+                        self.assertEqual(lines[3:], ['{"toolName":"test"}'])

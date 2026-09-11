@@ -17,7 +17,7 @@ allowlist をやめ、`run_onchange_after_21-link-mise-shims.sh.tmpl` 内で自�
 - `EXCLUDE_EXACT`: ランタイム本体など、リンクしない名前の完全一致
 - `EXCLUDE_PATTERN`: 実行可能な補助ファイルを除くワイルドカード
 
-具体的な除外対象は、同スクリプトの `EXCLUDE_EXACT` と `EXCLUDE_PATTERN` を正本とする。
+具体的な除外対象は、同スクリプトの `EXCLUDE_EXACT` と `EXCLUDE_PATTERN` で定義する。
 
 これ以外は全て `~/.local/bin` にリンクする。
 

@@ -7,7 +7,7 @@ set -euo pipefail
 # - Keep this after run_once_before_10-install-packages so package-manager prerequisites
 #   such as git/zsh/curl are already installed where needed.
 # - Keep this before run_once_after_20-mise-install so `mise install` has a bootstrapper.
-MISE_VERSION="v2026.8.10"
+MISE_VERSION="v2026.9.4"
 MISE_BIN_DIR="${HOME}/.local/bin"
 
 mise_path="$(command -v mise 2>/dev/null || true)"
@@ -106,15 +106,15 @@ sha256_file() {
 case "$(uname -s):$(uname -m)" in
   Darwin:arm64)
     mise_archive="mise-${MISE_VERSION}-macos-arm64.tar.gz"
-    expected_sha256="ac6ed53215e70abfb220524aed121bf02dbd3fbd4a19355032dd1c5a108fb212"
+    expected_sha256="989fa96f2c9eba80e0cc35b0887d69b8f5b25c17f54bc8676aa520e93450425f"
     ;;
   Linux:x86_64|Linux:amd64)
     mise_archive="mise-${MISE_VERSION}-linux-x64.tar.gz"
-    expected_sha256="e013fe11a0a9055fe78d2546baa85eba90a56e6445c431021b4fe328e6910fe2"
+    expected_sha256="2f4489c8e57e7d0fc1ad155691bacac5ed0c613c5e3acec2e42ecad8ace5ce3f"
     ;;
   Linux:aarch64|Linux:arm64)
     mise_archive="mise-${MISE_VERSION}-linux-arm64.tar.gz"
-    expected_sha256="5fd8a9ffb312b47e29f642d377ad4fa9093962b47061ef5c15665086904e1046"
+    expected_sha256="18303fdb59095acf0c50b0d23819b87182516988f9eb2ec016b52f8814916904"
     ;;
   *)
     echo "error: unsupported platform: $(uname -s) $(uname -m)" >&2

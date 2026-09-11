@@ -57,6 +57,16 @@ azure_cli_suite() {
 }
 
 {{ if eq .chezmoi.os "linux" -}}
+apt_get() {
+  sudo timeout --signal=INT --kill-after=30s 15m \
+    apt-get \
+    -o Acquire::Retries=3 \
+    -o Acquire::http::Timeout=30 \
+    -o Acquire::https::Timeout=30 \
+    -o DPkg::Lock::Timeout=60 \
+    "$@"
+}
+
 echo "Installing system packages via apt..."
 # git: ディストロ標準の git は設定ベースフック (git >= 2.54) に届かない
 # （Ubuntu 24.04 = 2.43、26.04 = 2.53 を確認）。
@@ -64,17 +74,17 @@ echo "Installing system packages via apt..."
 # PPA が使えない環境ではディストロ版のまま続行し、設定フックは無効になる
 # （chezmoi apply 時の run_after_40-check-git-hooks が警告する）。
 if ! command -v add-apt-repository >/dev/null 2>&1; then
-  sudo apt-get update -qq || echo "Warning: apt-get update had errors, continuing..." >&2
-  sudo apt-get install -y -qq software-properties-common
+  apt_get update -q || echo "Warning: apt-get update had errors, continuing..." >&2
+  apt_get install -y software-properties-common
 fi
 if ! sudo add-apt-repository -y ppa:git-core/ppa 2>/dev/null; then
   echo "Warning: could not add ppa:git-core/ppa; falling back to distro git (config-based hooks will be inactive)." >&2
 fi
 # サードパーティリポジトリのGPGキー期限切れ等でupdate全体が失敗することがあるため、警告に留める
-if ! sudo apt-get update -qq; then
+if ! apt_get update -q; then
   echo "Warning: apt-get update had errors (possibly from third-party repos), continuing..." >&2
 fi
-sudo apt-get install -y -qq \
+apt_get install -y \
   bash-completion \
   bubblewrap \
   curl \
@@ -196,9 +206,9 @@ if ! command -v gh >/dev/null 2>&1; then
     sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | \
       sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-    if ! sudo apt-get update -qq; then
+    if ! apt_get update -q; then
       echo "Warning: apt-get update failed for the GitHub CLI repository; skipping GitHub CLI installation." >&2
-    elif ! sudo apt-get install -y -qq gh; then
+    elif ! apt_get install -y gh; then
       echo "Warning: failed to install GitHub CLI from apt; continue and retry after network recovery." >&2
     fi
   fi
@@ -257,11 +267,11 @@ if ! command -v az >/dev/null 2>&1; then
     fi
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ ${repository_suite} main" | \
       sudo tee /etc/apt/sources.list.d/azure-cli.list >/dev/null
-    if ! sudo apt-get update -qq; then
+    if ! apt_get update -q; then
       echo "Warning: apt-get update failed for the Azure CLI repository; skipping Azure CLI installation." >&2
       exit 0
     fi
-    if ! sudo apt-get install -y -qq azure-cli; then
+    if ! apt_get install -y azure-cli; then
       echo "Warning: failed to install Azure CLI from apt; continue and retry after network recovery." >&2
     fi
   )
@@ -300,7 +310,7 @@ if ! command -v azd >/dev/null 2>&1; then
       echo "error: checksum verification failed for Azure Developer CLI" >&2
       exit 1
     fi
-    if ! sudo apt-get install -y -qq "${azd_deb}"; then
+    if ! apt_get install -y "${azd_deb}"; then
       echo "Warning: failed to install Azure Developer CLI; continue and retry after network recovery." >&2
     fi
   )

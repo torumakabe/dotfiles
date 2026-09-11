@@ -12,9 +12,21 @@ download_file() {
   output=$2
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "$output" "$url"
+    curl \
+      -fsSL \
+      --connect-timeout 15 \
+      --max-time 120 \
+      --retry 3 \
+      --retry-delay 2 \
+      -o "$output" \
+      "$url"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$output" "$url"
+    wget \
+      -q \
+      --timeout=120 \
+      --tries=4 \
+      -O "$output" \
+      "$url"
   else
     echo "error: curl or wget required to install chezmoi" >&2
     exit 1
@@ -123,6 +135,10 @@ if [ "${CHEZMOI_INSTALL_ONLY:-}" = "1" ]; then
   # dotfiles を適用せずにバイナリだけを導入する。CI がこの経路で
   # テスト用の chezmoi を入れる。
   exit 0
+fi
+
+if [ -n "${CHEZMOI_INIT_BRANCH:-}" ]; then
+  exec "$chezmoi" init --apply --branch "$CHEZMOI_INIT_BRANCH" torumakabe
 fi
 
 exec "$chezmoi" init --apply torumakabe

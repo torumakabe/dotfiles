@@ -1,18 +1,24 @@
 # /// script
 # requires-python = ">=3.13"
 # ///
-"""uv Enforcer — preToolUse hook that blocks direct python/pip execution.
+"""uv Enforcer — preToolUse hook for uv execution in Copilot shell tools.
 
 Ensures all Python operations go through uv (uv run, uv add, uv pip).
-Reads a JSON tool-call from stdin and emits a JSON permission decision on stdout.
+Allowed shell commands are updated to use a Copilot-owned writable uv cache.
 
 Run via: uv run uv-enforcer.py
 """
 from __future__ import annotations
 
+import base64
 import json
+import ntpath
+import os
+import posixpath
 import re
+import shlex
 import sys
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -23,6 +29,10 @@ from typing import Any
 def deny(reason: str) -> None:
     print(json.dumps({"permissionDecision": "deny", "permissionDecisionReason": reason}))
     sys.exit(0)
+
+
+def emit_modified_args(tool_args: dict[str, Any]) -> None:
+    print(json.dumps({"modifiedArgs": tool_args}))
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +128,7 @@ BLOCKED_COMMANDS: dict[str, str] = {
 
 VERSIONED_PYTHON_RE = re.compile(r"^python3(?:\.\d+)+(?:\.exe)?$")
 VERSIONED_PIP_RE = re.compile(r"^pip3(?:\.\d+)+(?:\.exe)?$")
+UV_CACHE_WRAPPER_MARKER = "# copilot-uv-cache-wrapper"
 
 
 def blocked_command_reason(command_name: str) -> str | None:
@@ -162,6 +173,59 @@ def check_command(command: str) -> str | None:
     return None
 
 
+def copilot_uv_cache_dir(
+    platform_name: str = sys.platform,
+    environ: Mapping[str, str] = os.environ,
+    home: str | None = None,
+) -> str:
+    """Return the Copilot-owned uv cache path used by sandbox shell commands."""
+    resolved_home = home or str(os.path.expanduser("~"))
+    if platform_name == "win32":
+        cache_home = environ.get("LOCALAPPDATA") or ntpath.join(
+            resolved_home, "AppData", "Local"
+        )
+        return ntpath.join(cache_home, "GitHubCopilot", "uv")
+    if platform_name == "darwin":
+        return posixpath.join(resolved_home, "Library", "Caches", "github-copilot", "uv")
+    cache_home = environ.get("XDG_CACHE_HOME") or posixpath.join(
+        resolved_home, ".cache"
+    )
+    return posixpath.join(cache_home, "github-copilot", "uv")
+
+
+def with_copilot_uv_cache(
+    tool_name: str,
+    tool_args: dict[str, Any],
+    cache_dir: str | None = None,
+) -> dict[str, Any] | None:
+    """Apply ADR-030 without exposing the cache path to runtime discovery."""
+    command = tool_args.get("command")
+    if tool_name not in ("bash", "powershell") or not isinstance(command, str) or not command:
+        return None
+    if command.startswith(f"{UV_CACHE_WRAPPER_MARKER}\n"):
+        return None
+
+    cache_dir = cache_dir or copilot_uv_cache_dir()
+    modified = dict(tool_args)
+    if tool_name == "powershell":
+        escaped = cache_dir.replace("'", "''")
+        encoded = base64.b64encode(command.encode("utf-16-le")).decode("ascii")
+        modified["command"] = (
+            f"{UV_CACHE_WRAPPER_MARKER}\n"
+            f"$env:UV_CACHE_DIR = '{escaped}'; "
+            "& ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) "
+            "-NoLogo -NoProfile -NonInteractive -OutputFormat Text "
+            f"-EncodedCommand '{encoded}'; "
+            "exit $LASTEXITCODE"
+        )
+    else:
+        modified["command"] = (
+            f"{UV_CACHE_WRAPPER_MARKER}\n"
+            f"export UV_CACHE_DIR={shlex.quote(cache_dir)};\n{command}"
+        )
+    return modified
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -188,7 +252,9 @@ def main() -> None:
     if reason:
         deny(reason)
 
-    return  # Command is fine — defer to CLI default
+    modified_args = with_copilot_uv_cache(tool_name, tool_args)
+    if modified_args is not None:
+        emit_modified_args(modified_args)
 
 
 if __name__ == "__main__":

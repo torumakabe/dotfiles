@@ -1,14 +1,46 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-if ! command -v gh >/dev/null 2>&1; then
+if gh_path="$(command -v gh 2>/dev/null)"; then
+  :
+elif command -v mise >/dev/null 2>&1 &&
+  gh_path="$(mise which gh 2>/dev/null)"; then
+  :
+else
   echo "Warning: gh-stack was not installed because GitHub CLI (gh) is not available. The next 'chezmoi apply' will retry." >&2
   exit 0
 fi
 
-if ! extension_list="$(gh extension list 2>/dev/null)"; then
+install_from_public_github() {
+  if GH_PAGER=cat PAGER=cat "${gh_path}" "$@"; then
+    return 0
+  fi
+
+  echo "Warning: authenticated GitHub API request failed. Retrying the public github/gh-stack repository without credentials." >&2
+
+  local anonymous_config status
+  if ! anonymous_config="$(mktemp -d)"; then
+    return 1
+  fi
+
+  env \
+    -u GH_TOKEN \
+    -u GITHUB_TOKEN \
+    GH_CONFIG_DIR="${anonymous_config}" \
+    GH_PROMPT_DISABLED=1 \
+    GH_PAGER=cat \
+    PAGER=cat \
+    "${gh_path}" "$@"
+  status=$?
+  rm -rf "${anonymous_config}"
+  return "${status}"
+}
+
+if ! extension_list="$("${gh_path}" extension list 2>/dev/null)"; then
   echo "Warning: could not inspect GitHub CLI extensions. The next 'chezmoi apply' will retry gh-stack installation." >&2
+  install_failed=1
 else
+  install_failed=0
   if ! printf '%s\n' "${extension_list}" | awk '{
     for (field = 1; field <= NF; field++) {
       if ($field == "github/gh-stack") {
@@ -17,14 +49,15 @@ else
     }
   }
   END { exit !found }'; then
-    if ! gh extension install github/gh-stack; then
+    if ! install_from_public_github extension install github/gh-stack; then
       echo "Warning: failed to install the github/gh-stack extension. The next 'chezmoi apply' will retry." >&2
+      install_failed=1
     fi
   fi
 fi
 
 if ! installed_skill="$(
-  gh skill list \
+  "${gh_path}" skill list \
     --agent github-copilot \
     --scope user \
     --json skillName \
@@ -32,15 +65,16 @@ if ! installed_skill="$(
     2>/dev/null
 )"; then
   echo "Warning: could not inspect GitHub Copilot skills. GitHub CLI 2.94 or later is required. The next 'chezmoi apply' will retry." >&2
-  exit 0
+  exit 1
 fi
 
 if [ "${installed_skill}" = "gh-stack" ]; then
-  exit 0
+  exit "${install_failed}"
 fi
 
-if ! gh skill install github/gh-stack gh-stack --agent github-copilot --scope user; then
+if ! install_from_public_github skill install github/gh-stack gh-stack --agent github-copilot --scope user; then
   echo "Warning: failed to install the github/gh-stack skill. The next 'chezmoi apply' will retry." >&2
+  install_failed=1
 fi
 
-exit 0
+exit "${install_failed}"

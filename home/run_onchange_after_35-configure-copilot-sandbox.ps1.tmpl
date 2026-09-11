@@ -1,14 +1,36 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 3
+# Copilot sandbox policy version: 5
 
 $ErrorActionPreference = 'Stop'
 
 $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
 $settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
+$dataHome = if ($env:XDG_DATA_HOME) {
+  $env:XDG_DATA_HOME
+} elseif ($env:LOCALAPPDATA) {
+  $env:LOCALAPPDATA
+} else {
+  Join-Path $HOME 'AppData\Local'
+}
+$miseDataDir = if ($env:MISE_DATA_DIR) { $env:MISE_DATA_DIR } else { Join-Path $dataHome 'mise' }
+$miseInstalls = if ($env:MISE_INSTALLS_DIR) { $env:MISE_INSTALLS_DIR } else { Join-Path $miseDataDir 'installs' }
+# ADR-030 keeps this repo-owned cache separate from runtime-discovered uv caches.
+$copilotUvCacheHome = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME 'AppData\Local' }
+$copilotUvCacheParent = Join-Path $copilotUvCacheHome 'GitHubCopilot'
+$copilotUvCacheDir = Join-Path $copilotUvCacheParent 'uv'
 New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+
+$trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+$miseDataFullPath = [System.IO.Path]::GetFullPath($miseDataDir).TrimEnd($trimChars)
+$miseInstallsFullPath = [System.IO.Path]::GetFullPath($miseInstalls).TrimEnd($trimChars)
+$miseDataPrefix = $miseDataFullPath + [System.IO.Path]::DirectorySeparatorChar
+$installsUnderData = (
+  $miseInstallsFullPath.Equals($miseDataFullPath, [System.StringComparison]::OrdinalIgnoreCase) -or
+  $miseInstallsFullPath.StartsWith($miseDataPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+)
 
 $desiredSettings = @'
 {{ include ".chezmoitemplates/copilot-user-settings.json" }}
@@ -41,8 +63,8 @@ function Set-JsonProperty {
 
 function Get-JsonArrayOrEmpty {
   param($Value)
-  if ($null -eq $Value) { return ,@() }
-  return ,@($Value)
+  if ($null -eq $Value) { return @() }
+  return @($Value)
 }
 
 function Get-JsonProperty {
@@ -85,6 +107,86 @@ function Remove-JsonProperty {
 
   if ($null -ne $Object -and $Object.PSObject.Properties[$Name]) {
     $Object.PSObject.Properties.Remove($Name)
+  }
+}
+
+function ConvertTo-NormalizedPolicyPath {
+  param([Parameter(Mandatory = $true)] [string] $Path)
+
+  $expandedPath = if ($Path -eq '~') {
+    $HOME
+  } elseif ($Path.StartsWith('~/') -or $Path.StartsWith('~\')) {
+    Join-Path $HOME $Path.Substring(2)
+  } else {
+    $Path
+  }
+  $fullPath = [System.IO.Path]::GetFullPath($expandedPath)
+  $root = [System.IO.Path]::GetPathRoot($fullPath)
+  if ($fullPath.Equals($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $root
+  }
+  return $fullPath.TrimEnd($trimChars)
+}
+
+function Test-PolicyPathMatch {
+  param(
+    [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $Paths,
+    [Parameter(Mandatory = $true)] [string] $Target
+  )
+
+  $normalizedTarget = ConvertTo-NormalizedPolicyPath -Path $Target
+  foreach ($path in $Paths) {
+    if (
+      $path -is [string] -and
+      -not [string]::IsNullOrWhiteSpace($path) -and
+      (ConvertTo-NormalizedPolicyPath -Path $path).Equals(
+        $normalizedTarget,
+        [System.StringComparison]::OrdinalIgnoreCase
+      )
+    ) {
+      return $true
+    }
+  }
+  return $false
+}
+
+function Test-PolicyPathContainsTarget {
+  param(
+    [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $Paths,
+    [Parameter(Mandatory = $true)] [string] $Target
+  )
+
+  $normalizedTarget = ConvertTo-NormalizedPolicyPath -Path $Target
+  foreach ($path in $Paths) {
+    if ($path -isnot [string] -or [string]::IsNullOrWhiteSpace($path)) {
+      continue
+    }
+    $normalizedPath = ConvertTo-NormalizedPolicyPath -Path $path
+    $pathRoot = [System.IO.Path]::GetPathRoot($normalizedPath)
+    $pathPrefix = if ($normalizedPath.Equals($pathRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+      $normalizedPath
+    } else {
+      $normalizedPath + [System.IO.Path]::DirectorySeparatorChar
+    }
+    if (
+      $normalizedTarget.Equals($normalizedPath, [System.StringComparison]::OrdinalIgnoreCase) -or
+      $normalizedTarget.StartsWith($pathPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+    ) {
+      return $true
+    }
+  }
+  return $false
+}
+
+function Assert-ManagedCachePathIsNotReparsePoint {
+  foreach ($managedCachePath in @($copilotUvCacheParent, $copilotUvCacheDir)) {
+    if (Test-Path -LiteralPath $managedCachePath) {
+      $item = Get-Item -LiteralPath $managedCachePath -Force
+      if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        Write-Error "Managed Copilot uv cache path is a reparse point: $managedCachePath"
+        exit 1
+      }
+    }
   }
 }
 
@@ -140,9 +242,51 @@ $userPolicy = if ($null -ne $existingPolicy) { $existingPolicy } else { [pscusto
 $filesystem = if ($null -ne $existingFilesystem) { $existingFilesystem } else { [pscustomobject]@{} }
 $network = if ($null -ne $existingNetwork) { $existingNetwork } else { [pscustomobject]@{} }
 
-Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths'))
-Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
-Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
+$readwritePaths = @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths'))
+$readonlyPaths = @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
+$deniedPaths = @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
+$managedReadonlyPaths = @($miseDataDir)
+if (-not $installsUnderData) {
+  $managedReadonlyPaths += $miseInstalls
+}
+$managedReadwritePaths = @($copilotUvCacheDir)
+
+foreach ($managedPath in $managedReadonlyPaths) {
+  if (Test-PolicyPathContainsTarget -Paths $deniedPaths -Target $managedPath) {
+    Write-Error "$settingsPath has sandbox.userPolicy.filesystem.deniedPaths conflicting with managed mise path: $managedPath"
+    exit 1
+  }
+  if (
+    -not (Test-PolicyPathMatch -Paths $readwritePaths -Target $managedPath) -and
+    -not (Test-PolicyPathMatch -Paths $readonlyPaths -Target $managedPath)
+  ) {
+    $readonlyPaths += $managedPath
+  }
+}
+
+foreach ($managedPath in $managedReadwritePaths) {
+  if (Test-PolicyPathContainsTarget -Paths $deniedPaths -Target $managedPath) {
+    Write-Error "$settingsPath has sandbox.userPolicy.filesystem.deniedPaths conflicting with managed Copilot uv cache path: $managedPath"
+    exit 1
+  }
+  if (Test-PolicyPathContainsTarget -Paths $readonlyPaths -Target $managedPath) {
+    Write-Error "$settingsPath has sandbox.userPolicy.filesystem.readonlyPaths conflicting with managed Copilot uv cache path: $managedPath"
+    exit 1
+  }
+  if (-not (Test-PolicyPathMatch -Paths $readwritePaths -Target $managedPath)) {
+    $readwritePaths += $managedPath
+  }
+}
+
+Assert-ManagedCachePathIsNotReparsePoint
+New-Item -ItemType Directory -Path $miseDataDir -Force | Out-Null
+New-Item -ItemType Directory -Path $miseInstalls -Force | Out-Null
+New-Item -ItemType Directory -Path $copilotUvCacheDir -Force | Out-Null
+Assert-ManagedCachePathIsNotReparsePoint
+
+Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value $readwritePaths
+Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value $readonlyPaths
+Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value $deniedPaths
 Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
 
 Set-JsonProperty -Object $network -Name 'allowOutbound' -Value $true
@@ -205,5 +349,6 @@ try {
   }
 }
 
-Write-Host "Configured Copilot CLI local sandbox in $settingsPath"
+$enabledText = ([string](Get-JsonProperty -Object $sandbox -Name 'enabled')).ToLowerInvariant()
+Write-Host "Updated Copilot CLI sandbox policy in $settingsPath (sandbox.enabled=$enabledText)"
 {{- end -}}

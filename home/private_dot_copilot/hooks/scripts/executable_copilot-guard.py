@@ -511,6 +511,15 @@ def _command_segments(tokens: list[str]) -> list[list[str]]:
     return segments
 
 
+def _segment_command_start(segment: list[str], shell: str) -> int:
+    """Skip the PowerShell grouping added by the ADR-030 uv wrapper."""
+    index = 0
+    if shell == "powershell":
+        while index < len(segment) and segment[index] in ("{", "}"):
+            index += 1
+    return index
+
+
 def extract_command_candidates(command: str, shell: str | None = None) -> list[str]:
     """Extract path-like command tokens using the selected shell's quote rules."""
     candidates: list[str] = []
@@ -708,7 +717,9 @@ def check_env_access(command: str, shell: str = "bash") -> str | None:
     normalized = " ".join(shell_tokens)
 
     for seg_tokens in segments:
-        if seg_tokens:
+        start = _segment_command_start(seg_tokens, shell)
+        if start < len(seg_tokens):
+            seg_tokens = seg_tokens[start:]
             seg_lead = seg_tokens[0]
             if seg_lead in ENV_DUMP_COMMANDS:
                 return f"Blocked env dump command: {seg_lead}"
@@ -804,7 +815,7 @@ def _has_git_commit(command: str, shell: str = "bash") -> bool:
     for seg in segments:
         if not seg:
             continue
-        idx = 0
+        idx = _segment_command_start(seg, shell)
         # Skip env-var assignments before the command (VAR=value …).
         while idx < len(seg) and re.match(r"^[A-Za-z_]\w*=", seg[idx]):
             idx += 1

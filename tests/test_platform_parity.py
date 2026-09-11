@@ -102,7 +102,7 @@ PLATFORM_CONTRACT = {
     "shell:ll": _implemented_everywhere(),
     "shell:copilot-guardrails": _implemented_everywhere(),
     "shell:mise-executable-environment": _implemented_everywhere(),
-    "shell:copilot-hook-mise-exec": _implemented_everywhere(),
+    "shell:copilot-hook-direct-uv": _implemented_everywhere(),
     "shell:copilot-winget-launcher": _windows_only(
         "exception: docs/troubleshooting.md WindowsApps execution alias workaround"
     ),
@@ -350,8 +350,11 @@ class PlatformParityTests(unittest.TestCase):
                 self.assertNotIn('__add_path "${HOME}/.local/share/mise/shims"', profile)
         self.assertIn("mise activate pwsh", self.powershell)
         self.assertIn("mise activate zsh", self.zshrc)
+        config = (REPO_ROOT / "home/dot_config/mise/config.toml.tmpl").read_text()
+        self.assertIn("activate_shims = false", config)
+        self.assertIn("activate_aggressive = true", config)
 
-    def test_copilot_hook_mise_exec_is_shared_by_all_platforms(self) -> None:
+    def test_copilot_hook_direct_uv_is_shared_by_all_platforms(self) -> None:
         hooks = json.loads(
             (REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json").read_text()
         )["hooks"]
@@ -360,7 +363,8 @@ class PlatformParityTests(unittest.TestCase):
                 for platform in PLATFORMS:
                     with self.subTest(platform=platform, command=command):
                         key = "powershell" if platform == "windows-powershell" else "bash"
-                        self.assertIn("mise exec -- uv run ", command[key])
+                        self.assertIn("uv run ", command[key])
+                        self.assertNotIn("mise exec", command[key])
                         self.assertEqual(command["cwd"], ".")
 
     def test_gh_stack_contract_components_exist_for_each_platform(self) -> None:
@@ -378,13 +382,20 @@ class PlatformParityTests(unittest.TestCase):
                     if feature == "skill:gh-stack":
                         self.assertIn(
                             "--agent github-copilot --scope user",
-                            source,
+                            " ".join(source.split()),
                         )
                     else:
-                        self.assertIn(
-                            "gh extension install github/gh-stack",
-                            source,
-                        )
+                        if platform == "windows-powershell":
+                            self.assertIn(
+                                "'extension', 'install', 'github/gh-stack'",
+                                " ".join(source.split()),
+                            )
+                        else:
+                            self.assertIn(
+                                "install_from_public_github extension install "
+                                "github/gh-stack",
+                                " ".join(source.split()),
+                            )
 
     def test_exceptions_reference_relevant_existing_documentation(self) -> None:
         checked_features = set()

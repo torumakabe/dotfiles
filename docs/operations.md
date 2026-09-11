@@ -19,7 +19,7 @@
 `mise` 設定や導入元を見直すときに、次の制約が残っているか確認する。解消されていれば条件分岐やワークアラウンドを外せる。
 
 - **cargo-make**: linux/arm64 向け配布なし
-- **npm:typescript-language-server**: 利用中の npm レジストリプロキシが trusted publisher の証跡を保持しない版だけを `trust_policy_excludes` の対象とする。対象版は `home/dot_config/mise/config.toml.tmpl` を正本とする
+- **npm:typescript-language-server**: 利用中の npm レジストリプロキシが trusted publisher の証跡を保持しない版だけを `trust_policy_excludes` の対象とする。対象版は `home/dot_config/mise/config.toml.tmpl` で定義する
 - **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式 `.deb`、更新は `azd update`）
 - **copilot-cli**: mise の `github:` バックエンドで更新遅延やバージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式リリースアーカイブ、更新は `copilot update`）
 - **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
@@ -29,6 +29,8 @@ TypeScript language server の除外を撤去するときは、`home/dot_config/
 ## gh-stack の更新
 
 セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
+
+Codespacesなどで現在の`gh`認証tokenが公開`github/gh-stack`へのAPI要求をSAML enforcementにより拒否された場合、セットアップスクリプトは同じ公式`gh`コマンドを資格情報なしで再実行する。匿名実行は一時的な`GH_CONFIG_DIR`を使い、既存の認証設定を変更しない。匿名APIのrate limitでも失敗した場合は`chezmoi apply`を異常終了させ、未導入のまま成功を報告しない。
 
 更新前には、skill と extension の候補を確認する。
 
@@ -43,7 +45,11 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を保持する。文字列、数値、真偽値、オブジェクトなどの非配列値は、設定ファイルを書き換える前にエラーとして拒否する。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を保持する。`readonlyPaths` にはmise data rootを重複なく追加し、`MISE_INSTALLS_DIR`がdata rootの外を指す場合はそのディレクトリも追加する。data rootは`MISE_DATA_DIR`、`XDG_DATA_HOME`、OSの既定値の順で決まり、Windowsでは`LOCALAPPDATA`が未設定の場合に`~/AppData/Local`を使う。同じpathが`readwritePaths`にある場合は既存のwrite grantを維持し、`readonlyPaths`へ追加しない。`deniedPaths`にある場合は拒否設定を上書きせず、設定ファイルを変更する前にエラーで停止する。
+
+`readwritePaths` には Copilot 専用 uv cache directory だけを追加する。macOS は `~/Library/Caches/github-copilot/uv`、Linux 系は `${XDG_CACHE_HOME:-~/.cache}/github-copilot/uv`、Windows は `%LOCALAPPDATA%\GitHubCopilot\uv` を使う。preToolUse hook は Node.js の規則、Copilot Guard、Python の規則と cache 設定の順に実行する。`uv-enforcer.py` は、許可する shell command の `modifiedArgs` へ `UV_CACHE_DIR` の設定を追加する。PowerShell command は同じ PowerShell 実体の子プロセスへ `EncodedCommand` として渡し、子プロセスの終了コードを tool call へ返す。host の環境変数と uv の global config は変更しない。設定同期は grant 対象を作成してから settings を書き込む。専用 cache path またはその親が既存の `readonlyPaths` または `deniedPaths` にある場合は制限を解除せず、設定ファイルを変更する前にエラーで停止する。管理対象の `github-copilot` directory または `uv` directory が symbolic link か Windows の reparse point である場合も停止する。各 path 配列が文字列、数値、真偽値、オブジェクトなどの非配列値の場合もエラーとして拒否する。
+
+mise data root、外部 installs directory、XDG cache home を移動した場合は、`chezmoi apply --force` で同期スクリプトを再実行する。同期後は `readonlyPaths` と `readwritePaths` を確認し、旧 directory の entry を手動で除去する。既存 entry とリポジトリが追加した entry を設定ファイルだけで判別できないため、同期処理は旧 entry を自動削除しない。hook 設定を反映するため、適用後は Copilot CLI を再起動する。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 
@@ -72,37 +78,115 @@ chezmoi diff && chezmoi apply
 
 macOS と Linux は、`home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。Windows は DSC の `jdx.mise` を使い、winget が公式 GitHub Releases ZIP を配置する。導入経路は OS ごとに異なるが、全 OS で mise の公式成果物を使う（[ADR-027](adr/027-mise-install-from-official-artifacts-per-os.md)）。
 
+macOS と Linux の固定版には、共通設定の `activate_shims` を認識する mise 2026.9.4 以降を使う。2026.8.10 はこの設定を未知のフィールドとして無視するため、shim を除外する契約を満たさない。
+
 macOS に Homebrew formula の mise がある場合、現在解決される mise が formula の実体であるか、mise が未解決のときだけ、導入スクリプトは検証済みの公式バイナリを原子的に配置する。現在 `command -v mise` で解決される formula 以外の mise、または標準配置先 `~/.local/bin/mise` にある実行可能な mise は置き換えない。PATH 外の任意の場所は探索しない。現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、導入スクリプトは formula を削除しない。Homebrew 版の activation を読み込んだ既存のシェルをすべて終了し、新しいシェルで `command -v mise` が導入スクリプトの案内したパスを返すことを確認してから、`brew uninstall mise` を手動で実行する。
 
 ### 実体環境への切替
 
-mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定し、Copilot の全5 command hook は host 上で `MISE_ENABLE_TOOLS=uv mise exec -- uv run ...` を使う。Windows は既存の PowerShell activation から実体環境を継承する。
+mise の導入、lock、通常更新は維持する。Unix の共有 profile は公式 `mise env` で実体 PATH と SDK 環境を設定する。対話 zsh と PowerShell は公式の `mise activate` を維持する。共通設定の `activate_shims = false` で shim farm を PATH から除外し、`activate_aggressive = true` で OS や他のパッケージ管理ツールが提供する同名コマンドより mise の実体 PATH を優先する。Copilot の全5 command hook は host 上で `uv run ...` を使う。Windows ではユーザー PATH の shim 登録を非対話環境との互換性のため維持するため、Copilot CLI は PowerShell profile を読み込んだターミナルから起動する。
 
-変更対象の profile と `~/.copilot/hooks/hooks.json` を、端末内の専用作業ディレクトリへ属性とリンクを保持して退避する。CLI 実体を更新する場合はその実体も、uv backend を変更する場合は次節の対象も退避する。元の不在と変更前後の内容を記録し、並行変更を復元で上書きしない。
+切替の受け入れ条件は、Copilot の sandbox 内で宣言済みの mise 管理ツールがすべて shim を経由せず実体から解決することである。uv は command hook が必要とするため確認の起点になるが、条件は uv だけに限らない。設定に宣言していないツールの shim は過去の導入の残骸であり、shim 経由でも版を解決できないため、この条件の対象から除く。
 
-Unix では `.profile`、`.zprofile`、`.zshenv` を一組として反映する。新しい親ターミナルから CLI を起動し、GUI は通常の起動方法で別に確認する。古い環境や login snapshot を持つアプリと CLI を再起動し、同じプロセス内で子シェルだけを作って反映済みとは判断しない。最初の hook で mise 自体と uv の解決先を確認する。通常 agent shell から見つかることは、hook の親 PATH から見つかる証拠にはならない。
+変更対象の profile と `~/.copilot/hooks/hooks.json` を、端末内の専用作業ディレクトリへ属性とリンクを保持して退避する。CLI 実体を更新する場合はその実体も退避する。元の不在と変更前後の内容を記録し、並行変更を復元で上書きしない。
+
+Unix では `.profile`、`.zprofile`、`.zshenv` を一組として反映する。新しい親ターミナルから CLI を起動し、GUI は通常の起動方法で別に確認する。古い環境や login snapshot を持つアプリと CLI を再起動し、同じプロセス内で子シェルだけを作って反映済みとは判断しない。最初の hook で uv の解決先を確認する。通常 agent shell から見つかることは、hook の親 PATH から見つかる証拠にはならない。
+
+受け入れ条件は、各環境の sandbox 内で確認する。対象の名前は `mise bin-paths` が返す実体ディレクトリの実行ファイルから取る。名前の出所を宣言側に置くことで、shim の有無に依存せず、宣言していないツールの残骸も混ざらない。
+
+確認は host と sandbox の2段に分ける。Windows の sandbox 内では mise が global config を読めず `mise bin-paths` が空を返すため、名前の一覧は host 側で作る。まず host のターミナルで一覧を作る。
+
+```sh
+mise bin-paths | while read -r dir; do
+    for file in "$dir"/*; do
+        [ -x "$file" ] && [ ! -d "$file" ] &&
+            printf '%s\t%s\n' "$(basename "$file")" "$file"
+    done
+done | awk -F '\t' '!seen[$1]++' > "$HOME/mise-tool-paths.tsv"
+wc -l < "$HOME/mise-tool-paths.tsv"
+```
+
+```powershell
+$extensions = $env:PATHEXT -split ';'
+$seen = @{}
+& mise bin-paths | ForEach-Object {
+    Get-ChildItem -LiteralPath $_ -File -ErrorAction SilentlyContinue |
+        Where-Object { $extensions -contains [IO.Path]::GetExtension($_.Name) } |
+        ForEach-Object {
+            $extension = [IO.Path]::GetExtension($_.Name)
+            $name = $_.Name.Substring(0, $_.Name.Length - $extension.Length)
+            if (-not $seen.ContainsKey($name)) { $seen[$name] = $_.FullName }
+        }
+}
+$seen.GetEnumerator() | Sort-Object Name | ForEach-Object {
+    "{0}`t{1}" -f $_.Name, $_.Value
+} | Set-Content -LiteralPath (Join-Path $env:USERPROFILE 'mise-tool-paths.tsv')
+```
+
+次に sandbox 内で解決先を確認する。zsh と bash では次を実行する。
+
+```sh
+entries=$(cat "$HOME/mise-tool-paths.tsv")
+[ -n "$entries" ] || printf '%s\n' "no entries: the host list is empty"
+printf '%s\n' "$entries" | while IFS="$(printf '\t')" read -r name expected; do
+    [ -n "$name" ] && [ -n "$expected" ] || continue
+    resolved=$(command -v "$name") || { printf '%s\n' "unresolved: $name"; continue; }
+    case "$resolved" in
+        "$expected") ;;
+        */shims/*) printf '%s\n' "via shim: $name -> $resolved (expected $expected)" ;;
+        *) printf '%s\n' "outside mise bin paths: $name -> $resolved (expected $expected)" ;;
+    esac
+done
+```
+
+PowerShell では次を実行する。
+
+```powershell
+$entries = Get-Content -LiteralPath (Join-Path $env:USERPROFILE 'mise-tool-paths.tsv')
+if (-not $entries) { 'no entries: the host list is empty' }
+$entries | ForEach-Object {
+    $name, $expected = $_ -split "`t", 2
+    $resolved = (Get-Command $name -ErrorAction SilentlyContinue).Source
+    if (-not $resolved) { "unresolved: $name" }
+    elseif ($resolved -like '*\shims\*') {
+        "via shim: $name -> $resolved (expected $expected)"
+    }
+    elseif (-not [IO.Path]::GetFullPath($resolved).Equals(
+        [IO.Path]::GetFullPath($expected),
+        [StringComparison]::OrdinalIgnoreCase
+    )) {
+        "outside mise bin paths: $name -> $resolved (expected $expected)"
+    }
+}
+```
+
+出力が空であれば条件を満たす。一覧が空のときは `no entries` を出す。空の一覧は該当なしと区別できず、確認できていない状態だからである。shim だけでなく、system や Homebrew の同名コマンドが mise の実体より先に選ばれた場合も報告する。Windows の sandbox 内では `LOCALAPPDATA` がパッケージ配下へリダイレクトされるため、host 側で記録した実体パスとの比較を使う。出力がある名前は切替の失敗として扱う。確認後は一覧のファイルを削除する。
+
+受け入れ確認はbuilt-in shellへscript本体を直接渡す。`bash -lc`、`bash -c`、`zsh -c`、profileを読む`pwsh`などを挟むと、shell初期化がsandbox内でmiseを再実行し、継承された`PATH`とは別の条件を測ることになる。子shell自体の互換性を確認する場合は、通常実行の合否と分けて記録する。
 
 Linux の CLI 初回導入版は1.0.83である。既存 CLI は初回導入処理では更新されないため、1.0.80以前の場合は導入元の標準更新方法を使う。GUI 同梱 runtime は別に版と login-shell 環境取得の有無を確認する。
 
-失敗時は変更後の対象を保存してから、退避した profile、hook、更新した CLI 実体を復元し、新しい親プロセスから旧コマンドを起動する。新規作成したファイルは、変更後の内容から変わっていない場合だけ除去して元の不在へ戻す。既存ファイルに別の変更があれば上書きせず停止する。uv の復元は次節に従う。
+失敗時は変更後の対象を保存してから、退避した profile、hook、更新した CLI 実体を復元し、新しい親プロセスから旧コマンドを起動する。新規作成したファイルは、変更後の内容から変わっていない場合だけ除去して元の不在へ戻す。既存ファイルに別の変更があれば上書きせず停止する。
 
 macOS の shim リンクと Windows User PATH の shim 登録は、この変更では撤去しない。後で撤去する場合は、macOS の対象リンク、リンク先、管理state（`${XDG_STATE_HOME:-$HOME/.local/state}/chezmoi-dotfiles/mise-shim-links`）、Windows User PATH の変更部分を追加で退避する。Windows は変更した要素の位置を記録し、他の PATH 要素を巻き戻さずに復元する。並行変更で安全に復元できない場合は停止する。登録を撤去する前に復元手順を確認する。
 
-実体と依存先の解決、更新と復元の結果は、sandbox 内の実作業結果と分けて記録する。Windows の uv rename/persist 障害や Linux/WSL の cache アクセス方針を、この切替の停止理由にはしない。新たな失敗は変更との関係を切り分け、未実行の処理を成功と推定しない。
+実体と依存先の解決、更新と復元の結果は、sandbox 内の実作業結果と分けて記録する。新たな失敗は変更との関係を切り分け、未実行の処理を成功と推定しない。
 
 ### uv の backend 移行
 
-uv は `github:astral-sh/uv` backend で管理する。新規環境は通常の導入でよい。既存の aqua install は、同じ版のまま backend を変更しても再導入されないことがあるため、一度だけ `--force` で入れ直す。以後は通常の `mise-upgrade` で更新し、毎回の force reinstall や PATH の手動同期は行わない。
+uv は `github:astral-sh/uv` backend で管理する。新規環境は全OSで通常の導入を使う。既存のaqua installは、同じ版のままbackendを変更しても再導入されないことがある。macOS、Linux、WSLでは、この節の`--force`手順で一度だけ入れ直す。既存のWindows環境は、退避と復元を含む[Windowsの直接移行手順](../tests/manual/windows-uv/direct-migration.md)を使う。以後は通常の`mise-upgrade`で更新し、毎回のforce reinstallやPATHの手動同期は行わない。
 
 移行時は版と backend を同時に変更しない。global config と隣接 lock の両方を使い、uv の版、各対象の URL/checksum、provenance が従来と一致することを確認する。alias だけを変更して旧 lock を残すと、旧 backend が復元される場合がある。ソース名 `home/dot_config/mise/private_mise.lock` は、端末では `~/.config/mise/mise.lock` になる。
 
+以下の手順はmacOS、Linux、WSLの既存環境に適用する。Windowsでは実行せず、上記の直接移行手順に従う。
+
 1. 運用者は対象端末の uv/uvx を使う処理、Copilot、他の mise 更新と chezmoi apply を止める。プロジェクト設定が混ざらない作業ディレクトリで `mise config ls`、`mise tool uv --json`、`mise where uv`、`mise cache path` を確認する。
-2. 運用者は端末内の専用ディレクトリに config/lock、`installs/uv`、`installs/.mise-installs.toml`、shims 内の uv/uvx 関連ファイル、mise の `cache/uv` を退避する。Windows の拡張子付き shim、metadata、runtime link も対象にし、リンクはリンクとして保持する。不在だった対象も記録し、保存先のアクセス権を元より広げない。
+2. 運用者は端末内の専用ディレクトリに config/lock、`installs/uv`、`installs/.mise-installs.toml`、shims 内の uv/uvx 関連ファイル、mise の `cache/uv` を退避する。リンクはリンクとして保持する。不在だった対象も記録し、保存先のアクセス権を元より広げない。
 3. config と lock の uv 以外に端末固有の変更がない場合は、下記の対象限定 apply で両ファイルを反映する。固有変更がある場合は先に差分を整理し、uv の宣言、alias、uv の lock entry 群だけを反映する。
 4. 運用者は既存の GitHub 認証を使って、下記の `mise --locked install --force uv` を一度実行する。`uv@<version>` ではなく設定と同じ `uv` を要求し、版は lock で固定する。`--force` は途中で旧実体を削除するため、退避前に実行しない。通常の同期フックや `reshim` はこの操作の代用にならない。
-5. 運用者は `mise tool uv --json`、`mise ls uv`、`mise which uv`、`mise which uvx` で backend が GitHub、missing なし、実体のディレクトリが選ばれることを確認する。その後、新しい親ターミナルから起動した Copilot で `command -v uv`（PowerShell は `Get-Command uv`）、uv/uvx の版表示を確認する。実体への到達と cache を使う処理の成否は区別する。
+5. 運用者は `mise tool uv --json`、`mise ls uv`、`mise which uv`、`mise which uvx` で backend が GitHub、missing なし、実体のディレクトリが選ばれることを確認する。その後、新しい親ターミナルから起動した Copilot で `command -v uv`とuv/uvxの版表示を確認する。実体への到達と cache を使う処理の成否は区別する。
 
-設定ファイルだけの反映（全 OS 共通。更新済みの source を使う）:
+設定ファイルだけの反映（更新済みのsourceを使う）:
 
 ```sh
 chezmoi apply --exclude=scripts "$HOME/.config/mise/config.toml" "$HOME/.config/mise/mise.lock"
@@ -122,23 +206,6 @@ macOS / Linux / WSL の通常ターミナル:
 )
 ```
 
-Windows の通常 PowerShell:
-
-```powershell
-$previousToken = $env:GITHUB_TOKEN
-try {
-    $token = gh auth token
-    if ($LASTEXITCODE -ne 0 -or -not $token) { throw "Existing GitHub authentication is unavailable" }
-    $env:GITHUB_TOKEN = $token
-    mise --locked install --force uv
-    if ($LASTEXITCODE -ne 0) { throw "uv backend migration failed; restore the backup" }
-}
-finally {
-    $env:GITHUB_TOKEN = $previousToken
-    $token = $null
-}
-```
-
 失敗した場合、運用者は失敗後の uv 関連ファイルを退避し、保存した config/lock、uv の実体、metadata、shim、cache を元へ復元する。共有 manifest 全体を戻してよいのは、uv 以外に並行変更がない場合だけである。別の編集があれば上書きせず、差分を確認する。新しいターミナルで旧構成の uv/uvx が起動するまでバックアップを残し、再ダウンロードだけを復元手段にしない。
 
 lock の更新では、終了コード0だけで完了と判定しない。指定した5対象、各 options に対応する entry、`latest` を含む specifiers、URL/checksum と provenance を確認する。API 制限で対象が skipped になる場合は、既存認証をコマンドへ渡してから再生成する。uv 固有の配置と Windows ARM64 の扱いは [構造の説明](architecture.md#uv-の実体配置) を参照する。
@@ -153,7 +220,7 @@ mise-self-upgrade
 
 このコマンドは `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、更新があった場合は続けて `mise reshim` を実行する。更新がない場合は正常終了する。winget portable package の symlink 判定により通常の upgrade が「変更済み」と誤検知されることがあるため、mise 本体の更新ではこの関数を使う。
 
-Copilot CLI など mise shim 経由のプロセスが動いていると winget が `mise.exe` を削除できないため、実行前に検出して停止を促す。
+Copilot CLI など mise の実体または shim から起動したプロセスが動いていると winget が `mise.exe` を削除できないため、実行前に検出して停止を促す。
 
 ### `mise-upgrade`
 
@@ -174,7 +241,9 @@ mise-upgrade
 
 ### 対象プラットフォームの定義元
 
-対象プラットフォームは `~/.config/mise/config.toml` の `[settings] lockfile_platforms` が正本である。この設定は、auto-lock（`mise install` が実インストール後に走らせる書き戻し）と `--platform` を省略した `mise lock` が使う基準集合を決める。
+対象プラットフォームは `~/.config/mise/config.toml` の `[settings] lockfile_platforms` で定義する。この設定は、auto-lock（`mise install` が実インストール後に走らせる書き戻し）と `--platform` を省略した `mise lock` が使う基準集合を決める。
+
+初回導入とlockfile同期スクリプトは、`mise install`の前に管理対象lockfileを退避する。auto-lockで内容が変化した場合は実行後に元の内容へ復元し、復元に失敗した場合はスクリプトを異常終了させる。スクリプト外で実行する`mise install`と`mise upgrade`にはこの保護がない。
 
 ```toml
 [settings]
@@ -260,9 +329,9 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 ## Bootstrap / shell pin の更新
 
-初期セットアップ系スクリプトは、上流の最新版をその場で実行しない。ダウンロードする成果物はバージョンと公式 SHA-256、Git から取得するソースは完全な commit SHA で固定する。各値は、その値を定義するスクリプトを正本とする。
+初期セットアップ系スクリプトは、上流の最新版をその場で実行しない。ダウンロードする成果物はバージョンと公式 SHA-256、Git から取得するソースは完全な commit SHA で固定する。各値は、その値を定義するスクリプトで管理する。
 
-| 正本 | pin |
+| 管理元 | pin |
 |------|-----|
 | `install.sh` | `CHEZMOI_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_before_20-install-mise.sh.tmpl` | `MISE_VERSION` とアーキテクチャ別 SHA-256 |
@@ -273,6 +342,8 @@ GITHUB_TOKEN=$(gh auth token) mise install
 成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。現在の draw.io 配布フローには公式 checksum がないため、更新担当者が対象リリース asset の SHA-256 を計算し、上流リリースの出所と asset を確認してから pin を更新する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
+
+Linuxの初回パッケージ導入では、aptのHTTPとHTTPS通信を30秒で打ち切り、3回まで再試行する。dpkgのロック待機は60秒、1回のapt処理全体は15分を上限とする。パッケージ導入の出力は進捗を確認できる粒度で表示し、通信が停止した状態を無期限に待たない。
 
 `run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。macOS の Homebrew formula から公式バイナリへの移行だけは例外であり、解決される mise が formula の実体である場合、または mise が未解決の場合に移行処理を実行する。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
@@ -296,6 +367,8 @@ sed '/^[[:space:]]*{{/d' home/run_once_after_30-install-tools.sh.tmpl | bash -n
 dotfiles は `devcontainer.json` から適用しない。VS Code の Dotfiles ユーザ設定は `README.md` の「Dev Container (ローカル)」節に従う。この設定がないコンテナにはテストに必要なツールが入らない。
 
 VS Code の Dev Containers 拡張は Dotfiles セットアップコマンドへ `REMOTE_CONTAINERS=true` を渡す。chezmoi は初期化時にこの値を `.devcontainer` として設定へ保存する。統合ターミナルでは `REMOTE_CONTAINERS` が未設定の場合があるため、ターミナルの環境変数だけで初期化時の判定を再検証しない。
+
+Dev Container と Codespaces の Copilot sandbox は受け入れ条件に含めない。ツール管理は通常の Linux と同じ `home/dot_config/mise/config.toml.tmpl`、`private_mise.lock`、mise 導入スクリプト、更新手順を使う。Dev Container だけは作成時の GitHub 未認証を避けるため、同じ config と lockfileによるツール導入を起動後へ遅らせる。
 
 ```bash
 devcontainer up --workspace-folder .

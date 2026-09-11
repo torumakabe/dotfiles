@@ -2,7 +2,7 @@
 
 初回の対象はuv 0.12.10とする。候補lockは5プラットフォームともこの版を保持する。0.12.11の公開後経過時間を待たず、最小公開経過時間の制限も変更しない。以降の版を扱うときも、スクリプト内の版番号を更新する方式にはしない。
 
-`plan-direct-windows-uv.ps1`は読取専用のPlan入口として維持する。`direct-windows-uv.ps1`が、取得済みReportからの`Prepare`、公式miseによる一回の`Install`、オフラインの`Restore`を実装する。Windowsでの直接InstallとRestoreは未実施であり、実環境の切り替え完了を意味しない。
+`plan-direct-windows-uv.ps1`は読取専用のPlan入口として維持する。`direct-windows-uv.ps1`が、取得済みReportからの`Prepare`、公式miseによる一回の`Install`、オフラインの`Restore`を実装する。認証修正前の直接InstallはGitHub attestation APIのHTTP 403で失敗し、元環境は保存済みコードによるRestoreで復元済みである。認証修正版のInstallは未実施であり、実環境の切り替え完了を意味しない。
 
 旧`windows-uv.ps1`のsnapshot、plan、journalは読み込まない。旧保存スクリプトと復元済みの記録はそのまま保持する。旧Applyによるバイナリディレクトリのコピーと公開は、この移行では使用しない。
 
@@ -132,4 +132,4 @@ mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,wind
 
 `tests/test_windows_uv_direct_plan.py`が既存Planの設定、lock、pointer分類、保存先を検査する。`tests/test_windows_uv_direct.py`はmacOS上の既存PowerShellで合成fixtureを作り、成功後のRestore、導入失敗、rename中断、未封印の導入とコピーの中断、digest不一致、元8版と4証跡の保持、27個のmetadata保護を検査する。未封印内容を扱う試験では、明示指定なしでの拒否、指定した場合の原物復元、作成元不明のファイルの退避保存、バックアップや設定の改変拒否、退避renameの再中断を扱う。トランザクション試験ではネイティブのIDとrename、TOML解析、子プロセスの導入をmockへ置き換える。追加の試験では既存chezmoiでlockと候補configのTOML往復変換を検査する。
 
-WindowsのPlan実行とReportの観測内容は確認済みである。新入口のNTFSでの直接InstallとRestore、実際の候補TOMLを使うmise子プロセス、ネットワーク経由の公式導入、sandbox内ワークロードは未検証である。mockの成功でこれらを代用しない。以前のコピー候補の公開失敗は原因不明のままであり、この実装をその原因解決とは扱わない。
+WindowsのPlan実行、Reportの観測内容、認証修正前のNTFSでの直接Install失敗、保存済みコードによるRestoreを確認済みである。直接Installではダウンロードとchecksum確認まで成功し、attestation APIの未認証rate limit超過でHTTP 403となった。認証取得と退避前のAPI確認を追加した修正版のInstall、導入成功後の検証と公開、sandbox内ワークロードは未検証である。mockの成功でこれらを代用しない。以前のコピー候補の公開失敗は原因不明のままであり、この実装をその原因解決とは扱わない。

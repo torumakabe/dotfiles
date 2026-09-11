@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -253,6 +254,7 @@ $journal=Read-Json (Join-Path $Backup 'journal.json')
 """
 
 
+@unittest.skipIf(sys.platform.startswith("linux"), "Windows resume tests do not run on Linux")
 @unittest.skipUnless(PWSH, "pwsh is required")
 class WindowsUvResumeTests(unittest.TestCase):
     def run_case(self, case: str, harness: str = HARNESS) -> dict:

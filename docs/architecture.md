@@ -43,13 +43,19 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 5. `git commit` の明示承認
 
 パス比較前に `\` を `/` へ正規化する。`allowed-files.txt` は、ワイルドカードのない単一のプロジェクト相対パスを `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。読み取り専用の `rg` と `glob` にも例外を適用するが、検索フィルターはワイルドカードのない許可パスに限定し、明示された検索ルートがすべてプロジェクト内にあることを確認する。シンボリックリンク、ジャンクション、file URI、`..` を含むパス、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
-各 command hook は host 上で `MISE_ENABLE_TOOLS=uv mise exec -- uv run ...` を実行する。PowerShell も同じ環境変数と引数を使う。mise の解決対象を `uv` だけに限定し、shim を使わずに起動する。hook の cwd と標準入力はそのまま渡す。mise の実行と必要な導入は host 側であり、通常の sandbox shell 内で行う処理ではない。hook を起動する runtime の親 PATH に mise 自体が必要である。
+各 command hook は host 上で `uv run ...` を実行する。PowerShell も同じ引数を使う。hook の cwd と標準入力はそのまま渡し、runtime の親 PATH から uv の実体を直接起動する。mise による導入と更新は host 側で行い、通常の sandbox shell 内では実行しない。
 
 Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
 
 `copilot-guardrails --allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。MCP と LSP は sandbox 対象外である。backend は macOS の Seatbelt、Linux、WSL、Codespaces、Dev Container の bubblewrap、Windows の ProcessContainer である。Linux 系の診断は `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap を確認し、`false` の場合は probe を省略する。診断は利用可否を報告するものであり、sandbox 外での再実行方法が提示されることを保証しない。
 
-コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトを正本とする。
+sandbox の developer-tool 自動許可は、`PATH` に含まれる各ディレクトリを読み取り対象にするが、その中のシンボリックリンクが指す親ディレクトリ全体までは許可しない。Node.js の `corepack` と `npx`、npm backend の `tsc`、`installs` の外に実体を置く `core:dotnet` などを実行できるよう、mise data root を `sandbox.userPolicy.filesystem.readonlyPaths` へ追加する。`MISE_INSTALLS_DIR` がdata rootの外を指す場合は、そのディレクトリも追加する。同期スクリプトは対象ディレクトリを作成してから設定を書き込み、存在しないread-only grantによるsandbox起動失敗を防ぐ。書き込みは許可しない。
+
+Copilot runtime 1.0.83 は利用者の uv cache を read-only で自動許可するが、通常の `uv run` も cache 内へ一時ファイルと lock を作成する。同じ path を `readwritePaths` へ追加しても自動 read-only grant が残るため、preToolUse hook の `uv-enforcer.py` が shell command に Copilot 専用の `UV_CACHE_DIR` を追加する。設定同期はその専用 directory だけを `readwritePaths` へ追加し、親に read-only または deny の設定がある場合と、管理対象が symbolic link または reparse point の場合は停止する。host の uv cache、cache home 全体、mise data root には write grant を与えない。
+
+この契約の対象は、Copilot CLI が profile を読まずに起動する built-in shell の直接実行である。利用者が `bash -lc`、`zsh -c`、profile を読む `pwsh` などを明示的に起動すると、各 shell の初期化処理が sandbox 内で mise を再実行する場合がある。これは継承済みの実体 `PATH` を使う通常実行とは別に検証する。
+
+コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。Dev Container と Codespaces のツールは、通常の Linux と同じ mise config、lockfile、導入スクリプト、更新手順で管理する。Dev Container は作成時の GitHub 未認証を避けるため、同じ config と lockfile を使う `mise install --yes` だけを起動後に実行する。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトで管理する。
 
 ## git pre-commit フック
 
@@ -111,11 +117,13 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 macOS の login zsh では、`~/.zshenv` の後に `/etc/zprofile` の `path_helper` が PATH を並べ替える。`~/.zprofile` は `/opt/homebrew/opt/git/bin` を優先させてから共有 profile を読み、mise の実体 PATH を再構成する。Git の処理は、設定ベースフックが git 2.54 以降を必要とするためである（ADR-020）。対話 activation がない非対話 login zsh でも同じ構成を使う。
 
+対話 zsh と PowerShell は公式の `mise activate` を維持し、ディレクトリ移動時の版切替を利用できるようにする。共通設定の `activate_shims = false` により、full activation は shim farm を PATH へ追加しない。`activate_aggressive = true` は、OS や他のパッケージ管理ツールが提供する同名コマンドより mise の実体 PATH を前方に保つ。対話シェルと、そこから起動する Copilot CLI は、同じ実体 PATH を使う。Windows のユーザー PATH に登録する shim は非対話環境との互換性のため残るため、実体 PATH の契約は PowerShell profile を読み込んだターミナルから Copilot CLI を起動する場合に適用する。
+
 ### Copilot の通常 shell と command hook
 
 Copilot CLI 1.0.81 以降の Unix の通常 agent shell は、host 上で非対話 login bash の環境を取得し、親環境へ merge してから sandbox shell を作る。共有 profile の `mise env` はこの host 側で実行され、通常の agent command shell は `--norc --noprofile` で実体環境を使う。環境取得時の cwd は HOME なので、project-local の版切替はこの構成の保証に含めない。Linux の初回導入には、この機能を含む CLI 1.0.83 を使う。
 
-command hook はこの環境補完を共有せず、runtime の親環境を使うため、各 hook で host 側の `mise exec` を実行する。SDK の `session.shell.exec` も通常 agent shell の補完を共有しない別 API である。利用未確認の API への対応は要求せず、実際に使う CLI／GUI の起動と最初の hook を区別して確認する。
+command hook はこの環境補完を共有せず、runtime の親環境を使う。各 hook は、その親 PATH にある uv の実体を `uv run` で直接起動する。SDK の `session.shell.exec` も通常 agent shell の補完を共有しない別 API である。利用未確認の API への対応は要求せず、実際に使う CLI／GUI の起動と最初の hook を区別して確認する。
 
 この区分の根拠は [runtime bd85d404 の環境取得](https://github.com/github/copilot-agent-runtime/blob/bd85d40405b59a8f2088da47f7a1e833f7291624/src/runtime/src/tools/session_shell_driver.rs#L594-L620) と [hook の親環境](https://github.com/github/copilot-agent-runtime/blob/bd85d40405b59a8f2088da47f7a1e833f7291624/src/runtime/src/session/services/hook_processor_service.rs#L468-L477) である。GUI 同梱 runtime の版と起動環境は、PATH 上の単体 CLI とは別に扱う。公式 `.github/github-app.yml` に汎用 PATH 注入項目は確認できず、setup script の export で親アプリを変更する構成にはしない。
 
@@ -129,7 +137,7 @@ macOS の `run_onchange_after_21-link-mise-shims.sh` は、以前の GUI 固定 
 
 uv は全対象 OS で mise の `github:astral-sh/uv` backend を使う。公式アーカイブの選択、展開、uv/uvx を含むディレクトリの PATH 検出は backend に任せ、独自 wrapper や `filter_bins` は指定しない。Windows ARM64 だけは従来の x64 配布物を `asset_pattern` で明示し、エミュレーションで使う。
 
-`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、uv/uvx を直接解決できる。shim と `.mise-bins` 内の実体へのリンクは別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。uv の cache 書き込み許可は変更しない。
+`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、uv/uvx を直接解決できる。shim と `.mise-bins` 内の実体へのリンクは別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。通常の sandbox shell が使う Copilot 専用 uv cache だけは ADR-030 に従って書き込みを許可する。
 
 lock は `latest` を要求として保持し、Windows ARM64 の option により uv が複数 entry に分かれる。checksum と GitHub artifact attestation の検証機能を利用するが、aqua recipe が指定していた署名元 workflow の限定は行わない。既存 install の移行は [運用手順](operations.md#uv-の-backend-移行) を参照する。
 
@@ -137,7 +145,7 @@ lock は `latest` を要求として保持し、Windows ARM64 の option によ�
 
 mise の npm backend はパッケージごとにインストール先を分ける。`npm:typescript` の TypeScript 7.x は `tsc` の実行に使い、`npm:typescript-language-server` からは参照しない。language server が利用する `lib/tsserver.js` は、`run_after_22-install-typescript-lsp` が固定版の TypeScript 6.x を `~/.local/share/chezmoi-dotfiles/typescript-lsp` へ導入して提供する。スクリプトは mise 管理 Node と同じディレクトリの npm を使い、package version と `tsserver.js` が正しければ何もしない。不足または版違いの場合だけ再導入するため、初回適用で Node 導入を保留する Dev Container でも、`mise install` 後の次回適用で回復する。
 
-Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、この安定 prefix 配下の `node_modules/typescript/lib/tsserver.js` を指定する。mise の language server インストール先とバージョンをパスに含めないため、language server の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` を正本とする。
+Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、この安定 prefix 配下の `node_modules/typescript/lib/tsserver.js` を指定する。mise の language server インストール先とバージョンをパスに含めないため、language server の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` で定義する。
 
 ## MSVC リンカー解決 (Windows)
 
@@ -149,7 +157,7 @@ Windows で cargo が `windows-msvc` ターゲットをビルドするには MSV
 
 ## セットアップスクリプトの実行順
 
-chezmoi は `run_*_before_*`、通常ファイル、`run_*_after_*` の順に適用し、同じフェーズではファイル名の番号順に実行する。全件一覧は変化しやすいため、gh-stack の導入と Git hook の確認を含む全実装は `home/run_*` を正本とする。
+chezmoi は `run_*_before_*`、通常ファイル、`run_*_after_*` の順に適用し、同じフェーズではファイル名の番号順に実行する。全件一覧は変化しやすいため、gh-stack の導入と Git hook の確認を含む全実装は `home/run_*` で管理する。
 
 mise 関連では、本体を導入する `run_once_before_20-install-mise`、lockfile 変更を同期する `run_onchange_after_15-mise-sync-tools`、通常適用時にツールを導入する `run_once_after_20-mise-install`、macOS の shim symlink を更新する `run_onchange_after_21-link-mise-shims`、LSP 用 TypeScript を確認する `run_after_22-install-typescript-lsp` の依存関係を保つ。変更時は、mise 本体と設定の配置前に `mise install` を実行しないこと、LSP 用 TypeScript の導入前に Node が利用可能であること、Codespaces と Dev Container の分岐を壊さないことを確認する。
 

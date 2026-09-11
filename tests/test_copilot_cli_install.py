@@ -97,6 +97,24 @@ class CopilotCliInstallTests(unittest.TestCase):
     def test_gate_does_not_regress_to_command_lookup(self) -> None:
         self.assertNotRegex(self.bootstrap, r"command -v copilot")
 
+    def test_linux_apt_operations_have_bounded_network_waits(self) -> None:
+        self.assertIn("apt_get() {", self.bootstrap)
+        self.assertIn(
+            "sudo timeout --signal=INT --kill-after=30s 15m", self.bootstrap
+        )
+        self.assertIn("Acquire::Retries=3", self.bootstrap)
+        self.assertIn("Acquire::http::Timeout=30", self.bootstrap)
+        self.assertIn("Acquire::https::Timeout=30", self.bootstrap)
+        self.assertIn("DPkg::Lock::Timeout=60", self.bootstrap)
+        self.assertNotIn("sudo apt-get", self.bootstrap)
+
+    def test_system_package_install_keeps_progress_visible(self) -> None:
+        package_install = self.bootstrap[
+            self.bootstrap.index("apt_get install -y \\\n"):
+            self.bootstrap.index("git_unshadow /usr/local/bin /usr/bin")
+        ]
+        self.assertNotIn("-qq", package_install)
+
     def test_copilot_uses_pinned_verified_release(self) -> None:
         self.assertIn('COPILOT_VERSION="1.0.83"', self.bootstrap)
         block = _case_block(self.bootstrap, "COPILOT_VERSION")
@@ -144,7 +162,7 @@ class CopilotCliInstallTests(unittest.TestCase):
         )
         self.assertLess(
             self.bootstrap.index("fingerprint verification failed"),
-            self.bootstrap.index("sudo apt-get install -y -qq azure-cli"),
+            self.bootstrap.index("apt_get install -y azure-cli"),
         )
 
     def test_azure_cli_codename_fallbacks_and_supported_suites(self) -> None:
@@ -204,7 +222,7 @@ class CopilotCliInstallTests(unittest.TestCase):
         )
         self.assertLess(
             self.bootstrap.index('actual_sha256="$(sha256_file "${azd_deb}")"'),
-            self.bootstrap.index('sudo apt-get install -y -qq "${azd_deb}"'),
+            self.bootstrap.index('apt_get install -y "${azd_deb}"'),
         )
 
     def test_rustup_uses_pinned_verified_binary(self) -> None:

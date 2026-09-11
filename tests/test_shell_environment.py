@@ -3,6 +3,7 @@
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,7 @@ import unittest
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+OPERATIONS_PATH = REPO_ROOT / "docs/operations.md"
 SHELLS = tuple(shell for shell in ("sh", "dash", "bash", "zsh") if shutil.which(shell))
 
 
@@ -225,6 +227,243 @@ class ShellEnvironmentTests(unittest.TestCase):
                 self.assertEqual(result.stdout.splitlines(), [
                     str(node_bin / "node"), "spaces and 'quotes'", str(node_bin / "node"),
                 ])
+
+    @unittest.skipUnless(
+        shutil.which("mise") and shutil.which("zsh"),
+        "mise and zsh are required for activation behavior",
+    )
+    def test_real_mise_activation_honors_activate_shims(self) -> None:
+        mise = pathlib.Path(shutil.which("mise")).resolve()
+        data = self.root / "data"
+        shims = data / "shims"
+        install_bin = data / "installs/node/1.2.3/bin"
+        install_bin.mkdir(parents=True)
+        shims.mkdir()
+        self.write_executable(install_bin / "node", "#!/bin/sh\nexit 0\n")
+        self.write_executable(shims / "node", "#!/bin/sh\nexit 99\n")
+        env = self.env | {
+            "PATH": f"{self.bin}:{shims}:/usr/bin:/bin",
+            "MISE_CONFIG_DIR": str(self.root / "config"),
+            "MISE_DATA_DIR": str(data),
+            "MISE_CACHE_DIR": str(self.root / "cache"),
+            "MISE_STATE_DIR": str(self.root / "state"),
+            "MISE_TRUSTED_CONFIG_PATHS": str(self.root),
+            "MISE_AUTO_INSTALL": "1",
+        }
+        config = self.root / "mise.toml"
+
+        for activate_shims, expected_count in ((True, "1"), (False, "0")):
+            with self.subTest(activate_shims=activate_shims):
+                config.write_text(
+                    '[tools]\nnode = "1.2.3"\n'
+                    f"[settings]\nactivate_shims = {str(activate_shims).lower()}\n",
+                    encoding="utf-8",
+                )
+                result = subprocess.run(
+                    [
+                        shutil.which("zsh"),
+                        "-dfc",
+                        f'eval "$({mise} activate zsh)"; '
+                        'command -v node; '
+                        'printf "%s\\n" "$MISE_SHELL"; '
+                        'print -r -- "$PATH" | tr : "\\n" | '
+                        'grep -c "$MISE_DATA_DIR/shims" || true',
+                    ],
+                    cwd=self.root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assert_success(result)
+                self.assertEqual(result.stdout.splitlines(), [
+                    str(install_bin / "node"), "zsh", expected_count,
+                ])
+
+    @unittest.skipUnless(
+        shutil.which("mise") and shutil.which("zsh"),
+        "mise and zsh are required for activation behavior",
+    )
+    def test_real_mise_activation_honors_activate_aggressive(self) -> None:
+        mise = pathlib.Path(shutil.which("mise")).resolve()
+        data = self.root / "data"
+        install_bin = data / "installs/node/1.2.3/bin"
+        shadow_bin = self.root / "shadow"
+        install_bin.mkdir(parents=True)
+        shadow_bin.mkdir()
+        self.write_executable(install_bin / "node", "#!/bin/sh\nexit 0\n")
+        self.write_executable(shadow_bin / "node", "#!/bin/sh\nexit 99\n")
+        env = self.env | {
+            "MISE_CONFIG_DIR": str(self.root / "config"),
+            "MISE_DATA_DIR": str(data),
+            "MISE_CACHE_DIR": str(self.root / "cache"),
+            "MISE_STATE_DIR": str(self.root / "state"),
+            "MISE_TRUSTED_CONFIG_PATHS": str(self.root),
+            "MISE_AUTO_INSTALL": "1",
+        }
+        config = self.root / "mise.toml"
+
+        for aggressive, expected in (
+            (False, shadow_bin / "node"),
+            (True, install_bin / "node"),
+        ):
+            with self.subTest(activate_aggressive=aggressive):
+                config.write_text(
+                    '[tools]\nnode = "1.2.3"\n'
+                    "[settings]\nactivate_shims = false\n"
+                    f"activate_aggressive = {str(aggressive).lower()}\n",
+                    encoding="utf-8",
+                )
+                result = subprocess.run(
+                    [
+                        shutil.which("zsh"),
+                        "-dfc",
+                        f'eval "$({mise} activate zsh)"; '
+                        f'PATH="{shadow_bin}:$PATH"; export PATH; '
+                        f'eval "$({mise} hook-env --force -s zsh)"; '
+                        'command -v node; '
+                        'print -r -- "$PATH" | tr : "\\n" | '
+                        'grep -c "$MISE_DATA_DIR/shims" || true',
+                    ],
+                    cwd=self.root,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                self.assert_success(result)
+                self.assertEqual(result.stdout.splitlines(), [str(expected), "0"])
+
+
+class ShimResolutionCheckTests(unittest.TestCase):
+    """Run the documented acceptance check so the published command stays usable."""
+
+    @staticmethod
+    def documented_block(
+        language: str, marker: str = "outside mise bin paths:"
+    ) -> str:
+        text = OPERATIONS_PATH.read_text(encoding="utf-8")
+        blocks = [
+            block
+            for block in re.findall(rf"```{language}\n(.*?)```", text, re.DOTALL)
+            if marker in block
+        ]
+        assert len(blocks) == 1, f"expected one {language} block for {marker!r}"
+        return blocks[0]
+
+    def test_posix_listing_takes_names_from_declared_bin_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            tools, fake = root / "tools", root / "fake"
+            for directory in (tools, fake, tools / "subdir"):
+                directory.mkdir(parents=True)
+            for name in ("alpha", "beta"):
+                (tools / name).write_text("#!/bin/sh\n", encoding="utf-8")
+                (tools / name).chmod(0o755)
+            (tools / "notexec").write_text("", encoding="utf-8")
+            (fake / "mise").write_text(f"#!/bin/sh\nprintf '%s\\n' '{tools}'\n", encoding="utf-8")
+            (fake / "mise").chmod(0o755)
+
+            result = subprocess.run(
+                ["sh", "-c", self.documented_block("sh", "mise bin-paths")],
+                capture_output=True, text=True, check=False,
+                env={"PATH": f"{fake}:/usr/bin:/bin", "HOME": str(root)},
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                (root / "mise-tool-paths.tsv").read_text(encoding="utf-8"),
+                f"alpha\t{tools / 'alpha'}\nbeta\t{tools / 'beta'}\n",
+            )
+
+    def test_posix_check_reports_non_mise_and_shim_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            expected, shims, other = root / "expected", root / "shims", root / "other"
+            for directory in (expected, shims, other):
+                directory.mkdir()
+            for path in (
+                expected / "alpha",
+                expected / "beta",
+                expected / "delta",
+                shims / "beta",
+                other / "delta",
+            ):
+                path.write_text("#!/bin/sh\n", encoding="utf-8")
+                path.chmod(0o755)
+            (root / "mise-tool-paths.tsv").write_text(
+                f"alpha\t{expected / 'alpha'}\n"
+                f"beta\t{expected / 'beta'}\n"
+                f"gamma\t{expected / 'gamma'}\n"
+                f"delta\t{expected / 'delta'}\n",
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                ["sh", "-c", self.documented_block("sh")],
+                capture_output=True, text=True, check=False,
+                env={
+                    "PATH": f"{shims}:{other}:{expected}:/usr/bin:/bin",
+                    "HOME": str(root),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(), [
+                f"via shim: beta -> {shims}/beta (expected {expected}/beta)",
+                "unresolved: gamma",
+                f"outside mise bin paths: delta -> {other}/delta "
+                f"(expected {expected}/delta)",
+            ])
+
+    def test_checks_report_an_empty_entry_list_as_a_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            (pathlib.Path(temp) / "mise-tool-paths.tsv").write_text("", encoding="utf-8")
+
+            result = subprocess.run(
+                ["sh", "-c", self.documented_block("sh")],
+                capture_output=True, text=True, check=False,
+                env={"PATH": "/usr/bin:/bin", "HOME": temp},
+            )
+
+            self.assertEqual(
+                result.stdout.splitlines(), ["no entries: the host list is empty"]
+            )
+        self.assertIn("no entries", self.documented_block("powershell"))
+
+    def test_powershell_listing_strips_only_executable_extensions(self) -> None:
+        block = self.documented_block("powershell", "mise bin-paths")
+
+        self.assertIn("PATHEXT", block)
+        self.assertNotIn("BaseName", block)
+
+    def test_listings_take_names_from_declared_bin_paths(self) -> None:
+        for language in ("sh", "powershell"):
+            with self.subTest(language=language):
+                listing = self.documented_block(language, "mise bin-paths")
+                self.assertNotIn("shims", listing)
+                self.assertIn("mise-tool-paths.tsv", listing)
+
+    def test_checks_reject_shims_and_other_executable_paths(self) -> None:
+        self.assertIn("*/shims/*", self.documented_block("sh"))
+        self.assertIn('"$expected"', self.documented_block("sh"))
+        self.assertIn(r"'*\shims\*'", self.documented_block("powershell"))
+        self.assertIn("[IO.Path]::GetFullPath($expected)", self.documented_block("powershell"))
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_check_parses(self) -> None:
+        result = subprocess.run(
+            ["pwsh", "-NoProfile", "-Command",
+             "$errors=$null; $null=[Management.Automation.Language.Parser]::ParseInput("
+             "[Console]::In.ReadToEnd(),[ref]$null,[ref]$errors); "
+             "if ($errors.Count) { $errors | Out-String; exit 1 }"],
+            input=self.documented_block("powershell"),
+            capture_output=True, text=True, check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
