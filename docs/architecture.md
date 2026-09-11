@@ -49,6 +49,10 @@ Copilot CLI local sandbox は user-level settings で管理し、未設定時の
 
 `copilot-guardrails --allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。MCP と LSP は sandbox 対象外である。backend は macOS の Seatbelt、Linux、WSL、Codespaces、Dev Container の bubblewrap、Windows の ProcessContainer である。Linux 系の診断は `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap を確認し、`false` の場合は probe を省略する。診断は利用可否を報告するものであり、sandbox 外での再実行方法が提示されることを保証しない。
 
+sandbox の developer-tool 自動許可は、`PATH` に含まれる各ディレクトリを読み取り対象にするが、その中のシンボリックリンクが指す親ディレクトリ全体までは許可しない。Node.js の `corepack` と `npx`、npm backend の `tsc`、`installs` の外に実体を置く `core:dotnet` などを実行できるよう、mise data root を `sandbox.userPolicy.filesystem.readonlyPaths` へ追加する。`MISE_INSTALLS_DIR` がdata rootの外を指す場合は、そのディレクトリも追加する。同期スクリプトは対象ディレクトリを作成してから設定を書き込み、存在しないread-only grantによるsandbox起動失敗を防ぐ。書き込みは許可しない。
+
+この契約の対象は、Copilot CLI が profile を読まずに起動する built-in shell の直接実行である。利用者が `bash -lc`、`zsh -c`、profile を読む `pwsh` などを明示的に起動すると、各 shell の初期化処理が sandbox 内で mise を再実行する場合がある。これは継承済みの実体 `PATH` を使う通常実行とは別に検証する。
+
 コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。Dev Container と Codespaces のツールは、通常の Linux と同じ mise config、lockfile、導入スクリプト、更新手順で管理する。Dev Container は作成時の GitHub 未認証を避けるため、同じ config と lockfile を使う `mise install --yes` だけを起動後に実行する。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトを正本とする。
 
 ## git pre-commit フック

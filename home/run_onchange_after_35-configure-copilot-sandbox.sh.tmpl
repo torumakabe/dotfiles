@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # Copilot CLI local sandbox 設定 (Linux/macOS)
 #
-# Copilot sandbox policy version: 3
+# Copilot sandbox policy version: 4
 
 set -euo pipefail
 
@@ -16,7 +16,18 @@ fi
 copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
 settings_path="${copilot_home}/settings.json"
 settings_dir="$(dirname "${settings_path}")"
+mise_data_dir="${MISE_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/mise}"
+mise_installs="${MISE_INSTALLS_DIR:-${mise_data_dir}/installs}"
 mkdir -p "${settings_dir}"
+
+case "${mise_installs}" in
+"${mise_data_dir}"|"${mise_data_dir%/}"/*)
+  external_mise_installs=""
+  ;;
+*)
+  external_mise_installs="${mise_installs}"
+  ;;
+esac
 
 tmp_dir="$(mktemp -d)"
 merged="${tmp_dir}/merged.json"
@@ -79,7 +90,30 @@ for path_name in readwritePaths readonlyPaths deniedPaths; do
   esac
 done
 
-jq --slurpfile desired "${desired}" '
+jq \
+  --arg mise_data_dir "${mise_data_dir}" \
+  --arg external_mise_installs "${external_mise_installs}" \
+  --slurpfile desired "${desired}" '
+  def normalize_path:
+    if type != "string" or . == "/" then . else sub("/+$"; "") end;
+
+  def contains_path($paths; $path):
+    any($paths[]?;
+      type == "string" and
+      (normalize_path == ($path | normalize_path))
+    );
+
+  def append_managed_readonly($path):
+    if $path == "" then
+      .
+    elif contains_path(.deniedPaths; $path) then
+      error("sandbox.userPolicy.filesystem.deniedPaths conflicts with managed mise path: \($path)")
+    elif contains_path(.readwritePaths; $path) or contains_path(.readonlyPaths; $path) then
+      .
+    else
+      .readonlyPaths += [$path]
+    end;
+
   . * $desired[0]
   | .sandbox = (
     (.sandbox // {})
@@ -91,6 +125,8 @@ jq --slurpfile desired "${desired}" '
         | .readwritePaths = (.readwritePaths // [])
         | .readonlyPaths = (.readonlyPaths // [])
         | .deniedPaths = (.deniedPaths // [])
+        | append_managed_readonly($mise_data_dir)
+        | append_managed_readonly($external_mise_installs)
         | .clearPolicyOnExit = false
       )
       | .network = (
@@ -100,6 +136,8 @@ jq --slurpfile desired "${desired}" '
     )
   )
 ' "${input_path}" >"${merged}"
+
+mkdir -p "${mise_data_dir}" "${mise_installs}"
 
 jq --argjson enabled "${existing_enabled}" '.sandbox.enabled = $enabled' "${merged}" >"${settings_tmp}"
 

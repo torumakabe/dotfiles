@@ -1,14 +1,32 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 3
+# Copilot sandbox policy version: 4
 
 $ErrorActionPreference = 'Stop'
 
 $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
 $settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
+$dataHome = if ($env:XDG_DATA_HOME) {
+  $env:XDG_DATA_HOME
+} elseif ($env:LOCALAPPDATA) {
+  $env:LOCALAPPDATA
+} else {
+  Join-Path $HOME 'AppData\Local'
+}
+$miseDataDir = if ($env:MISE_DATA_DIR) { $env:MISE_DATA_DIR } else { Join-Path $dataHome 'mise' }
+$miseInstalls = if ($env:MISE_INSTALLS_DIR) { $env:MISE_INSTALLS_DIR } else { Join-Path $miseDataDir 'installs' }
 New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
+
+$trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+$miseDataFullPath = [System.IO.Path]::GetFullPath($miseDataDir).TrimEnd($trimChars)
+$miseInstallsFullPath = [System.IO.Path]::GetFullPath($miseInstalls).TrimEnd($trimChars)
+$miseDataPrefix = $miseDataFullPath + [System.IO.Path]::DirectorySeparatorChar
+$installsUnderData = (
+  $miseInstallsFullPath.Equals($miseDataFullPath, [System.StringComparison]::OrdinalIgnoreCase) -or
+  $miseInstallsFullPath.StartsWith($miseDataPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+)
 
 $desiredSettings = @'
 {{ include ".chezmoitemplates/copilot-user-settings.json" }}
@@ -41,8 +59,8 @@ function Set-JsonProperty {
 
 function Get-JsonArrayOrEmpty {
   param($Value)
-  if ($null -eq $Value) { return ,@() }
-  return ,@($Value)
+  if ($null -eq $Value) { return @() }
+  return @($Value)
 }
 
 function Get-JsonProperty {
@@ -86,6 +104,28 @@ function Remove-JsonProperty {
   if ($null -ne $Object -and $Object.PSObject.Properties[$Name]) {
     $Object.PSObject.Properties.Remove($Name)
   }
+}
+
+function Test-PolicyPathMatch {
+  param(
+    [Parameter(Mandatory = $true)] [AllowEmptyCollection()] [object[]] $Paths,
+    [Parameter(Mandatory = $true)] [string] $Target
+  )
+
+  $normalizedTarget = [System.IO.Path]::GetFullPath($Target).TrimEnd($trimChars)
+  foreach ($path in $Paths) {
+    if (
+      $path -is [string] -and
+      -not [string]::IsNullOrWhiteSpace($path) -and
+      [System.IO.Path]::GetFullPath($path).TrimEnd($trimChars).Equals(
+        $normalizedTarget,
+        [System.StringComparison]::OrdinalIgnoreCase
+      )
+    ) {
+      return $true
+    }
+  }
+  return $false
 }
 
 # `/sandbox disable` persists sandbox.enabled=$false in settings.json, and that
@@ -140,9 +180,33 @@ $userPolicy = if ($null -ne $existingPolicy) { $existingPolicy } else { [pscusto
 $filesystem = if ($null -ne $existingFilesystem) { $existingFilesystem } else { [pscustomobject]@{} }
 $network = if ($null -ne $existingNetwork) { $existingNetwork } else { [pscustomobject]@{} }
 
-Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths'))
-Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
-Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
+$readwritePaths = @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths'))
+$readonlyPaths = @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
+$deniedPaths = @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
+$managedReadonlyPaths = @($miseDataDir)
+if (-not $installsUnderData) {
+  $managedReadonlyPaths += $miseInstalls
+}
+
+foreach ($managedPath in $managedReadonlyPaths) {
+  if (Test-PolicyPathMatch -Paths $deniedPaths -Target $managedPath) {
+    Write-Error "$settingsPath has sandbox.userPolicy.filesystem.deniedPaths conflicting with managed mise path: $managedPath"
+    exit 1
+  }
+  if (
+    -not (Test-PolicyPathMatch -Paths $readwritePaths -Target $managedPath) -and
+    -not (Test-PolicyPathMatch -Paths $readonlyPaths -Target $managedPath)
+  ) {
+    $readonlyPaths += $managedPath
+  }
+}
+
+New-Item -ItemType Directory -Path $miseDataDir -Force | Out-Null
+New-Item -ItemType Directory -Path $miseInstalls -Force | Out-Null
+
+Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value $readwritePaths
+Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value $readonlyPaths
+Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value $deniedPaths
 Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
 
 Set-JsonProperty -Object $network -Name 'allowOutbound' -Value $true

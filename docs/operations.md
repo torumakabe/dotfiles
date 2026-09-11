@@ -43,7 +43,9 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を保持する。文字列、数値、真偽値、オブジェクトなどの非配列値は、設定ファイルを書き換える前にエラーとして拒否する。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を保持する。`readonlyPaths` にはmise data rootを重複なく追加し、`MISE_INSTALLS_DIR`がdata rootの外を指す場合はそのディレクトリも追加する。data rootは`MISE_DATA_DIR`、`XDG_DATA_HOME`、OSの既定値の順で決まり、Windowsでは`LOCALAPPDATA`が未設定の場合に`~/AppData/Local`を使う。同期スクリプトはgrant対象を作成してから設定を書き込む。同じpathが`readwritePaths`にある場合は既存のwrite grantを維持し、`readonlyPaths`へ追加しない。`deniedPaths`にある場合は拒否設定を上書きせず、設定ファイルを変更する前にエラーで停止する。各path配列が文字列、数値、真偽値、オブジェクトなどの非配列値の場合もエラーとして拒否する。
+
+mise data root または外部 installs directory を移動した場合は、`chezmoi apply --force` で同期スクリプトを再実行する。同期後は `readonlyPaths` を確認し、旧 directory の entry を手動で除去する。既存 entry とリポジトリが追加した entry を設定ファイルだけで判別できないため、同期処理は旧 entry を自動削除しない。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 
@@ -153,6 +155,8 @@ $entries | ForEach-Object {
 ```
 
 出力が空であれば条件を満たす。一覧が空のときは `no entries` を出す。空の一覧は該当なしと区別できず、確認できていない状態だからである。shim だけでなく、system や Homebrew の同名コマンドが mise の実体より先に選ばれた場合も報告する。Windows の sandbox 内では `LOCALAPPDATA` がパッケージ配下へリダイレクトされるため、host 側で記録した実体パスとの比較を使う。出力がある名前は切替の失敗として扱う。確認後は一覧のファイルを削除する。
+
+受け入れ確認はbuilt-in shellへscript本体を直接渡す。`bash -lc`、`bash -c`、`zsh -c`、profileを読む`pwsh`などを挟むと、shell初期化がsandbox内でmiseを再実行し、継承された`PATH`とは別の条件を測ることになる。子shell自体の互換性を確認する場合は、通常実行の合否と分けて記録する。
 
 Linux の CLI 初回導入版は1.0.83である。既存 CLI は初回導入処理では更新されないため、1.0.80以前の場合は導入元の標準更新方法を使う。GUI 同梱 runtime は別に版と login-shell 環境取得の有無を確認する。
 

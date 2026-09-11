@@ -153,6 +153,7 @@ def _run_posix_script(
     *,
     codespaces: bool = False,
     devcontainer: bool = False,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     script_path = home / "configure-sandbox.sh"
     script_path.write_text(
@@ -164,13 +165,18 @@ def _run_posix_script(
         ),
         encoding="utf-8",
     )
+    env = {
+        **os.environ,
+        "COPILOT_HOME": str(settings_path.parent),
+        "HOME": str(home),
+    }
+    env.pop("MISE_DATA_DIR", None)
+    env.pop("MISE_INSTALLS_DIR", None)
+    env.pop("XDG_DATA_HOME", None)
+    env.update(extra_env or {})
     return subprocess.run(
         ["bash", str(script_path)],
-        env={
-            **os.environ,
-            "COPILOT_HOME": str(settings_path.parent),
-            "HOME": str(home),
-        },
+        env=env,
         check=False,
         capture_output=True,
         encoding="utf-8",
@@ -178,13 +184,25 @@ def _run_posix_script(
 
 
 def _run_powershell_script(
-    home: pathlib.Path, settings_path: pathlib.Path
+    home: pathlib.Path,
+    settings_path: pathlib.Path,
+    *,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     script_path = home / "configure-sandbox.ps1"
     script_path.write_text(_render(POWERSHELL_SCRIPT_PATH, "windows"), encoding="utf-8")
+    env = {
+        **os.environ,
+        "COPILOT_HOME": str(settings_path.parent),
+        "LOCALAPPDATA": str(home / "AppData/Local"),
+    }
+    env.pop("MISE_DATA_DIR", None)
+    env.pop("MISE_INSTALLS_DIR", None)
+    env.pop("XDG_DATA_HOME", None)
+    env.update(extra_env or {})
     return subprocess.run(
         ["pwsh", "-NoLogo", "-NoProfile", "-File", str(script_path)],
-        env={**os.environ, "COPILOT_HOME": str(settings_path.parent)},
+        env=env,
         check=False,
         capture_output=True,
         encoding="utf-8",
@@ -269,7 +287,12 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 class CopilotSandboxMergeTests(unittest.TestCase):
-    def _assert_settings(self, settings: dict, expected_enabled: bool = True) -> None:
+    def _assert_settings(
+        self,
+        settings: dict,
+        expected_mise_readonly_paths: list[pathlib.Path],
+        expected_enabled: bool = True,
+    ) -> None:
         self.assertEqual(settings["unrelated"], {"keep": True})
         self.assertEqual(settings["deepUnknown"], DEEP_UNKNOWN)
         self.assertTrue(settings["experimental"])
@@ -302,8 +325,19 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self.assertEqual(policy["keep"], UNKNOWN_SETTINGS["userPolicy"]["keep"])
         self.assertNotIn("version", policy)
         self.assertEqual(
-            {name: policy["filesystem"][name] for name in FILESYSTEM_PATHS},
-            FILESYSTEM_PATHS,
+            policy["filesystem"]["readwritePaths"],
+            FILESYSTEM_PATHS["readwritePaths"],
+        )
+        self.assertEqual(
+            policy["filesystem"]["readonlyPaths"],
+            [
+                *FILESYSTEM_PATHS["readonlyPaths"],
+                *(str(path) for path in expected_mise_readonly_paths),
+            ],
+        )
+        self.assertEqual(
+            policy["filesystem"]["deniedPaths"],
+            FILESYSTEM_PATHS["deniedPaths"],
         )
         self.assertEqual(
             policy["filesystem"]["keep"],
@@ -319,7 +353,9 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self.assertNotIn("allowedHosts", policy["network"])
         self.assertNotIn("blockedHosts", policy["network"])
 
-    def _assert_normalizes_empty_filesystem_paths(self, run_script) -> None:
+    def _assert_normalizes_empty_filesystem_paths(
+        self, run_script, expected_mise_readonly_paths
+    ) -> None:
         for path_name in FILESYSTEM_PATHS:
             for case_name, remove_key in (("missing", True), ("null", False)):
                 with self.subTest(path=path_name, case=case_name):
@@ -339,9 +375,17 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                         merged = json.loads(
                             settings_path.read_text(encoding="utf-8-sig")
                         )
+                        expected = (
+                            [
+                                str(path)
+                                for path in expected_mise_readonly_paths(home)
+                            ]
+                            if path_name == "readonlyPaths"
+                            else []
+                        )
                         self.assertEqual(
                             merged["sandbox"]["userPolicy"]["filesystem"][path_name],
-                            [],
+                            expected,
                         )
 
     def _assert_rejects_invalid_filesystem_paths(self, run_script) -> None:
@@ -376,35 +420,170 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                             original,
                         )
 
+    def _assert_managed_path_conflicts(
+        self, run_script, managed_path_for_home
+    ) -> None:
+        for path_name, expected_success in (
+            ("readwritePaths", True),
+            ("deniedPaths", False),
+        ):
+            with self.subTest(path=path_name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    home = pathlib.Path(temp_dir)
+                    managed_path = managed_path_for_home(home)
+                    settings_path = _seed_settings(home)
+                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                    filesystem = settings["sandbox"]["userPolicy"]["filesystem"]
+                    filesystem[path_name] = [f"{managed_path}{os.sep}"]
+                    settings_path.write_text(json.dumps(settings), encoding="utf-8")
+                    original = settings_path.read_text(encoding="utf-8")
+
+                    result = run_script(home, settings_path)
+                    if expected_success:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        merged = json.loads(
+                            settings_path.read_text(encoding="utf-8-sig")
+                        )
+                        self.assertEqual(
+                            merged["sandbox"]["userPolicy"]["filesystem"][
+                                "readonlyPaths"
+                            ],
+                            FILESYSTEM_PATHS["readonlyPaths"],
+                        )
+                    else:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("deniedPaths", result.stderr)
+                        self.assertEqual(
+                            settings_path.read_text(encoding="utf-8"),
+                            original,
+                        )
+                        self.assertFalse(managed_path.exists())
+
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
     def test_posix_merge_preserves_paths_and_removes_stale_network_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             home = pathlib.Path(temp_dir)
             settings_path = _seed_settings(home)
-            result = _run_posix_script(home, settings_path)
+            for _ in range(2):
+                result = _run_posix_script(home, settings_path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8")),
+                [home / ".local/share/mise"],
+            )
+            self.assertTrue((home / ".local/share/mise/installs").is_dir())
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_uses_configured_mise_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+            mise_data_dir = home / "custom-mise"
+            mise_installs_dir = home / "custom-installs"
+            result = _run_posix_script(
+                home,
+                settings_path,
+                extra_env={
+                    "MISE_DATA_DIR": str(mise_data_dir),
+                    "MISE_INSTALLS_DIR": str(mise_installs_dir),
+                },
+            )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self._assert_settings(json.loads(settings_path.read_text(encoding="utf-8")))
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8")),
+                [mise_data_dir, mise_installs_dir],
+            )
+            self.assertTrue(mise_data_dir.is_dir())
+            self.assertTrue(mise_installs_dir.is_dir())
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_uses_xdg_data_home(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+            xdg_data_home = home / "xdg-data"
+            result = _run_posix_script(
+                home,
+                settings_path,
+                extra_env={"XDG_DATA_HOME": str(xdg_data_home)},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8")),
+                [xdg_data_home / "mise"],
+            )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_merge_preserves_paths_and_removes_stale_network_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             home = pathlib.Path(temp_dir)
             settings_path = _seed_settings(home)
-            result = _run_powershell_script(home, settings_path)
+            for _ in range(2):
+                result = _run_powershell_script(home, settings_path)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8-sig")),
+                [home / "AppData/Local/mise"],
+            )
+            self.assertTrue((home / "AppData/Local/mise/installs").is_dir())
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_uses_configured_mise_data_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+            mise_data_dir = home / "custom-mise"
+            mise_installs_dir = home / "custom-installs"
+            result = _run_powershell_script(
+                home,
+                settings_path,
+                extra_env={
+                    "MISE_DATA_DIR": str(mise_data_dir),
+                    "MISE_INSTALLS_DIR": str(mise_installs_dir),
+                },
+            )
             self.assertEqual(result.returncode, 0, result.stderr)
             self._assert_settings(
-                json.loads(settings_path.read_text(encoding="utf-8-sig"))
+                json.loads(settings_path.read_text(encoding="utf-8-sig")),
+                [mise_data_dir, mise_installs_dir],
+            )
+            self.assertTrue(mise_data_dir.is_dir())
+            self.assertTrue(mise_installs_dir.is_dir())
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_uses_xdg_data_home(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+            xdg_data_home = home / "xdg-data"
+            result = _run_powershell_script(
+                home,
+                settings_path,
+                extra_env={"XDG_DATA_HOME": str(xdg_data_home)},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8-sig")),
+                [xdg_data_home / "mise"],
             )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
     def test_posix_normalizes_missing_or_null_filesystem_paths(self) -> None:
-        self._assert_normalizes_empty_filesystem_paths(_run_posix_script)
+        self._assert_normalizes_empty_filesystem_paths(
+            _run_posix_script,
+            lambda home: [home / ".local/share/mise"],
+        )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_normalizes_missing_or_null_filesystem_paths(self) -> None:
-        self._assert_normalizes_empty_filesystem_paths(_run_powershell_script)
+        self._assert_normalizes_empty_filesystem_paths(
+            _run_powershell_script,
+            lambda home: [home / "AppData/Local/mise"],
+        )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
@@ -414,6 +593,21 @@ class CopilotSandboxMergeTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_rejects_non_array_filesystem_paths(self) -> None:
         self._assert_rejects_invalid_filesystem_paths(_run_powershell_script)
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_handles_managed_path_permission_conflicts(self) -> None:
+        self._assert_managed_path_conflicts(
+            _run_posix_script,
+            lambda home: home / ".local/share/mise",
+        )
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_handles_managed_path_permission_conflicts(self) -> None:
+        self._assert_managed_path_conflicts(
+            _run_powershell_script,
+            lambda home: home / "AppData/Local/mise",
+        )
 
 
 # (case name, seeded value, expected merged value). ``_ENABLED_KEY_ABSENT``
