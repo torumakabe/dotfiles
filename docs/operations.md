@@ -30,6 +30,8 @@ TypeScript language server の除外を撤去するときは、`home/dot_config/
 
 セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
 
+Codespacesなどで現在の`gh`認証tokenが公開`github/gh-stack`へのAPI要求をSAML enforcementにより拒否された場合、セットアップスクリプトは同じ公式`gh`コマンドを資格情報なしで再実行する。匿名実行は一時的な`GH_CONFIG_DIR`を使い、既存の認証設定を変更しない。匿名APIのrate limitでも失敗した場合は導入を保留し、次回の`chezmoi apply`で再試行する。
+
 更新前には、skill と extension の候補を確認する。
 
 ```bash

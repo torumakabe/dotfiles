@@ -382,13 +382,20 @@ class PlatformParityTests(unittest.TestCase):
                     if feature == "skill:gh-stack":
                         self.assertIn(
                             "--agent github-copilot --scope user",
-                            source,
+                            " ".join(source.split()),
                         )
                     else:
-                        self.assertIn(
-                            "gh extension install github/gh-stack",
-                            source,
-                        )
+                        if platform == "windows-powershell":
+                            self.assertIn(
+                                "'extension', 'install', 'github/gh-stack'",
+                                " ".join(source.split()),
+                            )
+                        else:
+                            self.assertIn(
+                                "install_from_public_github extension install "
+                                "github/gh-stack",
+                                " ".join(source.split()),
+                            )
 
     def test_exceptions_reference_relevant_existing_documentation(self) -> None:
         checked_features = set()

@@ -1,7 +1,10 @@
 """Verify official gh-stack extension and skill installation."""
 
+import os
 import pathlib
 import re
+import subprocess
+import tempfile
 import unittest
 
 
@@ -10,11 +13,6 @@ SHELL_INSTALLER = REPO_ROOT / "home/run_after_31-install-gh-stack.sh.tmpl"
 POWERSHELL_INSTALLER = REPO_ROOT / "home/run_after_31-install-gh-stack.ps1.tmpl"
 CHEZMOIIGNORE = REPO_ROOT / "home/.chezmoiignore"
 README = REPO_ROOT / "README.md"
-UPSTREAM_REPOSITORY = "github/gh-stack"
-SKILL_INSTALL_COMMAND = (
-    "gh skill install github/gh-stack gh-stack "
-    "--agent github-copilot --scope user"
-)
 
 
 class GhStackInstallTests(unittest.TestCase):
@@ -25,30 +23,40 @@ class GhStackInstallTests(unittest.TestCase):
         cls.ignore = CHEZMOIIGNORE.read_text(encoding="utf-8")
 
     def test_both_installers_target_the_official_repository(self) -> None:
-        extension_install_command = (
-            f"gh extension install {UPSTREAM_REPOSITORY}"
+        normalized_shell = " ".join(
+            self.shell.replace("\\\n", " ").split()
         )
-        for name, source in (
-            ("shell", self.shell),
-            ("powershell", self.powershell),
-        ):
-            with self.subTest(installer=name):
-                normalized = " ".join(source.replace("\\\n", " ").split())
-                self.assertIn("gh extension list", source)
-                self.assertIn(extension_install_command, source)
-                self.assertIn(
-                    "gh skill list --agent github-copilot --scope user",
-                    normalized,
-                )
-                self.assertIn(SKILL_INSTALL_COMMAND, normalized)
-                self.assertLess(
-                    source.index("gh extension list"),
-                    source.index(extension_install_command),
-                )
-                self.assertLess(
-                    source.index("gh skill list"),
-                    source.index(SKILL_INSTALL_COMMAND),
-                )
+        normalized_powershell = " ".join(self.powershell.split())
+
+        self.assertIn("gh extension list", self.shell)
+        self.assertIn(
+            "install_from_public_github extension install github/gh-stack",
+            normalized_shell,
+        )
+        self.assertIn(
+            "gh skill list --agent github-copilot --scope user",
+            normalized_shell,
+        )
+        self.assertIn(
+            "install_from_public_github skill install github/gh-stack gh-stack "
+            "--agent github-copilot --scope user",
+            normalized_shell,
+        )
+
+        self.assertIn("gh extension list", self.powershell)
+        self.assertIn(
+            "'extension', 'install', 'github/gh-stack'",
+            normalized_powershell,
+        )
+        self.assertIn(
+            "gh skill list --agent github-copilot --scope user",
+            normalized_powershell,
+        )
+        self.assertRegex(
+            normalized_powershell,
+            r"'skill', 'install', 'github/gh-stack', 'gh-stack'.*"
+            r"'--agent', 'github-copilot'.*'--scope', 'user'",
+        )
 
     def test_both_installers_skip_updates(self) -> None:
         for name, source in (
@@ -58,14 +66,82 @@ class GhStackInstallTests(unittest.TestCase):
             with self.subTest(installer=name):
                 self.assertNotIn("extension upgrade", source)
                 self.assertNotIn("skill update", source)
-                self.assertEqual(
-                    source.count(
-                        f"gh extension install {UPSTREAM_REPOSITORY}"
-                    ),
-                    1,
-                )
-                self.assertEqual(source.count(SKILL_INSTALL_COMMAND), 1)
                 self.assertNotIn("--force", source)
+
+    def test_both_installers_retry_public_repository_without_credentials(self) -> None:
+        self.assertIn("install_from_public_github", self.shell)
+        self.assertIn("-u GH_TOKEN", self.shell)
+        self.assertIn("-u GITHUB_TOKEN", self.shell)
+        self.assertIn('GH_CONFIG_DIR="${anonymous_config}"', self.shell)
+
+        self.assertIn("Invoke-GhPublicInstall", self.powershell)
+        self.assertIn(
+            "SetEnvironmentVariable('GH_TOKEN', $null)",
+            self.powershell,
+        )
+        self.assertIn(
+            "SetEnvironmentVariable('GITHUB_TOKEN', $null)",
+            self.powershell,
+        )
+        self.assertIn("$env:GH_CONFIG_DIR = $anonymousConfig", self.powershell)
+
+    @unittest.skipIf(os.name == "nt", "the POSIX installer requires Bash")
+    def test_shell_retries_failed_installs_anonymously(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            log_path = root / "calls.log"
+            fake_gh = bin_dir / "gh"
+            fake_gh.write_text(
+                """#!/usr/bin/env bash
+set -u
+printf '%s|config=%s|gh=%s|github=%s\\n' \
+  "$*" "${GH_CONFIG_DIR-}" "${GH_TOKEN-}" "${GITHUB_TOKEN-}" \
+  >>"${GH_TEST_LOG}"
+case "$1 $2" in
+  "extension list"|"skill list")
+    exit 0
+    ;;
+  "extension install"|"skill install")
+    if [ -n "${GH_CONFIG_DIR-}" ] &&
+       [ -z "${GH_TOKEN-}" ] &&
+       [ -z "${GITHUB_TOKEN-}" ]; then
+      exit 0
+    fi
+    exit 1
+    ;;
+esac
+exit 1
+""",
+                encoding="utf-8",
+            )
+            fake_gh.chmod(0o755)
+
+            env = os.environ.copy()
+            env.update({
+                "PATH": f"{bin_dir}:{env['PATH']}",
+                "GH_TEST_LOG": str(log_path),
+                "GH_TOKEN": "authenticated-token",
+                "GITHUB_TOKEN": "secondary-token",
+            })
+            result = subprocess.run(
+                ["bash", str(SHELL_INSTALLER)],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = log_path.read_text(encoding="utf-8").splitlines()
+            anonymous_installs = [
+                line for line in calls
+                if " install " in line
+                and "|config=" in line
+                and "|gh=|github=" in line
+            ]
+            self.assertEqual(len(anonymous_installs), 2, calls)
 
     def test_installed_skill_skips_installation(self) -> None:
         shell = " ".join(self.shell.split())

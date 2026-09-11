@@ -5,6 +5,62 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     exit 0
 }
 
+function Invoke-GhPublicInstall {
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$GhArguments
+    )
+
+    & gh @GhArguments | Out-Host
+    if ($LASTEXITCODE -eq 0) {
+        return $true
+    }
+
+    Write-Warning "Authenticated GitHub API request failed. Retrying the public github/gh-stack repository without credentials."
+
+    $anonymousConfig = Join-Path ([System.IO.Path]::GetTempPath()) (
+        "gh-public-{0}" -f [System.Guid]::NewGuid().ToString("N")
+    )
+    [System.IO.Directory]::CreateDirectory($anonymousConfig) | Out-Null
+
+    $environmentNames = @(
+        'GH_TOKEN',
+        'GITHUB_TOKEN',
+        'GH_CONFIG_DIR',
+        'GH_PROMPT_DISABLED',
+        'GH_PAGER',
+        'PAGER'
+    )
+    $savedEnvironment = @{}
+    foreach ($name in $environmentNames) {
+        $savedEnvironment[$name] = [System.Environment]::GetEnvironmentVariable(
+            $name,
+            [System.EnvironmentVariableTarget]::Process
+        )
+    }
+
+    try {
+        [System.Environment]::SetEnvironmentVariable('GH_TOKEN', $null)
+        [System.Environment]::SetEnvironmentVariable('GITHUB_TOKEN', $null)
+        $env:GH_CONFIG_DIR = $anonymousConfig
+        $env:GH_PROMPT_DISABLED = '1'
+        $env:GH_PAGER = 'cat'
+        $env:PAGER = 'cat'
+
+        & gh @GhArguments | Out-Host
+        return ($LASTEXITCODE -eq 0)
+    } finally {
+        foreach ($name in $environmentNames) {
+            [System.Environment]::SetEnvironmentVariable(
+                $name,
+                $savedEnvironment[$name],
+                [System.EnvironmentVariableTarget]::Process
+            )
+        }
+        Remove-Item -LiteralPath $anonymousConfig -Recurse -Force
+    }
+}
+
 $extensionList = & gh extension list 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "Could not inspect GitHub CLI extensions. The next 'chezmoi apply' will retry gh-stack installation."
@@ -13,8 +69,10 @@ if ($LASTEXITCODE -ne 0) {
         ([string]$_ -split '\s+') -contains 'github/gh-stack'
     }
     if (-not $extensionInstalled) {
-        & gh extension install github/gh-stack
-        if ($LASTEXITCODE -ne 0) {
+        $installed = Invoke-GhPublicInstall -GhArguments @(
+            'extension', 'install', 'github/gh-stack'
+        )
+        if (-not $installed) {
             Write-Warning "Failed to install the github/gh-stack extension. The next 'chezmoi apply' will retry."
         }
     }
@@ -34,8 +92,17 @@ if ($skill) {
     exit 0
 }
 
-& gh skill install github/gh-stack gh-stack --agent github-copilot --scope user
-if ($LASTEXITCODE -ne 0) {
+$installed = Invoke-GhPublicInstall -GhArguments @(
+    'skill',
+    'install',
+    'github/gh-stack',
+    'gh-stack',
+    '--agent',
+    'github-copilot',
+    '--scope',
+    'user'
+)
+if (-not $installed) {
     Write-Warning "Failed to install the github/gh-stack skill. The next 'chezmoi apply' will retry."
 }
 
