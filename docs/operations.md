@@ -76,6 +76,8 @@ chezmoi diff && chezmoi apply
 
 macOS と Linux は、`home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。Windows は DSC の `jdx.mise` を使い、winget が公式 GitHub Releases ZIP を配置する。導入経路は OS ごとに異なるが、全 OS で mise の公式成果物を使う（[ADR-027](adr/027-mise-install-from-official-artifacts-per-os.md)）。
 
+macOS と Linux の固定版には、共通設定の `activate_shims` を認識する mise 2026.9.4 以降を使う。2026.8.10 はこの設定を未知のフィールドとして無視するため、shim を除外する契約を満たさない。
+
 macOS に Homebrew formula の mise がある場合、現在解決される mise が formula の実体であるか、mise が未解決のときだけ、導入スクリプトは検証済みの公式バイナリを原子的に配置する。現在 `command -v mise` で解決される formula 以外の mise、または標準配置先 `~/.local/bin/mise` にある実行可能な mise は置き換えない。PATH 外の任意の場所は探索しない。現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、導入スクリプトは formula を削除しない。Homebrew 版の activation を読み込んだ既存のシェルをすべて終了し、新しいシェルで `command -v mise` が導入スクリプトの案内したパスを返すことを確認してから、`brew uninstall mise` を手動で実行する。
 
 ### 実体環境への切替

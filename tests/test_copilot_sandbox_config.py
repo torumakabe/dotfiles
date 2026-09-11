@@ -11,6 +11,7 @@ and PowerShell scripts against seeded settings files to pin that contract.
 import json
 import os
 import pathlib
+import re
 import shutil
 import stat
 import subprocess
@@ -77,6 +78,11 @@ def _nested_unknown(depth: int) -> object:
 
 
 DEEP_UNKNOWN = _nested_unknown(25)
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _normalized_powershell_error(stderr: str) -> str:
+    return " ".join(ANSI_ESCAPE.sub("", stderr).replace("|", " ").split())
 
 # Sentinel distinguishing "no sandbox.enabled key seeded" from any JSON value,
 # including `None` (JSON null), which is itself one of the invalid cases.
@@ -515,8 +521,9 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                         self.assertTrue(uv_cache_path.is_dir())
                     else:
                         self.assertNotEqual(result.returncode, 0)
-                        self.assertIn(path_name, result.stderr)
-                        self.assertIn("managed Copilot uv cache path", result.stderr)
+                        error = _normalized_powershell_error(result.stderr)
+                        self.assertIn(path_name, error)
+                        self.assertIn("managed Copilot uv cache path", error)
                         self.assertEqual(
                             settings_path.read_text(encoding="utf-8"),
                             original,
@@ -542,8 +549,9 @@ class CopilotSandboxMergeTests(unittest.TestCase):
 
                     result = run_script(home, settings_path)
                     self.assertNotEqual(result.returncode, 0)
-                    self.assertIn(path_name, result.stderr)
-                    self.assertIn("managed Copilot uv cache path", result.stderr)
+                    error = _normalized_powershell_error(result.stderr)
+                    self.assertIn(path_name, error)
+                    self.assertIn("managed Copilot uv cache path", error)
                     self.assertEqual(
                         settings_path.read_text(encoding="utf-8"),
                         original,
