@@ -966,6 +966,10 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     settings = json.loads(settings_path.read_text(encoding="utf-8"))
                     self.assertIs(settings["sandbox"]["enabled"], expected)
+                    self.assertIn(
+                        f"sandbox.enabled={str(expected).lower()}",
+                        result.stdout,
+                    )
                     self.assertEqual(
                         stat.S_IMODE(settings_path.stat().st_mode),
                         0o600,
@@ -1008,6 +1012,10 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                         settings_path.read_text(encoding="utf-8-sig")
                     )
                     self.assertIs(settings["sandbox"]["enabled"], expected)
+                    self.assertIn(
+                        f"sandbox.enabled={str(expected).lower()}",
+                        result.stdout,
+                    )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")

@@ -213,6 +213,28 @@ class TestMainIntegration(unittest.TestCase):
             uve.with_copilot_uv_cache("bash", payload["toolArgs"]),
         )
 
+    def test_bash_cache_wrapper_is_idempotent(self) -> None:
+        first = uve.with_copilot_uv_cache(
+            "bash",
+            {"command": "uv run python script.py"},
+            "/tmp/copilot-uv",
+        )
+        self.assertIsNotNone(first)
+        self.assertIsNone(
+            uve.with_copilot_uv_cache("bash", first, "/tmp/copilot-uv")
+        )
+
+    def test_powershell_cache_wrapper_is_idempotent(self) -> None:
+        first = uve.with_copilot_uv_cache(
+            "powershell",
+            {"command": "uv run python script.py"},
+            r"C:\cache",
+        )
+        self.assertIsNotNone(first)
+        self.assertIsNone(
+            uve.with_copilot_uv_cache("powershell", first, r"C:\cache")
+        )
+
     def test_allow_non_bash_tool(self) -> None:
         self._assert_unchanged({
             "toolName": "edit",
@@ -235,6 +257,7 @@ class TestMainIntegration(unittest.TestCase):
             modified,
             {
                 "command": (
+                    "# copilot-uv-cache-wrapper\n"
                     "$env:UV_CACHE_DIR = 'C:\\Users\\O''Brien\\uv'; "
                     "& ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) "
                     "-NoLogo -NoProfile -NonInteractive -OutputFormat Text "

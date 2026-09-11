@@ -128,6 +128,7 @@ BLOCKED_COMMANDS: dict[str, str] = {
 
 VERSIONED_PYTHON_RE = re.compile(r"^python3(?:\.\d+)+(?:\.exe)?$")
 VERSIONED_PIP_RE = re.compile(r"^pip3(?:\.\d+)+(?:\.exe)?$")
+UV_CACHE_WRAPPER_MARKER = "# copilot-uv-cache-wrapper"
 
 
 def blocked_command_reason(command_name: str) -> str | None:
@@ -201,6 +202,8 @@ def with_copilot_uv_cache(
     command = tool_args.get("command")
     if tool_name not in ("bash", "powershell") or not isinstance(command, str) or not command:
         return None
+    if command.startswith(f"{UV_CACHE_WRAPPER_MARKER}\n"):
+        return None
 
     cache_dir = cache_dir or copilot_uv_cache_dir()
     modified = dict(tool_args)
@@ -208,6 +211,7 @@ def with_copilot_uv_cache(
         escaped = cache_dir.replace("'", "''")
         encoded = base64.b64encode(command.encode("utf-16-le")).decode("ascii")
         modified["command"] = (
+            f"{UV_CACHE_WRAPPER_MARKER}\n"
             f"$env:UV_CACHE_DIR = '{escaped}'; "
             "& ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) "
             "-NoLogo -NoProfile -NonInteractive -OutputFormat Text "
@@ -216,6 +220,7 @@ def with_copilot_uv_cache(
         )
     else:
         modified["command"] = (
+            f"{UV_CACHE_WRAPPER_MARKER}\n"
             f"export UV_CACHE_DIR={shlex.quote(cache_dir)};\n{command}"
         )
     return modified

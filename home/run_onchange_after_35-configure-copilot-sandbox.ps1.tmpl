@@ -349,5 +349,6 @@ try {
   }
 }
 
-Write-Host "Configured Copilot CLI local sandbox in $settingsPath"
+$enabledText = ([string](Get-JsonProperty -Object $sandbox -Name 'enabled')).ToLowerInvariant()
+Write-Host "Updated Copilot CLI sandbox policy in $settingsPath (sandbox.enabled=$enabledText)"
 {{- end -}}

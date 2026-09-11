@@ -227,5 +227,5 @@ jq --argjson enabled "${existing_enabled}" '.sandbox.enabled = $enabled' "${merg
 
 jq -e . "${settings_tmp}" >/dev/null
 mv -f "${settings_tmp}" "${settings_path}"
-echo "Configured Copilot CLI local sandbox in ${settings_path}"
+echo "Updated Copilot CLI sandbox policy in ${settings_path} (sandbox.enabled=${existing_enabled})"
 {{- end -}}
