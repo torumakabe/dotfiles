@@ -14,7 +14,7 @@ Copilot が Stacked PR を設計して操作するには、判断とコマンド
 
 skill と extension の版は固定しない。新規端末が過去の版へ固定されることを避け、公式コマンドが解決する最新安定版を取得する。端末間の版差を許容し、更新候補は定期レビューで検出する。
 
-Stacked PR を提案する条件は `copilot-instructions.md` で管理し、`gh stack` の操作方法は公式 skill を正本とする。更新候補は `gh skill update gh-stack --dry-run` と `gh extension upgrade gh-stack --dry-run` で確認し、更新は明示的に実行する。
+Stacked PR を提案する条件は `copilot-instructions.md` で管理し、`gh stack` の操作方法は公式 skill に従う。更新候補は `gh skill update gh-stack --dry-run` と `gh extension upgrade gh-stack --dry-run` で確認し、更新は明示的に実行する。
 
 ## Consequences
 

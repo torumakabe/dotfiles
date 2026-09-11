@@ -25,7 +25,7 @@ copilot-guardrails
 
 端末の profile や別の worktree だけを修正した場合、通常の適用元に修正がなければ、次の `chezmoi apply` で回避策が失われる可能性がある。利用者は `chezmoi source-path` で適用元を確認し、そのソースにも同じ修正を取り込んでから通常の適用を再開する。
 
-この回避策は CLI の起動経路を変更するもので、Windows のパッケージ登録を修復するものではない。パッケージ ID に依存するタスクバー連携の動作は未確認である。この WindowsApps 固有の回避策は macOS/Linux/WSL には追加しない。対象範囲と撤去条件の正本は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。
+この回避策は CLI の起動経路を変更するもので、Windows のパッケージ登録を修復するものではない。パッケージ ID に依存するタスクバー連携の動作は未確認である。この WindowsApps 固有の回避策は macOS/Linux/WSL には追加しない。対象範囲と撤去条件は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) で管理する。
 
 ## `warning: config file template has changed`
 
@@ -104,6 +104,8 @@ jq .sandbox.enabled ~/.copilot/settings.json
 ## `mise.lock has changed since chezmoi last wrote it?` と聞かれる
 
 `chezmoi status` が `MM .config/mise/mise.lock` を示し、`chezmoi apply` が上のプロンプトを出す。Codespaces のような TTY の無い環境では `could not open a new TTY` で停止する。
+
+リポジトリの初回導入とlockfile同期スクリプトは、実行前の管理対象lockfileを退避し、`mise install`のauto-lockによる差分を実行後に復元する。この症状は、スクリプト外で`mise install`や`mise upgrade`を実行した場合、または自動復元に失敗した場合に確認する。
 
 デプロイ済みの lockfile に、意図しないプラットフォームのエントリが加わった状態である。`chezmoi diff ~/.config/mise/mise.lock` で追加された行を確認する。`linux-x64-musl` や `windows-x64-baseline` のようなエントリが増えていれば、`lockfile_platforms` が効かないまま auto-lock が走ったことを意味する（[ADR-021](adr/021-mise-lockfile-platforms.md)）。
 
@@ -226,10 +228,10 @@ node -p "require('$lsp_typescript_root/node_modules/typescript/package.json').ve
 
 実行順と役割は [`docs/architecture.md`](architecture.md#セットアップスクリプトの実行順) を参照。
 
-- **warning で継続**: shell 設定の一部、`mise install` 後の任意ツール、追加ツール導入の失敗
-- **error で停止**: Oh My Zsh の clone、Docker 本体導入など継続に必要な処理
+- **warning で継続**: shell設定の一部と、後続処理が利用しない任意ツールの導入失敗
+- **error で停止**: Oh My Zshのclone、管理対象lockfileの復元失敗、mise管理ツールがmissingのまま残った場合、gh-stackのextensionまたはskillの導入や一覧取得に失敗した場合
 
-warning は標準エラーに表示される。表示されたコマンドを手動で再実行して復旧する。
+標準エラーの行頭が`Warning:`でも、導入結果を保証できない処理は非0で終了する。末尾の終了コードとエラー内容を確認し、表示されたコマンドを手動で再実行して復旧する。
 
 ## GitHub API または `gh extension install` が SAML 403 で失敗する
 
@@ -294,9 +296,12 @@ chezmoi apply
 確認コマンド:
 
 ```bash
-echo "$PATH" | tr ':' '\n'   # ~/.local/share/mise/shims, ~/.local/bin, ~/go/bin が含まれること
+mise bin-paths
+echo "$PATH" | tr ':' '\n'   # miseの実体ディレクトリ群、~/.local/bin、~/go/binが含まれること
 command -v copilot uv
 ```
+
+Unixの共有profileは`~/.local/share/mise/shims`をPATHへ追加しない。Windowsは非対話環境との互換性のため、User PATHのshim登録を維持する。
 
 ```powershell
 (Get-Command uv).Source

@@ -19,7 +19,7 @@
 `mise` 設定や導入元を見直すときに、次の制約が残っているか確認する。解消されていれば条件分岐やワークアラウンドを外せる。
 
 - **cargo-make**: linux/arm64 向け配布なし
-- **npm:typescript-language-server**: 利用中の npm レジストリプロキシが trusted publisher の証跡を保持しない版だけを `trust_policy_excludes` の対象とする。対象版は `home/dot_config/mise/config.toml.tmpl` を正本とする
+- **npm:typescript-language-server**: 利用中の npm レジストリプロキシが trusted publisher の証跡を保持しない版だけを `trust_policy_excludes` の対象とする。対象版は `home/dot_config/mise/config.toml.tmpl` で定義する
 - **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式 `.deb`、更新は `azd update`）
 - **copilot-cli**: mise の `github:` バックエンドで更新遅延やバージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式リリースアーカイブ、更新は `copilot update`）
 - **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
@@ -174,17 +174,19 @@ macOS の shim リンクと Windows User PATH の shim 登録は、この変更�
 
 ### uv の backend 移行
 
-uv は `github:astral-sh/uv` backend で管理する。新規環境は通常の導入でよい。既存の aqua install は、同じ版のまま backend を変更しても再導入されないことがあるため、一度だけ `--force` で入れ直す。以後は通常の `mise-upgrade` で更新し、毎回の force reinstall や PATH の手動同期は行わない。
+uv は `github:astral-sh/uv` backend で管理する。新規環境は全OSで通常の導入を使う。既存のaqua installは、同じ版のままbackendを変更しても再導入されないことがある。macOS、Linux、WSLでは、この節の`--force`手順で一度だけ入れ直す。既存のWindows環境は、退避と復元を含む[Windowsの直接移行手順](../tests/manual/windows-uv/direct-migration.md)を使う。以後は通常の`mise-upgrade`で更新し、毎回のforce reinstallやPATHの手動同期は行わない。
 
 移行時は版と backend を同時に変更しない。global config と隣接 lock の両方を使い、uv の版、各対象の URL/checksum、provenance が従来と一致することを確認する。alias だけを変更して旧 lock を残すと、旧 backend が復元される場合がある。ソース名 `home/dot_config/mise/private_mise.lock` は、端末では `~/.config/mise/mise.lock` になる。
 
+以下の手順はmacOS、Linux、WSLの既存環境に適用する。Windowsでは実行せず、上記の直接移行手順に従う。
+
 1. 運用者は対象端末の uv/uvx を使う処理、Copilot、他の mise 更新と chezmoi apply を止める。プロジェクト設定が混ざらない作業ディレクトリで `mise config ls`、`mise tool uv --json`、`mise where uv`、`mise cache path` を確認する。
-2. 運用者は端末内の専用ディレクトリに config/lock、`installs/uv`、`installs/.mise-installs.toml`、shims 内の uv/uvx 関連ファイル、mise の `cache/uv` を退避する。Windows の拡張子付き shim、metadata、runtime link も対象にし、リンクはリンクとして保持する。不在だった対象も記録し、保存先のアクセス権を元より広げない。
+2. 運用者は端末内の専用ディレクトリに config/lock、`installs/uv`、`installs/.mise-installs.toml`、shims 内の uv/uvx 関連ファイル、mise の `cache/uv` を退避する。リンクはリンクとして保持する。不在だった対象も記録し、保存先のアクセス権を元より広げない。
 3. config と lock の uv 以外に端末固有の変更がない場合は、下記の対象限定 apply で両ファイルを反映する。固有変更がある場合は先に差分を整理し、uv の宣言、alias、uv の lock entry 群だけを反映する。
 4. 運用者は既存の GitHub 認証を使って、下記の `mise --locked install --force uv` を一度実行する。`uv@<version>` ではなく設定と同じ `uv` を要求し、版は lock で固定する。`--force` は途中で旧実体を削除するため、退避前に実行しない。通常の同期フックや `reshim` はこの操作の代用にならない。
-5. 運用者は `mise tool uv --json`、`mise ls uv`、`mise which uv`、`mise which uvx` で backend が GitHub、missing なし、実体のディレクトリが選ばれることを確認する。その後、新しい親ターミナルから起動した Copilot で `command -v uv`（PowerShell は `Get-Command uv`）、uv/uvx の版表示を確認する。実体への到達と cache を使う処理の成否は区別する。
+5. 運用者は `mise tool uv --json`、`mise ls uv`、`mise which uv`、`mise which uvx` で backend が GitHub、missing なし、実体のディレクトリが選ばれることを確認する。その後、新しい親ターミナルから起動した Copilot で `command -v uv`とuv/uvxの版表示を確認する。実体への到達と cache を使う処理の成否は区別する。
 
-設定ファイルだけの反映（全 OS 共通。更新済みの source を使う）:
+設定ファイルだけの反映（更新済みのsourceを使う）:
 
 ```sh
 chezmoi apply --exclude=scripts "$HOME/.config/mise/config.toml" "$HOME/.config/mise/mise.lock"
@@ -202,23 +204,6 @@ macOS / Linux / WSL の通常ターミナル:
     fi
     GITHUB_TOKEN="$token" mise --locked install --force uv
 )
-```
-
-Windows の通常 PowerShell:
-
-```powershell
-$previousToken = $env:GITHUB_TOKEN
-try {
-    $token = gh auth token
-    if ($LASTEXITCODE -ne 0 -or -not $token) { throw "Existing GitHub authentication is unavailable" }
-    $env:GITHUB_TOKEN = $token
-    mise --locked install --force uv
-    if ($LASTEXITCODE -ne 0) { throw "uv backend migration failed; restore the backup" }
-}
-finally {
-    $env:GITHUB_TOKEN = $previousToken
-    $token = $null
-}
 ```
 
 失敗した場合、運用者は失敗後の uv 関連ファイルを退避し、保存した config/lock、uv の実体、metadata、shim、cache を元へ復元する。共有 manifest 全体を戻してよいのは、uv 以外に並行変更がない場合だけである。別の編集があれば上書きせず、差分を確認する。新しいターミナルで旧構成の uv/uvx が起動するまでバックアップを残し、再ダウンロードだけを復元手段にしない。
@@ -256,7 +241,9 @@ mise-upgrade
 
 ### 対象プラットフォームの定義元
 
-対象プラットフォームは `~/.config/mise/config.toml` の `[settings] lockfile_platforms` が正本である。この設定は、auto-lock（`mise install` が実インストール後に走らせる書き戻し）と `--platform` を省略した `mise lock` が使う基準集合を決める。
+対象プラットフォームは `~/.config/mise/config.toml` の `[settings] lockfile_platforms` で定義する。この設定は、auto-lock（`mise install` が実インストール後に走らせる書き戻し）と `--platform` を省略した `mise lock` が使う基準集合を決める。
+
+初回導入とlockfile同期スクリプトは、`mise install`の前に管理対象lockfileを退避する。auto-lockで内容が変化した場合は実行後に元の内容へ復元し、復元に失敗した場合はスクリプトを異常終了させる。スクリプト外で実行する`mise install`と`mise upgrade`にはこの保護がない。
 
 ```toml
 [settings]
@@ -342,9 +329,9 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 ## Bootstrap / shell pin の更新
 
-初期セットアップ系スクリプトは、上流の最新版をその場で実行しない。ダウンロードする成果物はバージョンと公式 SHA-256、Git から取得するソースは完全な commit SHA で固定する。各値は、その値を定義するスクリプトを正本とする。
+初期セットアップ系スクリプトは、上流の最新版をその場で実行しない。ダウンロードする成果物はバージョンと公式 SHA-256、Git から取得するソースは完全な commit SHA で固定する。各値は、その値を定義するスクリプトで管理する。
 
-| 正本 | pin |
+| 管理元 | pin |
 |------|-----|
 | `install.sh` | `CHEZMOI_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_before_20-install-mise.sh.tmpl` | `MISE_VERSION` とアーキテクチャ別 SHA-256 |

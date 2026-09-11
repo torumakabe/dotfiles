@@ -10,14 +10,14 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 対象指定がなければ全項目を点検する。指定があれば、その対象と検証に必要な実装、設定、テスト、公式情報に絞る。参照するパス、見出し、ADR、エージェント、スキル、コマンドの実在も確認する。
 
 - **現在の不一致**: 現在形の説明、契約、適用中の Accepted な ADR、実装の意図と、実装または公式情報が矛盾し、対象環境や利用機能への適用、具体的な影響、修正案または判断すべき選択肢を示せる場合
-- **同期漏れのリスク**: 同じ情報を複数箇所が独立して保持し、正本からの生成や直接の一致検査がなく、同期漏れを起こす変更契機と正本を選んだ解消案を示せる場合。正本への参照や、この条件に該当しない最小要約は含めない
+- **同期漏れのリスク**: 同じ情報を複数箇所が独立して保持し、管理元からの生成や直接の一致検査がなく、同期漏れを起こす変更契機と管理元を選んだ解消案を示せる場合。管理元への参照や、この条件に該当しない最小要約は含めない
 - 過去の検証版や観測結果は歴史的記録として扱う。OS 名から未記載の CPU やディストリビューションへの対応を推論した結果、未再現の仮説、対象環境で使う根拠がない構成、任意説明の不足を現在の問題にしない
 - 行数、新版の存在、検査不能だけを問題の根拠にしない。未確認の範囲は検査済みの範囲と分ける
 
 ## instructions、agents、skills と記述の配置
 
 - `.github/copilot-instructions.md` と `.github/agents/` はこのリポジトリ用、`home/private_dot_copilot/copilot-instructions.md` は配布用として、スコープ、重複、競合を確認する
-- 指示、エージェント、コードコメント、文書を[記述の置き場所](../../home/private_dot_copilot/copilot-instructions.md#記述の置き場所)と[リポジトリの割り当て](../copilot-instructions.md#記述の置き場所)に照合する。モデルの一般知識や重複は削除を優先し、必要な情報は正本を参照する。単に別ファイルへ移すだけにしない
+- 指示、エージェント、コードコメント、文書を[記述の置き場所](../../home/private_dot_copilot/copilot-instructions.md#記述の置き場所)と[リポジトリの割り当て](../copilot-instructions.md#記述の置き場所)に照合する。モデルの一般知識や重複は削除を優先し、必要な情報は管理元を参照する。単に別ファイルへ移すだけにしない
 - `.github/agents/*.agent.md` の `name` がファイル名から `.agent.md` を除いた名前と一致し、`description` で依頼に合うエージェントを選べるか確認する
 - ユーザー共通のエージェントは配布しておらず、`home/private_dot_copilot/skills/` は `.gitkeep` のみである。外部スキルは [Copilot CLI の管理境界](../../docs/copilot-cli.md)に照合し、ローカルの `SKILL.md` がないことを欠落にしない
 - `home/.chezmoitemplates/copilot-user-settings.json` と適用処理のマージ範囲を確認する。`enabledPlugins` の管理項目を排他的な許可リストとみなさず、管理外の既存項目が保持されることと区別する
@@ -35,7 +35,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 運用中の URL、pin、checksum と、`.github/copilot-instructions.md` の「プラットフォーム制約」「ワークアラウンド」を公式情報に照合する。対象指定がある場合は関連する項目を扱う。
 
 - 固定版のリリース、asset、checksum、URL の到達先を確認し、最新安定版までの差分、Security Advisories、根拠となる上流 issue から、セキュリティ、互換性、利用機能、更新方針への影響を調べる
-- `home/run_once_after_10-setup-shell.sh.tmpl` を正本として、Oh My Zsh の固定 commit の存在と公式 default branch との差分を確認する
+- `home/run_once_after_10-setup-shell.sh.tmpl` に定義された値を使い、Oh My Zsh の固定 commit の存在と公式 default branch との差分を確認する
 - 同テンプレートの zsh-completions は lightweight tag と annotated tag を commit まで解決し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` の不一致を報告する。tag は最新の draft でも prerelease でもない release と比較する
 - 上記二つの pin は、新版の存在だけなら外部情報の更新候補とし、自動更新しない
 - `gh-stack` の skill と CLI extension は [gh-stack の更新](../../docs/operations.md#gh-stack-の更新)の候補確認手順を使い、導入版と更新候補を分けて確認する。CLI extension 全般へ対象を広げない
@@ -69,7 +69,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 ## 報告
 
-現在の不一致と同期漏れのリスクを分け、各問題に重要度、影響、対象環境、`path:line` の根拠、修正案を示す。同じ問題は一度だけ扱い、重複には出現箇所、変更契機、同期保証、正本を添える。
+現在の不一致と同期漏れのリスクを分け、各問題に重要度、影響、対象環境、`path:line` の根拠、修正案を示す。同じ問題は一度だけ扱い、重複には出現箇所、変更契機、同期保証、管理元を添える。
 
 版、パス、環境の挙動を根拠にする場合は、実装が選ぶ分岐と実体を特定し、実測コマンドと結果を示す。指摘の撤回や「問題なし」の判断にも同じ証拠条件を使う。
 

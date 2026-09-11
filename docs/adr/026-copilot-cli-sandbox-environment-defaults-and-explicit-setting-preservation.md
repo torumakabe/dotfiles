@@ -14,7 +14,7 @@ ADR-025 は全環境で local sandbox を初回から有効にした。しかし
 
 全環境で、既存値が boolean の `true` または `false` なら `chezmoi apply` 後も維持し、非 boolean は上書きせずエラーとして拒否する。コンテナでも利用者は手動で有効化できるが、bubblewrap のネスト実行は公式サポートを確認できない限り成功を保証しない。組織の managed settings は利用者設定より優先する。
 
-MCP と LSP を local sandbox の対象外とする ADR-025 の判断も継承し、`sandboxMcpServers=false` と `sandboxLspServers=false` を維持する。設定値の実装は `home/.chezmoitemplates/copilot-user-settings.json` を正本とする。
+MCP と LSP を local sandbox の対象外とする ADR-025 の判断も継承し、`sandboxMcpServers=false` と `sandboxLspServers=false` を維持する。設定値は `home/.chezmoitemplates/copilot-user-settings.json` で定義する。
 
 設定同期は、リポジトリが管理する sandbox policy だけを更新し、管理対象外のキーを階層にかかわらず保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化し、既存の配列を維持する。ADR-029 に従い、`readonlyPaths` は既存配列を保持したうえで、リポジトリ管理の mise read-only entry を重複なく追加する。ADR-030 に従い、`readwritePaths` には uv cache directory だけを追加する。配列以外の値と、管理対象 path に対する明示的な read-only または deny は意図を推測して変換せず、設定ファイルを書き換える前にエラーとして拒否する。
 

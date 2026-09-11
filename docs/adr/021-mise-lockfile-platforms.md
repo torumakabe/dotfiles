@@ -22,7 +22,7 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 
 集合は mise の既定（`linux-arm64`、`linux-arm64-musl`、`linux-x64`、`linux-x64-musl`、`macos-arm64`、`macos-x64`、`windows-x64` の 7 種）とは一致させない。musl 系はこの dotfiles の対象外であり、`macos-x64` は macOS を Apple Silicon に限定するため除く。代わりに既定に無い `windows-arm64` を加える。
 
-`mise-upgrade`（zsh の関数と PowerShell の `Invoke-MiseUpgrade`）が持つ明示的な `mise lock --global --platform ...` は残す。この処理は既存 lockfile を削除してから再生成する破壊的操作であり、設定が読まれない状況（`2026.4.8` 未満の mise、設定ファイルの欠落）でも意図した集合になることを保証する必要があるため。プラットフォーム集合の正本は config.toml とし、`tests/test_mise_config.py` が config.toml を TOML として解析した値から CLI の CSV を導出して、zsh / PowerShell / 文書との一致を検査する。
+`mise-upgrade`（zsh の関数と PowerShell の `Invoke-MiseUpgrade`）が持つ明示的な `mise lock --global --platform ...` は残す。この処理は既存 lockfile を削除してから再生成する破壊的操作であり、設定が読まれない状況（`2026.4.8` 未満の mise、設定ファイルの欠落）でも意図した集合になることを保証する必要があるため。プラットフォーム集合は config.toml で定義し、`tests/test_mise_config.py` が config.toml を TOML として解析した値から CLI の CSV を導出して、zsh / PowerShell / 文書との一致を検査する。
 
 ## Consequences
 

@@ -10,7 +10,7 @@ ADR-015 は Copilot CLI の shell command に対するネットワーク制御�
 
 ## Decision
 
-`home/.chezmoitemplates/copilot-user-settings.json` を正本とし、Windows、macOS、ネイティブ Linux、WSL2、Codespaces、Dev Container の user-level `~/.copilot/settings.json` へ `sandbox.enabled=true` を既定値として配布する。`experimental=true` とし、`addCurrentWorkingDirectory=true`、`allowDevToolAccess=true`、`auth.git=true`、`auth.gh=true`、`network.allowOutbound=true`、`network.allowLocalNetwork=true` を設定する。既存の filesystem path rules（`readwritePaths`、`readonlyPaths`、`deniedPaths`）は維持し、stale な network 系キーは chezmoi apply のたびに除去する。MCP と LSP は `sandboxMcpServers=false` と `sandboxLspServers=false` により sandbox の対象外に据え置く。
+`home/.chezmoitemplates/copilot-user-settings.json` で設定値を定義し、Windows、macOS、ネイティブ Linux、WSL2、Codespaces、Dev Container の user-level `~/.copilot/settings.json` へ `sandbox.enabled=true` を既定値として配布する。`experimental=true` とし、`addCurrentWorkingDirectory=true`、`allowDevToolAccess=true`、`auth.git=true`、`auth.gh=true`、`network.allowOutbound=true`、`network.allowLocalNetwork=true` を設定する。既存の filesystem path rules（`readwritePaths`、`readonlyPaths`、`deniedPaths`）は維持し、stale な network 系キーは chezmoi apply のたびに除去する。MCP と LSP は `sandboxMcpServers=false` と `sandboxLspServers=false` により sandbox の対象外に据え置く。
 
 利用者は Copilot CLI 組み込みの `/sandbox disable` で `sandbox.enabled=false` を持続化できる。`home/run_onchange_after_35-configure-copilot-sandbox.{sh,ps1}.tmpl` は desired template を適用する前に既存の `sandbox.enabled` を検査し、値が boolean であれば他の repo-managed な sandbox key をマージした後にその値を復元する。既存の key が欠落していれば true を採用し、null や非 boolean であれば黙って上書きせず chezmoi apply を明示的なエラーで止める。この復元により、`/sandbox disable` の効果は `/sandbox enable` を実行するまで、将来の chezmoi apply や template 更新を跨いで残る。
 
