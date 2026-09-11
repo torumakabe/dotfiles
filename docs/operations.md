@@ -30,7 +30,7 @@ TypeScript language server の除外を撤去するときは、`home/dot_config/
 
 セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
 
-Codespacesなどで現在の`gh`認証tokenが公開`github/gh-stack`へのAPI要求をSAML enforcementにより拒否された場合、セットアップスクリプトは同じ公式`gh`コマンドを資格情報なしで再実行する。匿名実行は一時的な`GH_CONFIG_DIR`を使い、既存の認証設定を変更しない。匿名APIのrate limitでも失敗した場合は導入を保留し、次回の`chezmoi apply`で再試行する。
+Codespacesなどで現在の`gh`認証tokenが公開`github/gh-stack`へのAPI要求をSAML enforcementにより拒否された場合、セットアップスクリプトは同じ公式`gh`コマンドを資格情報なしで再実行する。匿名実行は一時的な`GH_CONFIG_DIR`を使い、既存の認証設定を変更しない。匿名APIのrate limitでも失敗した場合は`chezmoi apply`を異常終了させ、未導入のまま成功を報告しない。
 
 更新前には、skill と extension の候補を確認する。
 
@@ -302,6 +302,8 @@ GITHUB_TOKEN=$(gh auth token) mise install
 成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。現在の draw.io 配布フローには公式 checksum がないため、更新担当者が対象リリース asset の SHA-256 を計算し、上流リリースの出所と asset を確認してから pin を更新する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
+
+Linuxの初回パッケージ導入では、aptのHTTPとHTTPS通信を30秒で打ち切り、3回まで再試行する。dpkgのロック待機は60秒、1回のapt処理全体は15分を上限とする。パッケージ導入の出力は進捗を確認できる粒度で表示し、通信が停止した状態を無期限に待たない。
 
 `run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。macOS の Homebrew formula から公式バイナリへの移行だけは例外であり、解決される mise が formula の実体である場合、または mise が未解決の場合に移行処理を実行する。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
