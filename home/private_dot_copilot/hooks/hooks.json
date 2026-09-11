@@ -4,8 +4,8 @@
     "preToolUse": [
       {
         "type": "command",
-        "bash": "uv run \"$HOME/.copilot/hooks/scripts/copilot-guard.py\"",
-        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\copilot-guard.py\"",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/node-global-enforcer.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\node-global-enforcer.py\"",
         "cwd": ".",
         "timeoutSec": 30
       },
@@ -18,8 +18,8 @@
       },
       {
         "type": "command",
-        "bash": "uv run \"$HOME/.copilot/hooks/scripts/node-global-enforcer.py\"",
-        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\node-global-enforcer.py\"",
+        "bash": "uv run \"$HOME/.copilot/hooks/scripts/copilot-guard.py\"",
+        "powershell": "uv run \"$HOME\\.copilot\\hooks\\scripts\\copilot-guard.py\"",
         "cwd": ".",
         "timeoutSec": 30
       }

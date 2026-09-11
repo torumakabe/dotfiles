@@ -173,6 +173,8 @@ def _run_posix_script(
     env.pop("MISE_DATA_DIR", None)
     env.pop("MISE_INSTALLS_DIR", None)
     env.pop("XDG_DATA_HOME", None)
+    env.pop("XDG_CACHE_HOME", None)
+    env.pop("UV_CACHE_DIR", None)
     env.update(extra_env or {})
     return subprocess.run(
         ["bash", str(script_path)],
@@ -199,6 +201,7 @@ def _run_powershell_script(
     env.pop("MISE_DATA_DIR", None)
     env.pop("MISE_INSTALLS_DIR", None)
     env.pop("XDG_DATA_HOME", None)
+    env.pop("UV_CACHE_DIR", None)
     env.update(extra_env or {})
     return subprocess.run(
         ["pwsh", "-NoLogo", "-NoProfile", "-File", str(script_path)],
@@ -291,6 +294,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self,
         settings: dict,
         expected_mise_readonly_paths: list[pathlib.Path],
+        expected_uv_cache_path: pathlib.Path,
         expected_enabled: bool = True,
     ) -> None:
         self.assertEqual(settings["unrelated"], {"keep": True})
@@ -326,7 +330,10 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self.assertNotIn("version", policy)
         self.assertEqual(
             policy["filesystem"]["readwritePaths"],
-            FILESYSTEM_PATHS["readwritePaths"],
+            [
+                *FILESYSTEM_PATHS["readwritePaths"],
+                str(expected_uv_cache_path),
+            ],
         )
         self.assertEqual(
             policy["filesystem"]["readonlyPaths"],
@@ -354,7 +361,10 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self.assertNotIn("blockedHosts", policy["network"])
 
     def _assert_normalizes_empty_filesystem_paths(
-        self, run_script, expected_mise_readonly_paths
+        self,
+        run_script,
+        expected_mise_readonly_paths,
+        expected_uv_cache_path,
     ) -> None:
         for path_name in FILESYSTEM_PATHS:
             for case_name, remove_key in (("missing", True), ("null", False)):
@@ -381,7 +391,11 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                                 for path in expected_mise_readonly_paths(home)
                             ]
                             if path_name == "readonlyPaths"
-                            else []
+                            else (
+                                [str(expected_uv_cache_path(home))]
+                                if path_name == "readwritePaths"
+                                else []
+                            )
                         )
                         self.assertEqual(
                             merged["sandbox"]["userPolicy"]["filesystem"][path_name],
@@ -459,6 +473,111 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                         )
                         self.assertFalse(managed_path.exists())
 
+    def _assert_uv_cache_permission_conflicts(
+        self, run_script, uv_cache_path_for_home
+    ) -> None:
+        for path_name, expected_success in (
+            ("readwritePaths", True),
+            ("readonlyPaths", False),
+            ("deniedPaths", False),
+        ):
+            with self.subTest(path=path_name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    home = pathlib.Path(temp_dir)
+                    uv_cache_path = uv_cache_path_for_home(home)
+                    settings_path = _seed_settings(home)
+                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                    filesystem = settings["sandbox"]["userPolicy"]["filesystem"]
+                    filesystem[path_name] = [f"{uv_cache_path}{os.sep}"]
+                    settings_path.write_text(json.dumps(settings), encoding="utf-8")
+                    original = settings_path.read_text(encoding="utf-8")
+
+                    result = run_script(home, settings_path)
+                    if expected_success:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        merged = json.loads(
+                            settings_path.read_text(encoding="utf-8-sig")
+                        )
+                        self.assertEqual(
+                            merged["sandbox"]["userPolicy"]["filesystem"][
+                                "readwritePaths"
+                            ],
+                            [f"{uv_cache_path}{os.sep}"],
+                        )
+                        self.assertTrue(uv_cache_path.is_dir())
+                    else:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(path_name, result.stderr)
+                        self.assertIn("managed Copilot uv cache path", result.stderr)
+                        self.assertEqual(
+                            settings_path.read_text(encoding="utf-8"),
+                            original,
+                        )
+                        self.assertFalse(uv_cache_path.exists())
+
+    def _assert_uv_cache_parent_permission_conflicts(
+        self, run_script, uv_cache_path_for_home
+    ) -> None:
+        for path_name in ("readonlyPaths", "deniedPaths"):
+            with self.subTest(path=path_name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    home = pathlib.Path(temp_dir)
+                    uv_cache_path = uv_cache_path_for_home(home)
+                    settings_path = _seed_settings(home)
+                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                    filesystem = settings["sandbox"]["userPolicy"]["filesystem"]
+                    filesystem[path_name] = [
+                        str(uv_cache_path.parent / "nested" / "..")
+                    ]
+                    settings_path.write_text(json.dumps(settings), encoding="utf-8")
+                    original = settings_path.read_text(encoding="utf-8")
+
+                    result = run_script(home, settings_path)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(path_name, result.stderr)
+                    self.assertIn("managed Copilot uv cache path", result.stderr)
+                    self.assertEqual(
+                        settings_path.read_text(encoding="utf-8"),
+                        original,
+                    )
+                    self.assertFalse(uv_cache_path.exists())
+
+    def _assert_uv_cache_rejects_links(
+        self, run_script, uv_cache_path_for_home, expected_error: str
+    ) -> None:
+        for link_name in ("parent", "target"):
+            with self.subTest(link=link_name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    home = pathlib.Path(temp_dir)
+                    uv_cache_path = uv_cache_path_for_home(home)
+                    settings_path = _seed_settings(home)
+                    original = settings_path.read_text(encoding="utf-8")
+                    redirect = home / "redirect"
+                    redirect.mkdir()
+                    try:
+                        if link_name == "parent":
+                            uv_cache_path.parent.parent.mkdir(parents=True)
+                            uv_cache_path.parent.symlink_to(
+                                redirect,
+                                target_is_directory=True,
+                            )
+                        else:
+                            uv_cache_path.parent.mkdir(parents=True)
+                            uv_cache_path.symlink_to(
+                                redirect,
+                                target_is_directory=True,
+                            )
+                    except OSError as error:
+                        self.skipTest(f"directory symlink unavailable: {error}")
+
+                    result = run_script(home, settings_path)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(expected_error, result.stderr)
+                    self.assertEqual(
+                        settings_path.read_text(encoding="utf-8"),
+                        original,
+                    )
+
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
     def test_posix_merge_preserves_paths_and_removes_stale_network_keys(self) -> None:
@@ -471,8 +590,10 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8")),
                 [home / ".local/share/mise"],
+                home / ".cache/github-copilot/uv",
             )
             self.assertTrue((home / ".local/share/mise/installs").is_dir())
+            self.assertTrue((home / ".cache/github-copilot/uv").is_dir())
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
@@ -494,6 +615,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8")),
                 [mise_data_dir, mise_installs_dir],
+                home / ".cache/github-copilot/uv",
             )
             self.assertTrue(mise_data_dir.is_dir())
             self.assertTrue(mise_installs_dir.is_dir())
@@ -514,6 +636,26 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8")),
                 [xdg_data_home / "mise"],
+                home / ".cache/github-copilot/uv",
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_uses_xdg_cache_home(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+            xdg_cache_home = home / "xdg-cache"
+            result = _run_posix_script(
+                home,
+                settings_path,
+                extra_env={"XDG_CACHE_HOME": str(xdg_cache_home)},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8")),
+                [home / ".local/share/mise"],
+                xdg_cache_home / "github-copilot/uv",
             )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
@@ -527,8 +669,10 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8-sig")),
                 [home / "AppData/Local/mise"],
+                home / "AppData/Local/GitHubCopilot/uv",
             )
             self.assertTrue((home / "AppData/Local/mise/installs").is_dir())
+            self.assertTrue((home / "AppData/Local/GitHubCopilot/uv").is_dir())
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_uses_configured_mise_data_dir(self) -> None:
@@ -549,6 +693,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8-sig")),
                 [mise_data_dir, mise_installs_dir],
+                home / "AppData/Local/GitHubCopilot/uv",
             )
             self.assertTrue(mise_data_dir.is_dir())
             self.assertTrue(mise_installs_dir.is_dir())
@@ -568,6 +713,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8-sig")),
                 [xdg_data_home / "mise"],
+                home / "AppData/Local/GitHubCopilot/uv",
             )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
@@ -576,6 +722,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self._assert_normalizes_empty_filesystem_paths(
             _run_posix_script,
             lambda home: [home / ".local/share/mise"],
+            lambda home: home / ".cache/github-copilot/uv",
         )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
@@ -583,6 +730,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self._assert_normalizes_empty_filesystem_paths(
             _run_powershell_script,
             lambda home: [home / "AppData/Local/mise"],
+            lambda home: home / "AppData/Local/GitHubCopilot/uv",
         )
 
     @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
@@ -607,6 +755,113 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self._assert_managed_path_conflicts(
             _run_powershell_script,
             lambda home: home / "AppData/Local/mise",
+        )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_handles_uv_cache_permission_conflicts(self) -> None:
+        self._assert_uv_cache_permission_conflicts(
+            _run_posix_script,
+            lambda home: home / ".cache/github-copilot/uv",
+        )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_rejects_uv_cache_parent_permission_conflicts(self) -> None:
+        self._assert_uv_cache_parent_permission_conflicts(
+            _run_posix_script,
+            lambda home: home / ".cache/github-copilot/uv",
+        )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_relative_dot_policy_path_is_not_a_parent_conflict(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            settings["sandbox"]["userPolicy"]["filesystem"]["deniedPaths"] = ["."]
+            settings_path.write_text(json.dumps(settings), encoding="utf-8")
+
+            result = _run_posix_script(home, settings_path)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            merged = json.loads(settings_path.read_text(encoding="utf-8-sig"))
+            self.assertIn(
+                str(home / ".cache/github-copilot/uv"),
+                merged["sandbox"]["userPolicy"]["filesystem"]["readwritePaths"],
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_expands_tilde_for_uv_cache_permission_conflicts(self) -> None:
+        for path_name, expected_success in (
+            ("readwritePaths", True),
+            ("readonlyPaths", False),
+            ("deniedPaths", False),
+        ):
+            with self.subTest(path=path_name):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    home = pathlib.Path(temp_dir)
+                    uv_cache_path = home / ".cache/github-copilot/uv"
+                    settings_path = _seed_settings(home)
+                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+                    filesystem = settings["sandbox"]["userPolicy"]["filesystem"]
+                    filesystem[path_name] = ["~/.cache/github-copilot/uv/"]
+                    settings_path.write_text(json.dumps(settings), encoding="utf-8")
+                    original = settings_path.read_text(encoding="utf-8")
+
+                    result = _run_posix_script(home, settings_path)
+                    if expected_success:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        merged = json.loads(
+                            settings_path.read_text(encoding="utf-8-sig")
+                        )
+                        self.assertEqual(
+                            merged["sandbox"]["userPolicy"]["filesystem"][
+                                "readwritePaths"
+                            ],
+                            ["~/.cache/github-copilot/uv/"],
+                        )
+                        self.assertTrue(uv_cache_path.is_dir())
+                    else:
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn(path_name, result.stderr)
+                        self.assertIn("managed Copilot uv cache path", result.stderr)
+                        self.assertEqual(
+                            settings_path.read_text(encoding="utf-8"),
+                            original,
+                        )
+                        self.assertFalse(uv_cache_path.exists())
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_handles_uv_cache_permission_conflicts(self) -> None:
+        self._assert_uv_cache_permission_conflicts(
+            _run_powershell_script,
+            lambda home: home / "AppData/Local/GitHubCopilot/uv",
+        )
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_rejects_uv_cache_parent_permission_conflicts(self) -> None:
+        self._assert_uv_cache_parent_permission_conflicts(
+            _run_powershell_script,
+            lambda home: home / "AppData/Local/GitHubCopilot/uv",
+        )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_rejects_linked_uv_cache_paths(self) -> None:
+        self._assert_uv_cache_rejects_links(
+            _run_posix_script,
+            lambda home: home / ".cache/github-copilot/uv",
+            "symbolic link",
+        )
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_powershell_rejects_linked_uv_cache_paths(self) -> None:
+        self._assert_uv_cache_rejects_links(
+            _run_powershell_script,
+            lambda home: home / "AppData/Local/GitHubCopilot/uv",
+            "reparse point",
         )
 
 

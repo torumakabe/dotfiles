@@ -42,6 +42,7 @@
 | [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Accepted |
 | [028](028-copilot-hook-direct-uv-execution.md) | Copilot は mise 管理ツールを実体パスから実行する | Accepted |
 | [029](029-copilot-sandbox-readonly-mise-data-root.md) | Copilot sandbox は mise data root を read-only grant する | Accepted |
+| [030](030-copilot-sandbox-readwrite-uv-cache.md) | Copilot sandbox の uv は専用 cache を使う | Accepted |
 
 ## テンプレート
 

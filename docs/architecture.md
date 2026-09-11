@@ -51,6 +51,8 @@ Copilot CLI local sandbox は user-level settings で管理し、未設定時の
 
 sandbox の developer-tool 自動許可は、`PATH` に含まれる各ディレクトリを読み取り対象にするが、その中のシンボリックリンクが指す親ディレクトリ全体までは許可しない。Node.js の `corepack` と `npx`、npm backend の `tsc`、`installs` の外に実体を置く `core:dotnet` などを実行できるよう、mise data root を `sandbox.userPolicy.filesystem.readonlyPaths` へ追加する。`MISE_INSTALLS_DIR` がdata rootの外を指す場合は、そのディレクトリも追加する。同期スクリプトは対象ディレクトリを作成してから設定を書き込み、存在しないread-only grantによるsandbox起動失敗を防ぐ。書き込みは許可しない。
 
+Copilot runtime 1.0.83 は利用者の uv cache を read-only で自動許可するが、通常の `uv run` も cache 内へ一時ファイルと lock を作成する。同じ path を `readwritePaths` へ追加しても自動 read-only grant が残るため、preToolUse hook の `uv-enforcer.py` が shell command に Copilot 専用の `UV_CACHE_DIR` を追加する。設定同期はその専用 directory だけを `readwritePaths` へ追加し、親に read-only または deny の設定がある場合と、管理対象が symbolic link または reparse point の場合は停止する。host の uv cache、cache home 全体、mise data root には write grant を与えない。
+
 この契約の対象は、Copilot CLI が profile を読まずに起動する built-in shell の直接実行である。利用者が `bash -lc`、`zsh -c`、profile を読む `pwsh` などを明示的に起動すると、各 shell の初期化処理が sandbox 内で mise を再実行する場合がある。これは継承済みの実体 `PATH` を使う通常実行とは別に検証する。
 
 コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。Dev Container と Codespaces のツールは、通常の Linux と同じ mise config、lockfile、導入スクリプト、更新手順で管理する。Dev Container は作成時の GitHub 未認証を避けるため、同じ config と lockfile を使う `mise install --yes` だけを起動後に実行する。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトを正本とする。
@@ -135,7 +137,7 @@ macOS の `run_onchange_after_21-link-mise-shims.sh` は、以前の GUI 固定 
 
 uv は全対象 OS で mise の `aqua:astral-sh/uv` backend を使う。Windows ARM64 では、lockfile が指定する x64 配布物を従来どおりエミュレーションで使う。独自 wrapper、常設 updater、PATH 同期処理は追加しない。
 
-`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、aqua backend の uv/uvx を直接解決できる。shim と実体 PATH は別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。uv の cache 書き込み許可は変更しない。
+`mise env` または既存の `mise activate` が設定した実体 PATH を使うと、aqua backend の uv/uvx を直接解決できる。shim と実体 PATH は別の仕組みであり、この設定は shim の全面撤去ではない。macOS の shim symlink と Windows の User PATH は上記のとおり保持する。通常の sandbox shell が使う Copilot 専用 uv cache だけは ADR-030 に従って書き込みを許可する。
 
 lock は `latest` を要求として保持し、uv 0.12.10 の単一 entry に5対象プラットフォームの配布物と checksum、provenance を固定する。
 

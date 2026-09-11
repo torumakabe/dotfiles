@@ -1,18 +1,23 @@
 # /// script
 # requires-python = ">=3.13"
 # ///
-"""uv Enforcer — preToolUse hook that blocks direct python/pip execution.
+"""uv Enforcer — preToolUse hook for uv execution in Copilot shell tools.
 
 Ensures all Python operations go through uv (uv run, uv add, uv pip).
-Reads a JSON tool-call from stdin and emits a JSON permission decision on stdout.
+Allowed shell commands are updated to use a Copilot-owned writable uv cache.
 
 Run via: uv run uv-enforcer.py
 """
 from __future__ import annotations
 
 import json
+import ntpath
+import os
+import posixpath
 import re
+import shlex
 import sys
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -23,6 +28,10 @@ from typing import Any
 def deny(reason: str) -> None:
     print(json.dumps({"permissionDecision": "deny", "permissionDecisionReason": reason}))
     sys.exit(0)
+
+
+def emit_modified_args(tool_args: dict[str, Any]) -> None:
+    print(json.dumps({"modifiedArgs": tool_args}))
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +171,50 @@ def check_command(command: str) -> str | None:
     return None
 
 
+def copilot_uv_cache_dir(
+    platform_name: str = sys.platform,
+    environ: Mapping[str, str] = os.environ,
+    home: str | None = None,
+) -> str:
+    """Return the Copilot-owned uv cache path used by sandbox shell commands."""
+    resolved_home = home or str(os.path.expanduser("~"))
+    if platform_name == "win32":
+        cache_home = environ.get("LOCALAPPDATA") or ntpath.join(
+            resolved_home, "AppData", "Local"
+        )
+        return ntpath.join(cache_home, "GitHubCopilot", "uv")
+    if platform_name == "darwin":
+        return posixpath.join(resolved_home, "Library", "Caches", "github-copilot", "uv")
+    cache_home = environ.get("XDG_CACHE_HOME") or posixpath.join(
+        resolved_home, ".cache"
+    )
+    return posixpath.join(cache_home, "github-copilot", "uv")
+
+
+def with_copilot_uv_cache(
+    tool_name: str,
+    tool_args: dict[str, Any],
+    cache_dir: str | None = None,
+) -> dict[str, Any] | None:
+    """Set UV_CACHE_DIR in the command without changing the host process env."""
+    command = tool_args.get("command")
+    if tool_name not in ("bash", "powershell") or not isinstance(command, str) or not command:
+        return None
+
+    cache_dir = cache_dir or copilot_uv_cache_dir()
+    modified = dict(tool_args)
+    if tool_name == "powershell":
+        escaped = cache_dir.replace("'", "''")
+        modified["command"] = (
+            f"$env:UV_CACHE_DIR = '{escaped}'; & {{\n{command}\n}}"
+        )
+    else:
+        modified["command"] = (
+            f"export UV_CACHE_DIR={shlex.quote(cache_dir)};\n{command}"
+        )
+    return modified
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -188,7 +241,9 @@ def main() -> None:
     if reason:
         deny(reason)
 
-    return  # Command is fine — defer to CLI default
+    modified_args = with_copilot_uv_cache(tool_name, tool_args)
+    if modified_args is not None:
+        emit_modified_args(modified_args)
 
 
 if __name__ == "__main__":

@@ -8,9 +8,14 @@ import subprocess
 import tempfile
 import unittest
 
+from tests._helpers import run_hook
+
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOOKS_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/hooks.json"
+HOOK_SCRIPTS = REPO_ROOT / "home/private_dot_copilot/hooks/scripts"
+UV_ENFORCER_PATH = HOOK_SCRIPTS / "executable_uv-enforcer.py"
+COPILOT_GUARD_PATH = HOOK_SCRIPTS / "executable_copilot-guard.py"
 EXPECTED_BASH_PREFIX = "uv run "
 EXPECTED_POWERSHELL_PREFIX = "uv run "
 
@@ -21,6 +26,63 @@ def _commands() -> list[dict[str, object]]:
 
 
 class CopilotHooksConfigTests(unittest.TestCase):
+    def test_cache_mutation_runs_after_enforcers_and_before_guard(self) -> None:
+        pre_tool_use = json.loads(HOOKS_PATH.read_text(encoding="utf-8"))["hooks"][
+            "preToolUse"
+        ]
+        self.assertIn("node-global-enforcer.py", pre_tool_use[0]["bash"])
+        self.assertIn("uv-enforcer.py", pre_tool_use[1]["bash"])
+        self.assertIn("copilot-guard.py", pre_tool_use[2]["bash"])
+
+    def test_guard_checks_the_cache_modified_command(self) -> None:
+        for tool_name in ("bash", "powershell"):
+            with self.subTest(tool_name=tool_name):
+                payload = {
+                    "toolName": tool_name,
+                    "toolArgs": {"command": "git commit -m test"},
+                }
+                mutation = run_hook(UV_ENFORCER_PATH, payload, cwd=REPO_ROOT)
+                self.assertEqual(mutation.returncode, 0, mutation.stderr)
+                modified_args = json.loads(mutation.stdout)["modifiedArgs"]
+
+                guarded = run_hook(
+                    COPILOT_GUARD_PATH,
+                    {"toolName": tool_name, "toolArgs": modified_args},
+                    cwd=REPO_ROOT,
+                )
+                self.assertEqual(guarded.returncode, 0, guarded.stderr)
+                decision = json.loads(guarded.stdout)
+                self.assertEqual(decision["permissionDecision"], "ask")
+                self.assertIn("git commit", decision["permissionDecisionReason"])
+
+    def test_guard_denies_cache_modified_environment_dump(self) -> None:
+        for tool_name in ("bash", "powershell"):
+            for command in ("printenv", "env"):
+                with self.subTest(tool_name=tool_name, command=command):
+                    mutation = run_hook(
+                        UV_ENFORCER_PATH,
+                        {
+                            "toolName": tool_name,
+                            "toolArgs": {"command": command},
+                        },
+                        cwd=REPO_ROOT,
+                    )
+                    self.assertEqual(mutation.returncode, 0, mutation.stderr)
+                    modified_args = json.loads(mutation.stdout)["modifiedArgs"]
+
+                    guarded = run_hook(
+                        COPILOT_GUARD_PATH,
+                        {"toolName": tool_name, "toolArgs": modified_args},
+                        cwd=REPO_ROOT,
+                    )
+                    self.assertEqual(guarded.returncode, 0, guarded.stderr)
+                    decision = json.loads(guarded.stdout)
+                    self.assertEqual(decision["permissionDecision"], "deny")
+                    self.assertIn(
+                        "env dump",
+                        decision["permissionDecisionReason"],
+                    )
+
     def test_all_commands_invoke_uv_directly(self) -> None:
         commands = _commands()
         self.assertEqual(len(commands), 5)

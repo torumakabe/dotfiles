@@ -1089,6 +1089,21 @@ class CopilotGuardEnvBlockingTests(unittest.TestCase):
         )
         self.assertIsNotNone(result)
 
+    def test_blocks_powershell_script_block_env_dump(self) -> None:
+        for command in ('& { printenv }', '& { env }'):
+            with self.subTest(command=command):
+                result = copilot_guard.check_env_access(command, "powershell")
+                self.assertIsNotNone(result)
+                self.assertIn("env dump", result)
+
+    def test_allows_powershell_script_block_env_text(self) -> None:
+        self.assertIsNone(
+            copilot_guard.check_env_access(
+                '& { Write-Output "printenv" }',
+                "powershell",
+            )
+        )
+
     # --- Compound commands ---
 
     def test_blocks_env_in_pipe_chain(self) -> None:
@@ -1544,6 +1559,31 @@ class GitCommitCheckerTests(unittest.TestCase):
         result = copilot_guard.check_git_commit(ctx)
         self.assertIsNotNone(result)
         self.assertEqual(result.decision, "ask")
+
+    def test_powershell_script_block_git_commit(self) -> None:
+        command = (
+            "$env:UV_CACHE_DIR = 'C:\\cache'; & {\n"
+            'git commit -m "msg"\n'
+            "}"
+        )
+        ctx = make_ctx(
+            tool_name="powershell",
+            command=command,
+            tool_args={"command": command},
+        )
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, "ask")
+
+    def test_powershell_script_block_output_no_match(self) -> None:
+        command = '& { Write-Output "git commit" }'
+        ctx = make_ctx(
+            tool_name="powershell",
+            command=command,
+            tool_args={"command": command},
+        )
+        result = copilot_guard.check_git_commit(ctx)
+        self.assertIsNone(result)
 
     def test_git_commit_after_pipe(self) -> None:
         ctx = make_ctx(tool_name="bash", command='echo ok | git commit --allow-empty -m "msg"', tool_args={"command": 'echo ok | git commit --allow-empty -m "msg"'})

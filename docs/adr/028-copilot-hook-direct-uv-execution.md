@@ -26,6 +26,8 @@ zsh の公式 `mise activate zsh` と PowerShell の公式 `mise activate pwsh` 
 
 Copilot のコマンドフック 5 件（`preToolUse` 3 件、`postToolUse`、`postToolUseFailure`）は bash と PowerShell の双方で、親プロセスの `PATH` から実体の `uv` を解決し、プレーンな `uv run ...` を直接起動する。フック内では mise を起動せず、`MISE_ENABLE_TOOLS=uv` も設定しない。
 
+通常の sandbox shell で `uv run` が cache へ書き込むために必要な command 変更と filesystem grant は ADR-030 で管理する。preToolUse hook の `uv-enforcer.py` が shell command に Copilot 専用の `UV_CACHE_DIR` を追加する。command hook 自身は sandbox 外で動作し、host の uv cache を使う。
+
 Windows の永続的な User `PATH` には、非対話互換性のため mise shims を残す。このため Windows の実体パス契約は現時点で、PowerShell profile が `mise activate pwsh` を実行したターミナルから Copilot CLI を起動することを要件とする。GUI または profile を読まない起動は未検証であり、対応済みとはしない。
 
 受け入れ確認では検証 script 本体を built-in shell tool へ直接渡す。`bash -lc`、`bash -c`、`sh -c`、`env -i` などで起動時の request env を変更した結果は、実体パス契約の判定に使わない。
@@ -35,3 +37,4 @@ Windows の永続的な User `PATH` には、非対話互換性のため mise sh
 - activation と hook は shim を追加せず、aggressive 設定により mise install path を既存 PATH の競合より前に置く。フックごとの mise 起動と設定読み込みはなくなり、実行契約は親プロセスが提供する `uv` の実体パスになる。
 - WSL の built-in shell 直接検証では 43 件中 40 件が実体パス契約を満たした。sandbox 内で symlink target を解決できない残り 3 件は、PATH 順序やフック方式ではなく ADR-029 の filesystem grant で解決し、設定配布後に再検証する。Copilot フックのエンドツーエンド検証も残る。
 - Windows は、profile 読み込み済み PowerShell から WinGet 本体を起動する経路に限り、host の mise 実体 PATH 順序を sandbox が保持し、9 コマンドを shim や mise config 解決を介さず実体から実行できることを 2026-09-11 に確認した。sandbox 内で mise 自身が config を canonicalize できない問題、profile を読む子 shell、GUI または profile なしの起動、Copilot フック 5 件全体のエンドツーエンド検証は残る。
+- WSL2ではADR-029の適用後に43コマンドすべての実体解決と代表9コマンドの実行に成功した。通常の`uv run`はuv cacheのread-only grantで失敗したため、ADR-030の適用後に再検証する。
