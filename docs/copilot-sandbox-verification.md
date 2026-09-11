@@ -302,6 +302,32 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 
 失敗時は、実行コマンド、終了コード、標準エラー、`/sandbox` の各画面の表示を残す。認証情報や機密性のある環境変数の値は記録へ含めない。
 
+## ADR-030 の撤去判定
+
+Copilot CLI または MXC の更新後は、issue の状態や版番号だけで ADR-030 の回避策を撤去しない。sandbox を有効にした新規 Copilot CLI セッションで、hook が設定した `UV_CACHE_DIR` を同じ tool call 内で解除し、uv の既定 cache を使う操作が成功するか確認する。
+
+Bash tool では次を実行する。
+
+```bash
+env -u UV_CACHE_DIR uv run --no-project -- python --version
+```
+
+PowerShell tool では次を実行する。
+
+```powershell
+$env:UV_CACHE_DIR = $null
+uv run --no-project -- python --version
+```
+
+終了コード0で Python の version が表示された場合、その環境では専用 cache を使わずに通常の `uv run` が動作している。Windows、macOS、native Linux、WSL2 のすべてで個別に成功した場合に限り、`.github/copilot-instructions.md` に列挙した ADR-030 の実装を一括して撤去する。一つでも失敗した場合は回避策を維持し、終了コードと標準エラーを検証記録へ残す。
+
+| 環境 | 専用 cache 適用後 | 撤去判定プローブ |
+|---|---|---|
+| WSL2 | 成功 | 未実施 |
+| macOS | 未実施 | 未実施 |
+| native Linux | 未実施 | 未実施 |
+| Windows ProcessContainer | 未実施 | 未実施 |
+
 ## 検証記録
 
 変化しやすい実測値は、この表へ追記する。環境内の対話確認を実施していない結果は、dotfiles 契約の合格として扱わない。

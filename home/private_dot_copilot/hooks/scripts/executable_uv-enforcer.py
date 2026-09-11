@@ -196,7 +196,7 @@ def with_copilot_uv_cache(
     tool_args: dict[str, Any],
     cache_dir: str | None = None,
 ) -> dict[str, Any] | None:
-    """Set UV_CACHE_DIR in the command without changing the host process env."""
+    """Apply ADR-030 without exposing the cache path to runtime discovery."""
     command = tool_args.get("command")
     if tool_name not in ("bash", "powershell") or not isinstance(command, str) or not command:
         return None

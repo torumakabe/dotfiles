@@ -83,6 +83,31 @@ class CopilotHooksConfigTests(unittest.TestCase):
                         decision["permissionDecisionReason"],
                     )
 
+    def test_guard_allows_cache_modified_safe_command(self) -> None:
+        for tool_name, command in (
+            ("bash", "printf ok"),
+            ("powershell", "Write-Output ok"),
+        ):
+            with self.subTest(tool_name=tool_name):
+                mutation = run_hook(
+                    UV_ENFORCER_PATH,
+                    {
+                        "toolName": tool_name,
+                        "toolArgs": {"command": command},
+                    },
+                    cwd=REPO_ROOT,
+                )
+                self.assertEqual(mutation.returncode, 0, mutation.stderr)
+                modified_args = json.loads(mutation.stdout)["modifiedArgs"]
+
+                guarded = run_hook(
+                    COPILOT_GUARD_PATH,
+                    {"toolName": tool_name, "toolArgs": modified_args},
+                    cwd=REPO_ROOT,
+                )
+                self.assertEqual(guarded.returncode, 0, guarded.stderr)
+                self.assertEqual(guarded.stdout.strip(), "")
+
     def test_all_commands_invoke_uv_directly(self) -> None:
         commands = _commands()
         self.assertEqual(len(commands), 5)

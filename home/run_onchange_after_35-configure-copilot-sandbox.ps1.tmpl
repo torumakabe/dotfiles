@@ -17,6 +17,7 @@ $dataHome = if ($env:XDG_DATA_HOME) {
 }
 $miseDataDir = if ($env:MISE_DATA_DIR) { $env:MISE_DATA_DIR } else { Join-Path $dataHome 'mise' }
 $miseInstalls = if ($env:MISE_INSTALLS_DIR) { $env:MISE_INSTALLS_DIR } else { Join-Path $miseDataDir 'installs' }
+# ADR-030 keeps this repo-owned cache separate from runtime-discovered uv caches.
 $copilotUvCacheHome = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { Join-Path $HOME 'AppData\Local' }
 $copilotUvCacheParent = Join-Path $copilotUvCacheHome 'GitHubCopilot'
 $copilotUvCacheDir = Join-Path $copilotUvCacheParent 'uv'

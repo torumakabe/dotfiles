@@ -17,6 +17,8 @@ import subprocess
 import tempfile
 import unittest
 
+from tests._helpers import load_script
+
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "home"
@@ -28,6 +30,11 @@ POWERSHELL_SCRIPT_PATH = (
 )
 ZSHRC_PATH = SOURCE_ROOT / "dot_zshrc.tmpl"
 POWERSHELL_PROFILE_PATH = SOURCE_ROOT / "PowerShell_profile.ps1.tmpl"
+UV_ENFORCER_PATH = (
+    SOURCE_ROOT
+    / "private_dot_copilot/hooks/scripts/executable_uv-enforcer.py"
+)
+uv_enforcer = load_script("sandbox_config_uv_enforcer", UV_ENFORCER_PATH)
 
 FILESYSTEM_PATHS = {
     "readwritePaths": ["/tmp/readwrite"],
@@ -151,6 +158,7 @@ def _run_posix_script(
     home: pathlib.Path,
     settings_path: pathlib.Path,
     *,
+    platform: str = "linux",
     codespaces: bool = False,
     devcontainer: bool = False,
     extra_env: dict[str, str] | None = None,
@@ -159,7 +167,7 @@ def _run_posix_script(
     script_path.write_text(
         _render(
             POSIX_SCRIPT_PATH,
-            "linux",
+            platform,
             codespaces=codespaces,
             devcontainer=devcontainer,
         ),
@@ -652,10 +660,42 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                 extra_env={"XDG_CACHE_HOME": str(xdg_cache_home)},
             )
             self.assertEqual(result.returncode, 0, result.stderr)
+            expected_cache = pathlib.Path(
+                uv_enforcer.copilot_uv_cache_dir(
+                    "linux",
+                    {"XDG_CACHE_HOME": str(xdg_cache_home)},
+                    str(home),
+                )
+            )
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8")),
                 [home / ".local/share/mise"],
-                xdg_cache_home / "github-copilot/uv",
+                expected_cache,
+            )
+
+    @unittest.skipIf(os.name == "nt", "POSIX script executes in Linux/macOS CI")
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq are required")
+    def test_posix_darwin_uv_cache_path_matches_hook(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            home = pathlib.Path(temp_dir)
+            settings_path = _seed_settings(home)
+            result = _run_posix_script(
+                home,
+                settings_path,
+                platform="darwin",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            expected_cache = pathlib.Path(
+                uv_enforcer.copilot_uv_cache_dir(
+                    "darwin",
+                    {},
+                    str(home),
+                )
+            )
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8")),
+                [home / ".local/share/mise"],
+                expected_cache,
             )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
@@ -666,10 +706,17 @@ class CopilotSandboxMergeTests(unittest.TestCase):
             for _ in range(2):
                 result = _run_powershell_script(home, settings_path)
                 self.assertEqual(result.returncode, 0, result.stderr)
+            expected_cache = pathlib.Path(
+                uv_enforcer.copilot_uv_cache_dir(
+                    "win32",
+                    {"LOCALAPPDATA": str(home / "AppData/Local")},
+                    str(home),
+                ).replace("\\", "/")
+            )
             self._assert_settings(
                 json.loads(settings_path.read_text(encoding="utf-8-sig")),
                 [home / "AppData/Local/mise"],
-                home / "AppData/Local/GitHubCopilot/uv",
+                expected_cache,
             )
             self.assertTrue((home / "AppData/Local/mise/installs").is_dir())
             self.assertTrue((home / "AppData/Local/GitHubCopilot/uv").is_dir())

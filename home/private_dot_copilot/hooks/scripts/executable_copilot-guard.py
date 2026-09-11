@@ -512,7 +512,7 @@ def _command_segments(tokens: list[str]) -> list[list[str]]:
 
 
 def _segment_command_start(segment: list[str], shell: str) -> int:
-    """Return the first command token after shell grouping syntax."""
+    """Skip the PowerShell grouping added by the ADR-030 uv wrapper."""
     index = 0
     if shell == "powershell":
         while index < len(segment) and segment[index] in ("{", "}"):
