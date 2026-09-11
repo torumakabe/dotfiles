@@ -72,7 +72,6 @@ def _render(
     *,
     codespaces: bool = False,
     devcontainer: bool = False,
-    env: dict[str, str] | None = None,
 ) -> str:
     result = subprocess.run(
         [
@@ -85,7 +84,7 @@ def _render(
             }),
             "--file", str(path),
         ],
-        env=env, check=False, capture_output=True, encoding="utf-8",
+        check=False, capture_output=True, encoding="utf-8",
     )
     if result.returncode != 0:
         raise AssertionError(result.stderr)
@@ -143,7 +142,7 @@ def _run_posix_script(
     script_path = home / "configure-sandbox.sh"
     script_path.write_text(_render(
         POSIX_SCRIPT_PATH, platform, codespaces=codespaces,
-        devcontainer=devcontainer, env=env,
+        devcontainer=devcontainer,
     ), encoding="utf-8")
     return subprocess.run(
         ["bash", str(script_path)], env=env, check=False,
