@@ -315,4 +315,8 @@ macOS では user uv.toml のファイル RO を追加する前、sandbox 内の
 
 その後、macOS の直接読み取りと Windows / WSL の利用者による診断で、3環境とも配布済み `uv-enforcer.py` に旧キャッシュ切替処理がなく、旧専用キャッシュの RW 許可だけが残っていることを確認した。macOS / WSL は通常シェルで `~/.cache/uv` を選び、Windows は `%LOCALAPPDATA%\uv\cache` を選んだ。CLI 起動元の `UV_CACHE_DIR` は全環境で未設定だった。Windows で動作するとの利用者報告は維持するが、旧hookの効果とは説明しない。
 
-現在の実装は POSIX のコマンド内で専用キャッシュを選び、通常シェルの uv 設定は変更しない。macOS の通常 HOME と PATH、複製した実設定、配布対象の hook、Python 自動探索を使い、検証専用の Python RO を追加せず比較した。RW なしでは専用キャッシュの初期化が `Operation not permitted` で終了コード2となり、検証ファイルは残らなかった。RW ありでは管理下の Python 3.14を自動選択し、終了コード0、`CACHEDIR.TAG` と検証ファイルのホスト永続化を確認した。通常設定への適用はまだ実施していない。
+現在の実装は POSIX のコマンド内で専用キャッシュを選び、通常シェルの uv 設定は変更しない。commit `34b6fba` の配布対象 hook、通常 HOME と PATH、Python 自動探索を使い、検証専用の Python RO を追加せず比較した。
+
+macOS では、RW なしの場合に専用キャッシュの初期化が `Operation not permitted` で失敗し、uv は終了コード2、検証ファイルは残らなかった。RW ありでは管理下の Python 3.14を自動選択し、uv は終了コード0となり、`CACHEDIR.TAG` と検証ファイルがホストへ残った。通常設定へ適用後、新しい Copilot CLI プロセスを localhost の固定応答 provider で起動し、hookが `~/Library/Caches/github-copilot/uv` を選択することと、検証ファイルのホスト永続化を確認した。適用前のファイルは `~/.cache/copilot-uv-deploy.5hv61N` へ保存した。
+
+WSL2 では、RW なしでも uv は終了コード0となったが、検証ファイルはホストへ残らなかった。RW ありでは `/usr/bin/python3` を自動選択し、uv は終了コード0となり、`CACHEDIR.TAG` と検証ファイルがホストへ残った。commit `34b6fba` を通常設定へ適用した後、再起動した Copilot CLI で hook が `~/.cache/github-copilot/uv` を選択し、通常の WSL 端末から検証ファイルを読み取れることを確認した。適用前のファイルは `~/.cache/copilot-uv-deploy.sOzKbf/backup` へ保存した。
