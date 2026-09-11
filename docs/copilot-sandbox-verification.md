@@ -25,6 +25,12 @@ WSL1 は対象外とする。Windows native の ProcessContainer は Windows 側
 export TEST_BRANCH='<検証対象ブランチ>'
 ```
 
+新規環境で`install.sh`から初回導入全体を検証する場合は、同じbranchを`CHEZMOI_INIT_BRANCH`へ渡す。未設定時の`install.sh`はリポジトリの既定branchを使用する。
+
+```bash
+CHEZMOI_INIT_BRANCH="${TEST_BRANCH}" ./install.sh
+```
+
 chezmoi のソースリポジトリへ移動する。
 
 ```bash
