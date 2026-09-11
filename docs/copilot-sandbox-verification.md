@@ -324,7 +324,7 @@ uv run --no-project -- python --version
 | 環境 | 専用 cache 適用後 | 撤去判定プローブ |
 |---|---|---|
 | WSL2 | 成功 | 未実施 |
-| macOS | 未実施 | 未実施 |
+| macOS | 成功 | 成功 |
 | native Linux | 未実施 | 未実施 |
 | Windows ProcessContainer | 未実施 | 未実施 |
 
@@ -342,3 +342,4 @@ uv run --no-project -- python --version
 | 2026-09-11 | Windows native、profile 読み込み済み PowerShell 7.6.5 から WinGet 本体を起動し、built-in PowerShell で直接確認 | build、architecture 未記録 | 1.0.83 | 未記録 | host の実体 PATH を sandbox が保持 | N/A | host の `copilot` alias は `%LOCALAPPDATA%\Microsoft\WinGet\Links\copilot.exe` を指した。sandbox 内で `uv`、`uvx`、`node`、`npm`、`npx`、`corepack`、`tsc`、`dotnet`、`jq` はすべて mise 実体へ解決し、各 `--version` が終了コード0で成功した。shim は実体 PATH 群より後ろだった。sandbox 内の `LOCALAPPDATA` はパッケージ配下へリダイレクトされた。新しい read-only grant の適用、profile を読む子 shell、GUI または profile なしの起動、5 hook 全体の確認は未実施 |
 | 2026-09-11 | WSL2、新規Copilot CLIセッションのbuilt-in Bashへ検証scriptを直接渡して確認 | OS、architecture未記録 | 1.0.83 | 未記録 | commit `78f8937`のmise read-only grantを適用 | 未記録 | manifestの43コマンドはすべて期待するmise実体へ解決した。`uv`、`uvx`、`node`、`npm`、`npx`、`corepack`、`tsc`、`dotnet`、`jq`の実行は終了コード0だった。`uv run --no-project -- python --version`は`~/.cache/uv/.tmp...`への一時ファイル作成がread-only filesystemで失敗し、単独tool callでも同じ終了コード2となった。ADR-030のuv cache write grant適用後の再検証は未実施 |
 | 2026-09-11 | WSL2、commit `0c35b02` 適用後の新規Copilot CLIセッションでbuilt-in Bashへ検証scriptを直接渡して確認 | OS、architecture未記録 | 1.0.83 | 未記録 | Copilot専用uv cacheのread-write grantとcommand内`UV_CACHE_DIR`を適用 | 未記録 | `UV_CACHE_DIR`は`/home/tomakabe/.cache/github-copilot/uv`だった。manifestの43コマンドは不一致0で、`uv`、`uvx`、`jq`、`node`、`npm`、`corepack`、`npx`、`tsc`、`typescript-language-server`はすべて期待するmise実体から終了コード0で実行された。`uv run --no-project -- python --version`はPython 3.10.12を返して終了コード0で成功し、command hookエラーは発生しなかった |
+| 2026-09-11 | macOS、commit `6a88175` 適用後の新規Copilot CLIセッションでbuilt-in Bashを使用 | macOS 26.6.2、arm64 | 1.0.84-4 | 未記録 | Copilot専用uv cacheのread-write grantとcommand内`UV_CACHE_DIR`を適用 | N/A | `UV_CACHE_DIR`は`/Users/tomakabe/Library/Caches/github-copilot/uv`、`uv`はmise管理下の0.12.10だった。専用cacheを使う`uv run --no-project -- python --version`はPython 3.14.6を返して終了コード0で成功した。同じtool call内で`UV_CACHE_DIR`を解除した撤去判定プローブもPython 3.14.6を返して終了コード0で成功し、command hookエラーは発生しなかった |
