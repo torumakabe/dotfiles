@@ -1,0 +1,52 @@
+{
+  "scope": "Dedicated fixture only. No real install, migration, profile/PATH or authentication change.",
+  "commit": "40fe5d31b009210857095b153298e5f7c9d9a956",
+  "sacl": "unobserved",
+  "powerShell": "7.6.5",
+  "architecture": "X64",
+  "status": "PASS",
+  "childExitCode": 0,
+  "failure": null,
+  "selectedCase": "absence interruption absent/file apply after-move-1",
+  "phase": "native-fixture",
+  "native": {
+    "selectedCase": "absence interruption absent/file apply after-move-1",
+    "status": "native_fixture_passed_not_install",
+    "nativeExecuted": true,
+    "sacl": "unobserved",
+    "count": 6,
+    "scope": "Dedicated retained fixtures only; no real install, ARM64 emulation or sandbox validation.",
+    "cases": [
+      {
+        "case": "parser/no-audit:uv-state.ps1",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "parser/no-audit:windows-uv.ps1",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "parser/no-audit:rehearse-windows-uv.ps1",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "parser/no-audit:run-native-fixture.ps1",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "function-export:New-ExclusiveDirectory",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "absence interruption absent/file apply after-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      }
+    ]
+  }
+}

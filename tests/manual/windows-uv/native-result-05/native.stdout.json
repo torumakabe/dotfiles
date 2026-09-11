@@ -1,0 +1,41 @@
+{
+  "nativeExecuted": true,
+  "status": "native_failed_or_unsupported_do_not_apply",
+  "selectedCase": "hardlink rejected",
+  "location": "at <ScriptBlock>, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 475\r\nat Check, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 115\r\nat <ScriptBlock>, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 473",
+  "nativeError": {
+    "operation": null,
+    "code": 5,
+    "destination": null,
+    "source": null
+  },
+  "failedCase": "hardlink rejected",
+  "error": "アクセスが拒否されました。",
+  "cases": [
+    {
+      "status": "passed",
+      "kind": "static",
+      "case": "parser/no-audit:uv-state.ps1"
+    },
+    {
+      "status": "passed",
+      "kind": "static",
+      "case": "parser/no-audit:windows-uv.ps1"
+    },
+    {
+      "status": "passed",
+      "kind": "static",
+      "case": "parser/no-audit:rehearse-windows-uv.ps1"
+    },
+    {
+      "status": "passed",
+      "kind": "static",
+      "case": "parser/no-audit:run-native-fixture.ps1"
+    },
+    {
+      "status": "passed",
+      "kind": "static",
+      "case": "function-export:New-ExclusiveDirectory"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "architecture": "X64",
+  "powerShell": "7.6.5",
+  "childExitCode": null,
+  "phase": "audit-read-preflight",
+  "failure": "The process does not possess the 'SeSecurityPrivilege' privilege which is required for this operation.",
+  "commit": "851c16106e7616c96460aa2e8c6aae922f97efaf",
+  "scope": "Dedicated fixture only. No real install, migration, profile/PATH or authentication change.",
+  "status": "BLOCKED",
+  "native": null
+}

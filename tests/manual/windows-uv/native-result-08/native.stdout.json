@@ -1,0 +1,40 @@
+{
+  "nativeExecuted": true,
+  "scope": "Dedicated retained fixtures only; no real install, ARM64 emulation or sandbox validation.",
+  "status": "native_fixture_passed_not_install",
+  "sacl": "unobserved",
+  "count": 6,
+  "selectedCase": "hardlink rejected",
+  "cases": [
+    {
+      "case": "parser/no-audit:uv-state.ps1",
+      "kind": "static",
+      "status": "passed"
+    },
+    {
+      "case": "parser/no-audit:windows-uv.ps1",
+      "kind": "static",
+      "status": "passed"
+    },
+    {
+      "case": "parser/no-audit:rehearse-windows-uv.ps1",
+      "kind": "static",
+      "status": "passed"
+    },
+    {
+      "case": "parser/no-audit:run-native-fixture.ps1",
+      "kind": "static",
+      "status": "passed"
+    },
+    {
+      "case": "function-export:New-ExclusiveDirectory",
+      "kind": "static",
+      "status": "passed"
+    },
+    {
+      "case": "hardlink rejected",
+      "kind": "native_fixture_not_install",
+      "status": "passed"
+    }
+  ]
+}

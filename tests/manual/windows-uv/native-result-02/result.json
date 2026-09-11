@@ -1,0 +1,12 @@
+{
+  "scope": "Dedicated fixture only. No real install, migration, profile/PATH or authentication change.",
+  "commit": "44642eb2e5016578ab1ba6f019d2570a0ebefaf4",
+  "status": "FAIL",
+  "sacl": "unobserved",
+  "architecture": "X64",
+  "failure": "Native fixture returned 1. See native.stderr.txt and native.stdout.json.",
+  "powerShell": "7.6.5",
+  "native": null,
+  "phase": "native-fixture",
+  "childExitCode": 1
+}

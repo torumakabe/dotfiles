@@ -1,0 +1,438 @@
+{
+  "sacl": "unobserved",
+  "status": "FAIL",
+  "phase": "native-fixture",
+  "failure": "Native fixture returned 1. See native.stderr.txt and native.stdout.json.",
+  "commit": "40fe5d31b009210857095b153298e5f7c9d9a956",
+  "scope": "Dedicated fixture only. No real install, migration, profile/PATH or authentication change.",
+  "native": {
+    "status": "native_failed_or_unsupported_do_not_apply",
+    "cases": [
+      {
+        "case": "parser/no-audit:uv-state.ps1",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "parser/no-audit:windows-uv.ps1",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "parser/no-audit:rehearse-windows-uv.ps1",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "parser/no-audit:run-native-fixture.ps1",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "function-export:New-ExclusiveDirectory",
+        "status": "passed",
+        "kind": "static"
+      },
+      {
+        "case": "stable comparison ignores key order, not values",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "apply/restore identity and idempotence: directory/file",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "apply/restore identity and idempotence: file/directory",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "apply/restore identity and idempotence: file/file",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "apply/restore identity and idempotence: absent/file",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "apply/restore identity and idempotence: directory/absent",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "apply/restore identity and idempotence: absent/absent",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "file replacement seals original creation time without rewriting the original",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "file candidate sealed with different creation time refuses before rename",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unchanged candidate leaves original identity and journal untouched",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown original hash refuses before first rename",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown original sddl refuses before first rename",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown original attributes refuses before first rename",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown original created refuses before first rename",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown original written refuses before first rename",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown original identity refuses before first rename",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply before-journal restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply after-journal restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply before-move-1 restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply after-move-1 restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply before-move-2 restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply after-move-2 restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file restore before-journal resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file restore after-journal resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file restore before-move-1 resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file restore after-move-1 resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file restore before-move-2 resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file restore after-move-2 resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply before-move-1 can resume apply then restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply after-move-1 can resume apply then restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply before-move-2 can resume apply then restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted directory/file apply after-move-2 can resume apply then restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply before-journal restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply after-journal restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply before-move-1 restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply after-move-1 restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply before-move-2 restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply after-move-2 restores directly after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file restore before-journal resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file restore after-journal resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file restore before-move-1 resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file restore after-move-1 resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file restore before-move-2 resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file restore after-move-2 resumes after journal reload",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply before-move-1 can resume apply then restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply after-move-1 can resume apply then restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply before-move-2 can resume apply then restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "interrupted file/file apply after-move-2 can resume apply then restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "absence interruption absent/file apply before-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "absence interruption absent/file apply after-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "absence interruption absent/file restore before-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "absence interruption absent/file restore after-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "absence interruption directory/absent apply before-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "absence interruption directory/absent apply after-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "absence interruption directory/absent restore before-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "absence interruption directory/absent restore after-move-1",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown originalSource hash refuses recovery",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown originalSource identity refuses recovery",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown stage hash refuses recovery",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown stage identity refuses recovery",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown live hash refuses recovery",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown live identity refuses recovery",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown discard hash refuses recovery",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown discard identity refuses recovery",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "all-target preflight refuses later conflict before first rename",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown live object after original evacuation is never adopted",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown desired state in journal refuses",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "original source cannot be redirected to the observation copy",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "damaged installer output refuses before original evacuation",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "failed install and original absence need no recovery moves",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "missing retained original refuses without using the observation copy",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "restore needs neither installer workspace nor observation copies",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "unknown replacement after completed restore refuses repeat restore",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "injected interruption never hides an unrelated Windows failure",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "journal replacement Win32 5 is retained without retry or object moves",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "journal replacement Win32 32 is retained without retry or object moves",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      },
+      {
+        "case": "readonly rejected without clearing attributes",
+        "status": "passed",
+        "kind": "native_fixture_not_install"
+      }
+    ],
+    "error": "アクセスが拒否されました。",
+    "nativeExecuted": true,
+    "failedCase": "junction rejected before traversal",
+    "selectedCase": "",
+    "nativeError": {
+      "source": null,
+      "code": 5,
+      "destination": null,
+      "operation": null
+    },
+    "location": "at <ScriptBlock>, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 470\r\nat Check, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 115\r\nat <ScriptBlock>, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 467"
+  },
+  "architecture": "X64",
+  "selectedCase": "",
+  "powerShell": "7.6.5",
+  "childExitCode": 1
+}

@@ -1,0 +1,53 @@
+{
+  "failure": "Native fixture returned 1. See native.stderr.txt and native.stdout.json.",
+  "childExitCode": 1,
+  "powerShell": "7.6.5",
+  "status": "FAIL",
+  "scope": "Dedicated fixture only. No real install, migration, profile/PATH or authentication change.",
+  "architecture": "X64",
+  "commit": "40fe5d31b009210857095b153298e5f7c9d9a956",
+  "phase": "native-fixture",
+  "sacl": "unobserved",
+  "native": {
+    "nativeExecuted": true,
+    "status": "native_failed_or_unsupported_do_not_apply",
+    "selectedCase": "hardlink rejected",
+    "location": "at <ScriptBlock>, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 475\r\nat Check, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 115\r\nat <ScriptBlock>, C:\\Users\\tomakabe\\.local\\share\\chezmoi\\tests\\manual\\windows-uv\\rehearse-windows-uv.ps1: line 473",
+    "nativeError": {
+      "operation": null,
+      "code": 5,
+      "destination": null,
+      "source": null
+    },
+    "failedCase": "hardlink rejected",
+    "error": "アクセスが拒否されました。",
+    "cases": [
+      {
+        "status": "passed",
+        "kind": "static",
+        "case": "parser/no-audit:uv-state.ps1"
+      },
+      {
+        "status": "passed",
+        "kind": "static",
+        "case": "parser/no-audit:windows-uv.ps1"
+      },
+      {
+        "status": "passed",
+        "kind": "static",
+        "case": "parser/no-audit:rehearse-windows-uv.ps1"
+      },
+      {
+        "status": "passed",
+        "kind": "static",
+        "case": "parser/no-audit:run-native-fixture.ps1"
+      },
+      {
+        "status": "passed",
+        "kind": "static",
+        "case": "function-export:New-ExclusiveDirectory"
+      }
+    ]
+  },
+  "selectedCase": "hardlink rejected"
+}

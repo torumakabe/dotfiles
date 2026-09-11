@@ -1,0 +1,40 @@
+{
+  "selectedCase": "absence interruption absent/file apply after-move-1",
+  "status": "native_fixture_passed_not_install",
+  "nativeExecuted": true,
+  "sacl": "unobserved",
+  "count": 6,
+  "scope": "Dedicated retained fixtures only; no real install, ARM64 emulation or sandbox validation.",
+  "cases": [
+    {
+      "case": "parser/no-audit:uv-state.ps1",
+      "status": "passed",
+      "kind": "static"
+    },
+    {
+      "case": "parser/no-audit:windows-uv.ps1",
+      "status": "passed",
+      "kind": "static"
+    },
+    {
+      "case": "parser/no-audit:rehearse-windows-uv.ps1",
+      "status": "passed",
+      "kind": "static"
+    },
+    {
+      "case": "parser/no-audit:run-native-fixture.ps1",
+      "status": "passed",
+      "kind": "static"
+    },
+    {
+      "case": "function-export:New-ExclusiveDirectory",
+      "status": "passed",
+      "kind": "static"
+    },
+    {
+      "case": "absence interruption absent/file apply after-move-1",
+      "status": "passed",
+      "kind": "native_fixture_not_install"
+    }
+  ]
+}

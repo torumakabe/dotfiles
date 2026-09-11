@@ -1,0 +1,52 @@
+{
+  "scope": "Dedicated fixture only. No real install, migration, profile/PATH or authentication change.",
+  "sacl": "unobserved",
+  "status": "PASS",
+  "powerShell": "7.6.5",
+  "native": {
+    "nativeExecuted": true,
+    "status": "native_fixture_passed_not_install",
+    "count": 6,
+    "selectedCase": "alternate data stream rejected",
+    "scope": "Dedicated retained fixtures only; no real install, ARM64 emulation or sandbox validation.",
+    "sacl": "unobserved",
+    "cases": [
+      {
+        "status": "passed",
+        "case": "parser/no-audit:uv-state.ps1",
+        "kind": "static"
+      },
+      {
+        "status": "passed",
+        "case": "parser/no-audit:windows-uv.ps1",
+        "kind": "static"
+      },
+      {
+        "status": "passed",
+        "case": "parser/no-audit:rehearse-windows-uv.ps1",
+        "kind": "static"
+      },
+      {
+        "status": "passed",
+        "case": "parser/no-audit:run-native-fixture.ps1",
+        "kind": "static"
+      },
+      {
+        "status": "passed",
+        "case": "function-export:New-ExclusiveDirectory",
+        "kind": "static"
+      },
+      {
+        "status": "passed",
+        "case": "alternate data stream rejected",
+        "kind": "native_fixture_not_install"
+      }
+    ]
+  },
+  "phase": "native-fixture",
+  "architecture": "X64",
+  "selectedCase": "alternate data stream rejected",
+  "commit": "40fe5d31b009210857095b153298e5f7c9d9a956",
+  "childExitCode": 0,
+  "failure": null
+}
