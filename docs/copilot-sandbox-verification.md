@@ -323,7 +323,7 @@ uv run --no-project -- python --version
 
 | 環境 | 専用 cache 適用後 | 撤去判定プローブ |
 |---|---|---|
-| WSL2 | 成功 | 未実施 |
+| WSL2 | 成功 | 成功 |
 | macOS | 成功 | 成功 |
 | native Linux | 未実施 | 未実施 |
 | Windows ProcessContainer | 成功 | 失敗。回避策を維持 |
@@ -345,3 +345,4 @@ uv run --no-project -- python --version
 | 2026-09-11 | macOS、commit `6a88175` 適用後の新規Copilot CLIセッションでbuilt-in Bashを使用 | macOS 26.6.2、arm64 | 1.0.84-4 | 未記録 | Copilot専用uv cacheのread-write grantとcommand内`UV_CACHE_DIR`を適用 | N/A | `UV_CACHE_DIR`は`/Users/tomakabe/Library/Caches/github-copilot/uv`、`uv`はmise管理下の0.12.10だった。専用cacheを使う`uv run --no-project -- python --version`はPython 3.14.6を返して終了コード0で成功した。同じtool call内で`UV_CACHE_DIR`を解除した撤去判定プローブもPython 3.14.6を返して終了コード0で成功し、command hookエラーは発生しなかった |
 | 2026-09-11 | Windows native、commit `7ef5d73` 適用後の新規Copilot CLIセッションでbuilt-in PowerShellを使用 | build、architecture未記録 | version未記録 | 未記録 | Copilot専用uv cacheのread-write grantとcommand内`UV_CACHE_DIR`を適用 | N/A | `UV_CACHE_DIR`は`C:\Users\tomakabe\AppData\Local\GitHubCopilot\uv`、`uv`はmise管理下の0.12.10だった。専用cacheを使う`uv run --no-project -- python --version`はPython 3.14.5を返して成功した。専用cacheを解除した撤去判定プローブはAppContainer配下のuv cacheへの一時ファイル保存をアクセス拒否されて失敗したため、回避策を維持する。適用時のPowerShell wrapperはnative commandの失敗をtool callの終了コードへ反映せず、両tool callが終了コード0と報告された。子PowerShellで終了コードを維持する修正版の再検証は未実施 |
 | 2026-09-11 | Windows native、commit `417b22f` 適用後の新規Copilot CLIセッションでbuilt-in PowerShellを使用 | build、architecture未記録 | version未記録 | 未記録 | Copilot専用uv cacheのread-write grant、command内`UV_CACHE_DIR`、子PowerShellによる終了コード伝播を適用 | N/A | `UV_CACHE_DIR`は`C:\Users\tomakabe\AppData\Local\GitHubCopilot\uv`、`uv`はmise管理下の0.12.10だった。専用cacheを使う`uv run --no-project -- python --version`はPython 3.14.5を返し、tool callは終了コード0で成功した。専用cacheを解除した撤去判定プローブはAppContainer配下のuv cacheへの一時ファイル保存をアクセス拒否され、tool callは終了コード1を返した。標準エラーは通常のtextで、両方の実行にcommand hookエラーはなかったため、Windowsでは回避策を維持する |
+| 2026-09-11 | WSL2、新規Copilot CLIセッションのbuilt-in Bashで撤去判定プローブを実行 | OS、architecture未記録 | version未記録 | 未記録 | commit `0c35b02` のCopilot専用uv cache回避策を適用済み | 未記録 | `env -u UV_CACHE_DIR uv run --no-project -- python --version`はPython 3.10.12を返し、tool callは終了コード0で成功した。標準エラーとcommand hookエラーは発生しなかった |
