@@ -3,6 +3,7 @@
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -28,13 +29,14 @@ class GhStackInstallTests(unittest.TestCase):
         )
         normalized_powershell = " ".join(self.powershell.split())
 
-        self.assertIn("gh extension list", self.shell)
+        self.assertIn('"${gh_path}" extension list', self.shell)
+        self.assertIn('gh_path="$(mise which gh 2>/dev/null)"', self.shell)
         self.assertIn(
             "install_from_public_github extension install github/gh-stack",
             normalized_shell,
         )
         self.assertIn(
-            "gh skill list --agent github-copilot --scope user",
+            '"${gh_path}" skill list --agent github-copilot --scope user',
             normalized_shell,
         )
         self.assertIn(
@@ -43,13 +45,14 @@ class GhStackInstallTests(unittest.TestCase):
             normalized_shell,
         )
 
-        self.assertIn("gh extension list", self.powershell)
+        self.assertIn("& $ghPath extension list", self.powershell)
+        self.assertIn("$ghPath = & mise which gh", self.powershell)
         self.assertIn(
             "'extension', 'install', 'github/gh-stack'",
             normalized_powershell,
         )
         self.assertIn(
-            "gh skill list --agent github-copilot --scope user",
+            "& $ghPath skill list --agent github-copilot --scope user",
             normalized_powershell,
         )
         self.assertRegex(
@@ -91,6 +94,9 @@ class GhStackInstallTests(unittest.TestCase):
             root = pathlib.Path(temp_dir)
             bin_dir = root / "bin"
             bin_dir.mkdir()
+            awk_path = shutil.which("awk")
+            self.assertIsNotNone(awk_path)
+            (bin_dir / "awk").symlink_to(awk_path)
             log_path = root / "calls.log"
             fake_gh = bin_dir / "gh"
             fake_gh.write_text(
@@ -143,6 +149,69 @@ exit 1
             ]
             self.assertEqual(len(anonymous_installs), 2, calls)
 
+    @unittest.skipIf(os.name == "nt", "the POSIX installer requires Bash")
+    def test_shell_uses_mise_managed_gh_before_path_activation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            awk_path = shutil.which("awk")
+            self.assertIsNotNone(awk_path)
+            (bin_dir / "awk").symlink_to(awk_path)
+            log_path = root / "calls.log"
+            managed_gh = root / "managed-gh"
+            managed_gh.write_text(
+                """#!/bin/bash
+printf '%s\\n' "$*" >>"${GH_TEST_LOG}"
+case "$1 $2" in
+  "extension list")
+    printf 'gh-stack github/gh-stack v0.1.1\\n'
+    ;;
+  "skill list")
+    printf 'gh-stack\\n'
+    ;;
+esac
+""",
+                encoding="utf-8",
+            )
+            managed_gh.chmod(0o755)
+            fake_mise = bin_dir / "mise"
+            fake_mise.write_text(
+                f"""#!/bin/bash
+if [ "$1 $2" = "which gh" ]; then
+  printf '%s\\n' '{managed_gh}'
+  exit 0
+fi
+exit 1
+""",
+                encoding="utf-8",
+            )
+            fake_mise.chmod(0o755)
+
+            env = os.environ.copy()
+            env.update({
+                "PATH": str(bin_dir),
+                "GH_TEST_LOG": str(log_path),
+            })
+            result = subprocess.run(
+                ["/bin/bash", str(SHELL_INSTALLER)],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                log_path.read_text(encoding="utf-8").splitlines(),
+                [
+                    "extension list",
+                    "skill list --agent github-copilot --scope user "
+                    "--json skillName --jq "
+                    '.[] | select(.skillName == "gh-stack") | .skillName',
+                ],
+            )
+
     def test_installed_skill_skips_installation(self) -> None:
         shell = " ".join(self.shell.split())
         powershell = " ".join(self.powershell.split())
@@ -162,18 +231,21 @@ exit 1
                 self.assertIn("GitHub CLI 2.94 or later is required", source)
 
     def test_missing_gh_warns_and_exits_successfully(self) -> None:
-        self.assertIn("if ! command -v gh", self.shell)
+        self.assertIn('gh_path="$(command -v gh', self.shell)
+        self.assertIn('gh_path="$(mise which gh', self.shell)
         self.assertRegex(
             self.shell,
-            r"(?s)if ! command -v gh.*?Warning:.*?exit 0",
+            r"(?s)if gh_path=.*?elif command -v mise.*?else.*?Warning:.*?exit 0",
         )
         self.assertIn(
             "Get-Command gh -ErrorAction SilentlyContinue",
             self.powershell,
         )
+        self.assertIn("Get-Command mise -ErrorAction SilentlyContinue", self.powershell)
         self.assertRegex(
             self.powershell,
-            r"(?s)if \(-not \(Get-Command gh.*?Write-Warning.*?exit 0",
+            r"(?s)if \(\$ghCommand\).*?elseif \(Get-Command mise.*?"
+            r"if \(-not \$ghPath\).*?Write-Warning.*?exit 0",
         )
 
     def test_installers_are_run_after_scripts_for_their_platform(self) -> None:

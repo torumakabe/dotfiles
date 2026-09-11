@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-if ! command -v gh >/dev/null 2>&1; then
+if gh_path="$(command -v gh 2>/dev/null)"; then
+  :
+elif command -v mise >/dev/null 2>&1 &&
+  gh_path="$(mise which gh 2>/dev/null)"; then
+  :
+else
   echo "Warning: gh-stack was not installed because GitHub CLI (gh) is not available. The next 'chezmoi apply' will retry." >&2
   exit 0
 fi
 
 install_from_public_github() {
-  if GH_PAGER=cat PAGER=cat gh "$@"; then
+  if GH_PAGER=cat PAGER=cat "${gh_path}" "$@"; then
     return 0
   fi
 
@@ -25,13 +30,13 @@ install_from_public_github() {
     GH_PROMPT_DISABLED=1 \
     GH_PAGER=cat \
     PAGER=cat \
-    gh "$@"
+    "${gh_path}" "$@"
   status=$?
   rm -rf "${anonymous_config}"
   return "${status}"
 }
 
-if ! extension_list="$(gh extension list 2>/dev/null)"; then
+if ! extension_list="$("${gh_path}" extension list 2>/dev/null)"; then
   echo "Warning: could not inspect GitHub CLI extensions. The next 'chezmoi apply' will retry gh-stack installation." >&2
 else
   if ! printf '%s\n' "${extension_list}" | awk '{
@@ -49,7 +54,7 @@ else
 fi
 
 if ! installed_skill="$(
-  gh skill list \
+  "${gh_path}" skill list \
     --agent github-copilot \
     --scope user \
     --json skillName \

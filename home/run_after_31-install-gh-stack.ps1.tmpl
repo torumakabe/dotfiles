@@ -1,6 +1,16 @@
 $ErrorActionPreference = 'Continue'
 
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+$ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+if ($ghCommand) {
+    $ghPath = $ghCommand.Source
+} elseif (Get-Command mise -ErrorAction SilentlyContinue) {
+    $ghPath = & mise which gh 2>$null | Select-Object -First 1
+    if ($LASTEXITCODE -ne 0) {
+        $ghPath = $null
+    }
+}
+
+if (-not $ghPath) {
     Write-Warning "gh-stack was not installed because GitHub CLI (gh) is not available. The next 'chezmoi apply' will retry."
     exit 0
 }
@@ -11,7 +21,7 @@ function Invoke-GhPublicInstall {
         [string[]]$GhArguments
     )
 
-    & gh @GhArguments | Out-Host
+    & $ghPath @GhArguments | Out-Host
     if ($LASTEXITCODE -eq 0) {
         return $true
     }
@@ -47,7 +57,7 @@ function Invoke-GhPublicInstall {
         $env:GH_PAGER = 'cat'
         $env:PAGER = 'cat'
 
-        & gh @GhArguments | Out-Host
+        & $ghPath @GhArguments | Out-Host
         return ($LASTEXITCODE -eq 0)
     } finally {
         foreach ($name in $environmentNames) {
@@ -61,7 +71,7 @@ function Invoke-GhPublicInstall {
     }
 }
 
-$extensionList = & gh extension list 2>$null
+$extensionList = & $ghPath extension list 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "Could not inspect GitHub CLI extensions. The next 'chezmoi apply' will retry gh-stack installation."
 } else {
@@ -78,7 +88,7 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
-$skillList = & gh skill list --agent github-copilot --scope user --json skillName 2>$null
+$skillList = & $ghPath skill list --agent github-copilot --scope user --json skillName 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "Could not inspect GitHub Copilot skills. GitHub CLI 2.94 or later is required. The next 'chezmoi apply' will retry."
     exit 0
