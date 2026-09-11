@@ -74,7 +74,9 @@ function Invoke-GhPublicInstall {
 $extensionList = & $ghPath extension list 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "Could not inspect GitHub CLI extensions. The next 'chezmoi apply' will retry gh-stack installation."
+    $installFailed = $true
 } else {
+    $installFailed = $false
     $extensionInstalled = @($extensionList) | Where-Object {
         ([string]$_ -split '\s+') -contains 'github/gh-stack'
     }
@@ -84,6 +86,7 @@ if ($LASTEXITCODE -ne 0) {
         )
         if (-not $installed) {
             Write-Warning "Failed to install the github/gh-stack extension. The next 'chezmoi apply' will retry."
+            $installFailed = $true
         }
     }
 }
@@ -91,7 +94,7 @@ if ($LASTEXITCODE -ne 0) {
 $skillList = & $ghPath skill list --agent github-copilot --scope user --json skillName 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "Could not inspect GitHub Copilot skills. GitHub CLI 2.94 or later is required. The next 'chezmoi apply' will retry."
-    exit 0
+    exit 1
 }
 
 $skill = @($skillList | ConvertFrom-Json) | Where-Object {
@@ -99,7 +102,7 @@ $skill = @($skillList | ConvertFrom-Json) | Where-Object {
 } | Select-Object -First 1
 
 if ($skill) {
-    exit 0
+    exit $(if ($installFailed) { 1 } else { 0 })
 }
 
 $installed = Invoke-GhPublicInstall -GhArguments @(
@@ -114,6 +117,7 @@ $installed = Invoke-GhPublicInstall -GhArguments @(
 )
 if (-not $installed) {
     Write-Warning "Failed to install the github/gh-stack skill. The next 'chezmoi apply' will retry."
+    $installFailed = $true
 }
 
-exit 0
+exit $(if ($installFailed) { 1 } else { 0 })

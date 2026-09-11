@@ -38,7 +38,9 @@ install_from_public_github() {
 
 if ! extension_list="$("${gh_path}" extension list 2>/dev/null)"; then
   echo "Warning: could not inspect GitHub CLI extensions. The next 'chezmoi apply' will retry gh-stack installation." >&2
+  install_failed=1
 else
+  install_failed=0
   if ! printf '%s\n' "${extension_list}" | awk '{
     for (field = 1; field <= NF; field++) {
       if ($field == "github/gh-stack") {
@@ -49,6 +51,7 @@ else
   END { exit !found }'; then
     if ! install_from_public_github extension install github/gh-stack; then
       echo "Warning: failed to install the github/gh-stack extension. The next 'chezmoi apply' will retry." >&2
+      install_failed=1
     fi
   fi
 fi
@@ -62,15 +65,16 @@ if ! installed_skill="$(
     2>/dev/null
 )"; then
   echo "Warning: could not inspect GitHub Copilot skills. GitHub CLI 2.94 or later is required. The next 'chezmoi apply' will retry." >&2
-  exit 0
+  exit 1
 fi
 
 if [ "${installed_skill}" = "gh-stack" ]; then
-  exit 0
+  exit "${install_failed}"
 fi
 
 if ! install_from_public_github skill install github/gh-stack gh-stack --agent github-copilot --scope user; then
   echo "Warning: failed to install the github/gh-stack skill. The next 'chezmoi apply' will retry." >&2
+  install_failed=1
 fi
 
-exit 0
+exit "${install_failed}"

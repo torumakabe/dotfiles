@@ -47,19 +47,48 @@ if (-not $env:MISE_GITHUB_TOKEN -and -not $env:GITHUB_API_TOKEN -and -not $env:G
   }
 }
 
-Write-Host "Syncing mise tools with lockfile via $miseExe ..."
-& $miseExe install
-$installExit = $LASTEXITCODE
-& $miseExe reshim
-$reshimExit = $LASTEXITCODE
-
-if ($installExit -ne 0 -or $reshimExit -ne 0) {
-  Write-Error ("mise sync failed (install={0}, reshim={1}). " +
-    "原因を解消してから ``chezmoi apply`` を実行してください。" -f $installExit, $reshimExit)
-  $syncExit = if ($installExit -ne 0) { $installExit } else { $reshimExit }
+$lockfile = Join-Path $HOME '.config\mise\mise.lock'
+$lockfileBackup = $null
+if (Test-Path -LiteralPath $lockfile -PathType Leaf) {
+  $lockfileBackup = [System.IO.Path]::GetTempFileName()
+  Copy-Item -LiteralPath $lockfile -Destination $lockfileBackup -Force -ErrorAction Stop
 }
-else {
-  $syncExit = 0
+
+try {
+  Write-Host "Syncing mise tools with lockfile via $miseExe ..."
+  & $miseExe install
+  $installExit = $LASTEXITCODE
+  & $miseExe reshim
+  $reshimExit = $LASTEXITCODE
+
+  if ($installExit -ne 0 -or $reshimExit -ne 0) {
+    Write-Error ("mise sync failed (install={0}, reshim={1}). " +
+      "原因を解消してから ``chezmoi apply`` を実行してください。" -f $installExit, $reshimExit)
+    $syncExit = if ($installExit -ne 0) { $installExit } else { $reshimExit }
+  }
+  else {
+    $syncExit = 0
+  }
+}
+finally {
+  if ($lockfileBackup) {
+    try {
+      $lockfileChanged = -not (Test-Path -LiteralPath $lockfile -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $lockfile -Algorithm SHA256).Hash -ne
+        (Get-FileHash -LiteralPath $lockfileBackup -Algorithm SHA256).Hash
+      if ($lockfileChanged) {
+        Copy-Item -LiteralPath $lockfileBackup -Destination $lockfile -Force -ErrorAction Stop
+        Write-Host 'Restored managed mise lockfile after installation.'
+      }
+    }
+    catch {
+      Write-Error "Failed to restore managed mise lockfile: $lockfile`n$($_.Exception.Message)"
+      $syncExit = 1
+    }
+    finally {
+      Remove-Item -LiteralPath $lockfileBackup -Force -ErrorAction SilentlyContinue
+    }
+  }
 }
 
 exit $syncExit

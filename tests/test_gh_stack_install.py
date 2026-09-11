@@ -217,10 +217,14 @@ exit 1
         powershell = " ".join(self.powershell.split())
 
         self.assertIn(
-            'if [ "${installed_skill}" = "gh-stack" ]; then exit 0 fi',
+            'if [ "${installed_skill}" = "gh-stack" ]; then '
+            'exit "${install_failed}" fi',
             shell,
         )
-        self.assertIn("if ($skill) { exit 0 }", powershell)
+        self.assertIn(
+            "if ($skill) { exit $(if ($installFailed) { 1 } else { 0 }) }",
+            powershell,
+        )
 
     def test_installers_require_skill_inventory_support(self) -> None:
         for name, source in (
@@ -229,6 +233,11 @@ exit 1
         ):
             with self.subTest(installer=name):
                 self.assertIn("GitHub CLI 2.94 or later is required", source)
+
+    def test_install_failures_propagate_after_retry(self) -> None:
+        self.assertIn('exit "${install_failed}"', self.shell)
+        self.assertIn("exit 1", self.shell)
+        self.assertIn("exit $(if ($installFailed) { 1 } else { 0 })", self.powershell)
 
     def test_missing_gh_warns_and_exits_successfully(self) -> None:
         self.assertIn('gh_path="$(command -v gh', self.shell)

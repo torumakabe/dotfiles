@@ -546,6 +546,32 @@ class MiseConfigTests(unittest.TestCase):
             self.assertNotIn("chezmoi apply --force", script)
             self.assertNotIn("次回 chezmoi apply 時に再試行", script)
 
+    def test_install_paths_restore_managed_lockfile(self) -> None:
+        sync_shell = SYNC_SH_PATH.read_text(encoding="utf-8")
+        install_shell = INSTALL_SH_PATH.read_text(encoding="utf-8")
+        sync_powershell = SYNC_PS1_PATH.read_text(encoding="utf-8")
+
+        for script in (sync_shell, install_shell):
+            self.assertIn('lockfile="${HOME}/.config/mise/mise.lock"', script)
+            self.assertIn("trap restore_lockfile EXIT", script)
+            self.assertIn('cp -p "${lockfile_backup}" "${lockfile}"', script)
+
+        self.assertIn("$lockfileBackup = [System.IO.Path]::GetTempFileName()", sync_powershell)
+        self.assertIn(
+            "Copy-Item -LiteralPath $lockfileBackup -Destination $lockfile",
+            sync_powershell,
+        )
+
+    def test_initial_mise_install_fails_when_tools_remain_missing(self) -> None:
+        install_script = INSTALL_SH_PATH.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "ERROR: failed to inspect final mise installation status.",
+            install_script,
+        )
+        warning = install_script.index("WARNING: mise install が一部失敗しました")
+        self.assertIn("exit 1", install_script[warning:])
+
     def _check_mise_warnings(self, log: str) -> subprocess.CompletedProcess[str]:
         if shutil.which("zsh") is None:
             self.skipTest("zsh is required for mise warning tests")
