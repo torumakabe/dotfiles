@@ -360,6 +360,7 @@ pwsh -NoLogo -NoProfile -NonInteractive -File tests/manual/windows-uv/rehearse-w
 Git入力の検査は、実際の専用GitリポジトリとmacOSの既存PowerShellで実行できる。`tests/test_windows_uv_source.py`はASTから必要な関数だけを読み、Prepare本体を実行しない。PATH上にpwshがない場合は`PWSH`へ既存実行ファイルの絶対パスを指定する。新しい依存関係は導入しない。
 
 `tests/test_windows_uv_resume.py`は終了状態、親の変更範囲、journalへの封印、再検証時の変更拒否、schema 4のApplyとRestoreを検査する。実際のコマンド分岐をmockで実行し、VerifyInstallがインストーラーを呼ばないこと、通常Installが同じ事後検証を使うこと、snapshotと保存スクリプトのバイト列を変更しないことも確認する。固定SHAと保存コードの照合、改訂版RestoreでGitを呼ばない契約はGit入力の単体テストで扱う。公開用コピーの診断モード追加前は対象単体テスト66件とmock109件、静的検査5件がmacOSで成功し、追加後は変更対象の診断用11件が成功した。新モードのWindows実行は未検証である。
+LinuxとWSLでは、PowerShellのパス処理がWindowsと異なるため、このresumeテストを実行しない。Windowsでのネイティブ確認とmacOSの既存PowerShellによるmock確認は維持する。
 
 `tests/test_windows_uv_diagnostic.py`は、C#の呼び出し先をstubにしたエラー取得、偽ツリーの4段階、同名公開失敗後の停止、読み取り入力と実対象への書き込み拒否、失敗後の全検査を扱う。Windows APIは呼ばないため、Windowsでのネイティブ診断結果とは区別する。
 
