@@ -1,6 +1,13 @@
+import contextlib
+import io
 import json
+import os
 import pathlib
+import shlex
+import sys
+import tempfile
 import unittest
+from unittest import mock
 
 from tests._helpers import load_script, run_hook
 
@@ -197,10 +204,17 @@ class TestMainIntegration(unittest.TestCase):
         self.assertEqual(out["permissionDecision"], "deny")
 
     def test_allow_uv_run(self) -> None:
-        self._assert_allowed({
-            "toolName": "bash",
-            "toolArgs": {"command": "uv run python script.py"},
-        })
+        with tempfile.TemporaryDirectory() as root:
+            with mock.patch.dict(os.environ, {"HOME": root}, clear=True):
+                result = run_hook(SCRIPT_PATH, {
+                    "toolName": "bash",
+                    "toolArgs": {"command": "uv run python script.py"},
+                })
+        self.assertEqual(result.returncode, 0)
+        if sys.platform == "win32":
+            self.assertEqual(result.stdout.strip(), "")
+        else:
+            self.assertTrue(json.loads(result.stdout)["modifiedArgs"]["command"].endswith("; uv run python script.py"))
 
     def test_allow_non_bash_tool(self) -> None:
         self._assert_allowed({
@@ -208,9 +222,74 @@ class TestMainIntegration(unittest.TestCase):
             "toolArgs": {"path": "/tmp/foo.txt"},
         })
 
+    def test_powershell_keeps_the_original_command(self) -> None:
+        self._assert_allowed({
+            "toolName": "powershell",
+            "toolArgs": {"command": "uv run script.py"},
+        })
+
     def test_invalid_json_denies(self) -> None:
         out = self._decision("not valid json")
         self.assertEqual(out["permissionDecision"], "deny")
+
+
+@unittest.skipIf(os.name == "nt", "POSIX cache path checks")
+class TestCommandLocalCache(unittest.TestCase):
+    def _main(self, command, *, platform="linux", tool="bash", env=None, serialized=False):
+        args = {"command": command, "description": "keep", "initial_wait": 120}
+        payload = {"toolName": tool, "toolArgs": json.dumps(args) if serialized else args}
+        output = io.StringIO()
+        with mock.patch.object(uve, "read_input", return_value=payload), mock.patch.object(uve.sys, "platform", platform), mock.patch.dict(os.environ, env or {}, clear=True), contextlib.redirect_stdout(output):
+            try:
+                uve.main()
+            except SystemExit:
+                pass
+        return json.loads(output.getvalue()) if output.getvalue() else None
+
+    def test_prefix_quotes_cache_and_preserves_command_and_other_args(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            home = pathlib.Path(root).resolve()
+            cache_home = home / "spaces 'quotes; $dollars"
+            env = {"HOME": str(home), "XDG_CACHE_HOME": str(cache_home)}
+            commands = (
+                "uv run script.py",
+                "UV_CACHE_DIR=/explicit uv run script.py",
+                "uv --cache-dir /explicit run script.py",
+                "export UV_CACHE_DIR=/explicit; uv run script.py",
+                "echo hello\nuv cache dir",
+                "git status",
+            )
+            for command in commands:
+                for serialized in (True, False):
+                    with self.subTest(command=command, serialized=serialized):
+                        output = self._main(command, env=env, serialized=serialized)
+                        expected = f"export UV_CACHE_DIR={shlex.quote(str(cache_home / 'github-copilot/uv'))}; {command}"
+                        self.assertEqual(output, {"modifiedArgs": {
+                            "command": expected, "description": "keep", "initial_wait": 120,
+                        }})
+                        self.assertIsNone(self._main(expected, env=env))
+            self.assertFalse(cache_home.exists(), "the hook only selects a path")
+
+    def test_windows_powershell_and_non_shell_tools_are_unchanged(self) -> None:
+        for platform, tool in (("win32", "bash"), ("win32", "powershell"), ("linux", "powershell"), ("darwin", "edit")):
+            with self.subTest(platform=platform, tool=tool):
+                self.assertIsNone(self._main("uv run script.py", platform=platform, tool=tool, env={"UV_CACHE_DIR": "/host-override"}))
+
+    def test_python_and_pip_enforcement_precedes_cache_validation(self) -> None:
+        for command in ("python script.py", "pip install requests", "echo ok && python3 script.py"):
+            with self.subTest(command=command):
+                output = self._main(command, env={"UV_CACHE_DIR": "/invalid-launch"})
+                self.assertEqual(output["permissionDecision"], "deny")
+                self.assertIn("Use 'uv", output["permissionDecisionReason"])
+                self.assertNotIn("modifiedArgs", output)
+
+    def test_invalid_cache_environment_denies_with_actionable_reason(self) -> None:
+        output = self._main("uv cache dir", env={"UV_CACHE_DIR": ""})
+        self.assertEqual(output["permissionDecision"], "deny")
+        self.assertIn("launch-environment UV_CACHE_DIR", output["permissionDecisionReason"])
+
+    def test_empty_command_remains_silent(self) -> None:
+        self.assertIsNone(self._main(""))
 
 
 if __name__ == "__main__":

@@ -11,15 +11,15 @@
       },
       {
         "type": "command",
-        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/uv-enforcer.py\"",
-        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\uv-enforcer.py\"",
+        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/node-global-enforcer.py\"",
+        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\node-global-enforcer.py\"",
         "cwd": ".",
         "timeoutSec": 30
       },
       {
         "type": "command",
-        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/node-global-enforcer.py\"",
-        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\node-global-enforcer.py\"",
+        "bash": "MISE_ENABLE_TOOLS=uv uv run \"$HOME/.copilot/hooks/scripts/uv-enforcer.py\"",
+        "powershell": "$env:MISE_ENABLE_TOOLS='uv'; uv run \"$HOME\\.copilot\\hooks\\scripts\\uv-enforcer.py\"",
         "cwd": ".",
         "timeoutSec": 30
       }

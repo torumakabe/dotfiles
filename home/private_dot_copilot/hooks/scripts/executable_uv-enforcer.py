@@ -11,7 +11,10 @@ Run via: uv run uv-enforcer.py
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
 import re
+import shlex
 import sys
 from typing import Any
 
@@ -166,6 +169,43 @@ def check_command(command: str) -> str | None:
 # Main
 # ---------------------------------------------------------------------------
 
+def copilot_uv_cache_dir() -> str:
+    """Return the dedicated POSIX cache, rejecting redirected or unsafe paths."""
+    if "UV_CACHE_DIR" in os.environ:
+        raise ValueError("Unset launch-environment UV_CACHE_DIR before applying settings and starting Copilot; command-local overrides remain supported.")
+    home_value = os.environ.get("HOME", "")
+    home = Path(home_value)
+    if not home.is_absolute() or any(c in home_value for c in "\r\n"):
+        raise ValueError("HOME must be an absolute, single-line directory.")
+    if "//" in home_value or str(home) != home_value.rstrip("/") or ".." in home.parts:
+        raise ValueError("HOME must not contain redundant separators or '.'/'..' components.")
+    home = home.resolve(strict=True)
+    if home == Path("/") or not home.is_dir() or any(c in str(home) for c in "\r\n"):
+        raise ValueError("HOME must resolve to a non-root, single-line directory.")
+    base_value = (
+        str(home / "Library/Caches")
+        if sys.platform == "darwin"
+        else os.environ.get("XDG_CACHE_HOME") or str(home / ".cache")
+    )
+    if (
+        not base_value.startswith("/")
+        or any(c in base_value for c in "\r\n")
+        or ".." in base_value.split("/")
+    ):
+        raise ValueError("XDG_CACHE_HOME must be absolute, single-line, and contain no '..' components.")
+    base = Path("/" + base_value.lstrip("/"))
+    # HOME itself may be an OS alias; reject redirects below it and in external XDG paths.
+    if base.is_relative_to(Path(home_value)):
+        base = home / base.relative_to(Path(home_value))
+    if base == Path("/"):
+        raise ValueError("XDG_CACHE_HOME must not be the filesystem root.")
+    cache = base / "github-copilot/uv"
+    for component in reversed((cache, *cache.parents)):
+        if component.is_symlink() or (component.exists() and not component.is_dir()):
+            raise ValueError(f"Cache path must not contain symlinks or non-directories: {component}")
+    return str(cache)
+
+
 def main() -> None:
     try:
         input_data = read_input()
@@ -187,6 +227,17 @@ def main() -> None:
     reason = check_command(command)
     if reason:
         deny(reason)
+
+    if tool_name == "bash" and sys.platform != "win32":
+        try:
+            cache_dir = copilot_uv_cache_dir()
+        except (ValueError, OSError) as exc:
+            deny(str(exc))
+        # Command-local only: launch-time UV_CACHE_DIR causes ROOT_RO conflicts.
+        # Scope/removal conditions: repository .github/copilot-instructions.md workarounds.
+        prefix = f"export UV_CACHE_DIR={shlex.quote(cache_dir)}; "
+        if not command.startswith(prefix):
+            print(json.dumps({"modifiedArgs": {**tool_args, "command": prefix + command}}))
 
     return  # Command is fine — defer to CLI default
 
