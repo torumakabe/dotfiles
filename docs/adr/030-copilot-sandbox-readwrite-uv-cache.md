@@ -39,4 +39,4 @@ hook 設定は session 開始時に読み込まれるため、適用後は Copil
 - host の uv cache と設定は変更せず、sandbox shell だけが専用 cache を使う。
 - shell command 全体へ環境変数を設定するため、command 内で間接的に uv を起動する場合にも同じ cache を使う。command 自身が後から `UV_CACHE_DIR` を変更した場合は、その指定が優先される。
 - 古い Copilot 専用 uv cache path の entry は、利用者が追加した entry とリポジトリが追加した entry を settings だけで判別できないため、自動削除しない。
-- WSL2 で観測した read-only エラーへの対応は実装で検証する。Windows では hook の command 変更と policy の単体テストを行うが、ProcessContainer での `uv run` 成功は実機検証まで未確認として扱う。
+- WSL2 では commit `0c35b02` の適用後、43コマンドがすべて期待する mise 実体へ解決し、Copilot 専用 cache を使う `uv run --no-project -- python --version` が終了コード0で成功した。Windows では hook の command 変更と policy の単体テストを行うが、ProcessContainer での `uv run` 成功は実機検証まで未確認として扱う。
