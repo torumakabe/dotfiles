@@ -10,6 +10,7 @@ Run via: uv run uv-enforcer.py
 """
 from __future__ import annotations
 
+import base64
 import json
 import ntpath
 import os
@@ -205,8 +206,13 @@ def with_copilot_uv_cache(
     modified = dict(tool_args)
     if tool_name == "powershell":
         escaped = cache_dir.replace("'", "''")
+        encoded = base64.b64encode(command.encode("utf-16-le")).decode("ascii")
         modified["command"] = (
-            f"$env:UV_CACHE_DIR = '{escaped}'; & {{\n{command}\n}}"
+            f"$env:UV_CACHE_DIR = '{escaped}'; "
+            "& ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName) "
+            "-NoLogo -NoProfile -NonInteractive -OutputFormat Text "
+            f"-EncodedCommand '{encoded}'; "
+            "exit $LASTEXITCODE"
         )
     else:
         modified["command"] = (

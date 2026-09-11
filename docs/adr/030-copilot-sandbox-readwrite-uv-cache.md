@@ -18,7 +18,7 @@ uv は `UV_CACHE_DIR` を公式の cache directory override として提供す�
 
 ## Decision
 
-preToolUse hook は `node-global-enforcer.py`、`uv-enforcer.py`、`copilot-guard.py` の順で実行する。`uv-enforcer.py` は許可する bash と PowerShell の command に、`modifiedArgs` を使って `UV_CACHE_DIR` の設定を追加する。Node.js と Python の実行規則は変更前の command を検査し、最後の `copilot-guard.py` は変更後の command を検査する。`copilot-guard.py` が確認を要求する場合も、先行 hook の command 変更は維持される。
+preToolUse hook は `node-global-enforcer.py`、`copilot-guard.py`、`uv-enforcer.py` の順で実行する。Node.js の実行規則と Copilot Guard は変更前の command を検査する。`copilot-guard.py` が確認を要求し、利用者が承認した場合も、runtime は後続の `uv-enforcer.py` を実行し、その `modifiedArgs` を実行対象へ反映する。`uv-enforcer.py` は許可する bash と PowerShell の command に `UV_CACHE_DIR` の設定を追加する。PowerShell では、元の command を UTF-16LE の `EncodedCommand` として同じ PowerShell 実体の子プロセスへ渡し、`-NoProfile`、`-NonInteractive`、text output を指定して子プロセスの終了コードを親へ返す。
 
 | OS | Copilot 専用 uv cache |
 |---|---|
@@ -37,8 +37,8 @@ hook 設定は session 開始時に読み込まれるため、適用後は Copil
 - 通常の `uv run`、`uv sync`、`uv pip` は、sandbox 内で Copilot 専用 uv cache に必要な一時ファイルと lock を作成できる。
 - 書き込み許可は uv cache に限定され、mise data root と他の package manager cache はread-onlyのまま維持される。
 - host の uv cache と設定は変更せず、sandbox shell だけが専用 cache を使う。
-- shell command 全体へ環境変数を設定するため、command 内で間接的に uv を起動する場合にも同じ cache を使う。command 自身が後から `UV_CACHE_DIR` を変更した場合は、その指定が優先される。
+- shell command 全体へ環境変数を設定するため、command 内で間接的に uv を起動する場合にも同じ cache を使う。command 自身が後から `UV_CACHE_DIR` を変更した場合は、その指定が優先される。PowerShell tool call は、同じ PowerShell 実体を一つ追加で起動する。
 - 通常運用では古い Copilot 専用 uv cache path の entry を自動削除しない。この回避策を撤去するときは、リポジトリが管理する namespaced literal の完全一致 entry を削除する policy migration を実施する。
-- WSL2 では commit `0c35b02` の適用後、43コマンドがすべて期待する mise 実体へ解決し、Copilot 専用 cache を使う `uv run --no-project -- python --version` が終了コード0で成功した。macOS 26.6.2 と Copilot CLI 1.0.84-4 では、専用 cache を使う実行と `UV_CACHE_DIR` を解除する撤去判定プローブがともに終了コード0で成功した。Windows では hook の command 変更と policy の単体テストを行うが、ProcessContainer での `uv run` 成功は実機検証まで未確認として扱う。
+- WSL2 では commit `0c35b02` の適用後、43コマンドがすべて期待する mise 実体へ解決し、Copilot 専用 cache を使う `uv run --no-project -- python --version` が終了コード0で成功した。macOS 26.6.2 と Copilot CLI 1.0.84-4 では、専用 cache を使う実行と `UV_CACHE_DIR` を解除する撤去判定プローブがともに終了コード0で成功した。Windows ProcessContainer では、専用 cache を使う実行が成功し、専用 cache を解除した実行は AppContainer 内の uv cache への書き込みを拒否されて失敗した。初回検証で使った PowerShell command wrapper はこの native command の失敗を tool call の終了コードへ反映しなかったため、子 PowerShell 方式へ変更した版で終了コードを再検証する。
 
 この回避策の撤去条件と対象範囲は、`.github/copilot-instructions.md` の「ワークアラウンド（定期チェック対象）」を参照し、本 ADR には重複して記載しない。
