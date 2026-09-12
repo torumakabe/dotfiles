@@ -14,7 +14,7 @@
 
 `home/` にソースがあるだけではユーザーレベルの指示として読み込まれない。リポジトリ用の指示から共通規範を参照するときは、配布済みであることを前提にせずソースを参照する。
 
-配布用のカスタムエージェント定義はなく、`home/private_dot_copilot/skills/` は `.gitkeep` のみである。外部スキルの管理は[プラグインとスキル](#プラグインとスキル)を参照する。
+配布用のカスタムエージェントと skill は管理しない。外部 skill の管理は[プラグインとスキル](#プラグインとスキル)を参照する。
 
 ### その他の配布設定
 
@@ -49,7 +49,7 @@ Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilo
 
 プラグインの登録と有効化は [`home/.chezmoitemplates/copilot-user-settings.json`](../home/.chezmoitemplates/copilot-user-settings.json) を正本とし、既存の `settings.json` へマージする。登録外の既存プラグインも保持するため、排他的な許可リストではない。Copilot CLI が導入とセッション開始時の更新を担当し、スキル本文の正本は提供元にある。
 
-プラグインに含めない外部 skill は `gh skill` で管理し、自作 skill と公式の導入コマンドを持たない skill だけを `~/.copilot/skills/` から chezmoi へ取り込む。
+外部 skill はプラグインまたは `gh skill` で管理し、このリポジトリへ複製しない。
 
 ```bash
 # GitHub Copilot の user scope へ外部 skill を導入する
@@ -58,7 +58,7 @@ gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 
 `personal-skills@torumakabe-agent-plugins` は `agentfinder`、`japanese-technical-writing`、`lsp-setup` を提供する。利用時はスキル名を指定する。`agentfinder` が返した候補は、ユーザーが明示的に選ぶまで自動インストールしない。
 
-`gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。提案条件は[配布用カスタム指示](../home/private_dot_copilot/copilot-instructions.md#エージェント行動規範)、操作方法は公式 skill を正本とする。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
+`gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。提案条件は[配布用カスタム指示](../home/private_dot_copilot/copilot-instructions.md#エージェント行動規範)、操作方法は公式 skill を参照する。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
 
 ## セキュリティフック
 

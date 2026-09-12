@@ -288,32 +288,7 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 
 失敗時は、実行コマンド、終了コード、標準エラー、`/sandbox` の各画面の表示を残す。認証情報や機密性のある環境変数の値は記録へ含めない。
 
-## 検証記録
-
-変化しやすい実測値は、この表へ追記する。環境内の対話確認を実施していない結果は、dotfiles 契約の合格として扱わない。
-
-| 検証日 | 環境と確認方法 | OS、architecture | Copilot CLI | chezmoi | mise 同期 | bwrap | 結果 |
-|---|---|---|---|---|---|---|---|
-| 2026-08-16 | macOS、対話ターミナルと自動テスト | macOS 26.6.1、arm64 | 1.0.81-0 | 2.70.0 | 2026.8.6、成功 | N/A | 全368テストが成功し、27テストをskip。初期値は`true`。`/sandbox`のGeneral、Auth、Filesystem、Networkを確認し、手動enableとdisableの値が再起動後も維持された。backend名の表示はなかった |
-| 2026-08-16 | Dev Container、対話ターミナルでの互換性調査 | Ubuntu 26.04、arm64 | 1.0.80 | 未記録 | npmミラーの一時設定後に成功 | 0.11.1、probe失敗 | Dev Containers 0.88.0のログで、Dotfilesセットアップへ`--remote-env REMOTE_CONTAINERS=true`が渡されることを確認した。bubblewrapはインストール済みだが、user namespace作成が`No permissions to create a new namespace`で失敗した。Copilot CLIのshell commandも同じ理由で失敗した。現行契約では初期値を`false`とし、この互換性調査を合否条件に含めない |
-| 2026-08-16 | Codespaces、commit `1ec7eee`で隔離した設定ディレクトリを使用 | Linux 6.8.0-1052-azure、x86_64 | 実体の配置を確認。version取得は未完了 | 2.72.0 | miseとuvが未導入のため未実施 | 未導入 | `CODESPACES=true`を検出し、初期値`false`、ファイルモード`600`、既存boolean値の維持を確認した。`~/.copilot/settings.json`は未作成で、`/sandbox`と自動テストは未実施 |
-| 2026-08-16 | WSL2、対話ターミナルと自動テスト | Ubuntu 22.04.5、x86_64、kernel 6.18.35.2-microsoft-standard-WSL2 | version未記録 | version未記録 | 未記録 | 0.6.1、probe成功 | 対象33テストが成功し、4テストをskip。全363テストが成功し、18テストをskip。隔離した設定同期、`chezmoi apply`、手動enableとdisableの値が再起動後と再適用後も維持されることを確認した。backend名の表示はなかった |
-| 2026-08-16 | Windows native | Windows build 26200、architecture 未記録 | 1.0.81-0 | 未記録 | 未確認 | N/A | 単体テストと WinGet Configuration 構文は成功。対話的な enable、disable は未実施 |
-
-### uv キャッシュ許可の実 CLI 検証（2026-09-11）
-
-以下は、採用しなかった `uv.toml` 方式の調査結果であり、現在の hook 方式の合格記録ではない。Copilot CLI `1.0.84-4`、uv `0.12.12` で、一時 HOME、user uv.toml、キャッシュを使って比較した。Python は明示指定し、その読み取りを許可した。両環境とも dev-tool access は有効、sandbox の bypass は禁止した。
-
-| 環境 | キャッシュ RW なし | キャッシュ RW あり |
-|---|---|---|
-| macOS、arm64 | `CACHEDIR.TAG` 作成が拒否され、uv は終了コード 2。ホストのキャッシュは空 | uv は終了コード 0。ホストにキャッシュタグと確認用ファイルの一致する内容が残った |
-| WSL2、x86_64、kernel `6.18.40.1-microsoft-standard-WSL2`。利用者が WSL 端末で実行 | 指定した保存先で uv と確認用ファイルの作成が成功して終了コード 0。ただしホストのキャッシュは空 | uv は終了コード 0。ホストにキャッシュタグと確認用ファイルの一致する内容が残った |
-
-macOS では user uv.toml のファイル RO を追加する前、sandbox 内の uv が指定先ではなく既定キャッシュを選んだ。ファイル RO を追加した後は指定先を選び、キャッシュ RW によって永続化できた。また、`UV_CACHE_DIR` を CLI 起動環境に export した比較では、明示 RW を加えてもキャッシュ書き込みに失敗した。
-
-この比較はホストへの永続化を判定する必要性を示すが、通常の Python 自動探索は証明しない。WSL の具体的な一時 filesystem、配布 CLI が同梱する MXC の commit、Windows の自動許可の内訳は未確定である。
-
-その後、macOS の直接読み取りと Windows / WSL の利用者による診断で、3環境とも配布済み `uv-enforcer.py` に旧キャッシュ切替処理がなく、旧専用キャッシュの RW 許可だけが残っていることを確認した。macOS / WSL は通常シェルで `~/.cache/uv` を選び、Windows は `%LOCALAPPDATA%\uv\cache` を選んだ。CLI 起動元の `UV_CACHE_DIR` は全環境で未設定だった。Windows で動作するとの利用者報告は維持するが、旧hookの効果とは説明しない。
+## uv キャッシュ許可の実 CLI 検証（2026-09-11）
 
 現在の実装は POSIX のコマンド内で専用キャッシュを選び、通常シェルの uv 設定は変更しない。commit `34b6fba` の配布対象 hook、通常 HOME と PATH、Python 自動探索を使い、検証専用の Python RO を追加せず比較した。
 

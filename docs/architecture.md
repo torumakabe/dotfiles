@@ -8,7 +8,6 @@ README から分離した、構成と設計判断の詳細である。運用手�
 home/                           ← chezmoi source
 ├── .chezmoi.toml.tmpl          ← 共通 flag・変数定義
 ├── .chezmoiignore              ← 条件付き除外
-├── .chezmoiremove              ← 不要ファイルの削除
 ├── dot_gitconfig*.tmpl         ← Git 設定
 ├── dot_zshrc.tmpl              ← 対話 zsh
 ├── dot_profile.tmpl            ← POSIX 互換の共通 env（PATH, brew shellenv, mise shims）
@@ -17,7 +16,7 @@ home/                           ← chezmoi source
 ├── dot_local/bin/executable_gitleaks-pre-commit          ← gitleaks (設定ベースフック経由)
 ├── dot_config/mise/{config.toml.tmpl,private_mise.lock}
 ├── PowerShell_profile.ps1.tmpl
-├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp, skills）
+├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp）
 └── run_once_{before,after}_*   ← bootstrap スクリプト
 .devcontainer/devcontainer.json  ← このリポジトリを開発する Dev Container の構成
 reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
@@ -71,7 +70,7 @@ gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテ�
 
 プラットフォーム機能契約は、利用者向けの公開関数、alias、補完、ツール導入について、Windows/PowerShell、macOS/zsh、Linux/zsh、WSL/zsh の利用目的を等価に保つための分類である（ADR-019）。開発者は公開機能を変更するときに4環境の実装を更新するか、実装しない理由と適用範囲を契約と文書へ記録する。
 
-`tests/test_platform_parity.py` は、公開シンボルが契約へ分類されていること、契約上の実装を示す設定断片が存在すること、共通ツールが両系統の install script に存在することを静的に検査する。この検査は各OS上でのコマンド実行結果や上流配布物の可用性までは保証しない。開発者は実機固有の動作を各環境で確認し、`review-repo` は契約、実装、CIの一致を点検する。
+`tests/test_platform_parity.py` は、公開機能の分類と実装の対応を静的に検査する。各 OS での実行結果や上流配布物の可用性は保証しないため、開発者は環境固有の動作を実機で確認し、`review-repo` は契約、実装、CI の一致を点検する。
 
 理由付き例外は次のとおりである。
 

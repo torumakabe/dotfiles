@@ -14,7 +14,7 @@ Python の `pre-commit` フレームワークには `pre-commit init-templatedir
 
 ## Decision
 
-`core.hooksPath`（GLOBAL）を廃止し、`[init] templateDir = ~/.config/git/templates`（`home/dot_gitconfig.tmpl`）に切り替える。hook 本体は `home/dot_config/git/templates/hooks/executable_pre-commit` に移し（`~/.config/git/templates/hooks/pre-commit` へ配置）、repo-local hook への delegate/exec ロジックは削除する（テンプレート配布後は各リポジトリの通常の local hook になるため、委譲対象と自分自身が同一になり不要かつ自己ループの原因になる）。旧配置の `pre-commit` ファイルは `home/.chezmoiremove` で削除するが、旧ディレクトリ全体は削除しない。加えて、全 `ghq` リポジトリを走査して local `core.hooksPath` 上書き・hook 欠落・非 gitleaks hook・正常、を報告する読み取り専用の `git-hooks-audit`（zsh 関数 / PowerShell 関数）を追加する。
+`core.hooksPath`（GLOBAL）を廃止し、`[init] templateDir = ~/.config/git/templates`（`home/dot_gitconfig.tmpl`）に切り替える。hook 本体は `home/dot_config/git/templates/hooks/executable_pre-commit` に移し（`~/.config/git/templates/hooks/pre-commit` へ配置）、repo-local hook への delegate/exec ロジックは削除する（テンプレート配布後は各リポジトリの通常の local hook になるため、委譲対象と自分自身が同一になり不要かつ自己ループの原因になる）。加えて、全 `ghq` リポジトリを走査して local `core.hooksPath` 上書き、hook 欠落、非 gitleaks hook、正常の状態を報告する読み取り専用の `git-hooks-audit`（zsh 関数 / PowerShell 関数）を追加する。
 
 ## Consequences
 

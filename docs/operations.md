@@ -16,13 +16,7 @@
 
 ## 定期チェック対象の制約
 
-`mise` 設定や導入元を見直すときに、次の制約が残っているか確認する。解消されていれば条件分岐やワークアラウンドを外せる。
-
-- **cargo-make**: linux/arm64 向け配布なし
-- **npm:typescript-language-server**: 利用中の npm レジストリプロキシが trusted publisher の証跡を保持しない版だけを `trust_policy_excludes` の対象とする。対象版は `home/dot_config/mise/config.toml.tmpl` を正本とする
-- **azure-dev**: mise `github:` バックエンドがバイナリ名を正規化しないため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式 `.deb`、更新は `azd update`）
-- **copilot-cli**: mise の `github:` バックエンドで更新遅延やバージョン誤認が起きるため mise 外管理（macOS: `brew` / Windows: `winget` / Linux: 固定した公式リリースアーカイブ、更新は `copilot update`）
-- **edit**（Microsoft Edit）: Windows のみ winget/DSC で管理（`reference/windows/configuration.dsc.yaml`）。macOS / Linux では未使用
+制約の対象と撤去条件は [リポジトリ指示](../.github/copilot-instructions.md#プラットフォーム制約定期チェック対象) と [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) で管理する。`azd` と Copilot CLI を mise 外で管理する判断は [ADR-004](adr/004-azd-and-copilot-cli-outside-mise.md)、Microsoft Edit を Windows のみで管理する判断は [ADR-011](adr/011-edit-windows-via-winget-dsc.md) を参照する。
 
 TypeScript language server の除外を撤去するときは、`home/dot_config/mise/config.toml.tmpl` の版限定エントリを削除し、`mise install --force npm:typescript-language-server` で既存導入済み版も再検証する。成功後に `uv run -m unittest tests.test_mise_config -v` を実行する。失敗時の確認は [`troubleshooting.md`](troubleshooting.md#mise-install-が-aube-install-failed-failed-to-resolve-dependencies-で止まる) を参照する。
 
@@ -59,26 +53,16 @@ WSL2、macOS、Codespaces、Dev Container でリモートブランチを検証�
 
 ### uv 専用キャッシュの書き込み許可
 
-この設定は Copilot CLI の uv キャッシュ書き込みに対する**ワークアラウンド**であり、CLI または MXC の改善で不要になる可能性がある。対象と撤去判断は、[コーディングエージェント向け指示のワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)に集約する。
-
-macOS と Linux（WSL を含む）では、`uv-enforcer.py` が許可された Bash tool のコマンドへ `UV_CACHE_DIR` の設定を追加する。CLI 起動前の環境変数には設定せず、コマンドの実行時に専用キャッシュを選ぶ。既存の拒否チェックはコマンドを変更する前に実施する。
+対象と撤去条件は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。macOS と Linux（WSL を含む）では、`uv-enforcer.py` が許可済みの Bash tool コマンドへ `UV_CACHE_DIR` を追加し、設定同期が専用キャッシュを `readwritePaths` に追加する。
 
 | 環境 | 専用キャッシュ |
 |---|---|
 | macOS | `~/Library/Caches/github-copilot/uv` |
 | Linux、WSL | `${XDG_CACHE_HOME:-$HOME/.cache}/github-copilot/uv` |
 
-`run_after_35-configure-copilot-sandbox.sh.tmpl` は毎回の apply で専用キャッシュを作成し、必要な `readwritePaths` を追加する。既存の RO、deny、利用者が追加した RW は削除しない。`uv.toml`、通常シェルの環境変数、通常の uv キャッシュは変更しない。設定ファイルへの追加 RO も行わない。
+Copilot CLI を終了してから `chezmoi apply` を実行し、hook と RW 許可を同時に配布する。既存の RO、deny、利用者が追加した RW、通常シェルの uv 設定は変更しない。コマンド内で別の `UV_CACHE_DIR` や `--cache-dir` を指定した場合、その保存先は自動許可しない。
 
-CLI 起動環境へ `UV_CACHE_DIR` を export しない。hook が設定した後でも、元のコマンド内の明示的な環境変数設定や `--cache-dir` は uv の優先規則に従う。その保存先を自動許可することはない。hook は Bash tool に適用されるため、Copilot で sandbox を無効にした場合も専用キャッシュを選ぶ。
-
-相対パスや不正な保存先、既存の RO / deny との競合は、許可を広げて解消しない。エラーの原因を確認してから再適用する。`XDG_CACHE_HOME` などを変更した場合も、以前の RW 許可の所有者を推測して自動削除しない。不要な許可は、実際の配布状態と利用状況を確認して整理する。
-
-Copilot を終了してから apply し、設定の同時編集を避ける。hook と RW 許可の両方を適用してから再起動する。キャッシュ許可だけが残り、hook が古い場合は、uv が別のキャッシュを選んで失敗し得る。
-
-Windows は現在の利用環境で動作するとの報告があるため、このキャッシュ切替と RW 追加の対象外とする。Windows 全般で対処不要という意味ではない。配布済み hook にも旧キャッシュ切替はなく、現在の成功を旧hookや自動RW許可の効果とは断定しない。既存の Windows 設定は保持する。
-
-実 CLI の比較結果は[検証記録](copilot-sandbox-verification.md#uv-キャッシュ許可の実-cli-検証2026-09-11)、対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
+Windows は `UV_CACHE_DIR` の切替と RW 追加の対象外である。比較手順と観測結果は [実機検証](copilot-sandbox-verification.md#uv-キャッシュ許可の実-cli-検証2026-09-11) を参照する。
 
 ## chezmoi での編集
 
@@ -93,9 +77,7 @@ chezmoi diff && chezmoi apply
 
 ### 本体の導入元
 
-macOS と Linux は、`home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。Windows は DSC の `jdx.mise` を使い、winget が公式 GitHub Releases ZIP を配置する。導入経路は OS ごとに異なるが、全 OS で mise の公式成果物を使う（[ADR-027](adr/027-mise-install-from-official-artifacts-per-os.md)）。
-
-macOS に Homebrew formula の mise がある場合、現在解決される mise が formula の実体であるか、mise が未解決のときだけ、導入スクリプトは検証済みの公式バイナリを原子的に配置する。現在 `command -v mise` で解決される formula 以外の mise、または標準配置先 `~/.local/bin/mise` にある実行可能な mise は置き換えない。PATH 外の任意の場所は探索しない。現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、導入スクリプトは formula を削除しない。Homebrew 版の activation を読み込んだ既存のシェルをすべて終了し、新しいシェルで `command -v mise` が導入スクリプトの案内したパスを返すことを確認してから、`brew uninstall mise` を手動で実行する。
+macOS と Linux は、mise が未導入の場合に `home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。既存の mise は導入元と版を問わず置き換えない。Windows は DSC の `jdx.mise` を使い、winget が公式 GitHub Releases ZIP を配置する。導入方法は OS ごとに異なるが、リポジトリが新規導入する mise には公式成果物を使う（[ADR-028](adr/028-mise-bootstrap-preserves-existing-installations.md)）。
 
 ### `mise-self-upgrade`
 
@@ -228,7 +210,7 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
 
-`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。macOS の Homebrew formula から公式バイナリへの移行だけは例外であり、解決される mise が formula の実体である場合、または mise が未解決の場合に移行処理を実行する。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
+`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
 最低限の確認:
 

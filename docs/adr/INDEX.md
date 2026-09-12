@@ -39,7 +39,8 @@
 | [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension は公式 CLI で導入する | Accepted |
 | [025](025-copilot-cli-sandbox-user-level-default.md) | Copilot CLI local sandbox は user-level settings で既定有効にする | Superseded by ADR-026 |
 | [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 既定値と uv コマンド専用キャッシュ | Accepted |
-| [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Accepted |
+| [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Superseded by ADR-028 |
+| [028](028-mise-bootstrap-preserves-existing-installations.md) | mise bootstrap は既存導入を置換しない | Accepted |
 
 ## テンプレート
 

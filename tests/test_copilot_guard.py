@@ -33,6 +33,26 @@ def make_ctx(
     )
 
 
+class GuardAssertionsMixin:
+    def assert_check_result(
+        self, result, decision: str | None, reason_contains: str | None = None
+    ) -> None:
+        if decision is None:
+            self.assertIsNone(result)
+            return
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decision, decision)
+        if reason_contains is not None:
+            self.assertIn(reason_contains, result.reason)
+
+    def assert_hook_decision(self, result, decision: str | None) -> None:
+        self.assertEqual(result.returncode, 0, result.stderr)
+        if decision is None:
+            self.assertEqual(result.stdout, "")
+            return
+        self.assertEqual(json.loads(result.stdout)["permissionDecision"], decision)
+
+
 class CopilotGuardApplyPatchTests(unittest.TestCase):
     @staticmethod
     def _payload_for_path(tool_name: str, path: pathlib.Path) -> dict:
@@ -569,40 +589,19 @@ class CopilotGuardReadOnlySearchTests(unittest.TestCase):
 
 
 class CopilotGuardPathMatchingTests(unittest.TestCase):
-    def test_does_not_match_by_substring(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/tmp/accessTokens.json.backup",
-            ["**/accessTokens.json"],
+    def test_blocked_path_matching_cases(self) -> None:
+        cases = (
+            ("substring suffix", "/tmp/accessTokens.json.backup", ["**/accessTokens.json"], None),
+            ("windows path", r"C:\Users\me\.azure\accessTokens.json", ["**/accessTokens.json"], "**/accessTokens.json"),
+            ("nested unix path", "/home/me/project/.azure/dev/.env", ["**/.azure/**/.env"], "**/.azure/**/.env"),
+            ("file URI", "file:///C:/Users/me/.azure/accessTokens.json", ["**/accessTokens.json"], "**/accessTokens.json"),
+            ("file URI with netloc", "file://server/share/.azure/accessTokens.json", ["**/accessTokens.json"], "**/accessTokens.json"),
         )
-        self.assertIsNone(hit)
-
-    def test_matches_windows_path_after_normalization(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            r"C:\Users\me\.azure\accessTokens.json",
-            ["**/accessTokens.json"],
-        )
-        self.assertEqual(hit, "**/accessTokens.json")
-
-    def test_matches_nested_unix_path(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/me/project/.azure/dev/.env",
-            ["**/.azure/**/.env"],
-        )
-        self.assertEqual(hit, "**/.azure/**/.env")
-
-    def test_matches_file_uri(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "file:///C:/Users/me/.azure/accessTokens.json",
-            ["**/accessTokens.json"],
-        )
-        self.assertEqual(hit, "**/accessTokens.json")
-
-    def test_matches_file_uri_with_netloc(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "file://server/share/.azure/accessTokens.json",
-            ["**/accessTokens.json"],
-        )
-        self.assertEqual(hit, "**/accessTokens.json")
+        for name, candidate, patterns, expected in cases:
+            with self.subTest(name=name):
+                self.assertEqual(
+                    copilot_guard.check_blocked_path(candidate, patterns), expected
+                )
 
     def test_allowed_path_rejects_symlinked_azure_directory(self) -> None:
         with tempfile.TemporaryDirectory() as project_dir, tempfile.TemporaryDirectory() as target_dir:
@@ -622,13 +621,11 @@ class CopilotGuardPathMatchingTests(unittest.TestCase):
         self.assertFalse(allowed)
 
     def test_allowed_path_rejects_wildcard_allowed_pattern(self) -> None:
-        allowed = copilot_guard.matches_allowed_path(
-            ".azure/deployment-plan.md",
-            [".azure/**"],
-            REPO_ROOT,
+        self.assertFalse(
+            copilot_guard.matches_allowed_path(
+                ".azure/deployment-plan.md", [".azure/**"], REPO_ROOT
+            )
         )
-
-        self.assertFalse(allowed)
 
     def test_project_containment_rejects_junction_component(self) -> None:
         with tempfile.TemporaryDirectory() as project_dir:
@@ -638,130 +635,52 @@ class CopilotGuardPathMatchingTests(unittest.TestCase):
                 mock.patch.object(pathlib.Path, "is_junction", return_value=True),
             ):
                 contained = copilot_guard.is_project_contained_path(
-                    "search-root",
-                    project_root,
+                    "search-root", project_root
                 )
 
         self.assertFalse(contained)
 
 
-class CopilotGuardCommandMatchingTests(unittest.TestCase):
-    def test_command_ignores_non_path_substrings(self) -> None:
-        hit = copilot_guard.check_blocked_command(
-            'echo os.environ["PATH"]',
-            ["**/.env"],
+class CopilotGuardCommandMatchingTests(GuardAssertionsMixin, unittest.TestCase):
+    def test_command_matching_cases(self) -> None:
+        cases = (
+            ("non-path substring", 'echo os.environ["PATH"]', ["**/.env"], "bash", None),
+            ("windows assignment", 'type --file="C:\\Users\\me\\.azure\\accessTokens.json"', ["**/accessTokens.json"], "bash", "**/accessTokens.json"),
+            ("windows path with spaces", 'type --file="C:\\Users\\John Doe\\.azure\\accessTokens.json"', ["**/accessTokens.json"], "bash", "**/accessTokens.json"),
+            ("no file-tool exception", "type .azure/deployment-plan.md", ["**/.azure/**"], "bash", "**/.azure/**"),
+            ("bash adjacent empty quotes", "cat .e''nv", ["**/.env"], "bash", "**/.env"),
+            ("bash adjacent double quotes", 'cat .e""nv', ["**/.env"], "bash", "**/.env"),
+            ("bash split command and path", "c'a't '.e'nv", ["**/.env"], "bash", "**/.env"),
+            ("bash mixed quote fragments", """c"a"t .e'n'"v" """, ["**/.env"], "bash", "**/.env"),
+            ("PowerShell adjacent double quote", 'Get-Content .en"v"', ["**/.env"], "powershell", "**/.env"),
+            ("PowerShell adjacent single quote", "Get-Content .en'v'", ["**/.env"], "powershell", "**/.env"),
+            ("PowerShell split command", 'Get-"Content" .e"n"v', ["**/.env"], "powershell", "**/.env"),
+            ("bash unbalanced quote", 'cat .e"nv', ["**/.env"], "bash", "**/.env"),
+            ("PowerShell unbalanced quote", 'Get-Content .e"nv', ["**/.env"], "powershell", "**/.env"),
         )
-        self.assertIsNone(hit)
-
-    def test_command_matches_windows_assignment_argument(self) -> None:
-        hit = copilot_guard.check_blocked_command(
-            'type --file="C:\\Users\\me\\.azure\\accessTokens.json"',
-            ["**/accessTokens.json"],
-        )
-        self.assertEqual(hit, "**/accessTokens.json")
-
-    def test_command_matches_quoted_windows_path_with_spaces(self) -> None:
-        hit = copilot_guard.check_blocked_command(
-            'type --file="C:\\Users\\John Doe\\.azure\\accessTokens.json"',
-            ["**/accessTokens.json"],
-        )
-        self.assertEqual(hit, "**/accessTokens.json")
-
-    def test_command_does_not_apply_file_tool_exception(self) -> None:
-        hit = copilot_guard.check_blocked_command(
-            "type .azure/deployment-plan.md",
-            ["**/.azure/**"],
-        )
-        self.assertEqual(hit, "**/.azure/**")
-
-    def test_command_matches_posix_adjacent_quote_fragments(self) -> None:
-        for command in (
-            "cat .e''nv",
-            'cat .e""nv',
-            "c'a't '.e'nv",
-            """c"a"t .e'n'"v" """,
-        ):
-            with self.subTest(command=command):
-                hit = copilot_guard.check_blocked_command(
-                    command,
-                    ["**/.env"],
-                    "bash",
+        for name, command, patterns, shell, expected in cases:
+            with self.subTest(name=name):
+                self.assertEqual(
+                    copilot_guard.check_blocked_command(command, patterns, shell),
+                    expected,
                 )
-                self.assertEqual(hit, "**/.env")
 
-    def test_hook_denies_posix_adjacent_quote_secret_path(self) -> None:
-        for command in ("cat .e''nv", """c"a"t .e'n'"v" """):
-            with self.subTest(command=command):
+    def test_entrypoint_quote_handling_cases(self) -> None:
+        cases = (
+            ("bash", "cat .e''nv", "deny"),
+            ("bash", """c"a"t .e'n'"v" """, "deny"),
+            ("powershell", 'Get-Content .en"v"', "deny"),
+            ("powershell", "Get-Content .en'v'", "deny"),
+            ("bash", "cat <<'EOF'\nit's ordinary text\nEOF", None),
+            ("bash", "printf '%s\n ordinary", None),
+        )
+        for shell, command, expected in cases:
+            with self.subTest(shell=shell, command=command):
                 result = run_hook(
                     SCRIPT_PATH,
-                    {
-                        "toolName": "bash",
-                        "toolArgs": {"command": command},
-                    },
+                    {"toolName": shell, "toolArgs": {"command": command}},
                 )
-
-                self.assertEqual(result.returncode, 0, result.stderr)
-                decision = json.loads(result.stdout)
-                self.assertEqual(decision["permissionDecision"], "deny")
-
-    def test_command_matches_powershell_adjacent_quote_fragments(self) -> None:
-        for command in (
-            'Get-Content .en"v"',
-            "Get-Content .en'v'",
-            'Get-"Content" .e"n"v',
-        ):
-            with self.subTest(command=command):
-                hit = copilot_guard.check_blocked_command(
-                    command,
-                    ["**/.env"],
-                    "powershell",
-                )
-                self.assertEqual(hit, "**/.env")
-
-    def test_hook_denies_powershell_adjacent_quote_secret_path(self) -> None:
-        for command in ('Get-Content .en"v"', "Get-Content .en'v'"):
-            with self.subTest(command=command):
-                result = run_hook(
-                    SCRIPT_PATH,
-                    {
-                        "toolName": "powershell",
-                        "toolArgs": {"command": command},
-                    },
-                )
-
-                self.assertEqual(result.returncode, 0, result.stderr)
-                decision = json.loads(result.stdout)
-                self.assertEqual(decision["permissionDecision"], "deny")
-
-    def test_unbalanced_quote_still_matches_protected_path(self) -> None:
-        for shell, command in (
-            ("bash", 'cat .e"nv'),
-            ("powershell", 'Get-Content .e"nv'),
-        ):
-            with self.subTest(shell=shell):
-                hit = copilot_guard.check_blocked_command(
-                    command,
-                    ["**/.env"],
-                    shell,
-                )
-                self.assertEqual(hit, "**/.env")
-
-    def test_hook_allows_ordinary_heredoc_and_unbalanced_text(self) -> None:
-        for command in (
-            "cat <<'EOF'\nit's ordinary text\nEOF",
-            "printf '%s\n ordinary",
-        ):
-            with self.subTest(command=command):
-                result = run_hook(
-                    SCRIPT_PATH,
-                    {
-                        "toolName": "bash",
-                        "toolArgs": {"command": command},
-                    },
-                )
-
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, "")
+                self.assert_hook_decision(result, expected)
 
     def test_punctuation_only_tokens_are_ignored_exhaustively(self) -> None:
         self.assertEqual(
@@ -782,871 +701,270 @@ class CopilotGuardCommandMatchingTests(unittest.TestCase):
                 },
             },
         )
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        decision = json.loads(result.stdout)
-        self.assertEqual(decision["permissionDecision"], "deny")
+        self.assert_hook_decision(result, "deny")
 
 
-class CopilotGuardEnvBlockingTests(unittest.TestCase):
+class CopilotGuardEnvBlockingTests(GuardAssertionsMixin, unittest.TestCase):
     """Tests for environment variable access blocking."""
 
-    # --- Dump commands ---
+    def test_environment_access_cases(self) -> None:
+        denied = (
+            ("printenv", "bash", "printenv"),
+            ("printenv pipe", "bash", "printenv | grep SECRET"),
+            ("bare env", "bash", "env"),
+            ("bare set", "bash", "set"),
+            ("declare", "bash", "declare -p"),
+            ("export", "bash", "export -p"),
+            ("compgen variables", "bash", "compgen -v"),
+            ("compgen environment", "bash", "compgen -e"),
+            ("quoted set", "bash", '"s"et'),
+            ("quoted declare", "bash", 'dec"lare" -p'),
+            ("quoted export", "bash", 'expo"rt" -p'),
+            ("quoted compgen", "bash", 'comp"gen" -v'),
+            ("quoted PowerShell double", "powershell", 'Get-Ch"ildItem" Env:'),
+            ("quoted PowerShell single", "powershell", "Get-Ch'ildItem' Env:"),
+            ("POSIX empty quotes", "bash", "print''env"),
+            ("POSIX double quotes", "bash", 'print""env'),
+            ("POSIX split single quotes", "bash", "pr'int'en'v'"),
+            ("POSIX mixed quotes", "bash", """pr"in"t'e'nv"""),
+            ("GitHub token", "bash", "echo $GITHUB_TOKEN"),
+            ("braced secret", "bash", "echo ${SECRET_KEY}"),
+            ("Azure secret", "bash", 'echo "$AZURE_CLIENT_SECRET"'),
+            ("API key", "bash", "curl -H 'Authorization: $API_KEY'"),
+            ("database password", "bash", "mysql -p$DB_PASSWORD"),
+            ("connection string", "bash", "echo $DATABASE_CONNECTION_STRING"),
+            ("auth token", "bash", "echo $AUTH_TOKEN"),
+            ("camel auth token", "bash", "echo $githubToken"),
+            ("camel API key", "bash", "echo $apiKey"),
+            ("concatenated secret", "bash", "echo $mysecret"),
+            ("concatenated token", "bash", "echo $githubtoken"),
+            ("concatenated password", "bash", "echo $mypassword"),
+            ("concatenated API key", "bash", "echo $XAPIKEY"),
+            ("concatenated signing key", "bash", "echo $signingkey"),
+            ("PowerShell env", "powershell", "Write-Output $env:GITHUB_TOKEN"),
+            ("braced PowerShell env", "powershell", "Write-Output ${env:GITHUB_TOKEN}"),
+            ("Python environ", "bash", 'uv run python -c "import os; print(os.environ)"'),
+            ("Node process.env", "bash", 'node -e "console.log(process.env)"'),
+            ("quoted Node process.env", "bash", "node -e 'console.log(process.'env')'"),
+            ("Perl ENV", "bash", "perl -e 'foreach (keys %ENV) { print }'"),
+            ("Ruby ENV", "bash", 'ruby -e "puts ENV.to_h"'),
+            ("PowerShell env dump", "powershell", "Get-ChildItem Env:"),
+            ("pipe chain", "bash", "ls && printenv | grep SECRET"),
+            ("sensitive chained variable", "bash", "cd /tmp && echo $GITHUB_TOKEN"),
+        )
+        allowed = (
+            ("env isolated", "bash", "env -i PATH=/usr/bin bash"),
+            ("env unset", "bash", "env -u SECRET command"),
+            ("env assignment", "bash", "env FOO=bar command"),
+            ("env separator", "bash", "env -- command"),
+            ("set option", "bash", "set -e"),
+            ("set options", "bash", "set -euo pipefail"),
+            ("author", "bash", "echo $author"),
+            ("keyword", "bash", "echo $keyword"),
+            ("tokens", "bash", "echo $tokens"),
+            ("monkey", "bash", "echo $monkey"),
+            ("PowerShell local variable", "powershell", "Write-Output $GITHUB_TOKEN"),
+            ("PowerShell PATH", "powershell", "Write-Output $env:PATH"),
+            ("braced PowerShell PATH", "powershell", "Write-Output ${env:PATH}"),
+            ("PATH", "bash", "echo $PATH"),
+            ("HOME", "bash", "echo $HOME"),
+            ("SHELL", "bash", "echo $SHELL"),
+            ("USER", "bash", "echo $USER"),
+            ("NODE_ENV", "bash", "echo $NODE_ENV"),
+            ("EDITOR", "bash", "echo $EDITOR"),
+            ("SSH_AUTH_SOCK", "bash", "echo $SSH_AUTH_SOCK"),
+            ("XDG_CONFIG_HOME", "bash", "echo $XDG_CONFIG_HOME"),
+            ("TMPDIR", "bash", "echo $TMPDIR"),
+            ("PWD", "bash", "echo $PWD"),
+            ("empty", "bash", ""),
+            ("normal command", "bash", "ls -la /tmp"),
+            ("ordinary heredoc", "bash", "cat <<'EOF'\nit's ordinary text\nEOF"),
+            ("unbalanced quote", "bash", "printf '%s\n ordinary"),
+            ("git", "bash", "git --no-pager status"),
+        )
+        for expected, cases in ((True, denied), (False, allowed)):
+            for name, shell, command in cases:
+                with self.subTest(name=name):
+                    result = copilot_guard.check_env_access(command, shell)
+                    self.assertEqual(result is not None, expected)
 
-    def test_blocks_printenv(self) -> None:
-        result = copilot_guard.check_env_access("printenv")
-        self.assertIsNotNone(result)
-        self.assertIn("printenv", result)
-
-    def test_blocks_printenv_with_pipe(self) -> None:
-        result = copilot_guard.check_env_access("printenv | grep SECRET")
-        self.assertIsNotNone(result)
-
-    def test_blocks_posix_adjacent_quote_env_dump(self) -> None:
-        for command in (
-            "print''env",
-            'print""env',
-            "pr'int'en'v'",
-            """pr"in"t'e'nv""",
-        ):
-            with self.subTest(command=command):
-                result = copilot_guard.check_env_access(command)
-                self.assertIsNotNone(result)
-                self.assertIn("printenv", result)
-
-    def test_hook_denies_posix_adjacent_quote_env_dump(self) -> None:
+    def test_entrypoint_denies_quote_obfuscated_env_dump(self) -> None:
         for command in ("print''env", """pr"in"t'e'nv"""):
             with self.subTest(command=command):
                 result = run_hook(
                     SCRIPT_PATH,
-                    {
-                        "toolName": "bash",
-                        "toolArgs": {"command": command},
-                    },
+                    {"toolName": "bash", "toolArgs": {"command": command}},
                 )
+                self.assert_hook_decision(result, "deny")
 
-                self.assertEqual(result.returncode, 0, result.stderr)
-                decision = json.loads(result.stdout)
-                self.assertEqual(decision["permissionDecision"], "deny")
-
-    def test_blocks_bare_env(self) -> None:
-        result = copilot_guard.check_env_access("env")
-        self.assertIsNotNone(result)
-
-    def test_allows_env_i(self) -> None:
-        result = copilot_guard.check_env_access("env -i PATH=/usr/bin bash")
-        self.assertIsNone(result)
-
-    def test_allows_env_u(self) -> None:
-        result = copilot_guard.check_env_access("env -u SECRET command")
-        self.assertIsNone(result)
-
-    def test_allows_env_with_assignment(self) -> None:
-        result = copilot_guard.check_env_access("env FOO=bar command")
-        self.assertIsNone(result)
-
-    def test_allows_env_double_dash(self) -> None:
-        result = copilot_guard.check_env_access("env -- command")
-        self.assertIsNone(result)
-
-    def test_blocks_bare_set(self) -> None:
-        result = copilot_guard.check_env_access("set")
-        self.assertIsNotNone(result)
-
-    def test_blocks_quote_obfuscated_enumeration_commands(self) -> None:
-        for command in (
-            '"s"et',
-            'dec"lare" -p',
-            'expo"rt" -p',
-            'comp"gen" -v',
-        ):
-            with self.subTest(command=command):
-                self.assertIsNotNone(copilot_guard.check_env_access(command))
-
-    def test_blocks_powershell_quote_obfuscated_runtime_dump(self) -> None:
-        for command in (
-            'Get-Ch"ildItem" Env:',
-            "Get-Ch'ildItem' Env:",
-        ):
-            with self.subTest(command=command):
-                self.assertIsNotNone(
-                    copilot_guard.check_env_access(command, "powershell")
-                )
-
-    def test_allows_set_with_options(self) -> None:
-        result = copilot_guard.check_env_access("set -e")
-        self.assertIsNone(result)
-
-    def test_allows_set_euo_pipefail(self) -> None:
-        result = copilot_guard.check_env_access("set -euo pipefail")
-        self.assertIsNone(result)
-
-    def test_blocks_declare_p(self) -> None:
-        result = copilot_guard.check_env_access("declare -p")
-        self.assertIsNotNone(result)
-
-    def test_blocks_export_p(self) -> None:
-        result = copilot_guard.check_env_access("export -p")
-        self.assertIsNotNone(result)
-
-    def test_blocks_compgen_v(self) -> None:
-        result = copilot_guard.check_env_access("compgen -v")
-        self.assertIsNotNone(result)
-
-    def test_blocks_compgen_e(self) -> None:
-        result = copilot_guard.check_env_access("compgen -e")
-        self.assertIsNotNone(result)
-
-    # --- Sensitive variable expansion ---
-
-    def test_blocks_github_token(self) -> None:
-        result = copilot_guard.check_env_access("echo $GITHUB_TOKEN")
-        self.assertIsNotNone(result)
-
-    def test_blocks_secret_key_braces(self) -> None:
-        result = copilot_guard.check_env_access("echo ${SECRET_KEY}")
-        self.assertIsNotNone(result)
-
-    def test_blocks_azure_client_secret(self) -> None:
-        result = copilot_guard.check_env_access('echo "$AZURE_CLIENT_SECRET"')
-        self.assertIsNotNone(result)
-
-    def test_blocks_api_key(self) -> None:
-        result = copilot_guard.check_env_access("curl -H 'Authorization: $API_KEY'")
-        self.assertIsNotNone(result)
-
-    def test_blocks_db_password(self) -> None:
-        result = copilot_guard.check_env_access("mysql -p$DB_PASSWORD")
-        self.assertIsNotNone(result)
-
-    def test_blocks_connection_string(self) -> None:
-        result = copilot_guard.check_env_access("echo $DATABASE_CONNECTION_STRING")
-        self.assertIsNotNone(result)
-
-    def test_blocks_auth_token(self) -> None:
-        result = copilot_guard.check_env_access("echo $AUTH_TOKEN")
-        self.assertIsNotNone(result)
-
-    def test_blocks_camel_case_auth_token(self) -> None:
-        result = copilot_guard.check_env_access("echo $githubToken")
-        self.assertIsNotNone(result)
-
-    def test_blocks_camel_case_api_key(self) -> None:
-        result = copilot_guard.check_env_access("echo $apiKey")
-        self.assertIsNotNone(result)
-
-    def test_blocks_concatenated_secret(self) -> None:
-        result = copilot_guard.check_env_access("echo $mysecret")
-        self.assertIsNotNone(result)
-
-    def test_blocks_concatenated_token(self) -> None:
-        result = copilot_guard.check_env_access("echo $githubtoken")
-        self.assertIsNotNone(result)
-
-    def test_blocks_concatenated_password(self) -> None:
-        result = copilot_guard.check_env_access("echo $mypassword")
-        self.assertIsNotNone(result)
-
-    def test_blocks_concatenated_api_key(self) -> None:
-        result = copilot_guard.check_env_access("echo $XAPIKEY")
-        self.assertIsNotNone(result)
-
-    def test_blocks_concatenated_signing_key(self) -> None:
-        result = copilot_guard.check_env_access("echo $signingkey")
-        self.assertIsNotNone(result)
-
-    def test_allows_author(self) -> None:
-        result = copilot_guard.check_env_access("echo $author")
-        self.assertIsNone(result)
-
-    def test_allows_keyword(self) -> None:
-        result = copilot_guard.check_env_access("echo $keyword")
-        self.assertIsNone(result)
-
-    def test_allows_tokens(self) -> None:
-        result = copilot_guard.check_env_access("echo $tokens")
-        self.assertIsNone(result)
-
-    def test_allows_monkey(self) -> None:
-        result = copilot_guard.check_env_access("echo $monkey")
-        self.assertIsNone(result)
-
-    # --- PowerShell variable syntax ---
-
-    def test_blocks_powershell_sensitive_env_var(self) -> None:
-        result = copilot_guard.check_env_access(
-            "Write-Output $env:GITHUB_TOKEN",
-            "powershell",
-        )
-        self.assertIsNotNone(result)
-
-    def test_blocks_braced_powershell_sensitive_env_var(self) -> None:
-        result = copilot_guard.check_env_access(
-            "Write-Output ${env:GITHUB_TOKEN}",
-            "powershell",
-        )
-        self.assertIsNotNone(result)
-
-    def test_allows_powershell_local_sensitive_named_var(self) -> None:
-        result = copilot_guard.check_env_access(
-            "Write-Output $GITHUB_TOKEN",
-            "powershell",
-        )
-        self.assertIsNone(result)
-
-    def test_allows_powershell_safe_env_var(self) -> None:
-        result = copilot_guard.check_env_access(
-            "Write-Output $env:PATH",
-            "powershell",
-        )
-        self.assertIsNone(result)
-
-    def test_allows_braced_powershell_safe_env_var(self) -> None:
-        result = copilot_guard.check_env_access(
-            "Write-Output ${env:PATH}",
-            "powershell",
-        )
-        self.assertIsNone(result)
-
-    # --- Safe variables ---
-
-    def test_allows_path(self) -> None:
-        result = copilot_guard.check_env_access("echo $PATH")
-        self.assertIsNone(result)
-
-    def test_allows_home(self) -> None:
-        result = copilot_guard.check_env_access("echo $HOME")
-        self.assertIsNone(result)
-
-    def test_allows_shell(self) -> None:
-        result = copilot_guard.check_env_access("echo $SHELL")
-        self.assertIsNone(result)
-
-    def test_allows_user(self) -> None:
-        result = copilot_guard.check_env_access("echo $USER")
-        self.assertIsNone(result)
-
-    def test_allows_node_env(self) -> None:
-        result = copilot_guard.check_env_access("echo $NODE_ENV")
-        self.assertIsNone(result)
-
-    def test_allows_editor(self) -> None:
-        result = copilot_guard.check_env_access("echo $EDITOR")
-        self.assertIsNone(result)
-
-    def test_allows_ssh_auth_sock(self) -> None:
-        result = copilot_guard.check_env_access("echo $SSH_AUTH_SOCK")
-        self.assertIsNone(result)
-
-    def test_allows_xdg_config_home(self) -> None:
-        result = copilot_guard.check_env_access("echo $XDG_CONFIG_HOME")
-        self.assertIsNone(result)
-
-    def test_allows_tmpdir(self) -> None:
-        result = copilot_guard.check_env_access("echo $TMPDIR")
-        self.assertIsNone(result)
-
-    def test_allows_pwd(self) -> None:
-        result = copilot_guard.check_env_access("echo $PWD")
-        self.assertIsNone(result)
-
-    # --- Language runtime env dumps ---
-
-    def test_blocks_python_os_environ(self) -> None:
-        result = copilot_guard.check_env_access(
-            'uv run python -c "import os; print(os.environ)"'
-        )
-        self.assertIsNotNone(result)
-
-    def test_blocks_node_process_env(self) -> None:
-        result = copilot_guard.check_env_access(
-            'node -e "console.log(process.env)"'
-        )
-        self.assertIsNotNone(result)
-
-    def test_blocks_quote_obfuscated_runtime_env_dump(self) -> None:
-        result = copilot_guard.check_env_access(
-            "node -e 'console.log(process.'env')'"
-        )
-        self.assertIsNotNone(result)
-
-    def test_blocks_perl_env(self) -> None:
-        result = copilot_guard.check_env_access(
-            'perl -e \'foreach (keys %ENV) { print }\''
-        )
-        self.assertIsNotNone(result)
-
-    def test_blocks_ruby_env_to_h(self) -> None:
-        result = copilot_guard.check_env_access(
-            'ruby -e "puts ENV.to_h"'
-        )
-        self.assertIsNotNone(result)
-
-    def test_blocks_powershell_get_childitem_env(self) -> None:
-        result = copilot_guard.check_env_access(
-            "Get-ChildItem Env:",
-            "powershell",
-        )
-        self.assertIsNotNone(result)
-
-    # --- Compound commands ---
-
-    def test_blocks_env_in_pipe_chain(self) -> None:
-        result = copilot_guard.check_env_access("ls && printenv | grep SECRET")
-        self.assertIsNotNone(result)
-
-    def test_blocks_sensitive_var_in_chained_command(self) -> None:
-        result = copilot_guard.check_env_access(
-            "cd /tmp && echo $GITHUB_TOKEN"
-        )
-        self.assertIsNotNone(result)
-
-    # --- Empty / safe commands ---
-
-    def test_allows_empty_command(self) -> None:
-        result = copilot_guard.check_env_access("")
-        self.assertIsNone(result)
-
-    def test_allows_normal_command(self) -> None:
-        result = copilot_guard.check_env_access("ls -la /tmp")
-        self.assertIsNone(result)
-
-    def test_allows_ordinary_heredoc_with_apostrophe(self) -> None:
-        command = "cat <<'EOF'\nit's ordinary text\nEOF"
-        self.assertIsNone(copilot_guard.check_env_access(command))
-
-    def test_unbalanced_quote_does_not_raise(self) -> None:
-        self.assertIsNone(copilot_guard.check_env_access("printf '%s\n ordinary"))
-
-    def test_allows_git_commands(self) -> None:
-        result = copilot_guard.check_env_access("git --no-pager status")
-        self.assertIsNone(result)
 
 
 class CopilotGuardNewBlockedPatternsTests(unittest.TestCase):
-    """Tests for newly added blocked-files.txt patterns (Copilot hooks, SSH, .github/hooks)."""
+    """Coverage for Copilot hooks, SSH, and .github hook patterns."""
 
-    # --- Copilot CLI 設定・Hook (改変防止) ---
-
-    def test_blocks_copilot_hooks_direct_child(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.copilot/hooks/hooks.json",
-            ["**/.copilot/hooks/**"],
+    def test_new_blocked_path_patterns(self) -> None:
+        cases = (
+            ("copilot hook", "/home/user/.copilot/hooks/hooks.json", "**/.copilot/hooks/**"),
+            ("blocked config", "/home/user/.copilot/hooks/blocked-files.txt", "**/.copilot/hooks/**"),
+            ("guard script", "/home/user/.copilot/hooks/scripts/copilot-guard.py", "**/.copilot/hooks/**"),
+            ("audit script", "/home/user/.copilot/hooks/scripts/audit-log.py", "**/.copilot/hooks/**"),
+            ("MCP config", "/home/user/.copilot/mcp-config.json", "**/.copilot/mcp-config.json"),
+            ("Copilot config", "/home/user/.copilot/config.json", "**/.copilot/config.json"),
+            ("GitHub hook", "/workspace/project/.github/hooks/check-sensitive-access.sh", "**/.github/hooks/**"),
+            ("relative GitHub hook", ".github/hooks/pre-tool-use.json", "**/.github/hooks/**"),
+            ("nested GitHub hook", ".github/hooks/scripts/check.sh", "**/.github/hooks/**"),
+            ("SSH known hosts", "/home/user/.ssh/known_hosts", "**/.ssh/*"),
+            ("SSH config", "/home/user/.ssh/config", "**/.ssh/*"),
+            ("RSA key", "/home/user/.ssh/id_rsa", "**/id_rsa"),
+            ("Ed25519 key", "/home/user/.ssh/id_ed25519", "**/id_ed25519"),
+            ("ECDSA key", "/home/user/.ssh/id_ecdsa", "**/id_ecdsa"),
         )
-        self.assertEqual(hit, "**/.copilot/hooks/**")
-
-    def test_blocks_copilot_hooks_config_file(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.copilot/hooks/blocked-files.txt",
-            ["**/.copilot/hooks/**"],
+        for name, candidate, pattern in cases:
+            with self.subTest(name=name):
+                self.assertEqual(
+                    copilot_guard.check_blocked_path(candidate, [pattern]), pattern
+                )
+        self.assertIsNone(
+            copilot_guard.check_blocked_path(
+                "/home/user/.ssh/id_rsa.pub", ["**/id_rsa"]
+            )
         )
-        self.assertEqual(hit, "**/.copilot/hooks/**")
 
-    def test_blocks_copilot_hooks_nested_script(self) -> None:
-        """Critical: scripts/ subdirectory must be protected to prevent 2-step attacks."""
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.copilot/hooks/scripts/copilot-guard.py",
-            ["**/.copilot/hooks/**"],
+    def test_new_blocked_command_patterns(self) -> None:
+        cases = (
+            ("hook config", "cat ~/.copilot/hooks/blocked-files.txt", "**/.copilot/hooks/**"),
+            ("read guard", "cat ~/.copilot/hooks/scripts/copilot-guard.py", "**/.copilot/hooks/**"),
+            ("modify guard", "sed -i 's/deny/allow/g' ~/.copilot/hooks/scripts/copilot-guard.py", "**/.copilot/hooks/**"),
+            ("remove GitHub hook", "rm .github/hooks/check-sensitive-access.sh", "**/.github/hooks/**"),
+            ("SSH key", "cat ~/.ssh/id_ed25519", "**/id_ed25519"),
+            ("MCP config", "cat ~/.copilot/mcp-config.json", "**/.copilot/mcp-config.json"),
         )
-        self.assertEqual(hit, "**/.copilot/hooks/**")
+        for name, command, pattern in cases:
+            with self.subTest(name=name):
+                self.assertEqual(
+                    copilot_guard.check_blocked_command(command, [pattern]), pattern
+                )
 
-    def test_blocks_copilot_hooks_nested_audit_log(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.copilot/hooks/scripts/audit-log.py",
-            ["**/.copilot/hooks/**"],
-        )
-        self.assertEqual(hit, "**/.copilot/hooks/**")
-
-    def test_blocks_copilot_mcp_config(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.copilot/mcp-config.json",
-            ["**/.copilot/mcp-config.json"],
-        )
-        self.assertEqual(hit, "**/.copilot/mcp-config.json")
-
-    def test_blocks_copilot_config(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.copilot/config.json",
-            ["**/.copilot/config.json"],
-        )
-        self.assertEqual(hit, "**/.copilot/config.json")
-
-    def test_blocks_github_hooks_file(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/workspace/project/.github/hooks/check-sensitive-access.sh",
-            ["**/.github/hooks/**"],
-        )
-        self.assertEqual(hit, "**/.github/hooks/**")
-
-    def test_blocks_github_hooks_json(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            ".github/hooks/pre-tool-use.json",
-            ["**/.github/hooks/**"],
-        )
-        self.assertEqual(hit, "**/.github/hooks/**")
-
-    def test_blocks_github_hooks_nested_script(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            ".github/hooks/scripts/check.sh",
-            ["**/.github/hooks/**"],
-        )
-        self.assertEqual(hit, "**/.github/hooks/**")
-
-    # --- SSH ---
-
-    def test_blocks_ssh_directory(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.ssh/known_hosts",
-            ["**/.ssh/*"],
-        )
-        self.assertEqual(hit, "**/.ssh/*")
-
-    def test_blocks_ssh_config(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.ssh/config",
-            ["**/.ssh/*"],
-        )
-        self.assertEqual(hit, "**/.ssh/*")
-
-    def test_blocks_id_rsa(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.ssh/id_rsa",
-            ["**/id_rsa"],
-        )
-        self.assertEqual(hit, "**/id_rsa")
-
-    def test_blocks_id_ed25519(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.ssh/id_ed25519",
-            ["**/id_ed25519"],
-        )
-        self.assertEqual(hit, "**/id_ed25519")
-
-    def test_blocks_id_ecdsa(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.ssh/id_ecdsa",
-            ["**/id_ecdsa"],
-        )
-        self.assertEqual(hit, "**/id_ecdsa")
-
-    def test_does_not_match_id_rsa_pub(self) -> None:
-        hit = copilot_guard.check_blocked_path(
-            "/home/user/.ssh/id_rsa.pub",
-            ["**/id_rsa"],
-        )
-        self.assertIsNone(hit)
-
-    # --- Command matching for hook file modification ---
-
-    def test_command_blocks_cat_copilot_hooks(self) -> None:
-        hit = copilot_guard.check_blocked_command(
-            "cat ~/.copilot/hooks/blocked-files.txt",
-            ["**/.copilot/hooks/**"],
-        )
-        self.assertEqual(hit, "**/.copilot/hooks/**")
-
-    def test_command_blocks_cat_copilot_guard_script(self) -> None:
-        """Critical: must block reading the guard script itself."""
-        hit = copilot_guard.check_blocked_command(
-            "cat ~/.copilot/hooks/scripts/copilot-guard.py",
-            ["**/.copilot/hooks/**"],
-        )
-        self.assertEqual(hit, "**/.copilot/hooks/**")
-
-    def test_command_blocks_sed_modify_guard_script(self) -> None:
-        """Critical: must block modification of the guard script."""
-        hit = copilot_guard.check_blocked_command(
-            "sed -i 's/deny/allow/g' ~/.copilot/hooks/scripts/copilot-guard.py",
-            ["**/.copilot/hooks/**"],
-        )
-        self.assertEqual(hit, "**/.copilot/hooks/**")
-
-    def test_command_blocks_rm_github_hooks(self) -> None:
-        hit = copilot_guard.check_blocked_command(
-            "rm .github/hooks/check-sensitive-access.sh",
-            ["**/.github/hooks/**"],
-        )
-        self.assertEqual(hit, "**/.github/hooks/**")
-
-    def test_command_blocks_cat_ssh_key(self) -> None:
-        hit = copilot_guard.check_blocked_command(
-            "cat ~/.ssh/id_ed25519",
-            ["**/id_ed25519"],
-        )
-        self.assertEqual(hit, "**/id_ed25519")
-
-    def test_command_blocks_cat_copilot_mcp_config(self) -> None:
-        hit = copilot_guard.check_blocked_command(
-            "cat ~/.copilot/mcp-config.json",
-            ["**/.copilot/mcp-config.json"],
-        )
-        self.assertEqual(hit, "**/.copilot/mcp-config.json")
 
 
 class CopilotGuardCheckResultTests(unittest.TestCase):
-    """Tests for the CheckResult type and ask() output helper."""
-
-    def test_check_result_is_named_tuple(self) -> None:
-        result = copilot_guard.CheckResult("deny", "test reason")
-        self.assertEqual(result.decision, "deny")
-        self.assertEqual(result.reason, "test reason")
-
-    def test_check_result_ask(self) -> None:
-        result = copilot_guard.CheckResult("ask", "confirm this")
-        self.assertEqual(result.decision, "ask")
-        self.assertEqual(result.reason, "confirm this")
+    def test_check_result_fields(self) -> None:
+        for decision, reason in (("deny", "test reason"), ("ask", "confirm this")):
+            with self.subTest(decision=decision):
+                result = copilot_guard.CheckResult(decision, reason)
+                self.assertEqual((result.decision, result.reason), (decision, reason))
 
 
-class CopilotGuardAskPatternsTests(unittest.TestCase):
-    """Tests for ask-files.txt pattern matching via check_blocked_files."""
-
-    def test_ask_pattern_returns_ask_decision(self) -> None:
-        ctx = make_ctx(
-            tool_name="edit",
-            tool_args={"path": "/home/user/.copilot/hooks/hooks.json"},
-            ask_patterns=["**/.copilot/hooks/**"],
+class CopilotGuardAskPatternsTests(GuardAssertionsMixin, unittest.TestCase):
+    def test_blocked_and_ask_pattern_cases(self) -> None:
+        cases = (
+            ("ask path", make_ctx(tool_name="edit", tool_args={"path": "/home/user/.copilot/hooks/hooks.json"}, ask_patterns=["**/.copilot/hooks/**"]), "ask", "**/.copilot/hooks/**"),
+            ("deny path", make_ctx(tool_name="view", tool_args={"path": "/home/user/.ssh/id_rsa"}, blocked_patterns=["**/id_rsa"]), "deny", None),
+            ("deny paths array", make_ctx(tool_name="view", tool_args={"paths": ["/home/user/project/README.md", r"C:\Users\me\.azure\accessTokens.json"]}, blocked_patterns=["**/accessTokens.json"]), "deny", None),
+            ("ask paths array", make_ctx(tool_name="edit", tool_args={"paths": ["/home/user/project/README.md", "/home/user/.copilot/hooks/hooks.json"]}, ask_patterns=["**/.copilot/hooks/**"]), "ask", None),
+            ("deny priority", make_ctx(tool_name="edit", tool_args={"path": "/home/user/.copilot/hooks/hooks.json"}, blocked_patterns=["**/.copilot/hooks/**"], ask_patterns=["**/.copilot/hooks/**"]), "deny", None),
+            ("no match", make_ctx(tool_name="view", tool_args={"path": "/home/user/project/src/main.py"}, blocked_patterns=["**/id_rsa"], ask_patterns=["**/.copilot/hooks/**"]), None, None),
+            ("ask command", make_ctx(tool_name="bash", tool_args={"command": "cat ~/.copilot/hooks/hooks.json"}, command="cat ~/.copilot/hooks/hooks.json", ask_patterns=["**/.copilot/hooks/**"]), "ask", None),
+            ("terraform vars", make_ctx(tool_name="edit", tool_args={"path": "/project/infra/terraform.tfvars"}, ask_patterns=["**/terraform.tfvars"]), "ask", None),
+            ("Bicep parameters", make_ctx(tool_name="view", tool_args={"path": "/project/infra/main.bicepparam"}, ask_patterns=["**/*.bicepparam"]), "ask", None),
+            ("MCP config", make_ctx(tool_name="edit", tool_args={"path": "/home/user/.copilot/mcp-config.json"}, ask_patterns=["**/.copilot/mcp-config.json"]), "ask", None),
+            ("Copilot config", make_ctx(tool_name="view", tool_args={"path": "/home/user/.copilot/config.json"}, ask_patterns=["**/.copilot/config.json"]), "ask", None),
+            ("GitHub hooks", make_ctx(tool_name="edit", tool_args={"path": "/workspace/.github/hooks/policy.json"}, ask_patterns=["**/.github/hooks/**"]), "ask", None),
+            ("empty ask patterns", make_ctx(tool_name="edit", tool_args={"path": "/project/terraform.tfvars"}, ask_patterns=[]), None, None),
         )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-        self.assertIn("**/.copilot/hooks/**", result.reason)
+        for name, ctx, decision, reason in cases:
+            with self.subTest(name=name):
+                self.assert_check_result(
+                    copilot_guard.check_blocked_files(ctx), decision, reason
+                )
 
-    def test_blocked_pattern_returns_deny_decision(self) -> None:
-        ctx = make_ctx(
-            tool_name="view",
-            tool_args={"path": "/home/user/.ssh/id_rsa"},
-            blocked_patterns=["**/id_rsa"],
+
+class CopilotGuardCheckerReturnTypeTests(GuardAssertionsMixin, unittest.TestCase):
+    def test_check_env_return_cases(self) -> None:
+        cases = (
+            ("dump", "bash", "printenv", "deny"),
+            ("safe", "bash", "ls -la", None),
+            ("PowerShell local", "powershell", "Write-Output $GITHUB_TOKEN", None),
+            ("PowerShell env", "powershell", "Write-Output $env:GITHUB_TOKEN", "deny"),
         )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "deny")
+        for name, tool_name, command, decision in cases:
+            with self.subTest(name=name):
+                result = copilot_guard.check_env(
+                    make_ctx(
+                        tool_name=tool_name,
+                        tool_args={"command": command},
+                        command=command,
+                    )
+                )
+                self.assert_check_result(result, decision)
+                if result is not None:
+                    self.assertIsInstance(result, copilot_guard.CheckResult)
 
-    def test_paths_array_returns_deny_decision(self) -> None:
-        ctx = make_ctx(
-            tool_name="view",
-            tool_args={"paths": ["/home/user/project/README.md", r"C:\Users\me\.azure\accessTokens.json"]},
-            blocked_patterns=["**/accessTokens.json"],
+
+class GitCommitCheckerTests(GuardAssertionsMixin, unittest.TestCase):
+    def test_git_commit_detection_cases(self) -> None:
+        cases = (
+            ("bare", "bash", "git commit"),
+            ("message", "bash", 'git commit -m "feat: add feature"'),
+            ("quoted bash", "bash", 'git "commit" -m x'),
+            ("quoted PowerShell double", "powershell", 'git "commit" -m x'),
+            ("quoted PowerShell single", "powershell", "git 'commit' -m x"),
+            ("amend", "bash", "git commit --amend"),
+            ("global option", "bash", 'git -c user.name=test commit -m "msg"'),
+            ("working directory", "bash", "git -C /tmp/repo commit"),
+            ("chain", "bash", 'git add . && git commit -m "msg"'),
+            ("environment assignment", "bash", 'GIT_AUTHOR_NAME=bot git commit -m "msg"'),
+            ("PowerShell", "powershell", 'git commit -m "msg"'),
+            ("pipe", "bash", 'echo ok | git commit --allow-empty -m "msg"'),
+            ("env wrapper", "bash", "env GIT_AUTHOR_NAME=bot git commit -m msg"),
+            ("command wrapper", "bash", "command git commit -m msg"),
+            ("absolute path", "bash", "/usr/bin/git commit -m msg"),
+            ("Windows executable", "powershell", "git.exe commit -m msg"),
+            ("sudo", "bash", "sudo git commit -m msg"),
+            ("env flags", "bash", "env -i git commit -m msg"),
         )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "deny")
-
-    def test_paths_array_returns_ask_decision(self) -> None:
-        ctx = make_ctx(
-            tool_name="edit",
-            tool_args={"paths": ["/home/user/project/README.md", "/home/user/.copilot/hooks/hooks.json"]},
-            ask_patterns=["**/.copilot/hooks/**"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_deny_takes_priority_over_ask_same_file(self) -> None:
-        """When a path matches both blocked and ask patterns, deny wins."""
-        ctx = make_ctx(
-            tool_name="edit",
-            tool_args={"path": "/home/user/.copilot/hooks/hooks.json"},
-            blocked_patterns=["**/.copilot/hooks/**"],
-            ask_patterns=["**/.copilot/hooks/**"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "deny")
-
-    def test_no_match_returns_none(self) -> None:
-        ctx = make_ctx(
-            tool_name="view",
-            tool_args={"path": "/home/user/project/src/main.py"},
-            blocked_patterns=["**/id_rsa"],
-            ask_patterns=["**/.copilot/hooks/**"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNone(result)
-
-    def test_ask_pattern_command_matching(self) -> None:
-        ctx = make_ctx(
-            tool_name="bash",
-            tool_args={"command": "cat ~/.copilot/hooks/hooks.json"},
-            command="cat ~/.copilot/hooks/hooks.json",
-            ask_patterns=["**/.copilot/hooks/**"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_ask_pattern_terraform_tfvars(self) -> None:
-        ctx = make_ctx(
-            tool_name="edit",
-            tool_args={"path": "/project/infra/terraform.tfvars"},
-            ask_patterns=["**/terraform.tfvars"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_ask_pattern_bicepparam(self) -> None:
-        ctx = make_ctx(
-            tool_name="view",
-            tool_args={"path": "/project/infra/main.bicepparam"},
-            ask_patterns=["**/*.bicepparam"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_ask_copilot_mcp_config(self) -> None:
-        ctx = make_ctx(
-            tool_name="edit",
-            tool_args={"path": "/home/user/.copilot/mcp-config.json"},
-            ask_patterns=["**/.copilot/mcp-config.json"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_ask_copilot_config_json(self) -> None:
-        ctx = make_ctx(
-            tool_name="view",
-            tool_args={"path": "/home/user/.copilot/config.json"},
-            ask_patterns=["**/.copilot/config.json"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_ask_github_hooks(self) -> None:
-        ctx = make_ctx(
-            tool_name="edit",
-            tool_args={"path": "/workspace/.github/hooks/policy.json"},
-            ask_patterns=["**/.github/hooks/**"],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_empty_ask_patterns_skips(self) -> None:
-        ctx = make_ctx(
-            tool_name="edit",
-            tool_args={"path": "/project/terraform.tfvars"},
-            ask_patterns=[],
-        )
-        result = copilot_guard.check_blocked_files(ctx)
-        self.assertIsNone(result)
-
-
-class CopilotGuardCheckerReturnTypeTests(unittest.TestCase):
-    """Tests that existing checkers now return CheckResult instead of raw str."""
-
-    def test_check_env_returns_check_result(self) -> None:
-        ctx = make_ctx(
-            tool_name="bash",
-            tool_args={"command": "printenv"},
-            command="printenv",
-        )
-        result = copilot_guard.check_env(ctx)
-        self.assertIsNotNone(result)
-        self.assertIsInstance(result, copilot_guard.CheckResult)
-        self.assertEqual(result.decision, "deny")
-
-    def test_check_env_returns_none_for_safe(self) -> None:
-        ctx = make_ctx(
-            tool_name="bash",
-            tool_args={"command": "ls -la"},
-            command="ls -la",
-        )
-        result = copilot_guard.check_env(ctx)
-        self.assertIsNone(result)
-
-    def test_check_env_uses_powershell_variable_syntax(self) -> None:
-        ctx = make_ctx(
-            tool_name="powershell",
-            tool_args={"command": "Write-Output $GITHUB_TOKEN"},
-            command="Write-Output $GITHUB_TOKEN",
-        )
-        result = copilot_guard.check_env(ctx)
-        self.assertIsNone(result)
-
-    def test_check_env_blocks_powershell_sensitive_env_var(self) -> None:
-        ctx = make_ctx(
-            tool_name="powershell",
-            tool_args={"command": "Write-Output $env:GITHUB_TOKEN"},
-            command="Write-Output $env:GITHUB_TOKEN",
-        )
-        result = copilot_guard.check_env(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "deny")
-
-class GitCommitCheckerTests(unittest.TestCase):
-    """Tests for the git commit approval checker."""
-
-    # --- Positive cases: should require approval ---
-
-    def test_bare_git_commit(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="git commit", tool_args={"command": "git commit"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_git_commit_with_message(self) -> None:
-        ctx = make_ctx(tool_name="bash", command='git commit -m "feat: add feature"', tool_args={"command": 'git commit -m "feat: add feature"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_quote_obfuscated_git_commit(self) -> None:
-        for shell, command in (
-            ("bash", 'git "commit" -m x'),
-            ("powershell", 'git "commit" -m x'),
-            ("powershell", "git 'commit' -m x"),
-        ):
-            with self.subTest(shell=shell, command=command):
+        for name, tool_name, command in cases:
+            with self.subTest(name=name):
                 ctx = make_ctx(
-                    tool_name=shell,
+                    tool_name=tool_name,
                     command=command,
                     tool_args={"command": command},
                 )
-                result = copilot_guard.check_git_commit(ctx)
-                self.assertIsNotNone(result)
-                self.assertEqual(result.decision, "ask")
+                self.assert_check_result(copilot_guard.check_git_commit(ctx), "ask")
 
-    def test_git_commit_amend(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="git commit --amend", tool_args={"command": "git commit --amend"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
+    def test_git_commit_non_matching_cases(self) -> None:
+        cases = (
+            ("add", "bash", "git add ."),
+            ("status", "bash", "git status"),
+            ("log", "bash", "git log --oneline"),
+            ("diff", "bash", "git --no-pager diff"),
+            ("non-shell tool", "edit", "git commit"),
+            ("empty", "bash", ""),
+            ("echo", "bash", 'echo "git commit"'),
+            ("quoted semicolon", "bash", 'echo "test; git commit -m msg"'),
+            ("quoted ampersand", "bash", 'echo "foo && git commit"'),
+        )
+        for name, tool_name, command in cases:
+            with self.subTest(name=name):
+                ctx = make_ctx(
+                    tool_name=tool_name,
+                    command=command,
+                    tool_args={"command": command},
+                )
+                self.assert_check_result(copilot_guard.check_git_commit(ctx), None)
 
-    def test_git_commit_with_global_option(self) -> None:
-        ctx = make_ctx(tool_name="bash", command='git -c user.name=test commit -m "msg"', tool_args={"command": 'git -c user.name=test commit -m "msg"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_git_commit_with_C_option(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="git -C /tmp/repo commit", tool_args={"command": "git -C /tmp/repo commit"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_git_commit_in_chain(self) -> None:
-        ctx = make_ctx(tool_name="bash", command='git add . && git commit -m "msg"', tool_args={"command": 'git add . && git commit -m "msg"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_git_commit_with_env_vars(self) -> None:
-        ctx = make_ctx(tool_name="bash", command='GIT_AUTHOR_NAME=bot git commit -m "msg"', tool_args={"command": 'GIT_AUTHOR_NAME=bot git commit -m "msg"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_powershell_git_commit(self) -> None:
-        ctx = make_ctx(tool_name="powershell", command='git commit -m "msg"', tool_args={"command": 'git commit -m "msg"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_git_commit_after_pipe(self) -> None:
-        ctx = make_ctx(tool_name="bash", command='echo ok | git commit --allow-empty -m "msg"', tool_args={"command": 'echo ok | git commit --allow-empty -m "msg"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    # --- Negative cases: should NOT trigger ---
-
-    def test_git_add_no_match(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="git add .", tool_args={"command": "git add ."})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
-
-    def test_git_status_no_match(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="git status", tool_args={"command": "git status"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
-
-    def test_git_log_no_match(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="git log --oneline", tool_args={"command": "git log --oneline"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
-
-    def test_git_diff_no_match(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="git --no-pager diff", tool_args={"command": "git --no-pager diff"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
-
-    def test_non_bash_tool_no_match(self) -> None:
-        ctx = make_ctx(tool_name="edit", command="git commit", tool_args={"command": "git commit"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
-
-    def test_empty_command_no_match(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="", tool_args={"command": ""})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
-
-    def test_echo_git_commit_no_match(self) -> None:
-        ctx = make_ctx(tool_name="bash", command='echo "git commit"', tool_args={"command": 'echo "git commit"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
-
-    def test_has_git_commit_helper(self) -> None:
-        """Direct unit test for the _has_git_commit helper."""
-        self.assertTrue(copilot_guard._has_git_commit("git commit"))
-        self.assertTrue(copilot_guard._has_git_commit("git commit -m 'msg'"))
-        self.assertTrue(copilot_guard._has_git_commit("git -c k=v commit"))
-        self.assertFalse(copilot_guard._has_git_commit("git add ."))
-        self.assertFalse(copilot_guard._has_git_commit("git push"))
-        self.assertFalse(copilot_guard._has_git_commit("echo git commit"))
-
-    # --- Bypass resistance (GPT 5.4 review findings) ---
-
-    def test_env_wrapper_git_commit(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="env GIT_AUTHOR_NAME=bot git commit -m msg", tool_args={"command": "env GIT_AUTHOR_NAME=bot git commit -m msg"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_command_wrapper_git_commit(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="command git commit -m msg", tool_args={"command": "command git commit -m msg"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_absolute_path_git_commit(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="/usr/bin/git commit -m msg", tool_args={"command": "/usr/bin/git commit -m msg"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_git_exe_commit(self) -> None:
-        ctx = make_ctx(tool_name="powershell", command="git.exe commit -m msg", tool_args={"command": "git.exe commit -m msg"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_sudo_git_commit(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="sudo git commit -m msg", tool_args={"command": "sudo git commit -m msg"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    def test_env_with_flags_git_commit(self) -> None:
-        ctx = make_ctx(tool_name="bash", command="env -i git commit -m msg", tool_args={"command": "env -i git commit -m msg"})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNotNone(result)
-        self.assertEqual(result.decision, "ask")
-
-    # --- False-positive resistance (Opus 4.6 review findings) ---
-
-    def test_quoted_semicolon_git_commit_no_match(self) -> None:
-        """Operators inside quotes must not trigger false positives."""
-        ctx = make_ctx(tool_name="bash", command='echo "test; git commit -m msg"', tool_args={"command": 'echo "test; git commit -m msg"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
-
-    def test_quoted_ampersand_git_commit_no_match(self) -> None:
-        ctx = make_ctx(tool_name="bash", command='echo "foo && git commit"', tool_args={"command": 'echo "foo && git commit"'})
-        result = copilot_guard.check_git_commit(ctx)
-        self.assertIsNone(result)
+    def test_has_git_commit_helper_cases(self) -> None:
+        cases = (
+            ("git commit", True),
+            ("git commit -m 'msg'", True),
+            ("git -c k=v commit", True),
+            ("git add .", False),
+            ("git push", False),
+            ("echo git commit", False),
+        )
+        for command, expected in cases:
+            with self.subTest(command=command):
+                self.assertEqual(copilot_guard._has_git_commit(command), expected)
 
 
 class LogDenyTests(unittest.TestCase):

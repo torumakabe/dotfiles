@@ -74,44 +74,19 @@ jobs:
             | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
           echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
 
-      - name: Smoke — copilot-guard denies .azure access
-        run: |
-          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat ~/.azure/azureProfile.json"}}' \
-            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
-          echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
-
-      - name: Smoke — copilot-guard denies terraform.tfstate access
-        run: |
-          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat terraform.tfstate"}}' \
-            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
-          echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
-
       - name: Smoke — copilot-guard asks for hooks modification
         run: |
           RESULT=$(echo '{"toolName":"edit","toolArgs":{"path":"/home/user/.copilot/hooks/hooks.json"}}' \
             | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
           echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='ask', f'Expected ask, got {d}'"
 
-      - name: Smoke — copilot-guard denies SSH key access
-        run: |
-          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"cat ~/.ssh/id_ed25519"}}' \
-            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
-          echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
-
-      - name: Smoke — copilot-guard denies printenv
-        run: |
-          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"printenv"}}' \
-            | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
-          echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
-
       # allow 側の smoke は tests/test_uv_enforcer.py と
       # tests/test_node_global_enforcer.py の TestMainIntegration が同じ payload で
-      # 検査するため置かない。deny 側を 1 本ずつ残すのは、tests/_helpers.py の
+      # 検査するため置かない。各 hook の代表例を残すのは、tests/_helpers.py の
       # run_hook が sys.executable で起動するのに対し、本番の hooks.json は
       # uv run で起動するためである。PEP 723 メタデータの破損はこの経路でしか
-      # 出ない。上の copilot-guard の smoke を全件残すのは、uv run 起動と、
-      # スクリプトが自身の隣から読む blocked-files.txt / ask-files.txt の
-      # 代表パターンを同時に検査する sentinel だからである。
+      # 出ない。copilot-guard は、自身の隣から読む blocked-files.txt と
+      # ask-files.txt を deny と ask の各1件で検査する。
       - name: Smoke — uv-enforcer denies bare python
         run: |
           RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' \
