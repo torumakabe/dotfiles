@@ -31,18 +31,6 @@ if (Get-Command go -ErrorAction SilentlyContinue) {
 # Spec Kit CLI: ubi backend の廃止予定と GitHub SAML 認証の影響を避けるため uv tool で管理
 if (Get-Command uv -ErrorAction SilentlyContinue) {
     Write-Host "Installing uv tools..."
-    if (Get-Command mise -ErrorAction SilentlyContinue) {
-        $legacySpecKit = mise ls --installed 'ubi:github/spec-kit' 2>$null
-        if ($LASTEXITCODE -eq 0 -and $legacySpecKit) {
-            Write-Host "Removing the legacy mise-managed Spec Kit CLI..."
-            try {
-                mise uninstall --all 'ubi:github/spec-kit'
-                if ($LASTEXITCODE -ne 0) { throw "mise uninstall failed" }
-            } catch {
-                Write-Warning "Failed to remove the legacy mise-managed Spec Kit CLI. Retry manually with 'mise uninstall --all ubi:github/spec-kit'."
-            }
-        }
-    }
     try {
         uv tool install --quiet ty
         if ($LASTEXITCODE -ne 0) { throw "uv tool install failed" }

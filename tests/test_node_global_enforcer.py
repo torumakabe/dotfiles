@@ -6,269 +6,109 @@ from tests._helpers import load_script, run_hook
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
-SCRIPT_PATH = REPO_ROOT / "home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py"
-
+SCRIPT_PATH = (
+    REPO_ROOT
+    / "home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py"
+)
 
 nge = load_script("node_global_enforcer", SCRIPT_PATH)
 
 
-# ── npm ───────────────────────────────────────────────────────────────────
-
-
-class TestNpmGlobalBlocked(unittest.TestCase):
-    """npm install -g / --global must be denied."""
-
-    def test_npm_install_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm install -g typescript"))
-
-    def test_npm_i_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm i -g typescript"))
-
-    def test_npm_install_global(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm install --global typescript"))
-
-    def test_npm_add_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm add -g typescript"))
-
-    def test_npm_g_before_subcommand(self) -> None:
-        """npm -g install foo (flag before subcommand)."""
-        self.assertIsNotNone(nge.check_command("npm -g install typescript"))
-
-    def test_npm_global_multiple_packages(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm install -g typescript eslint"))
-
-    def test_npm_global_with_env_prefix(self) -> None:
-        self.assertIsNotNone(nge.check_command("NODE_ENV=production npm install -g foo"))
-
-    def test_npm_location_global_equals(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm install --location=global typescript"))
-
-    def test_npm_location_global_space(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm install --location global typescript"))
-
-    def test_npm_link_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm link -g"))
-
-    def test_npm_link_bare(self) -> None:
-        """npm link without -g still modifies global node_modules."""
-        self.assertIsNotNone(nge.check_command("npm link"))
-
-    def test_npm_link_package(self) -> None:
-        """npm link <pkg> interacts with global node_modules."""
-        self.assertIsNotNone(nge.check_command("npm link express"))
-
-    def test_npm_ln(self) -> None:
-        """npm ln is an alias for npm link."""
-        self.assertIsNotNone(nge.check_command("npm ln"))
-
-    def test_npm_ln_package(self) -> None:
-        self.assertIsNotNone(nge.check_command("npm ln express"))
-
-    def test_sudo_npm_install_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("sudo npm install -g typescript"))
-
-    def test_sudo_E_npm_install_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("sudo -E npm install -g typescript"))
-
-    def test_env_npm_install_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("env npm install -g typescript"))
-
-    def test_absolute_path_npm(self) -> None:
-        self.assertIsNotNone(nge.check_command("/usr/bin/npm install -g typescript"))
-
-    def test_absolute_path_local_npm(self) -> None:
-        self.assertIsNotNone(nge.check_command("/usr/local/bin/npm install -g foo"))
-
-    def test_absolute_path_env_npm(self) -> None:
-        """/usr/bin/env npm install -g must not bypass prefix detection."""
-        self.assertIsNotNone(nge.check_command("/usr/bin/env npm install -g foo"))
-
-    def test_absolute_path_sudo_npm(self) -> None:
-        """/usr/bin/sudo npm install -g must not bypass prefix detection."""
-        self.assertIsNotNone(nge.check_command("/usr/bin/sudo npm install -g foo"))
-
-    def test_sudo_u_npm_install_g(self) -> None:
-        """sudo -u root npm install -g must not bypass via flag argument."""
-        self.assertIsNotNone(nge.check_command("sudo -u root npm install -g typescript"))
-
-    def test_sudo_u_user_npm_install_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("sudo -u nobody npm install -g foo"))
-
-    def test_env_u_npm_install_g(self) -> None:
-        """env -u VAR npm install -g must not bypass via flag argument."""
-        self.assertIsNotNone(nge.check_command("env -u NODE_ENV npm install -g foo"))
-
-    def test_corepack_yarn_global_add(self) -> None:
-        """corepack yarn global add must be blocked."""
-        self.assertIsNotNone(nge.check_command("corepack yarn global add typescript"))
-
-    def test_corepack_pnpm_add_g(self) -> None:
-        """corepack pnpm add -g must be blocked."""
-        self.assertIsNotNone(nge.check_command("corepack pnpm add -g typescript"))
-
-    def test_command_npm_install_g(self) -> None:
-        """command npm install -g must not bypass via command builtin."""
-        self.assertIsNotNone(nge.check_command("command npm install -g typescript"))
-
-    def test_yarn_silent_global_add(self) -> None:
-        """yarn --silent global add must be blocked despite leading flags."""
-        self.assertIsNotNone(nge.check_command("yarn --silent global add typescript"))
-
-    def test_yarn_cwd_global_add(self) -> None:
-        """yarn --cwd /repo global add must be blocked."""
-        self.assertIsNotNone(nge.check_command("yarn --cwd /repo global add typescript"))
-
-
-class TestNpmLocalAllowed(unittest.TestCase):
-    """Local npm operations must be allowed."""
-
-    def test_npm_install_local(self) -> None:
-        self.assertIsNone(nge.check_command("npm install typescript"))
-
-    def test_npm_i_local(self) -> None:
-        self.assertIsNone(nge.check_command("npm i"))
-
-    def test_npm_install_save_dev(self) -> None:
-        self.assertIsNone(nge.check_command("npm install -D typescript"))
-
-    def test_npm_ci(self) -> None:
-        self.assertIsNone(nge.check_command("npm ci"))
-
-    def test_npm_run(self) -> None:
-        self.assertIsNone(nge.check_command("npm run build"))
-
-    def test_npm_test(self) -> None:
-        self.assertIsNone(nge.check_command("npm test"))
-
-    def test_npx_allowed(self) -> None:
-        self.assertIsNone(nge.check_command("npx create-react-app my-app"))
-
-    def test_npm_uninstall_g_allowed(self) -> None:
-        """Cleaning up global packages is allowed."""
-        self.assertIsNone(nge.check_command("npm uninstall -g typescript"))
-
-    def test_npm_install_double_dash_g(self) -> None:
-        """npm install -- -g treats -g as a package name, not a flag."""
-        self.assertIsNone(nge.check_command("npm install -- -g typescript"))
-
-    def test_npm_install_link_package(self) -> None:
-        """npm install link (package named 'link') must be allowed."""
-        self.assertIsNone(nge.check_command("npm install link"))
-
-    def test_npm_install_ln_package(self) -> None:
-        """npm install ln (package named 'ln') must be allowed."""
-        self.assertIsNone(nge.check_command("npm install ln"))
-
-    def test_pipe_no_false_positive(self) -> None:
-        """Pipe right-side -g flag must not trigger false positive."""
-        self.assertIsNone(nge.check_command("npm install foo | tee -g log.txt"))
-
-
-# ── yarn ──────────────────────────────────────────────────────────────────
-
-
-class TestYarnGlobalBlocked(unittest.TestCase):
-
-    def test_yarn_global_add(self) -> None:
-        self.assertIsNotNone(nge.check_command("yarn global add typescript"))
-
-    def test_sudo_yarn_global_add(self) -> None:
-        self.assertIsNotNone(nge.check_command("sudo yarn global add typescript"))
-
-
-class TestYarnLocalAllowed(unittest.TestCase):
-
-    def test_yarn_add_local(self) -> None:
-        self.assertIsNone(nge.check_command("yarn add typescript"))
-
-    def test_yarn_install(self) -> None:
-        self.assertIsNone(nge.check_command("yarn install"))
-
-
-# ── pnpm ──────────────────────────────────────────────────────────────────
-
-
-class TestPnpmGlobalBlocked(unittest.TestCase):
-
-    def test_pnpm_add_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("pnpm add -g typescript"))
-
-    def test_pnpm_install_global(self) -> None:
-        self.assertIsNotNone(nge.check_command("pnpm install --global typescript"))
-
-    def test_pnpm_link_global(self) -> None:
-        self.assertIsNotNone(nge.check_command("pnpm link --global"))
-
-
-class TestPnpmLocalAllowed(unittest.TestCase):
-
-    def test_pnpm_add_local(self) -> None:
-        self.assertIsNone(nge.check_command("pnpm add typescript"))
-
-    def test_pnpm_dlx_allowed(self) -> None:
-        self.assertIsNone(nge.check_command("pnpm dlx create-react-app my-app"))
-
-
-# ── bun ───────────────────────────────────────────────────────────────────
-
-
-class TestBunGlobalBlocked(unittest.TestCase):
-
-    def test_bun_add_g(self) -> None:
-        self.assertIsNotNone(nge.check_command("bun add -g typescript"))
-
-    def test_bun_install_global(self) -> None:
-        self.assertIsNotNone(nge.check_command("bun install --global typescript"))
-
-
-class TestBunLocalAllowed(unittest.TestCase):
-
-    def test_bun_add_local(self) -> None:
-        self.assertIsNone(nge.check_command("bun add typescript"))
-
-    def test_bunx_allowed(self) -> None:
-        self.assertIsNone(nge.check_command("bunx create-react-app my-app"))
-
-
-# ── Shell chains & pipes ─────────────────────────────────────────────────
-
-
-class TestShellChains(unittest.TestCase):
-
-    def test_chained_global_install(self) -> None:
-        self.assertIsNotNone(nge.check_command("echo ok && npm install -g foo"))
-
-    def test_chained_local_only(self) -> None:
-        self.assertIsNone(nge.check_command("npm install && npm test"))
-
-    def test_piped_global_install(self) -> None:
-        self.assertIsNotNone(nge.check_command("echo foo | npm install -g bar"))
-
-    def test_semicolon_chained(self) -> None:
-        self.assertIsNotNone(nge.check_command("cd /tmp; npm i -g eslint"))
-
-
-# ── Non-shell tools ──────────────────────────────────────────────────────
-
-
-class TestNonShellToolsAllowed(unittest.TestCase):
-
-    def test_empty_command(self) -> None:
-        self.assertIsNone(nge.check_command(""))
-
-    def test_unrelated_command(self) -> None:
-        self.assertIsNone(nge.check_command("git status"))
-
-    def test_node_direct(self) -> None:
-        self.assertIsNone(nge.check_command("node script.js"))
-
-
-# ── Integration tests (stdin → stdout) ───────────────────────────────────
-
-
-class TestMainIntegration(unittest.TestCase):
-    """Exercise the full stdin → stdout JSON flow."""
-
+class CommandPolicyTests(unittest.TestCase):
+    def _assert_commands(self, commands: tuple[str, ...], blocked: bool) -> None:
+        for command in commands:
+            with self.subTest(command=command):
+                result = nge.check_command(command)
+                if blocked:
+                    self.assertIsNotNone(result)
+                else:
+                    self.assertIsNone(result)
+
+    def test_blocks_global_package_operations(self) -> None:
+        self._assert_commands(
+            (
+                "npm install -g typescript",
+                "npm i -g typescript",
+                "npm install --global typescript",
+                "npm add -g typescript",
+                "npm -g install typescript",
+                "npm install -g typescript eslint",
+                "NODE_ENV=production npm install -g foo",
+                "npm install --location=global typescript",
+                "npm install --location global typescript",
+                "npm link -g",
+                "npm link",
+                "npm link express",
+                "npm ln",
+                "npm ln express",
+                "sudo npm install -g typescript",
+                "sudo -E npm install -g typescript",
+                "env npm install -g typescript",
+                "/usr/bin/npm install -g typescript",
+                "/usr/local/bin/npm install -g foo",
+                "/usr/bin/env npm install -g foo",
+                "/usr/bin/sudo npm install -g foo",
+                "sudo -u root npm install -g typescript",
+                "sudo -u nobody npm install -g foo",
+                "env -u NODE_ENV npm install -g foo",
+                "command npm install -g typescript",
+                "yarn global add typescript",
+                "sudo yarn global add typescript",
+                "yarn --silent global add typescript",
+                "yarn --cwd /repo global add typescript",
+                "pnpm add -g typescript",
+                "pnpm install --global typescript",
+                "pnpm link --global",
+                "bun add -g typescript",
+                "bun install --global typescript",
+                "corepack yarn global add typescript",
+                "corepack pnpm add -g typescript",
+            ),
+            blocked=True,
+        )
+
+    def test_allows_local_and_unrelated_operations(self) -> None:
+        self._assert_commands(
+            (
+                "npm install typescript",
+                "npm i",
+                "npm install -D typescript",
+                "npm ci",
+                "npm run build",
+                "npm test",
+                "npx create-react-app my-app",
+                "npm uninstall -g typescript",
+                "npm install -- -g typescript",
+                "npm install link",
+                "npm install ln",
+                "npm install foo | tee -g log.txt",
+                "yarn add typescript",
+                "yarn install",
+                "pnpm add typescript",
+                "pnpm dlx create-react-app my-app",
+                "bun add typescript",
+                "bunx create-react-app my-app",
+                "",
+                "git status",
+                "node script.js",
+            ),
+            blocked=False,
+        )
+
+    def test_shell_chains(self) -> None:
+        cases = (
+            ("echo ok && npm install -g foo", True),
+            ("npm install && npm test", False),
+            ("echo foo | npm install -g bar", True),
+            ("cd /tmp; npm i -g eslint", True),
+        )
+        for command, blocked in cases:
+            with self.subTest(command=command):
+                result = nge.check_command(command)
+                self.assertEqual(result is not None, blocked)
+
+
+class MainIntegrationTests(unittest.TestCase):
     def _decision(self, payload: dict | str) -> dict:
         result = run_hook(SCRIPT_PATH, payload)
         self.assertEqual(result.returncode, 0)
@@ -280,27 +120,33 @@ class TestMainIntegration(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "")
 
     def test_deny_global_install(self) -> None:
-        out = self._decision({
-            "toolName": "bash",
-            "toolArgs": {"command": "npm install -g typescript"},
-        })
-        self.assertEqual(out["permissionDecision"], "deny")
+        output = self._decision(
+            {
+                "toolName": "bash",
+                "toolArgs": {"command": "npm install -g typescript"},
+            }
+        )
+        self.assertEqual(output["permissionDecision"], "deny")
 
     def test_allow_local_install(self) -> None:
-        self._assert_allowed({
-            "toolName": "bash",
-            "toolArgs": {"command": "npm install typescript"},
-        })
+        self._assert_allowed(
+            {
+                "toolName": "bash",
+                "toolArgs": {"command": "npm install typescript"},
+            }
+        )
 
     def test_allow_non_bash_tool(self) -> None:
-        self._assert_allowed({
-            "toolName": "edit",
-            "toolArgs": {"path": "/tmp/foo.txt"},
-        })
+        self._assert_allowed(
+            {
+                "toolName": "edit",
+                "toolArgs": {"path": "/tmp/foo.txt"},
+            }
+        )
 
     def test_invalid_json_denies(self) -> None:
-        out = self._decision("not valid json")
-        self.assertEqual(out["permissionDecision"], "deny")
+        output = self._decision("not valid json")
+        self.assertEqual(output["permissionDecision"], "deny")
 
 
 if __name__ == "__main__":

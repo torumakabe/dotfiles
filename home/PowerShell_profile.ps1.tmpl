@@ -2,7 +2,7 @@
 # PowerShell Profile managed by chezmoi
 # This file is deployed to ~/PowerShell_profile.ps1
 # Load from $PROFILE (OneDrive) with:
-#   . "$env:USERPROFILE\PowerShell_profile.ps1"
+#   if (Test-Path "$env:USERPROFILE\PowerShell_profile.ps1") { . "$env:USERPROFILE\PowerShell_profile.ps1" }
 
 # === mise activation (requires PowerShell 7+) ===
 mise activate pwsh | Out-String | Invoke-Expression

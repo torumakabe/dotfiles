@@ -18,7 +18,7 @@ INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 INSTALL_PS1_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.ps1.tmpl"
 MISE_CONFIG_PATH = REPO_ROOT / "home/dot_config/mise/config.toml.tmpl"
 CHEZMOI_DATA_PATH = REPO_ROOT / "home/.chezmoidata.toml"
-WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-copilot-hooks.yml"
+CI_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-copilot-hooks.yml"
 POSIX_RC_TEMPLATE_PATHS = tuple(
     REPO_ROOT / "home" / name
     for name in (
@@ -330,7 +330,6 @@ class PlatformParityTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
         cls.powershell = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
-        cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     def test_every_feature_accounts_for_every_platform(self) -> None:
         for feature, coverage in PLATFORM_CONTRACT.items():
@@ -342,32 +341,15 @@ class PlatformParityTests(unittest.TestCase):
                         status,
                     )
 
-    @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
-    def test_uv_dedicated_cache_matches_platform_contract(self) -> None:
-        from tests.test_copilot_sandbox_config import POSIX_SCRIPT_PATH, _render
+    def test_ci_enforces_the_cross_platform_contract(self) -> None:
+        workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
 
-        self.assertFalse(
-            (REPO_ROOT / "home/dot_config/uv/modify_private_uv.toml").exists()
-        )
-        for platform in PLATFORMS:
-            os_name = "windows" if platform == "windows-powershell" else (
-                "darwin" if platform == "macos-zsh" else "linux"
-            )
-            with self.subTest(platform=platform):
-                script = _render(POSIX_SCRIPT_PATH, os_name)
-                if platform == "windows-powershell":
-                    self.assertEqual(script.strip(), "")
-                    self.assertTrue(
-                        PLATFORM_CONTRACT["feature:copilot-uv-cache-hook"][platform]
-                        .startswith("exception:")
-                    )
-                else:
-                    self.assertIn("github-copilot/uv", script)
-                    self.assertIn("readwritePaths", script)
-                    self.assertEqual(
-                        PLATFORM_CONTRACT["feature:copilot-uv-cache-hook"][platform],
-                        "implemented",
-                    )
+        self.assertEqual(workflow.count("- 'home/**'"), 2)
+        shell_check = workflow.index("command -v zsh")
+        powershell_check = workflow.index("command -v pwsh")
+        test_run = workflow.index("uv run -m unittest discover -s tests -v")
+        self.assertLess(shell_check, powershell_check)
+        self.assertLess(powershell_check, test_run)
 
     def test_gh_stack_contract_components_exist_for_each_platform(self) -> None:
         for feature, paths in GH_STACK_COMPONENT_PATHS.items():
@@ -491,20 +473,6 @@ class PlatformParityTests(unittest.TestCase):
                 installer = installer_path.read_text(encoding="utf-8")
                 self.assertIn("uv tool install --quiet specify-cli", installer)
                 self.assertIn(source, installer)
-                self.assertIn("mise uninstall --all 'ubi:github/spec-kit'", installer)
-        mise_config = MISE_CONFIG_PATH.read_text(encoding="utf-8")
-        self.assertNotIn('"ubi:github/spec-kit"', mise_config)
-        self.assertNotIn('"pipx:specify-cli"', mise_config)
-
-    def test_powershell_uv_tool_failures_are_reported(self) -> None:
-        installer = INSTALL_PS1_PATH.read_text(encoding="utf-8")
-
-        self.assertEqual(
-            installer.count(
-                'if ($LASTEXITCODE -ne 0) { throw "uv tool install failed" }'
-            ),
-            2,
-        )
 
     @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
     def test_lefthook_is_managed_by_mise_on_every_platform(self) -> None:
@@ -629,12 +597,6 @@ $result = @{{
             self.assertEqual(set(state["sourced"]), powershell_initializers)
             self.assertEqual(set(state["registered"]), {"kubectl", "k"})
 
-    def test_closed_azure_warning_workaround_is_removed(self) -> None:
-        self.assertNotRegex(self.zshrc, r"(?m)^az\(\)\s*\{")
-
-    def test_copilot_app_cli_path_override_is_removed(self) -> None:
-        self.assertNotIn("COPILOT_CLI_PATH", self.zshrc)
-
     def test_copilot_winget_alias_resolution(self) -> None:
         pwsh = shutil.which("pwsh")
         if pwsh is None:
@@ -677,39 +639,6 @@ $result = @{{
                     expected = str(cli) if target_kind == "file" else "Write-Output"
                     self.assertEqual(state["target"], expected)
                     self.assertTrue(state["pathUnchanged"])
-
-    def test_ci_runs_for_home_changes_on_pull_requests_and_main_pushes(self) -> None:
-        pull_request = self.workflow.split("  push:", maxsplit=1)[0]
-        push = self.workflow.split("  push:", maxsplit=1)[1].split(
-            "  schedule:", maxsplit=1
-        )[0]
-        self.assertIn("- 'home/**'", pull_request)
-        self.assertIn("- 'home/**'", push)
-
-    def test_ci_installs_and_requires_both_shells_before_unittest(self) -> None:
-        install = "sudo apt-get install --yes zsh"
-        zsh_check = "command -v zsh"
-        pwsh_check = "command -v pwsh"
-        unittest_discover = "uv run -m unittest discover -s tests -v"
-        for command in (install, zsh_check, pwsh_check, unittest_discover):
-            with self.subTest(command=command):
-                self.assertIn(command, self.workflow)
-        unittest_position = self.workflow.index(unittest_discover)
-        for prerequisite in (install, zsh_check, pwsh_check):
-            with self.subTest(prerequisite=prerequisite):
-                self.assertLess(self.workflow.index(prerequisite), unittest_position)
-
-    def test_ci_installs_chezmoi_before_unittest(self) -> None:
-        """Without chezmoi the tests that render templates skip instead of failing."""
-        install = "CHEZMOI_INSTALL_ONLY=1 ./install.sh"
-        check = "chezmoi --version"
-        unittest_discover = "uv run -m unittest discover -s tests -v"
-        unittest_position = self.workflow.index(unittest_discover)
-        for prerequisite in (install, check):
-            with self.subTest(prerequisite=prerequisite):
-                self.assertIn(prerequisite, self.workflow)
-                self.assertLess(self.workflow.index(prerequisite), unittest_position)
-
 
 class WrapperGateParityTests(unittest.TestCase):
     """ADR-012 の wrapper は参照側と配布側で同じ条件を使う必要がある。

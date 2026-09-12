@@ -160,7 +160,6 @@ class GhStackInstallTests(unittest.TestCase):
             'if (Test-Path "$env:USERPROFILE\\PowerShell_profile.ps1")',
             windows,
         )
-        self.assertIn("$legacyLine", windows)
 
 
 if __name__ == "__main__":

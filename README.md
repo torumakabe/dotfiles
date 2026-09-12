@@ -2,13 +2,13 @@
 
 Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](https://mise.jdx.dev/).
 
-Linux / macOS / WSL / Windows / Codespaces / Dev Container で、できるだけ同じ運用感を保つための dotfiles である。設定ファイルは `chezmoi` で管理し、開発ツールのバージョンは `mise` でそろえ、GitHub Copilot CLI 向けの指示・フック・スキルも同じリポジトリで管理する。
+Linux / macOS / WSL / Windows / Codespaces / Dev Container で、できるだけ同じ運用感を保つための dotfiles である。設定ファイルは `chezmoi` で管理し、開発ツールのバージョンは `mise` でそろえ、GitHub Copilot CLI 向けの指示とフックも同じリポジトリで管理する。
 
 ## このリポジトリが扱うもの
 
 - **設定ファイルの配布**: `chezmoi` テンプレートで OS ごとの差分を吸収する
 - **ツールバージョンの固定**: `mise` と lockfile で取得元と版をそろえる
-- **Copilot CLI の共通設定**: カスタム指示、フック、スキルを管理する
+- **Copilot CLI の共通設定**: カスタム指示、フック、プラグイン設定を管理する
 - **安全寄りの既定値**: `gitleaks` の pre-commit フックと Copilot Guard を組み込む
 
 詳細は [`docs/architecture.md`](docs/architecture.md) と [`docs/copilot-cli.md`](docs/copilot-cli.md) を参照。
@@ -87,10 +87,8 @@ PowerShell Profile のローダー設定が未追加なら、dotfiles の初回�
 
 ```powershell
 if (!(Test-Path $PROFILE)) { New-Item -Path $PROFILE -Type File -Force }
-$legacyLine = '. "$env:USERPROFILE\PowerShell_profile.ps1"'
 $line = 'if (Test-Path "$env:USERPROFILE\PowerShell_profile.ps1") { . "$env:USERPROFILE\PowerShell_profile.ps1" }'
-if (!(Select-String -Path $PROFILE -SimpleMatch $legacyLine -Quiet) -and
-    !(Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
+if (!(Select-String -Path $PROFILE -SimpleMatch $line -Quiet)) {
     Add-Content -Path $PROFILE -Value $line
 }
 ```

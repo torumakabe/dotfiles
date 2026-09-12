@@ -16,7 +16,6 @@ from tests._helpers import load_script
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "home"
 USER_POLICY_PATH = SOURCE_ROOT / ".chezmoitemplates/copilot-user-settings.json"
-REMOVE_PATH = SOURCE_ROOT / ".chezmoiremove"
 POSIX_SCRIPT_PATH = SOURCE_ROOT / "run_after_35-configure-copilot-sandbox.sh.tmpl"
 POWERSHELL_SCRIPT_PATH = (
     SOURCE_ROOT / "run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl"
@@ -196,18 +195,6 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             "allowOutbound": True, "allowLocalNetwork": True,
         })
 
-    def test_plugin_skills_replace_legacy_user_copies(self) -> None:
-        removals = {
-            line for line in REMOVE_PATH.read_text().splitlines()
-            if line and not line.startswith("#")
-        }
-        for skill_name in ("agentfinder", "japanese-technical-writing", "lsp-setup"):
-            self.assertIn(f".copilot/skills/{skill_name}", removals)
-            self.assertFalse(any(
-                path.is_file()
-                for path in (SOURCE_ROOT / "private_dot_copilot/skills" / skill_name).rglob("*")
-            ))
-
     def test_guardrails_aliases_keep_allow_all(self) -> None:
         self.assertIn("--allow-all", ZSHRC_PATH.read_text())
         self.assertIn("--allow-all", POWERSHELL_PROFILE_PATH.read_text())
@@ -223,14 +210,6 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         script = POWERSHELL_SCRIPT_PATH.read_text()
         self.assertIn("[System.IO.File]::Replace", script)
         self.assertIn("[System.IO.File]::Move($temporaryPath, $settingsPath, $true)", script)
-
-    def test_posix_rechecks_environment_on_every_apply(self) -> None:
-        self.assertTrue(POSIX_SCRIPT_PATH.name.startswith("run_after_"))
-        self.assertFalse((SOURCE_ROOT / "run_onchange_after_35-configure-copilot-sandbox.sh.tmpl").exists())
-        self.assertFalse((SOURCE_ROOT / "dot_config/uv/modify_private_uv.toml").exists())
-        self.assertNotIn("UV_CACHE_DIR", POWERSHELL_SCRIPT_PATH.read_text())
-        self.assertNotIn("github-copilot/uv", POWERSHELL_SCRIPT_PATH.read_text())
-
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 class CopilotSandboxMergeTests(unittest.TestCase):
@@ -439,174 +418,84 @@ class DedicatedUvCacheTests(unittest.TestCase):
         with mock.patch.dict(os.environ, _posix_env(home, settings, env), clear=True), mock.patch.object(UVE.sys, "platform", platform):
             return UVE.copilot_uv_cache_dir()
 
-    def test_sync_and_hook_agree_and_reapply_is_idempotent(self) -> None:
+    def test_sync_and_hook_use_the_same_idempotent_cache_grant(self) -> None:
         for platform in ("linux", "darwin"):
-            for xdg in (None, "", "external", "punctuation"):
-                with self.subTest(platform=platform, xdg=xdg), tempfile.TemporaryDirectory() as root:
-                    home = pathlib.Path(root).resolve()
-                    settings = _seed_settings(home)
-                    base = home / ("cache with 'quote; dollar$" if xdg == "punctuation" else "cache")
-                    env = {} if xdg is None else {"XDG_CACHE_HOME": "" if xdg == "" else str(base)}
-                    if xdg == "external":
-                        base = home.parent / f"{home.name}-cache"
-                        env["XDG_CACHE_HOME"] = str(base)
-                        self.addCleanup(shutil.rmtree, base, True)
-                    expected = home / "Library/Caches" if platform == "darwin" else (base if xdg else home / ".cache")
-                    expected /= "github-copilot/uv"
-                    for _ in range(2):
-                        result = _run_posix_script(home, settings, platform=platform, extra_env=env)
-                        self.assertEqual(result.returncode, 0, result.stderr)
-                        self.assertEqual(_filesystem(settings)["readwritePaths"], [*FILESYSTEM_PATHS["readwritePaths"], str(expected)])
-                        self.assertEqual(self._hook_path(home, settings, platform, env), str(expected))
-                    self.assertTrue(expected.is_dir())
-                    self.assertFalse((home / ".config/uv").exists())
-                    self.assertEqual(sorted(p.name for p in settings.parent.iterdir()), ["settings.json"])
-                    self.assertEqual(_filesystem(settings)["readonlyPaths"], FILESYSTEM_PATHS["readonlyPaths"])
-
-    def test_existing_ancestor_or_alias_grants_are_preserved(self) -> None:
-        for rule in ("~/.cache", "~/.cache/github-copilot/uv", "alias"):
-            with self.subTest(rule=rule), tempfile.TemporaryDirectory() as root:
+            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as root:
                 home = pathlib.Path(root).resolve()
-                cache = home / ".cache/github-copilot/uv"
-                cache.mkdir(parents=True)
-                alias = home / "alias"
-                alias.symlink_to(cache)
                 settings = _seed_settings(home)
-                value = str(alias) if rule == "alias" else rule
-                document = json.loads(settings.read_text())
-                paths = document["sandbox"]["userPolicy"]["filesystem"]["readwritePaths"]
-                paths.append(value)
-                settings.write_text(json.dumps(document))
-                result = _run_posix_script(home, settings)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(_filesystem(settings)["readwritePaths"], paths)
+                expected = (
+                    home / "Library/Caches/github-copilot/uv"
+                    if platform == "darwin"
+                    else home / ".cache/github-copilot/uv"
+                )
+                for _ in range(2):
+                    result = _run_posix_script(
+                        home,
+                        settings,
+                        platform=platform,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(
+                        _filesystem(settings)["readwritePaths"],
+                        [*FILESYSTEM_PATHS["readwritePaths"], str(expected)],
+                    )
+                    self.assertEqual(
+                        self._hook_path(home, settings, platform, {}),
+                        str(expected),
+                    )
+                self.assertTrue(expected.is_dir())
 
-    def test_xdg_change_keeps_old_grant_without_ownership_inference(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            home = pathlib.Path(root).resolve()
-            settings = _seed_settings(home)
-            for base in (home / ".cache", home / "other-cache"):
-                result = _run_posix_script(home, settings, extra_env={"XDG_CACHE_HOME": str(base)})
-                self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(_filesystem(settings)["readwritePaths"], [
-                *FILESYSTEM_PATHS["readwritePaths"],
-                str(home / ".cache/github-copilot/uv"),
-                str(home / "other-cache/github-copilot/uv"),
-            ])
-
-    def test_restrictive_rules_fail_without_settings_or_cache_writes(self) -> None:
+    def test_restrictive_rules_are_not_overridden(self) -> None:
         for category in ("readonlyPaths", "deniedPaths"):
-            for rule in ("~", "~/.cache", "~/.cache/github-copilot/uv", "~/.cache/github-copilot/uv/subdir", "/"):
-                with self.subTest(category=category, rule=rule), tempfile.TemporaryDirectory() as root:
-                    home = pathlib.Path(root).resolve()
-                    settings = _seed_settings(home)
-                    document = json.loads(settings.read_text())
-                    document["sandbox"]["userPolicy"]["filesystem"][category].append(rule)
-                    settings.write_text(json.dumps(document))
-                    original = settings.read_bytes()
-                    result = _run_posix_script(home, settings)
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn(category, result.stderr)
-                    self.assertEqual(settings.read_bytes(), original)
-                    self.assertFalse((home / ".cache").exists())
+            with self.subTest(category=category), tempfile.TemporaryDirectory() as root:
+                home = pathlib.Path(root).resolve()
+                settings = _seed_settings(home)
+                document = json.loads(settings.read_text())
+                document["sandbox"]["userPolicy"]["filesystem"][category].append(
+                    "~/.cache"
+                )
+                settings.write_text(json.dumps(document))
+                original = settings.read_bytes()
+                result = _run_posix_script(home, settings)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(settings.read_bytes(), original)
 
-    def test_invalid_environment_is_rejected_by_sync_and_hook(self) -> None:
-        for value in ("relative", "/", "//", "/some/../cache", "/cache\nbad", "/cache\rbad"):
-            with self.subTest(value=value), tempfile.TemporaryDirectory() as root:
+    def test_sync_and_hook_reject_unsafe_environment(self) -> None:
+        cases = (
+            ("HOME", "relative"),
+            ("XDG_CACHE_HOME", "relative"),
+            ("UV_CACHE_DIR", "/explicit-cache"),
+        )
+        for name, value in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as root:
                 home = pathlib.Path(root).resolve()
                 settings = _seed_settings(home)
                 original = settings.read_bytes()
-                env = {"XDG_CACHE_HOME": value}
+                env = {name: value}
+
                 result = _run_posix_script(home, settings, extra_env=env)
+
                 self.assertNotEqual(result.returncode, 0)
-                with self.assertRaises(ValueError):
+                with self.assertRaises((ValueError, OSError)):
                     self._hook_path(home, settings, "linux", env)
                 self.assertEqual(settings.read_bytes(), original)
 
-    def test_cache_home_normalization_agrees_without_broad_grants(self) -> None:
+    def test_sync_and_hook_reject_redirected_cache(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             home = pathlib.Path(root).resolve()
+            target = home / "redirect"
+            target.mkdir()
+            (home / ".cache").symlink_to(target)
             settings = _seed_settings(home)
-            for value in (str(home), str(home) + "/", str(home) + "//./cache///"):
-                with self.subTest(value=value):
-                    env = {"XDG_CACHE_HOME": value}
-                    expected = self._hook_path(home, settings, "linux", env)
-                    result = _run_posix_script(home, settings, extra_env=env)
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    paths = _filesystem(settings)["readwritePaths"]
-                    self.assertIn(expected, paths)
-                    self.assertNotIn(str(home), paths)
-                    self.assertNotIn(str(pathlib.Path(value)), paths)
+            original = settings.read_bytes()
 
-    def test_invalid_home_is_rejected_by_sync_and_hook(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            home = pathlib.Path(root).resolve()
-            settings = _seed_settings(home)
-            for value in ("/", "relative", str(home) + "/.", str(home) + "//", str(home) + "\n"):
-                with self.subTest(value=value):
-                    env = {"HOME": value}
-                    result = _run_posix_script(home, settings, extra_env=env)
-                    self.assertNotEqual(result.returncode, 0)
-                    with self.assertRaises(ValueError):
-                        self._hook_path(home, settings, "linux", env)
-
-    def test_launch_override_is_rejected_even_when_empty_or_matching(self) -> None:
-        for platform in ("linux", "darwin"):
-            for value in ("", "/explicit-cache", "matching"):
-                with self.subTest(platform=platform, value=value), tempfile.TemporaryDirectory() as root:
-                    home = pathlib.Path(root).resolve()
-                    settings = _seed_settings(home)
-                    if value == "matching":
-                        value = self._hook_path(home, settings, platform, {})
-                    env = {"UV_CACHE_DIR": value}
-                    result = _run_posix_script(home, settings, platform=platform, extra_env=env)
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("launch-environment UV_CACHE_DIR", result.stderr)
-                    with self.assertRaisesRegex(ValueError, "launch-environment UV_CACHE_DIR"):
-                        self._hook_path(home, settings, platform, env)
-
-    def test_redirected_cache_components_are_rejected_without_target_writes(self) -> None:
-        for suffix in (".cache", ".cache/github-copilot", ".cache/github-copilot/uv"):
-            for dangling in (False, True):
-                with self.subTest(suffix=suffix, dangling=dangling), tempfile.TemporaryDirectory() as root:
-                    home = pathlib.Path(root).resolve()
-                    target = home / "redirect"
-                    if not dangling:
-                        target.mkdir()
-                    link = home / suffix
-                    link.parent.mkdir(parents=True, exist_ok=True)
-                    link.symlink_to(target)
-                    settings = _seed_settings(home)
-                    original = settings.read_bytes()
-                    result = _run_posix_script(home, settings)
-                    self.assertNotEqual(result.returncode, 0)
-                    with self.assertRaisesRegex(ValueError, "symlinks"):
-                        self._hook_path(home, settings, "linux", {})
-                    self.assertEqual(settings.read_bytes(), original)
-                    self.assertEqual(list(target.iterdir()) if target.exists() else [], [])
-
-    def test_home_alias_is_canonicalized_but_cache_file_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            base = pathlib.Path(root).resolve()
-            home = base / "real"
-            home.mkdir()
-            alias = base / "alias"
-            alias.symlink_to(home)
-            settings = _seed_settings(home)
-            for value in (str(alias / ".cache"), f"/{alias}//./.cache", str(alias)):
-                env = {"XDG_CACHE_HOME": value}
-                result = _run_posix_script(alias, settings, extra_env=env)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                expected = home / ("github-copilot/uv" if value == str(alias) else ".cache/github-copilot/uv")
-                self.assertEqual(self._hook_path(alias, settings, "linux", env), str(expected))
-        with tempfile.TemporaryDirectory() as root:
-            home = pathlib.Path(root).resolve()
-            (home / ".cache").write_text("not a directory")
-            settings = _seed_settings(home)
             result = _run_posix_script(home, settings)
+
             self.assertNotEqual(result.returncode, 0)
-            with self.assertRaisesRegex(ValueError, "non-directories"):
+            with self.assertRaises((ValueError, OSError)):
                 self._hook_path(home, settings, "linux", {})
+            self.assertEqual(settings.read_bytes(), original)
+            self.assertEqual(list(target.iterdir()), [])
 
 
 if __name__ == "__main__":

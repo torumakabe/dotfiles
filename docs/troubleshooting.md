@@ -25,7 +25,7 @@ copilot-guardrails
 
 端末の profile や別の worktree だけを修正した場合、通常の適用元に修正がなければ、次の `chezmoi apply` で回避策が失われる可能性がある。利用者は `chezmoi source-path` で適用元を確認し、そのソースにも同じ修正を取り込んでから通常の適用を再開する。
 
-この回避策は CLI の起動経路を変更するもので、Windows のパッケージ登録を修復するものではない。パッケージ ID に依存するタスクバー連携の動作は未確認である。この WindowsApps 固有の回避策は macOS/Linux/WSL には追加しない。対象範囲と撤去条件の正本は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。
+この回避策は CLI の起動先だけを変更し、Windows のパッケージ登録は修復しない。macOS/Linux/WSL は対象外である。対象範囲と撤去条件は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。
 
 ## `warning: config file template has changed`
 
@@ -131,33 +131,11 @@ jq .sandbox.enabled ~/.copilot/settings.json
 mise --version
 ```
 
-`lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。Homebrew formula 以外の mise がある端末では `run_once_before_20-install-mise.sh` がバージョンを問わず既存バイナリを保持するため、自分で更新する。
+`lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。`run_once_before_20-install-mise.sh` は既存バイナリを版にかかわらず保持するため、自分で更新する。
 
 ```text
 macOS / Linux: mise self-update
 Windows:       mise-self-upgrade
-```
-
-macOS の移行では、現在のシェルが Homebrew の絶対パスを含む activation hook を保持している可能性があるため、formula を自動削除しない。Homebrew 版の activation を読み込んだターミナルやシェルをすべて終了する。現在のシェルを継続して使う場合は、profile の再実行ガードを解除して login shell を起動し直す。
-
-```bash
-unset __DOTFILES_PROFILE_LOADED
-exec zsh -l
-```
-
-新しいシェルで、`command -v mise` が導入スクリプトの案内したパスを返すことを確認して formula を削除する。新規に公式バイナリを配置した場合のパスは `~/.local/bin/mise` である。
-
-```bash
-command -v mise   # ~/.local/bin/mise
-brew uninstall mise
-```
-
-formula をすでに削除し、`_mise_hook: no such file or directory: /opt/homebrew/bin/mise` が出る場合は、影響を受ける各シェルで公式バイナリの hook を読み直すか、そのシェルを終了する。
-
-```bash
-mise_path="$HOME/.local/bin/mise" # 導入スクリプトが別のパスを案内した場合は置き換える
-eval "$("$mise_path" activate zsh)"
-rehash
 ```
 
 mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。

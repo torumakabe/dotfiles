@@ -19,7 +19,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 - `.github/copilot-instructions.md` と `.github/agents/` はこのリポジトリ用、`home/private_dot_copilot/copilot-instructions.md` は配布用として、スコープ、重複、競合を確認する
 - 指示、エージェント、コードコメント、文書を[記述の置き場所](../../home/private_dot_copilot/copilot-instructions.md#記述の置き場所)と[リポジトリの割り当て](../copilot-instructions.md#記述の置き場所)に照合する。モデルの一般知識や重複は削除を優先し、必要な情報は正本を参照する。単に別ファイルへ移すだけにしない
 - `.github/agents/*.agent.md` の `name` がファイル名から `.agent.md` を除いた名前と一致し、`description` で依頼に合うエージェントを選べるか確認する
-- ユーザー共通のエージェントは配布しておらず、`home/private_dot_copilot/skills/` は `.gitkeep` のみである。外部スキルは [Copilot CLI の管理境界](../../docs/copilot-cli.md)に照合し、ローカルの `SKILL.md` がないことを欠落にしない
+- 配布用 agent と skill の有無は git 管理中のファイルと [Copilot CLI の管理境界](../../docs/copilot-cli.md) に照合する。プラグインや `gh skill` で管理する外部 skill にローカルの `SKILL.md` を要求しない
 - `home/.chezmoitemplates/copilot-user-settings.json` と適用処理のマージ範囲を確認する。`enabledPlugins` の管理項目を排他的な許可リストとみなさず、管理外の既存項目が保持されることと区別する
 
 ## README、docs、install.sh
@@ -45,8 +45,8 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 - `git ls-files --cached` と `.gitignore` から、キャッシュ、ビルド成果物、ローカル環境や秘密情報の誤追跡と除外漏れを確認する
 - `executable_`、`private_`、`.tmpl` の属性と、`run_once_before_` / `run_onchange_after_` の順序番号を確認する
-- `home/.chezmoiignore` の OS 条件と実在する配布物、`home/.chezmoi.toml.tmpl` の変数の意味が一致するか確認する。`.chezmoiremove` は過去の配布物という根拠を確認する
-- `home/run_once*` の bootstrap と migration を区別する。migration の旧状態と削除条件を追加時の commit や ADR に確認し、設定、lockfile、現行仕様で条件が成立するものだけ関連テストと文書を含めて削除を提案する。条件が不明なら補足を求め、再実行が不要なら scriptState を変更しない
+- `home/.chezmoiignore` の OS 条件と実在する配布物、`home/.chezmoi.toml.tmpl` の変数の意味が一致するか確認する
+- `home/run_once*` の bootstrap と migration を区別する。migration が存在する場合は追加時の commit や ADR で旧状態と削除条件を確認し、条件を満たすものだけ関連テストと文書を含めて削除を提案する。再実行が不要なら scriptState を変更しない
 
 ## mise とプラットフォーム契約
 
@@ -61,6 +61,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 - 配布 Python スクリプトの PEP 723 メタデータ、`tests/` の `uv run -m unittest` 経由の実行を確認する
 - `home/private_dot_copilot/` の `lsp-config.json.tmpl` と `mcp-config.json` のコマンドが、mise 管理下または導入手順に存在するか確認する
 - `.github/workflows/` の `paths` と実行対象に検査漏れがないか、smoke テストと unittest が独立した重複を持たないか、`permissions` と action の固定方法が方針に合うか確認する
+- テストは実装と設定の契約を検査する。説明文の特定語句を固定するテストは、識別子や参照先の実在検査へ置き換える
 
 ## ADR と stored memories
 
