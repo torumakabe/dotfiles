@@ -2,12 +2,10 @@
 
 ## ツール操作の制約
 
-- Python → `python` / `pip` の直接実行は禁止。スクリプトは `uv run script.py`（依存は PEP 723）、パッケージ追加は `uv add <pkg>` / `uv pip install <pkg>`、REPL は `uv run python` を使う
-- Windows: ファイルをエディタで開く → `Start-Process edit <path>`、Markdown 閲覧 → `Show-Markdown -Path <path> -UseBrowser`
-- Windows: Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、エイリアスや関数は使えない
-- Windows: bash スクリプト（skill 付属の `.sh` 等）は素の `bash` だと WSL 解決され `gh` 等が見えず失敗する。`& "C:\Program Files\Git\bin\bash.exe"` を明示し `MSYS_NO_PATHCONV=1` を設定する
-- macOS / Linux: コマンド存在チェック → `command -v`（`which` は使わない）
-- コード/テキスト検索は組み込み `grep` / `glob` を使い、`rg` / `Select-String` / `findstr` をシェル経由で実行しない
+- Python は `python` / `pip` を直接実行しない。スクリプトと REPL は `uv run`、依存追加は `uv add` または `uv pip install` を使う
+- Windows でシェルからファイルを開く場合は `Start-Process edit <path>`、Markdown は `Show-Markdown -Path <path> -UseBrowser` を使う
+- Windows の PowerShell から `.sh` を実行する場合は `$env:MSYS_NO_PATHCONV = "1"` を設定し、`& "C:\Program Files\Git\bin\bash.exe" <script>` を使う
+- macOS / Linux のコマンド存在確認は `command -v` を使い、`which` は使わない
 
 ## 言語
 
@@ -51,11 +49,8 @@
 
 ## エージェント行動規範
 
-- **作業範囲**: 計画や調査のみの依頼ではリポジトリを編集しない。承認済みの操作について同じ許可を再確認しない
-- **成果物の保存**: 作成と保存先が明示済みなら再確認しない。保存先が未指定の新規成果物は、要約を示して保存先を確認する
-- **コミット / push / PR 作成**: それぞれ明示的な指示がある場合だけ実行する。編集の許可を公開操作の許可とみなさない。編集後は `git diff --stat` と要約を提示する
-- **ブランチ**: ファイル変更を伴うタスクで main ブランチにいる場合、作業開始前にフィーチャーブランチを作成する。ブランチ名はタスク内容から自動生成し、作成時に報告する。Stacked PR の提案対象では、提案と承認を先に行い、通常のフィーチャーブランチを作らない
-- **PR の分割**: 単一の小変更は通常のブランチを使う。責務やレビュー担当で分けた変更が独立していれば別 PR とし、依存関係があれば編集前に `gh-stack` スキルで各層の責務、依存先、レビュー観点を示して Stacked PR を提案する。操作時は同スキルの手順に従う
+- **作業範囲**: 調査のみの依頼ではリポジトリを編集しない
+- **コミット / push**: それぞれ明示的な指示がある場合だけ実行する。編集の許可を commit や push の許可とみなさない。編集後は `git diff --stat` と要約を提示する
 
 ## 調査とスキル
 
