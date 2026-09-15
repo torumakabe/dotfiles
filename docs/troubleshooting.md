@@ -170,6 +170,8 @@ chezmoi status
 
 `npm:` バックエンドは mise 内蔵の [aube](https://aube.jdx.dev/) で install する。aube の `trustPolicy=no-downgrade` は、選んだ版より古い版が 1 つでも強い信頼証跡を持つ場合に install を止める。証跡は `approver`（staged publish） > `_npmUser.trustedPublisher` > `dist.attestations.provenance` の順にランク付けされる。
 
+エラーの版指定に `7.0.2~aube~<hash>` のような `~aube~` が含まれる場合は、信頼証跡の問題ではない。lockfile を削除した後の `mise lock` が npm backend の内部インストール名を公開版として扱っている。全ツールを再生成するときは `mise lock --global --platform ... --bump` を使い、config の `latest` / `lts` 等から公開版を再解決する。リポジトリ管理の関数では `mise-upgrade` がこの指定を行う。
+
 mise の表示は上記の一行に丸められるため、原因の判別には packument を直接見る。npm CLI は mise の shim 経由だと未導入ツールの自動 install を誘発して出力が汚れるので、node 同梱の実体を使う。
 
 ```bash

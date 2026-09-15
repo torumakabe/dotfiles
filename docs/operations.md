@@ -99,7 +99,7 @@ zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、lockfile re
 2. 既存の `mise.lock` と `~/.config/mise/locks/` を退避
 3. `mise upgrade`
 4. `minimum_release_age` の正規形警告と、`mise-versions ... fallback=true` の回復済み警告以外の `mise WARN` が出力された場合は、退避した生成物を復元して停止
-5. 既存の lockfile と sidecar を削除し、`mise lock --global --platform ...` で再生成
+5. 既存の lockfile と sidecar を削除し、`mise lock --global --platform ... --bump` で config の selector から版を再解決して再生成
 6. lockfile が参照する sidecar path と、各ディレクトリの `aube-lock.yaml` / `package.json` を検証
 7. chezmoi source の lockfile と exact sidecar tree を退避し、lockfile を `chezmoi re-add` した後、既存 sidecar を `chezmoi forget --force` で管理対象から外して `chezmoi add --exact` で追加
 8. 生成または chezmoi source 更新に失敗した場合は、target と source の生成物を更新前へ復元
@@ -129,6 +129,7 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 
 - `mise lock` は **`--global` が必須**（省略するとプロジェクト設定のみ対象になる）
 - lockfile 再生成時は **`--platform` を常に指定**する。`lockfile_platforms` があっても省略しない。lockfile を削除してから再生成する破壊的操作であり、設定が読まれない状況（古い mise、設定ファイルの欠落）でも意図した集合になることを保証するため
+- lockfile を削除して全ツールを再生成するときは **`--bump` を指定**する。指定しない場合、npm backend のインストール先に使われる `<version>~aube~<hash>` という内部名を公開版として解決し、aube が失敗することがある。`--bump` は `latest` や `lts` を config から再解決し、固定版は同じ版を維持する
 - `mise upgrade` 後は lockfile と `~/.config/mise/locks/` を一度削除してから再生成する。既存 lockfile のエントリと、参照されなくなった sidecar を残さないためである
 - revision 2 の lockfile だけを `chezmoi re-add` しない。既存の `~/.config/mise/locks/` を `chezmoi forget --force` した後、同じディレクトリを `chezmoi add --exact` で同じ変更へ含める
 - sidecar が 0 件の場合は `~/.config/mise/locks/.keep` を生成して exact directory を Git の管理対象に残す。他端末で適用したときに旧 sidecar を削除するためであり、sidecar が再び生成される更新では `.keep` も削除する

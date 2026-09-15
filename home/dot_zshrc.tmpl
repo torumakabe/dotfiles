@@ -407,7 +407,7 @@ mise-upgrade() {
   rm -f "$lockfile"
   rm -rf "$locks_dir"
   : > "$mise_log"
-  NO_COLOR=1 GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 2>&1 | tee "$mise_log"
+  NO_COLOR=1 GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 --bump 2>&1 | tee "$mise_log"
   if (( pipestatus[1] != 0 )); then
     _mise_restore_artifacts \
       "$lockfile" "$locks_dir" "$target_backup" \
