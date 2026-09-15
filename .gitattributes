@@ -1,0 +1,2 @@
+home/dot_config/mise/private_mise.lock -text
+home/dot_config/mise/*locks/** -text

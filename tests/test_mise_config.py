@@ -12,8 +12,10 @@ import unittest
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+GIT_ATTRIBUTES_PATH = REPO_ROOT / ".gitattributes"
 CONFIG_PATH = REPO_ROOT / "home/dot_config/mise/config.toml.tmpl"
 LOCK_PATH = REPO_ROOT / "home/dot_config/mise/private_mise.lock"
+MISE_SOURCE_PATH = REPO_ROOT / "home/dot_config/mise"
 SYNC_SH_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.sh.tmpl"
 SYNC_PS1_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_20-mise-install.sh.tmpl"
@@ -30,6 +32,9 @@ MISE_LOCK_PLATFORMS = (
 )
 MISE_LOCK_PLATFORM_CSV = ",".join(MISE_LOCK_PLATFORMS)
 CARGO_MAKE_EXCLUDED_PLATFORM = ("linux", "arm64")
+EXACT_LOCKS_SOURCE_PATTERN = re.compile(
+    r"(?:remove_)?(?:external_)?exact_(?:private_)?(?:readonly_)?locks"
+)
 
 # aube の trustPolicy=no-downgrade 除外。プロキシが証跡を落とす版だけを明記し、
 # パッケージ名だけの除外へ広げない（将来版の検査を残すため）。
@@ -131,6 +136,13 @@ def _mise_warning_helpers() -> str:
     return zshrc[start:end]
 
 
+def _mise_upgrade_function() -> str:
+    zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
+    start = zshrc.index("mise-upgrade() {")
+    end = zshrc.index("\n}\n\n{{ end -}}", start) + 2
+    return zshrc[start:end]
+
+
 def _powershell_mise_upgrade_function() -> str:
     profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
     start = profile.index("function Invoke-MiseUpgrade {")
@@ -221,24 +233,33 @@ class MiseConfigTests(unittest.TestCase):
                     encoding="utf-8",
                 )
                 self.assertEqual(rendered.returncode, 0, rendered.stderr)
+                rendered_script = (
+                    rendered.stdout.replace("\r\n", "\n").replace("\r", "\n")
+                ).encode("utf-8")
 
                 syntax = subprocess.run(
                     [bash, "-n"],
-                    input=rendered.stdout,
+                    input=rendered_script,
                     check=False,
                     capture_output=True,
-                    encoding="utf-8",
                 )
-                self.assertEqual(syntax.returncode, 0, syntax.stderr)
+                self.assertEqual(
+                    syntax.returncode,
+                    0,
+                    syntax.stderr.decode("utf-8", errors="replace"),
+                )
 
                 lint = subprocess.run(
                     [shellcheck, "-s", "bash", "-"],
-                    input=rendered.stdout,
+                    input=rendered_script,
                     check=False,
                     capture_output=True,
-                    encoding="utf-8",
                 )
-                self.assertEqual(lint.returncode, 0, lint.stdout + lint.stderr)
+                self.assertEqual(
+                    lint.returncode,
+                    0,
+                    (lint.stdout + lint.stderr).decode("utf-8", errors="replace"),
+                )
 
     def test_dotnet_alias_matches_lock_backend(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")
@@ -247,6 +268,176 @@ class MiseConfigTests(unittest.TestCase):
         dotnet_entries = lock["tools"]["dotnet"]
         self.assertEqual(len(dotnet_entries), 1)
         self.assertEqual(_tool_alias(config, "dotnet"), dotnet_entries[0]["backend"])
+
+    def test_lockfile_v2_sidecars_are_complete_and_exact(self) -> None:
+        chezmoi = shutil.which("chezmoi")
+        if chezmoi is None:
+            self.skipTest("chezmoi is required for sidecar source mapping tests")
+
+        lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
+        referenced_sidecars: set[pathlib.PurePosixPath] = set()
+
+        self.assertEqual(lock["lockfile_version"], 2)
+        for tool_entries in lock["tools"].values():
+            entries = tool_entries if isinstance(tool_entries, list) else [tool_entries]
+            for entry in entries:
+                aube = entry.get("aube")
+                if aube is None:
+                    continue
+                relative_path = pathlib.PurePosixPath(aube["path"])
+                self.assertFalse(relative_path.is_absolute())
+                self.assertEqual(relative_path.parts[0], "locks")
+                self.assertNotIn("..", relative_path.parts)
+                referenced_sidecars.add(
+                    pathlib.PurePosixPath(*relative_path.parts[1:])
+                )
+
+        source_roots = [
+            path
+            for path in MISE_SOURCE_PATH.iterdir()
+            if path.is_dir()
+            and EXACT_LOCKS_SOURCE_PATTERN.fullmatch(path.name)
+        ]
+        self.assertEqual(len(source_roots), 1)
+        source_root = source_roots[0]
+        nested_directories = [
+            path for path in source_root.rglob("*") if path.is_dir()
+        ]
+        self.assertTrue(nested_directories)
+        for directory in nested_directories:
+            with self.subTest(directory=directory.relative_to(source_root)):
+                self.assertTrue(directory.name.startswith("exact_"))
+        package_files = [
+            path for path in source_root.rglob("*") if path.name.endswith("package.json")
+        ]
+        aube_files = [
+            path for path in source_root.rglob("*") if path.name.endswith("aube-lock.yaml")
+        ]
+        self.assertEqual(len(package_files), len(aube_files))
+
+        with tempfile.TemporaryDirectory() as destination_dir:
+            target_root = pathlib.Path(destination_dir) / ".config/mise/locks"
+            chezmoi_args = [
+                chezmoi,
+                "--source",
+                str(REPO_ROOT),
+                "--destination",
+                destination_dir,
+            ]
+            managed_sidecars: set[pathlib.PurePosixPath] = set()
+            for source_file in package_files:
+                target = subprocess.run(
+                    chezmoi_args + ["target-path", str(source_file)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                target_parent = pathlib.Path(target).parent
+                managed_sidecars.add(
+                    pathlib.PurePosixPath(
+                        *target_parent.relative_to(target_root).parts
+                    )
+                )
+                matching_aube = []
+                for path in aube_files:
+                    aube_target = subprocess.run(
+                        chezmoi_args + ["target-path", str(path)],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    ).stdout.strip()
+                    if aube_target and pathlib.Path(aube_target) == (
+                        target_parent / "aube-lock.yaml"
+                    ):
+                        matching_aube.append(path)
+                self.assertEqual(
+                    len(matching_aube),
+                    1,
+                    f"missing aube-lock.yaml beside "
+                    f"{target_parent / 'package.json'}",
+                )
+
+        self.assertEqual(managed_sidecars, referenced_sidecars)
+
+    def test_mise_lock_artifacts_disable_git_text_conversion(self) -> None:
+        git = shutil.which("git")
+        if git is None:
+            self.skipTest("git is required for attribute tests")
+
+        self.assertTrue(GIT_ATTRIBUTES_PATH.is_file())
+        artifact_paths = [LOCK_PATH.relative_to(REPO_ROOT).as_posix()]
+        artifact_paths.extend(
+            path.relative_to(REPO_ROOT).as_posix()
+            for path in MISE_SOURCE_PATH.rglob("*")
+            if path.is_file()
+            and "locks" in path.relative_to(MISE_SOURCE_PATH).parts[0]
+        )
+        artifact_paths.append(
+            "home/dot_config/mise/exact_private_locks/"
+            "exact_example/exact_1/package.json"
+        )
+        self.assertGreater(len(artifact_paths), 1)
+        for relative_path in artifact_paths:
+            with self.subTest(path=relative_path):
+                result = subprocess.run(
+                    [git, "check-attr", "text", "--", relative_path],
+                    cwd=REPO_ROOT,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    result.stdout.strip(),
+                    f"{relative_path}: text: unset",
+                )
+
+    def test_exact_locks_source_attribute_order_matches_chezmoi(self) -> None:
+        self.assertIsNotNone(EXACT_LOCKS_SOURCE_PATTERN.fullmatch("exact_locks"))
+        self.assertIsNotNone(
+            EXACT_LOCKS_SOURCE_PATTERN.fullmatch("exact_private_locks")
+        )
+        self.assertIsNone(
+            EXACT_LOCKS_SOURCE_PATTERN.fullmatch("private_exact_locks")
+        )
+
+    def test_chezmoi_tracks_empty_sidecar_marker(self) -> None:
+        chezmoi = shutil.which("chezmoi")
+        if chezmoi is None:
+            self.skipTest("chezmoi is required for sidecar marker mapping tests")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            source = root / "source"
+            destination = root / "destination"
+            locks_dir = destination / ".config/mise/locks"
+            source.mkdir()
+            locks_dir.mkdir(parents=True)
+            (locks_dir / ".keep").touch()
+
+            result = subprocess.run(
+                [
+                    chezmoi,
+                    "--source",
+                    str(source),
+                    "--destination",
+                    str(destination),
+                    "add",
+                    "--exact",
+                    str(locks_dir),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(
+                (
+                    source
+                    / "dot_config/mise/exact_locks/empty_dot_keep"
+                ).is_file()
+            )
 
     def test_windows_dotnet_verification_uses_mise_root(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")
@@ -360,6 +551,43 @@ class MiseConfigTests(unittest.TestCase):
             self.assertNotIn("chezmoi apply --force", script)
             self.assertNotIn("次回 chezmoi apply 時に再試行", script)
 
+    def test_mise_upgrade_refreshes_sidecars_as_exact_directories(self) -> None:
+        zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
+        profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
+
+        for script in (zshrc, profile):
+            self.assertIn("chezmoi forget --force", script)
+            self.assertIn("chezmoi add --exact", script)
+            self.assertIn("aube-lock.yaml", script)
+            self.assertIn("package.json", script)
+            self.assertIn(".keep", script)
+        self.assertIn('chezmoi source-path "$locks_dir"', zshrc)
+        self.assertIn('source_locks_dir=""', zshrc)
+        self.assertIn("updated_source_locks_dir=$(chezmoi source-path", zshrc)
+        self.assertIn("grep -q '[^[:space:]]' \"$lockfile\"", zshrc)
+        self.assertNotIn('"$aube_path" == *".."*', zshrc)
+        self.assertIn("chezmoi source-path $locksDir", profile)
+        self.assertIn("$resolvedSourceLocksDir =", profile)
+        self.assertIn("$updatedSourceLocksDir =", profile)
+        self.assertIn(
+            "$PSNativeCommandUseErrorActionPreference = $false",
+            profile,
+        )
+        self.assertIn(
+            "$PSNativeCommandUseErrorActionPreference = "
+            "$previousNativeErrorPreference",
+            profile,
+        )
+        self.assertIn(
+            r"""'(?m)^\s*aube\s*=\s*\{\s*path\s*=\s*"([^"]+)"'""",
+            profile,
+        )
+        self.assertIn(
+            "$aubePath -notmatch '^locks/[^/\\\\]+(?:/[^/\\\\]+)*\\z'",
+            profile,
+        )
+        self.assertIn("[string]::IsNullOrWhiteSpace($lockText)", profile)
+
     def _check_mise_warnings(self, log: str) -> subprocess.CompletedProcess[str]:
         if shutil.which("zsh") is None:
             self.skipTest("zsh is required for mise warning tests")
@@ -398,63 +626,327 @@ class MiseConfigTests(unittest.TestCase):
     def test_mise_upgrade_helpers_use_local_zsh_options(self) -> None:
         helpers = _mise_warning_helpers()
 
-        self.assertEqual(helpers.count("emulate -L zsh"), 4)
+        self.assertEqual(helpers.count("emulate -L zsh"), 5)
 
-    def _run_zsh_lockfile_restore(
+    def _run_zsh_artifact_restore(
         self,
         lockfile: pathlib.Path,
-        backup: pathlib.Path,
+        locks_dir: pathlib.Path,
+        backup_dir: pathlib.Path,
         had_lockfile: bool,
+        had_locks_dir: bool,
     ) -> subprocess.CompletedProcess[str]:
         if shutil.which("zsh") is None:
-            self.skipTest("zsh is required for mise lockfile restore tests")
+            self.skipTest("zsh is required for mise artifact restore tests")
 
         script = (
             _mise_warning_helpers()
-            + '\n_mise_restore_lockfile "$1" "$2" "$3"\n'
+            + '\n_mise_restore_artifacts "$1" "$2" "$3" "$4" "$5"\n'
         )
         return subprocess.run(
             [
                 "zsh",
                 "-c",
                 script,
-                "mise-lockfile-restore-test",
+                "mise-artifact-restore-test",
                 str(lockfile),
-                str(backup),
+                str(locks_dir),
+                str(backup_dir),
                 "1" if had_lockfile else "0",
+                "1" if had_locks_dir else "0",
             ],
             check=False,
             capture_output=True,
             text=True,
         )
 
-    def test_zsh_restores_existing_lockfile_from_backup(self) -> None:
+    def test_zsh_restores_existing_mise_artifacts_from_backup(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             lockfile = root / "mise.lock"
-            backup = root / "mise.lock.backup"
+            locks_dir = root / "locks"
+            backup_dir = root / "backup"
             lockfile.write_text("generated", encoding="utf-8")
-            backup.write_text("original", encoding="utf-8")
+            (locks_dir / "generated").mkdir(parents=True)
+            (locks_dir / "generated/aube-lock.yaml").write_text(
+                "generated", encoding="utf-8"
+            )
+            (backup_dir / "locks/original").mkdir(parents=True)
+            (backup_dir / "mise.lock").write_text("original", encoding="utf-8")
+            (backup_dir / "locks/original/aube-lock.yaml").write_text(
+                "original", encoding="utf-8"
+            )
 
-            result = self._run_zsh_lockfile_restore(lockfile, backup, True)
+            result = self._run_zsh_artifact_restore(
+                lockfile, locks_dir, backup_dir, True, True
+            )
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(lockfile.read_text(encoding="utf-8"), "original")
-            self.assertFalse(backup.exists())
-            self.assertIn("lockfile を復元しました", result.stderr)
+            self.assertFalse((locks_dir / "generated").exists())
+            self.assertEqual(
+                (locks_dir / "original/aube-lock.yaml").read_text(encoding="utf-8"),
+                "original",
+            )
+            self.assertIn("lockfile と dependency sidecar を復元しました", result.stderr)
 
-    def test_zsh_removes_generated_lockfile_when_none_existed(self) -> None:
+    def test_zsh_removes_generated_mise_artifacts_when_none_existed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = pathlib.Path(temp_dir)
             lockfile = root / "mise.lock"
-            backup = root / "mise.lock.backup"
+            locks_dir = root / "locks"
+            backup_dir = root / "backup"
             lockfile.write_text("generated", encoding="utf-8")
+            (locks_dir / "generated").mkdir(parents=True)
+            backup_dir.mkdir()
 
-            result = self._run_zsh_lockfile_restore(lockfile, backup, False)
+            result = self._run_zsh_artifact_restore(
+                lockfile, locks_dir, backup_dir, False, False
+            )
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse(lockfile.exists())
-            self.assertIn("lockfile を復元しました", result.stderr)
+            self.assertFalse(locks_dir.exists())
+            self.assertIn("lockfile と dependency sidecar を復元しました", result.stderr)
+
+    def _run_zsh_sidecar_validation(
+        self,
+        lockfile: pathlib.Path,
+        config_dir: pathlib.Path,
+    ) -> subprocess.CompletedProcess[str]:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise sidecar validation tests")
+
+        script = (
+            _mise_warning_helpers()
+            + '\n_mise_validate_lock_sidecars "$1" "$2"\n'
+        )
+        return subprocess.run(
+            [
+                "zsh",
+                "-c",
+                script,
+                "mise-sidecar-validation-test",
+                str(lockfile),
+                str(config_dir),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_zsh_validates_flexibly_formatted_sidecar_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = pathlib.Path(temp_dir)
+            lockfile = config_dir / "mise.lock"
+            sidecar = config_dir / "locks/example/1"
+            sidecar.mkdir(parents=True)
+            (sidecar / "aube-lock.yaml").write_text("lock", encoding="utf-8")
+            (sidecar / "package.json").write_text("{}", encoding="utf-8")
+            lockfile.write_text(
+                '  aube  =  {  path = "locks/example/1", digest = "sha256:test" }\n',
+                encoding="utf-8",
+            )
+
+            result = self._run_zsh_sidecar_validation(lockfile, config_dir)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_zsh_rejects_unparsed_sidecar_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = pathlib.Path(temp_dir)
+            lockfile = config_dir / "mise.lock"
+            lockfile.write_text(
+                'aube = { digest = "sha256:test", path = "locks/example/1" }\n',
+                encoding="utf-8",
+            )
+
+            result = self._run_zsh_sidecar_validation(lockfile, config_dir)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("すべて解析できません", result.stderr)
+
+    def test_zsh_rejects_missing_lockfile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = pathlib.Path(temp_dir)
+
+            result = self._run_zsh_sidecar_validation(
+                config_dir / "missing.lock", config_dir
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("lockfile が存在しないか空です", result.stderr)
+
+    def test_zsh_rejects_whitespace_only_lockfile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = pathlib.Path(temp_dir)
+            lockfile = config_dir / "mise.lock"
+            lockfile.write_text(" \n\t\n", encoding="utf-8")
+
+            result = self._run_zsh_sidecar_validation(lockfile, config_dir)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("lockfile が存在しないか空です", result.stderr)
+
+    def test_zsh_rejects_unsafe_sidecar_paths(self) -> None:
+        for aube_path in (r"locks/example\evil/1", "locks/../evil"):
+            with self.subTest(aube_path=aube_path):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    config_dir = pathlib.Path(temp_dir)
+                    lockfile = config_dir / "mise.lock"
+                    lockfile.write_text(
+                        f'aube = {{ path = "{aube_path}", '
+                        'digest = "sha256:test" }\n',
+                        encoding="utf-8",
+                    )
+
+                    result = self._run_zsh_sidecar_validation(
+                        lockfile, config_dir
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(
+                        "dependency sidecar path が不正です",
+                        result.stderr,
+                    )
+
+    def test_zsh_allows_double_dots_inside_sidecar_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_dir = pathlib.Path(temp_dir)
+            lockfile = config_dir / "mise.lock"
+            sidecar = config_dir / "locks/example/1.0..2"
+            sidecar.mkdir(parents=True)
+            (sidecar / "aube-lock.yaml").write_text("lock", encoding="utf-8")
+            (sidecar / "package.json").write_text("{}", encoding="utf-8")
+            lockfile.write_text(
+                'aube = { path = "locks/example/1.0..2", '
+                'digest = "sha256:test" }\n',
+                encoding="utf-8",
+            )
+
+            result = self._run_zsh_sidecar_validation(lockfile, config_dir)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), "1")
+
+    def test_zsh_mise_upgrade_restores_source_and_target_on_readd_failure(
+        self,
+    ) -> None:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise-upgrade rollback tests")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            script = (
+                _mise_warning_helpers()
+                + "\n"
+                + _mise_upgrade_function()
+                + r"""
+test_root="$1"
+export HOME="${test_root}/home"
+export TMPDIR="${test_root}/tmp"
+lockfile="${HOME}/.config/mise/mise.lock"
+locks_dir="${HOME}/.config/mise/locks"
+source_home="${test_root}/source/home"
+source_lockfile="${source_home}/dot_config/mise/private_mise.lock"
+source_locks_dir="${source_home}/dot_config/mise/exact_locks"
+
+mkdir -p "${locks_dir}/original/1" \
+  "${source_locks_dir}/exact_original/exact_1" "$TMPDIR"
+print -r -- "original-target-lock" > "$lockfile"
+print -r -- "original-target-package" \
+  > "${locks_dir}/original/1/package.json"
+print -r -- "original-target-sidecar" \
+  > "${locks_dir}/original/1/aube-lock.yaml"
+print -r -- "original-source-lock" > "$source_lockfile"
+print -r -- "original-source-package" \
+  > "${source_locks_dir}/exact_original/exact_1/package.json"
+print -r -- "original-source-sidecar" \
+  > "${source_locks_dir}/exact_original/exact_1/aube-lock.yaml"
+
+gh() {
+  print -r -- "test-token"
+}
+
+mise() {
+  if [[ "$1" == "upgrade" ]]; then
+    return 0
+  fi
+  if [[ "$1" == "lock" ]]; then
+    mkdir -p "${locks_dir}/new/2"
+    print -r -- 'lockfile_version = 2
+[[tools."npm:test"]]
+version = "2"
+aube = { path = "locks/new/2", digest = "sha256:test" }' \
+      > "$lockfile"
+    print -r -- "new-package" > "${locks_dir}/new/2/package.json"
+    print -r -- "new-sidecar" > "${locks_dir}/new/2/aube-lock.yaml"
+    return 0
+  fi
+  return 1
+}
+
+chezmoi() {
+  if [[ "$1" == "source-path" ]]; then
+    if (( $# == 1 )); then
+      print -r -- "$source_home"
+    elif [[ "${@: -1}" == "$lockfile" ]]; then
+      print -r -- "$source_lockfile"
+    elif [[ "${@: -1}" == "$locks_dir" &&
+            -d "$source_locks_dir" ]]; then
+      print -r -- "$source_locks_dir"
+    else
+      return 1
+    fi
+    return 0
+  fi
+  if [[ "$1" == "re-add" ]]; then
+    command cp "$lockfile" "$source_lockfile"
+    return 1
+  fi
+  if [[ "$1" == "forget" ]]; then
+    command rm -rf "$source_locks_dir"
+    return 0
+  fi
+  return 1
+}
+
+git() {
+  if [[ "$*" == *"rev-parse --abbrev-ref HEAD"* ]]; then
+    print -r -- "main"
+  fi
+  return 0
+}
+
+if mise-upgrade; then
+  print -u2 -- "mise-upgrade unexpectedly succeeded"
+  exit 1
+fi
+[[ "$(<"$lockfile")" == "original-target-lock" ]] || exit 2
+[[ "$(<"${locks_dir}/original/1/package.json")" == \
+  "original-target-package" ]] || exit 3
+[[ "$(<"$source_lockfile")" == "original-source-lock" ]] || exit 4
+[[ "$(<"${source_locks_dir}/exact_original/exact_1/package.json")" == \
+  "original-source-package" ]] || exit 5
+"""
+            )
+            result = subprocess.run(
+                [
+                    "zsh",
+                    "-c",
+                    script,
+                    "mise-upgrade-rollback-test",
+                    temp_dir,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "chezmoi 反映に失敗しました",
+                result.stderr,
+            )
 
     def _run_powershell_mise_upgrade(
         self,
@@ -463,6 +955,12 @@ class MiseConfigTests(unittest.TestCase):
         lock_output: str = "",
         upgrade_exit: int = 0,
         lock_exit: int = 0,
+        chezmoi_add_exit: int = 0,
+        source_locks_managed: bool = True,
+        source_path_after_add_exit: int = 0,
+        lock_has_sidecars: bool = True,
+        empty_lockfile: bool = False,
+        aube_path: str = "locks/new/2",
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         pwsh = shutil.which("pwsh")
         if pwsh is None:
@@ -471,8 +969,32 @@ class MiseConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             test_root = pathlib.Path(temp_dir)
             lockfile = test_root / ".config/mise/mise.lock"
+            locks_dir = lockfile.parent / "locks"
             lockfile.parent.mkdir(parents=True)
             lockfile.write_text("original-lock", encoding="utf-8")
+            (locks_dir / "original/1").mkdir(parents=True)
+            (locks_dir / "original/1/aube-lock.yaml").write_text(
+                "original-sidecar", encoding="utf-8"
+            )
+            (locks_dir / "original/1/package.json").write_text(
+                "original-package", encoding="utf-8"
+            )
+            source_home = test_root / "source/home"
+            source_mise_dir = source_home / "dot_config/mise"
+            source_locks_dir = source_mise_dir / "exact_private_locks"
+            source_locks_leaf = source_locks_dir / "exact_original/exact_1"
+            source_mise_dir.mkdir(parents=True)
+            (source_mise_dir / "private_mise.lock").write_text(
+                "original-source-lock", encoding="utf-8"
+            )
+            if source_locks_managed:
+                source_locks_leaf.mkdir(parents=True)
+                (source_locks_leaf / "aube-lock.yaml").write_text(
+                    "original-source-sidecar", encoding="utf-8"
+                )
+                (source_locks_leaf / "package.json").write_text(
+                    "original-source-package", encoding="utf-8"
+                )
             history_file = test_root / "history.txt"
             script_file = test_root / "test-mise-upgrade.ps1"
             script_file.write_text(
@@ -480,6 +1002,12 @@ class MiseConfigTests(unittest.TestCase):
 $PSStyle.OutputRendering = 'PlainText'
 $historyPath = $env:TEST_HISTORY
 $testLockfile = Join-Path $HOME ".config\\mise\\mise.lock"
+$testLocksDir = Join-Path $HOME ".config\\mise\\locks"
+$testSourceHome = Join-Path $HOME "source\\home"
+$testSourceLockfile = Join-Path $testSourceHome "dot_config\\mise\\private_mise.lock"
+$testSourceLocksDir = Join-Path $testSourceHome "dot_config\\mise\\exact_private_locks"
+$script:sidecarAdded = $false
+$PSNativeCommandUseErrorActionPreference = $true
 
 function Add-TestHistory {{
     param([string]$Entry)
@@ -505,7 +1033,35 @@ function mise {{
         return
     }}
     if ($args[0] -eq 'lock') {{
-        [System.IO.File]::WriteAllText($testLockfile, 'new-lock')
+        if ($env:TEST_EMPTY_LOCKFILE -eq '1') {{
+            [System.IO.File]::WriteAllText($testLockfile, " `n")
+        }}
+        elseif ($env:TEST_LOCK_HAS_SIDECARS -eq '1') {{
+            [System.IO.File]::WriteAllText(
+                $testLockfile,
+                "lockfile_version = 2`n" +
+                "[[tools.`"npm:test`"]]`n" +
+                "version = `"2`"`n" +
+                "aube = {{ path = `"$($env:TEST_AUBE_PATH)`", " +
+                "digest = `"sha256:test`" }}`n"
+            )
+            $newSidecar = Join-Path $testLocksDir "new\\2"
+            New-Item -ItemType Directory -Path $newSidecar -Force | Out-Null
+            [System.IO.File]::WriteAllText(
+                (Join-Path $newSidecar "aube-lock.yaml"),
+                'new-sidecar'
+            )
+            [System.IO.File]::WriteAllText(
+                (Join-Path $newSidecar "package.json"),
+                'new-package'
+            )
+        }}
+        else {{
+            [System.IO.File]::WriteAllText(
+                $testLockfile,
+                "lockfile_version = 2`n"
+            )
+        }}
         if ($env:TEST_LOCK_OUTPUT) {{
             $env:TEST_LOCK_OUTPUT
         }}
@@ -517,14 +1073,59 @@ function chezmoi {{
     Add-TestHistory "chezmoi $($args -join ' ')"
     $global:LASTEXITCODE = 0
     if ($args[0] -eq 'source-path') {{
-        Join-Path $HOME 'source'
+        if ($args.Count -eq 1) {{
+            $testSourceHome
+        }}
+        elseif ($args[-1] -eq $testLocksDir) {{
+            if (-not (Test-Path -LiteralPath $testSourceLocksDir)) {{
+                $global:LASTEXITCODE = 1
+                return
+            }}
+            if ($script:sidecarAdded -and [int]$env:TEST_SOURCE_PATH_AFTER_ADD_EXIT -ne 0) {{
+                $global:LASTEXITCODE = [int]$env:TEST_SOURCE_PATH_AFTER_ADD_EXIT
+                return
+            }}
+            $testSourceLocksDir
+        }}
+        else {{
+            $testSourceLockfile
+        }}
+        return
+    }}
+    if ($args[0] -eq 're-add') {{
+        Copy-Item -LiteralPath $testLockfile -Destination $testSourceLockfile -Force
+        return
+    }}
+    if ($args[0] -eq 'forget') {{
+        Remove-Item -LiteralPath $testSourceLocksDir -Recurse -Force
+        return
+    }}
+    if ($args[0] -eq 'add') {{
+        if (Test-Path -LiteralPath (Join-Path $testLocksDir ".keep")) {{
+            New-Item -ItemType Directory -Path $testSourceLocksDir -Force |
+                Out-Null
+            Copy-Item -LiteralPath (Join-Path $testLocksDir ".keep") `
+                -Destination (
+                    Join-Path $testSourceLocksDir "empty_dot_keep"
+                ) -Force
+        }}
+        else {{
+            $sourceSidecar = Join-Path $testSourceLocksDir "exact_new\\exact_2"
+            New-Item -ItemType Directory -Path $sourceSidecar -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $testLocksDir "new\\2\\aube-lock.yaml") `
+                -Destination $sourceSidecar -Force
+            Copy-Item -LiteralPath (Join-Path $testLocksDir "new\\2\\package.json") `
+                -Destination $sourceSidecar -Force
+        }}
+        $script:sidecarAdded = $true
+        $global:LASTEXITCODE = [int]$env:TEST_CHEZMOI_ADD_EXIT
     }}
 }}
 
 function git {{
     Add-TestHistory "git $($args -join ' ')"
     $global:LASTEXITCODE = 0
-    if ($args[0] -eq 'rev-parse') {{
+    if ($args -contains 'rev-parse') {{
         'main'
     }}
 }}
@@ -542,6 +1143,38 @@ catch {{
 $result = @{{
     caught = $caught
     lock = [System.IO.File]::ReadAllText($testLockfile)
+    sidecar = if (Test-Path (Join-Path $testLocksDir "new\\2\\package.json")) {{
+        [System.IO.File]::ReadAllText(
+            (Join-Path $testLocksDir "new\\2\\package.json")
+        )
+    }} elseif (Test-Path (Join-Path $testLocksDir "original\\1\\package.json")) {{
+        [System.IO.File]::ReadAllText(
+            (Join-Path $testLocksDir "original\\1\\package.json")
+        )
+    }} else {{
+        $null
+    }}
+    target_keep = Test-Path (Join-Path $testLocksDir ".keep")
+    source_lock = [System.IO.File]::ReadAllText($testSourceLockfile)
+    source_sidecar = if (
+        Test-Path (Join-Path $testSourceLocksDir "exact_new\\exact_2\\package.json")
+    ) {{
+        [System.IO.File]::ReadAllText(
+            (Join-Path $testSourceLocksDir "exact_new\\exact_2\\package.json")
+        )
+    }} elseif (
+        Test-Path (
+            Join-Path $testSourceLocksDir "exact_original\\exact_1\\package.json"
+        )
+    ) {{
+        [System.IO.File]::ReadAllText(
+            (Join-Path $testSourceLocksDir "exact_original\\exact_1\\package.json")
+        )
+    }} else {{
+        $null
+    }}
+    source_keep = Test-Path (Join-Path $testSourceLocksDir "empty_dot_keep")
+    native_error_preference = $PSNativeCommandUseErrorActionPreference
     history = @(
         if (Test-Path $historyPath) {{
             Get-Content -Path $historyPath
@@ -565,6 +1198,13 @@ $result = @{{
                     "TEST_LOCK_OUTPUT": lock_output,
                     "TEST_UPGRADE_EXIT": str(upgrade_exit),
                     "TEST_LOCK_EXIT": str(lock_exit),
+                    "TEST_CHEZMOI_ADD_EXIT": str(chezmoi_add_exit),
+                    "TEST_SOURCE_PATH_AFTER_ADD_EXIT": str(
+                        source_path_after_add_exit
+                    ),
+                    "TEST_LOCK_HAS_SIDECARS": "1" if lock_has_sidecars else "0",
+                    "TEST_EMPTY_LOCKFILE": "1" if empty_lockfile else "0",
+                    "TEST_AUBE_PATH": aube_path,
                 }
             )
             result = subprocess.run(
@@ -584,7 +1224,7 @@ $result = @{{
 
             output = result.stdout + result.stderr
             log_match = re.search(
-                r"実行ログ:[\s|]*([^\r\n]+?\.tmp)\b",
+                r"(?m)実行ログ:[\s|]*([^\r\n]+?\.tmp)\s*$",
                 output,
             )
             if log_match:
@@ -605,8 +1245,18 @@ $result = @{{
                 self.assertEqual(result.returncode, 0)
                 self.assertEqual(state["caught"], not allowed)
                 self.assertEqual(
-                    state["lock"],
-                    "new-lock" if allowed else "original-lock",
+                    state["lock"].replace("\r\n", "\n"),
+                    (
+                        'lockfile_version = 2\n[[tools."npm:test"]]\n'
+                        'version = "2"\naube = { path = "locks/new/2", '
+                        'digest = "sha256:test" }\n'
+                    )
+                    if allowed
+                    else "original-lock",
+                )
+                self.assertEqual(
+                    state["sidecar"],
+                    "new-package" if allowed else "original-package",
                 )
                 if allowed:
                     self.assertIn("処理を継続します", result.stdout + result.stderr)
@@ -634,12 +1284,15 @@ $result = @{{
 
         self.assertEqual(result.returncode, 0)
         self.assertFalse(state["caught"])
-        self.assertEqual(state["lock"], "new-lock")
+        self.assertEqual(state["sidecar"], "new-package")
+        self.assertEqual(state["source_sidecar"], "new-package")
         self.assertIn("回復済み", result.stdout + result.stderr)
         self.assertTrue(
             any(item.startswith("chezmoi re-add") for item in state["history"])
         )
-        self.assertIn("git add -A", state["history"])
+        self.assertTrue(
+            any(item.endswith(" add -A") for item in state["history"])
+        )
 
     def test_powershell_mise_lock_restores_on_blocking_warning(self) -> None:
         result, state = self._run_powershell_mise_upgrade(
@@ -649,6 +1302,9 @@ $result = @{{
         self.assertEqual(result.returncode, 0)
         self.assertTrue(state["caught"])
         self.assertEqual(state["lock"], "original-lock")
+        self.assertEqual(state["sidecar"], "original-package")
+        self.assertEqual(state["source_lock"], "original-source-lock")
+        self.assertEqual(state["source_sidecar"], "original-source-package")
         self.assertEqual(
             state["history"],
             [
@@ -665,6 +1321,7 @@ $result = @{{
         self.assertEqual(result.returncode, 0)
         self.assertTrue(state["caught"])
         self.assertEqual(state["lock"], "original-lock")
+        self.assertEqual(state["sidecar"], "original-package")
         self.assertEqual(state["history"], ["gh auth token", "mise upgrade"])
         self.assertTrue(state["log_exists"])
 
@@ -674,6 +1331,7 @@ $result = @{{
         self.assertEqual(result.returncode, 0)
         self.assertTrue(state["caught"])
         self.assertEqual(state["lock"], "original-lock")
+        self.assertEqual(state["sidecar"], "original-package")
         self.assertEqual(
             state["history"],
             [
@@ -684,10 +1342,108 @@ $result = @{{
         )
         self.assertTrue(state["log_exists"])
         self.assertIn(
-            "lockfile の再生成に失敗しました。実行ログを確認してください。",
+            "lockfile と dependency sidecar の再生成に失敗しました。実行ログを確認してください。",
             result.stdout + result.stderr,
         )
         self.assertNotIn("GITHUB_TOKEN の有効期限", result.stdout + result.stderr)
+
+    def test_powershell_mise_upgrade_restores_source_on_sidecar_add_failure(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_upgrade(chezmoi_add_exit=37)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(state["caught"])
+        self.assertEqual(state["lock"], "original-lock")
+        self.assertEqual(state["sidecar"], "original-package")
+        self.assertEqual(state["source_lock"], "original-source-lock")
+        self.assertEqual(state["source_sidecar"], "original-source-package")
+        self.assertIn(
+            "dependency sidecar の chezmoi add --exact に失敗しました",
+            result.stdout + result.stderr,
+        )
+
+    def test_powershell_mise_upgrade_restores_source_when_post_add_path_fails(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_upgrade(
+            source_path_after_add_exit=41
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(state["caught"])
+        self.assertEqual(state["lock"], "original-lock")
+        self.assertEqual(state["sidecar"], "original-package")
+        self.assertEqual(state["source_lock"], "original-source-lock")
+        self.assertEqual(state["source_sidecar"], "original-source-package")
+        self.assertIn(
+            "更新後の dependency sidecar の chezmoi ソースパスを取得できません",
+            result.stdout + result.stderr,
+        )
+        self.assertNotIn(
+            "空の文字列であるため、引数をバインドできません",
+            result.stdout + result.stderr,
+        )
+
+    def test_powershell_mise_upgrade_adds_initially_unmanaged_sidecars(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_upgrade(
+            source_locks_managed=False
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(state["caught"])
+        self.assertEqual(state["source_sidecar"], "new-package")
+        self.assertFalse(
+            any("forget --force" in item for item in state["history"])
+        )
+
+    def test_powershell_mise_upgrade_tracks_empty_sidecar_directory(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_upgrade(
+            lock_has_sidecars=False
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(state["caught"])
+        self.assertIsNone(state["sidecar"])
+        self.assertIsNone(state["source_sidecar"])
+        self.assertTrue(state["target_keep"])
+        self.assertTrue(state["source_keep"])
+        self.assertTrue(
+            any("forget --force" in item for item in state["history"])
+        )
+        self.assertTrue(state["native_error_preference"])
+
+    def test_powershell_mise_upgrade_rejects_empty_lockfile(self) -> None:
+        result, state = self._run_powershell_mise_upgrade(empty_lockfile=True)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(state["caught"])
+        self.assertEqual(state["lock"], "original-lock")
+        self.assertEqual(state["sidecar"], "original-package")
+        self.assertIn(
+            "lockfile が存在しないか空です",
+            result.stdout + result.stderr,
+        )
+
+    def test_powershell_mise_upgrade_rejects_backslash_sidecar_path(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_upgrade(
+            aube_path=r"locks/..\..\evil"
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(state["caught"])
+        self.assertEqual(state["lock"], "original-lock")
+        self.assertEqual(state["sidecar"], "original-package")
+        self.assertIn(
+            r"dependency sidecar path が不正です: locks/..\..\evil",
+            result.stdout + result.stderr,
+        )
 
     def test_mise_lock_platform_contract_stays_aligned(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")

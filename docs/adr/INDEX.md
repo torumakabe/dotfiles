@@ -41,6 +41,7 @@
 | [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 既定値と uv コマンド専用キャッシュ | Accepted |
 | [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Superseded by ADR-028 |
 | [028](028-mise-bootstrap-preserves-existing-installations.md) | mise bootstrap は既存導入を置換しない | Accepted |
+| [029](029-mise-lockfile-v2-sidecars.md) | mise lockfile revision 2 の npm sidecar を不可分に管理する | Accepted |
 
 ## テンプレート
 

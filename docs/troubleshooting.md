@@ -43,14 +43,26 @@ chezmoi init torumakabe
 
 まず [`docs/operations.md`](operations.md#github-api-と-github_token) の手順で `GITHUB_TOKEN` を付けて再実行する。
 
+### `dependency sidecar ... path not found` で停止する
+
+mise lockfile revision 2 の `aube.path` が指す `~/.config/mise/locks/` を、lockfile と同時に配布できていない状態である。TypeScript の版や npm の接続障害ではない。
+
+リポジトリに対応する sidecar が含まれている場合は、設定と sidecar を先に適用してから全体を再適用する。
+
+```bash
+chezmoi apply ~/.config/mise/mise.lock ~/.config/mise/locks
+chezmoi apply
+```
+
+lockfile を作成する側では、lockfile だけを手動で `chezmoi re-add` せず、`mise-upgrade` で lockfile と exact sidecar tree を一括更新する。管理方法は [ADR-029](adr/029-mise-lockfile-v2-sidecars.md) を参照する。
+
 ### lockfile を再生成する
 
-lockfile 側の問題なら再生成する。
+lockfile または sidecar が破損している場合は、`mise-upgrade` で両方を再生成する。
 
 ```bash
 mise ls --missing
-rm ~/.config/mise/mise.lock
-GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
+mise-upgrade
 mise install
 ```
 

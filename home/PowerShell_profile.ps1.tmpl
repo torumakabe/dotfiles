@@ -103,12 +103,23 @@ function Invoke-MiseSelfUpgrade {
 # upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
 function Invoke-MiseUpgrade {
     $prevErrorAction = $ErrorActionPreference
+    $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
     $ErrorActionPreference = 'Stop'
+    $PSNativeCommandUseErrorActionPreference = $false
     $miseLog = $null
-    $lockfile = Join-Path $HOME ".config\mise\mise.lock"
-    $lockBackup = $null
+    $backupRoot = $null
+    $miseConfigDir = Join-Path $HOME ".config\mise"
+    $lockfile = Join-Path $miseConfigDir "mise.lock"
+    $locksDir = Join-Path $miseConfigDir "locks"
     $hadLockfile = $false
-    $restoreLockfileOnFailure = $false
+    $hadLocksDir = $false
+    $sourceLockfile = $null
+    $sourceLocksDir = $null
+    $hadSourceLockfile = $false
+    $hadSourceLocksDir = $false
+    $restoreTargetOnFailure = $false
+    $restoreSourceOnFailure = $false
+    $previousGitHubToken = $env:GITHUB_TOKEN
     try {
         # 前提条件チェック
         if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
@@ -127,12 +138,38 @@ function Invoke-MiseUpgrade {
         }
         $env:GITHUB_TOKEN = $token
 
-        function Restore-MiseLockfile {
-            if ($hadLockfile) {
-                Move-Item -Path $lockBackup -Destination $lockfile -Force
+        function Restore-MiseArtifacts {
+            param(
+                [Parameter(Mandatory)]
+                [string]$CurrentLockfile,
+                [Parameter(Mandatory)]
+                [AllowEmptyString()]
+                [string]$CurrentLocksDir,
+                [Parameter(Mandatory)]
+                [string]$BackupDir,
+                [Parameter(Mandatory)]
+                [bool]$HadLockfile,
+                [Parameter(Mandatory)]
+                [bool]$HadLocksDir
+            )
+
+            if (Test-Path -LiteralPath $CurrentLockfile) {
+                Remove-Item -LiteralPath $CurrentLockfile -Force -ErrorAction Stop
             }
-            else {
-                Remove-Item -Path $lockfile -Force -ErrorAction SilentlyContinue
+            if ($CurrentLocksDir -and (Test-Path -LiteralPath $CurrentLocksDir)) {
+                Remove-Item -LiteralPath $CurrentLocksDir `
+                    -Recurse -Force -ErrorAction Stop
+            }
+            if ($HadLockfile) {
+                Copy-Item -Path (Join-Path $BackupDir "mise.lock") `
+                    -Destination $CurrentLockfile -Force
+            }
+            if ($HadLocksDir) {
+                if (-not $CurrentLocksDir) {
+                    throw "dependency sidecar の復元先が空です"
+                }
+                Copy-Item -Path (Join-Path $BackupDir "locks") `
+                    -Destination $CurrentLocksDir -Recurse -Force
             }
         }
 
@@ -191,12 +228,22 @@ function Invoke-MiseUpgrade {
         }
 
         $miseLog = [System.IO.Path]::GetTempFileName()
-        $lockBackup = "$miseLog.lock"
+        $backupRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
+            "mise-upgrade-" + [System.Guid]::NewGuid().ToString("N")
+        )
+        $targetBackupDir = Join-Path $backupRoot "target"
+        New-Item -ItemType Directory -Path $targetBackupDir -Force | Out-Null
         $hadLockfile = Test-Path $lockfile
+        $hadLocksDir = Test-Path $locksDir
         if ($hadLockfile) {
-            Copy-Item -Path $lockfile -Destination $lockBackup -Force
+            Copy-Item -Path $lockfile `
+                -Destination (Join-Path $targetBackupDir "mise.lock") -Force
         }
-        $restoreLockfileOnFailure = $true
+        if ($hadLocksDir) {
+            Copy-Item -Path $locksDir `
+                -Destination (Join-Path $targetBackupDir "locks") -Recurse -Force
+        }
+        $restoreTargetOnFailure = $true
 
         Write-Host "==> mise upgrade: ツールを最新版に更新..."
         Invoke-MiseChecked `
@@ -204,62 +251,175 @@ function Invoke-MiseUpgrade {
             -FailureMessage "mise upgrade に失敗しました。" `
             -Arguments @("upgrade")
 
-        Write-Host "==> mise lock: lockfile を再生成..."
+        Write-Host "==> mise lock: lockfile と dependency sidecar を再生成..."
         Remove-Item -Path $lockfile -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $locksDir -Recurse -Force -ErrorAction SilentlyContinue
         Invoke-MiseChecked `
             -Phase "mise lock" `
-            -FailureMessage "lockfile の再生成に失敗しました。実行ログを確認してください。" `
+            -FailureMessage "lockfile と dependency sidecar の再生成に失敗しました。実行ログを確認してください。" `
             -Arguments @("lock", "--global", "--platform", "linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64")
 
-        $restoreLockfileOnFailure = $false
-        Remove-Item -Path $miseLog, $lockBackup -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path $locksDir -Force | Out-Null
+        $lockText = [System.IO.File]::ReadAllText($lockfile)
+        if ([string]::IsNullOrWhiteSpace($lockText)) {
+            throw "lockfile が存在しないか空です"
+        }
+        $aubePaths = [regex]::Matches(
+            $lockText,
+            '(?m)^\s*aube\s*=\s*\{\s*path\s*=\s*"([^"]+)"'
+        ) | ForEach-Object { $_.Groups[1].Value }
+        $aubeDeclarationCount = [regex]::Matches(
+            $lockText,
+            '(?m)^\s*aube\s*='
+        ).Count
+        if ($aubePaths.Count -ne $aubeDeclarationCount) {
+            throw "lockfile の dependency sidecar path をすべて解析できません"
+        }
+        foreach ($aubePath in $aubePaths) {
+            $pathParts = $aubePath -split '/'
+            if ($aubePath -notmatch '^locks/[^/\\]+(?:/[^/\\]+)*\z' -or
+                $pathParts -contains '..') {
+                throw "lockfile の dependency sidecar path が不正です: $aubePath"
+            }
+            $sidecarDir = Join-Path $miseConfigDir ($aubePath -replace '/', '\')
+            foreach ($requiredFile in @("aube-lock.yaml", "package.json")) {
+                if (-not (Test-Path -LiteralPath (Join-Path $sidecarDir $requiredFile))) {
+                    throw "dependency sidecar が不足しています: $aubePath/$requiredFile"
+                }
+            }
+        }
+        if ($aubePaths.Count -eq 0) {
+            [System.IO.File]::WriteAllText((Join-Path $locksDir ".keep"), "")
+        }
 
-        Write-Host "==> chezmoi re-add: lockfile をソースに反映..."
-        chezmoi re-add ~\.config\mise\mise.lock
-        if ($LASTEXITCODE -ne 0) { throw "chezmoi re-add に失敗しました。chezmoi source-path を確認してください" }
-
-        $sourceRoot = Join-Path (chezmoi source-path) ".."
-        Push-Location $sourceRoot
-
-        $branch = git rev-parse --abbrev-ref HEAD
-        if ($branch -ne "main") {
-            Pop-Location
+        $sourceHome = "$(& chezmoi source-path)".Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $sourceHome) {
+            throw "chezmoi ソースディレクトリを取得できません"
+        }
+        $sourceRoot = Split-Path $sourceHome -Parent
+        $branch = git -C $sourceRoot rev-parse --abbrev-ref HEAD
+        if ($LASTEXITCODE -ne 0 -or $branch -ne "main") {
             throw "chezmoi ソースが main ブランチではありません (現在: $branch)。git checkout main してから再実行してください"
         }
 
-        git add -A
-        $diff = git diff --cached --quiet 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ 更新するツールはありませんでした"
-            Pop-Location
-            return
+        $sourceLockfile = "$(& chezmoi source-path $lockfile)".Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $sourceLockfile) {
+            throw "mise.lock の chezmoi ソースパスを取得できません"
         }
+        $resolvedSourceLocksDir = "$(& chezmoi source-path $locksDir 2>$null)".Trim()
+        if ($LASTEXITCODE -eq 0 -and $resolvedSourceLocksDir) {
+            $sourceLocksDir = $resolvedSourceLocksDir
+        }
+        $sourceBackupDir = Join-Path $backupRoot "source"
+        New-Item -ItemType Directory -Path $sourceBackupDir -Force | Out-Null
+        $hadSourceLockfile = Test-Path $sourceLockfile
+        $hadSourceLocksDir = $sourceLocksDir -and (
+            Test-Path -LiteralPath $sourceLocksDir
+        )
+        if ($hadSourceLockfile) {
+            Copy-Item -Path $sourceLockfile `
+                -Destination (Join-Path $sourceBackupDir "mise.lock") -Force
+        }
+        if ($hadSourceLocksDir) {
+            Copy-Item -Path $sourceLocksDir `
+                -Destination (Join-Path $sourceBackupDir "locks") -Recurse -Force
+        }
+        $restoreSourceOnFailure = $true
 
-        git commit -m "chore: upgrade mise tools"
+        Write-Host "==> chezmoi: lockfile と dependency sidecar をソースに反映..."
+        chezmoi re-add $lockfile
         if ($LASTEXITCODE -ne 0) {
-            Pop-Location
-            throw "git commit に失敗しました"
+            throw "mise.lock の chezmoi re-add に失敗しました"
         }
-
-        git push
+        if ($hadSourceLocksDir) {
+            chezmoi forget --force $locksDir
+            if ($LASTEXITCODE -ne 0) {
+                throw "既存 dependency sidecar の chezmoi forget に失敗しました"
+            }
+        }
+        chezmoi add --exact $locksDir
         if ($LASTEXITCODE -ne 0) {
+            throw "dependency sidecar の chezmoi add --exact に失敗しました"
+        }
+        $updatedSourceLocksDir = "$(& chezmoi source-path $locksDir 2>$null)".Trim()
+        if ($LASTEXITCODE -ne 0 -or -not $updatedSourceLocksDir) {
+            throw "更新後の dependency sidecar の chezmoi ソースパスを取得できません"
+        }
+        $sourceLocksDir = $updatedSourceLocksDir
+
+        $restoreSourceOnFailure = $false
+        $restoreTargetOnFailure = $false
+        Remove-Item -Path $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $miseLog -Force -ErrorAction SilentlyContinue
+
+        Push-Location $sourceRoot
+        try {
+            git add -A
+            if ($LASTEXITCODE -ne 0) {
+                throw "git add に失敗しました"
+            }
+            $diff = git diff --cached --quiet 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "✅ 更新するツールはありませんでした"
+                return
+            }
+
+            git commit -m "chore: upgrade mise tools"
+            if ($LASTEXITCODE -ne 0) {
+                throw "git commit に失敗しました"
+            }
+
+            git push
+            if ($LASTEXITCODE -ne 0) {
+                throw "git push に失敗しました。コミットは完了しています。手動で push してください"
+            }
+        }
+        finally {
             Pop-Location
-            throw "git push に失敗しました。コミットは完了しています。手動で push してください"
         }
 
-        Pop-Location
         Write-Host "✅ mise ツールの更新が完了しました"
     }
     catch {
         $failure = $_
-        if ($restoreLockfileOnFailure) {
+        $restoreFailed = $false
+        if ($restoreSourceOnFailure) {
             try {
-                Restore-MiseLockfile
-                Write-Warning "mise upgrade 実行前の lockfile を復元しました"
+                & chezmoi forget --force $locksDir 2>$null | Out-Null
+                $currentSourceLocksDir = "$(& chezmoi source-path $locksDir 2>$null)".Trim()
+                if ($LASTEXITCODE -eq 0 -and $currentSourceLocksDir) {
+                    $sourceLocksDir = $currentSourceLocksDir
+                }
+                Restore-MiseArtifacts `
+                    -CurrentLockfile $sourceLockfile `
+                    -CurrentLocksDir $sourceLocksDir `
+                    -BackupDir (Join-Path $backupRoot "source") `
+                    -HadLockfile $hadSourceLockfile `
+                    -HadLocksDir $hadSourceLocksDir
+                Write-Warning "chezmoi ソースの lockfile と dependency sidecar を復元しました"
             }
             catch {
-                Write-Error "❌ mise upgrade 実行前の lockfile を復元できませんでした: $($_.Exception.Message)" -ErrorAction Continue
+                $restoreFailed = $true
+                Write-Error "❌ chezmoi ソースの lockfile と dependency sidecar を復元できませんでした: $($_.Exception.Message)" -ErrorAction Continue
             }
+        }
+        if ($restoreTargetOnFailure) {
+            try {
+                Restore-MiseArtifacts `
+                    -CurrentLockfile $lockfile `
+                    -CurrentLocksDir $locksDir `
+                    -BackupDir (Join-Path $backupRoot "target") `
+                    -HadLockfile $hadLockfile `
+                    -HadLocksDir $hadLocksDir
+                Write-Warning "mise upgrade 実行前の lockfile と dependency sidecar を復元しました"
+            }
+            catch {
+                $restoreFailed = $true
+                Write-Error "❌ mise upgrade 実行前の lockfile と dependency sidecar を復元できませんでした: $($_.Exception.Message)" -ErrorAction Continue
+            }
+        }
+        if ($backupRoot -and (Test-Path $backupRoot) -and -not $restoreFailed) {
+            Remove-Item -Path $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
         if ($miseLog -and (Test-Path $miseLog)) {
             Write-Error "❌ $($failure.Exception.Message) 実行ログ: $miseLog" -ErrorAction Continue
@@ -270,7 +430,13 @@ function Invoke-MiseUpgrade {
         throw $failure
     }
     finally {
-        $env:GITHUB_TOKEN = $null
+        if ($null -eq $previousGitHubToken) {
+            Remove-Item Env:GITHUB_TOKEN -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:GITHUB_TOKEN = $previousGitHubToken
+        }
+        $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
         $ErrorActionPreference = $prevErrorAction
     }
 }

@@ -244,28 +244,86 @@ _mise_check_warnings() {
   (( blocking_warning == 0 ))
 }
 
-_mise_restore_lockfile() {
+_mise_restore_artifacts() {
   emulate -L zsh
 
   local lockfile="$1"
-  local lock_backup="$2"
-  local had_lockfile="$3"
-  local restore_status
+  local locks_dir="$2"
+  local backup_dir="$3"
+  local had_lockfile="$4"
+  local had_locks_dir="$5"
+  local restore_status=0
 
+  rm -f "$lockfile" || restore_status=1
+  if [[ -n "$locks_dir" ]]; then
+    rm -rf "$locks_dir" || restore_status=1
+  fi
   if (( had_lockfile )); then
-    command mv -f "$lock_backup" "$lockfile"
-    restore_status=$?
-  else
-    rm -f "$lockfile"
-    restore_status=$?
+    command cp -p "${backup_dir}/mise.lock" "$lockfile" || restore_status=1
+  fi
+  if (( had_locks_dir )); then
+    if [[ -n "$locks_dir" ]]; then
+      command cp -Rp "${backup_dir}/locks" "$locks_dir" || restore_status=1
+    else
+      restore_status=1
+    fi
   fi
 
   if (( restore_status == 0 )); then
-    echo "↩️ mise upgrade 実行前の lockfile を復元しました" >&2
+    echo "↩️ lockfile と dependency sidecar を復元しました" >&2
   else
-    echo "❌ mise upgrade 実行前の lockfile を復元できませんでした" >&2
+    echo "❌ lockfile と dependency sidecar を復元できませんでした" >&2
   fi
   return "$restore_status"
+}
+
+_mise_validate_lock_sidecars() {
+  emulate -L zsh
+
+  local lockfile="$1"
+  local config_dir="$2"
+  local aube_path
+  local path_part
+  local -a path_parts
+  local expected_count extracted_count=0
+
+  if [[ ! -f "$lockfile" ]] ||
+      ! command grep -q '[^[:space:]]' "$lockfile"; then
+    echo "❌ lockfile が存在しないか空です" >&2
+    return 1
+  fi
+
+  expected_count=$(command grep -Ec '^[[:space:]]*aube[[:space:]]*=' "$lockfile") || expected_count=0
+
+  while IFS= read -r aube_path; do
+    (( extracted_count++ ))
+    path_parts=("${(@s:/:)aube_path}")
+    if [[ "$aube_path" != locks/?* ||
+          "$aube_path" == *\\* ||
+          "$aube_path" == *//* ||
+          "$aube_path" == */ ]]; then
+      echo "❌ lockfile の dependency sidecar path が不正です: $aube_path" >&2
+      return 1
+    fi
+    for path_part in "${path_parts[@]}"; do
+      if [[ "$path_part" == ".." ]]; then
+        echo "❌ lockfile の dependency sidecar path が不正です: $aube_path" >&2
+        return 1
+      fi
+    done
+    if [[ ! -f "${config_dir}/${aube_path}/aube-lock.yaml" ||
+          ! -f "${config_dir}/${aube_path}/package.json" ]]; then
+      echo "❌ dependency sidecar が不足しています: $aube_path" >&2
+      return 1
+    fi
+  done < <(command sed -n 's/^[[:space:]]*aube[[:space:]]*=[[:space:]]*{[[:space:]]*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$lockfile")
+
+  if (( extracted_count != expected_count )); then
+    echo "❌ lockfile の dependency sidecar path をすべて解析できません" >&2
+    return 1
+  fi
+
+  print -r -- "$extracted_count"
 }
 
 mise-upgrade() {
@@ -291,89 +349,223 @@ mise-upgrade() {
     return 1
   }
 
-  local mise_log
-  mise_log=$(mktemp "${TMPDIR:-/tmp}/mise-upgrade.XXXXXX") || {
-    echo "❌ mise の実行ログ用一時ファイルを作成できません" >&2
+  local work_dir
+  work_dir=$(mktemp -d "${TMPDIR:-/tmp}/mise-upgrade.XXXXXX") || {
+    echo "❌ mise の一時ディレクトリを作成できません" >&2
     return 1
   }
 
-  local lockfile="$HOME/.config/mise/mise.lock"
-  local lock_backup="${mise_log}.lock"
+  local mise_log="${work_dir}/mise.log"
+  local config_dir="$HOME/.config/mise"
+  local lockfile="${config_dir}/mise.lock"
+  local locks_dir="${config_dir}/locks"
+  local target_backup="${work_dir}/target"
   local had_lockfile=0
+  local had_locks_dir=0
+  mkdir -p "$target_backup" || {
+    rm -rf "$work_dir"
+    echo "❌ mise 生成物の退避先を作成できません" >&2
+    return 1
+  }
   if [[ -f "$lockfile" ]]; then
-    command cp -p "$lockfile" "$lock_backup" || {
-      rm -f "$mise_log"
+    command cp -p "$lockfile" "${target_backup}/mise.lock" || {
+      rm -rf "$work_dir"
       echo "❌ 既存 lockfile を退避できません" >&2
       return 1
     }
     had_lockfile=1
   fi
+  if [[ -d "$locks_dir" ]]; then
+    command cp -Rp "$locks_dir" "${target_backup}/locks" || {
+      rm -rf "$work_dir"
+      echo "❌ 既存 dependency sidecar を退避できません" >&2
+      return 1
+    }
+    had_locks_dir=1
+  fi
 
   echo "==> mise upgrade: ツールを最新版に更新..."
   NO_COLOR=1 GITHUB_TOKEN="$token" mise upgrade 2>&1 | tee "$mise_log"
   if (( pipestatus[1] != 0 )); then
-    _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
     echo "❌ mise upgrade に失敗しました" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
   fi
   if ! _mise_check_warnings "$mise_log" "mise upgrade"; then
-    _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
     echo "lockfile の再生成、commit、push は実行していません" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
   fi
 
-  echo "==> mise lock: lockfile を再生成..."
+  echo "==> mise lock: lockfile と dependency sidecar を再生成..."
   rm -f "$lockfile"
+  rm -rf "$locks_dir"
   : > "$mise_log"
   NO_COLOR=1 GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 2>&1 | tee "$mise_log"
   if (( pipestatus[1] != 0 )); then
-    _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
-    echo "❌ lockfile の再生成に失敗しました。実行ログを確認してください" >&2
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
+    echo "❌ lockfile と dependency sidecar の再生成に失敗しました。実行ログを確認してください" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
   fi
   if ! _mise_check_warnings "$mise_log" "mise lock"; then
-    _mise_restore_lockfile "$lockfile" "$lock_backup" "$had_lockfile" || :
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
     echo "chezmoi re-add、commit、push は実行していません" >&2
     echo "実行ログ: $mise_log" >&2
     return 1
   fi
-  rm -f "$mise_log" "$lock_backup"
-
-  echo "==> chezmoi re-add: lockfile をソースに反映..."
-  chezmoi re-add ~/.config/mise/mise.lock || {
-    echo "❌ chezmoi re-add に失敗しました。chezmoi source-path を確認してください" >&2
+  mkdir -p "$locks_dir" || {
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
+    echo "❌ dependency sidecar ディレクトリを作成できません" >&2
+    echo "実行ログ: $mise_log" >&2
     return 1
   }
+  local sidecar_count
+  if ! sidecar_count=$(_mise_validate_lock_sidecars "$lockfile" "$config_dir"); then
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
+    echo "実行ログ: $mise_log" >&2
+    return 1
+  fi
+  if (( sidecar_count == 0 )); then
+    : > "${locks_dir}/.keep" || {
+      _mise_restore_artifacts \
+        "$lockfile" "$locks_dir" "$target_backup" \
+        "$had_lockfile" "$had_locks_dir" || :
+      echo "❌ 空の dependency sidecar ディレクトリを管理対象にできません" >&2
+      return 1
+    }
+  fi
 
-  local source_root
-  source_root="$(chezmoi source-path)/.."
-  cd "$source_root" || {
-    echo "❌ chezmoi ソースディレクトリに移動できません: $source_root" >&2
+  local source_home source_root branch
+  source_home=$(chezmoi source-path) || {
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
+    echo "❌ chezmoi ソースディレクトリを取得できません" >&2
     return 1
   }
-
-  local branch
-  branch=$(git rev-parse --abbrev-ref HEAD)
+  source_root="${source_home:h}"
+  branch=$(git -C "$source_root" rev-parse --abbrev-ref HEAD) || {
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
+    echo "❌ chezmoi ソースのブランチを確認できません" >&2
+    return 1
+  }
   if [[ "$branch" != "main" ]]; then
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
     echo "❌ chezmoi ソースが main ブランチではありません (現在: $branch)。git checkout main してから再実行してください" >&2
     return 1
   fi
 
-  git add -A
-  if git diff --cached --quiet; then
+  local source_lockfile source_locks_dir source_backup
+  local had_source_lockfile=0
+  local had_source_locks_dir=0
+  source_lockfile=$(chezmoi source-path "$lockfile") || {
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
+    echo "❌ mise.lock の chezmoi ソースパスを取得できません" >&2
+    return 1
+  }
+  source_locks_dir=$(chezmoi source-path "$locks_dir" 2>/dev/null) ||
+    source_locks_dir=""
+  source_backup="${work_dir}/source"
+  mkdir -p "$source_backup" || {
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
+    echo "❌ chezmoi ソースの退避先を作成できません" >&2
+    return 1
+  }
+  if [[ -f "$source_lockfile" ]]; then
+    command cp -p "$source_lockfile" "${source_backup}/mise.lock" || {
+      _mise_restore_artifacts \
+        "$lockfile" "$locks_dir" "$target_backup" \
+        "$had_lockfile" "$had_locks_dir" || :
+      echo "❌ chezmoi ソースの mise.lock を退避できません" >&2
+      return 1
+    }
+    had_source_lockfile=1
+  fi
+  if [[ -d "$source_locks_dir" ]]; then
+    command cp -Rp "$source_locks_dir" "${source_backup}/locks" || {
+      _mise_restore_artifacts \
+        "$lockfile" "$locks_dir" "$target_backup" \
+        "$had_lockfile" "$had_locks_dir" || :
+      echo "❌ chezmoi ソースの dependency sidecar を退避できません" >&2
+      return 1
+    }
+    had_source_locks_dir=1
+  fi
+
+  local source_update_failed=0
+  echo "==> chezmoi: lockfile と dependency sidecar をソースに反映..."
+  chezmoi re-add "$lockfile" || source_update_failed=1
+  if (( ! source_update_failed && had_source_locks_dir )); then
+    chezmoi forget --force "$locks_dir" || source_update_failed=1
+  fi
+  if (( ! source_update_failed )); then
+    chezmoi add --exact "$locks_dir" || source_update_failed=1
+  fi
+  if (( ! source_update_failed )); then
+    local updated_source_locks_dir
+    if updated_source_locks_dir=$(chezmoi source-path "$locks_dir" 2>/dev/null) &&
+        [[ -n "$updated_source_locks_dir" ]]; then
+      source_locks_dir="$updated_source_locks_dir"
+    else
+      source_update_failed=1
+    fi
+  fi
+  if (( source_update_failed )); then
+    local current_source_locks_dir
+    chezmoi forget --force "$locks_dir" >/dev/null 2>&1 || :
+    current_source_locks_dir=$(chezmoi source-path "$locks_dir" 2>/dev/null) &&
+      source_locks_dir="$current_source_locks_dir"
+    _mise_restore_artifacts \
+      "$source_lockfile" "$source_locks_dir" "$source_backup" \
+      "$had_source_lockfile" "$had_source_locks_dir" || :
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
+    echo "❌ lockfile と dependency sidecar の chezmoi 反映に失敗しました" >&2
+    echo "実行ログ: $mise_log" >&2
+    return 1
+  fi
+
+  rm -rf "$work_dir"
+
+  git -C "$source_root" add -A || {
+    echo "❌ git add に失敗しました" >&2
+    return 1
+  }
+  if git -C "$source_root" diff --cached --quiet; then
     echo "✅ 更新するツールはありませんでした"
     return 0
   fi
 
-  git commit -m "chore: upgrade mise tools" || {
+  git -C "$source_root" commit -m "chore: upgrade mise tools" || {
     echo "❌ git commit に失敗しました" >&2
     return 1
   }
 
-  git push || {
+  git -C "$source_root" push || {
     echo "❌ git push に失敗しました。コミットは完了しています。手動で push してください" >&2
     return 1
   }

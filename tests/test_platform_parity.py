@@ -142,7 +142,8 @@ ZSH_INTERNAL_FUNCTIONS = {
     "_mise_normalize_log_line",
     "_mise_is_allowed_warning",
     "_mise_check_warnings",
-    "_mise_restore_lockfile",
+    "_mise_restore_artifacts",
+    "_mise_validate_lock_sidecars",
 }
 POWERSHELL_INTERNAL_FUNCTIONS = {
     "Get-CachedSourcePath",
