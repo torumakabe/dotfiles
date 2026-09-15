@@ -93,16 +93,17 @@ Copilot CLI など mise shim 経由のプロセスが動いていると winget �
 
 ### `mise-upgrade`
 
-zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、処理を始める前に既存 lockfile を退避してから次を一括実行する。
+zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、lockfile revision 2 の dependency sidecar を含めて次を一括実行する。
 
 1. `gh auth token` で一時トークンを取得
-2. 既存 lockfile を退避
+2. 既存の `mise.lock` と `~/.config/mise/locks/` を退避
 3. `mise upgrade`
-4. `minimum_release_age` の正規形警告と、`mise-versions ... fallback=true` の回復済み警告以外の `mise WARN` が出力された場合は、既存 lockfile を復元して停止
-5. 既存 lockfile を削除し、`mise lock --global --platform ...` で再生成
-6. `mise lock` が失敗した場合、または許可対象以外の `mise WARN` が出力された場合は、既存 lockfile を復元して停止
-7. `chezmoi re-add`
-8. git commit + push
+4. `minimum_release_age` の正規形警告と、`mise-versions ... fallback=true` の回復済み警告以外の `mise WARN` が出力された場合は、退避した生成物を復元して停止
+5. 既存の lockfile と sidecar を削除し、`mise lock --global --platform ...` で再生成
+6. lockfile が参照する sidecar path と、各ディレクトリの `aube-lock.yaml` / `package.json` を検証
+7. chezmoi source の lockfile と exact sidecar tree を退避し、lockfile を `chezmoi re-add` した後、既存 sidecar を `chezmoi forget --force` で管理対象から外して `chezmoi add --exact` で追加
+8. 生成または chezmoi source 更新に失敗した場合は、target と source の生成物を更新前へ復元
+9. git commit + push
 
 ```bash
 mise-upgrade
@@ -128,31 +129,42 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 
 - `mise lock` は **`--global` が必須**（省略するとプロジェクト設定のみ対象になる）
 - lockfile 再生成時は **`--platform` を常に指定**する。`lockfile_platforms` があっても省略しない。lockfile を削除してから再生成する破壊的操作であり、設定が読まれない状況（古い mise、設定ファイルの欠落）でも意図した集合になることを保証するため
-- `mise upgrade` 後は lockfile を一度削除してから再生成する（既存エントリが残り新版が反映されないため）
+- `mise upgrade` 後は lockfile と `~/.config/mise/locks/` を一度削除してから再生成する。既存 lockfile のエントリと、参照されなくなった sidecar を残さないためである
+- revision 2 の lockfile だけを `chezmoi re-add` しない。既存の `~/.config/mise/locks/` を `chezmoi forget --force` した後、同じディレクトリを `chezmoi add --exact` で同じ変更へ含める
+- sidecar が 0 件の場合は `~/.config/mise/locks/.keep` を生成して exact directory を Git の管理対象に残す。他端末で適用したときに旧 sidecar を削除するためであり、sidecar が再び生成される更新では `.keep` も削除する
 - 両シェルとも、`minimum_release_age` の正規形に一致するリリース保留警告と、`mise-versions` が `fallback=true` を明示した回復済み警告だけを許可し、警告内容と継続理由を表示する
 - `mise-versions ... fallback=true` は、GitHub Releases などの取得失敗後に代替経路で処理を継続できたことを示す。一時的な `502 Bad Gateway` でも発生するため、この警告だけから `GITHUB_TOKEN` の期限切れとは判断しない
 - 両シェルとも、許可対象以外の `mise WARN` が出力された場合は、終了コードが `0` でも lockfile を復元し、commit と push を行わない。`fallback=false`、`fallback` 欠落、形式不明の警告は停止対象とする
-- 両シェルとも、`mise upgrade` または `mise lock` の失敗時は、更新処理を始める前の lockfile を復元する
+- 両シェルとも、`mise upgrade`、`mise lock`、sidecar 検証、chezmoi source 更新の失敗時は、更新処理を始める前の lockfile と sidecar を復元する
 - 処理を停止した関数は、原因となった警告、lockfile の復元結果、実行ログの保存先を標準エラー出力へ表示する。運用者は表示されたログを確認して原因を特定する
-- PowerShell では `$env:GITHUB_TOKEN = (gh auth token); <cmd>; $env:GITHUB_TOKEN = $null` でトークンを渡し、`--platform` の値はクォートする
+- PowerShell では `gh auth token` の値を処理中だけ `GITHUB_TOKEN` に設定し、終了時に実行前の値へ戻す。`--platform` の値はクォートする
 
 ### 典型コマンド
 
-```bash
-# mise upgrade + lockfile 再生成
-GITHUB_TOKEN=$(gh auth token) mise upgrade
-rm -f ~/.config/mise/mise.lock
-GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
-chezmoi re-add ~/.config/mise/mise.lock
-
-# ツール追加・削除
-chezmoi edit ~/.config/mise/config.toml
-GITHUB_TOKEN=$(gh auth token) mise install
-GITHUB_TOKEN=$(gh auth token) mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64
-chezmoi re-add ~/.config/mise/config.toml ~/.config/mise/mise.lock
+```text
+# mise 管理の全ツール、lockfile、sidecar の一括更新
+mise-upgrade
 ```
 
-lockfile を削除して再生成したいケース: 新プラットフォーム追加、不要プラットフォーム除去、lockfile 破損。
+`mise-upgrade` は追加・変更したツールだけでなく、mise が管理する全ツールに `mise upgrade` を実行する。定期的な一括更新、ツール削除、対象プラットフォームの変更、lockfile または sidecar の破損からの復旧に使う。
+
+ツールの追加や設定変更だけを反映し、無関係なツールのバージョンを更新しない場合は、対象ツールを指定して lockfile を更新する。実行前に `gh auth token` の値を一時的に `GITHUB_TOKEN` へ設定する。
+
+```text
+# <tool> の例: npm:typescript、node、terraform
+chezmoi edit ~/.config/mise/config.toml
+mise install <tool>
+mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 <tool>
+chezmoi re-add ~/.config/mise/config.toml
+chezmoi re-add ~/.config/mise/mise.lock
+chezmoi source-path ~/.config/mise/locks
+chezmoi forget --force ~/.config/mise/locks
+chezmoi add --exact ~/.config/mise/locks
+```
+
+`chezmoi source-path ~/.config/mise/locks` が未管理として失敗した場合は、初回追加なので `chezmoi forget` を省略して `chezmoi add --exact` を実行する。`mise lock <tool>` は指定したツールだけを処理し、`--bump` を指定しないため、既存の一致する lockfile バージョンを更新しない。
+
+lockfile と sidecar を削除して再生成したいケースは、新プラットフォーム追加、不要プラットフォーム除去、生成物の破損である。通常は `mise-upgrade` を使い、手動で lockfile だけを書き戻さない。
 
 ## Rust toolchain の更新
 

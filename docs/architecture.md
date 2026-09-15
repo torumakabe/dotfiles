@@ -14,7 +14,7 @@ home/                           ← chezmoi source
 ├── dot_{zprofile,zshenv,bash_profile,bashrc}.tmpl ← 全て ~/.profile を source
 ├── dot_config/git/templates/hooks/executable_pre-commit  ← gitleaks (init.templateDir 経由)
 ├── dot_local/bin/executable_gitleaks-pre-commit          ← gitleaks (設定ベースフック経由)
-├── dot_config/mise/{config.toml.tmpl,private_mise.lock}
+├── dot_config/mise/{config.toml.tmpl,private_mise.lock,exact_locks/}
 ├── PowerShell_profile.ps1.tmpl
 ├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp）
 └── run_once_{before,after}_*   ← bootstrap スクリプト
@@ -128,6 +128,12 @@ mise の npm backend はパッケージごとにインストール先を分け�
 
 Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、この安定 prefix 配下の `node_modules/typescript/lib/tsserver.js` を指定する。mise の language server インストール先とバージョンをパスに含めないため、language server の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` を正本とする。
 
+### mise lockfile revision 2 の sidecar
+
+mise lockfile revision 2 は、npm ツールの推移依存関係を `~/.config/mise/locks/` の `aube-lock.yaml` と `package.json` に分離する。chezmoi source では再帰的な exact directory として管理し、`private_mise.lock` が参照しないパッケージや旧版のディレクトリを適用時に削除する。source 名は通常 `exact_locks` であり、権限属性が付く環境では `exact_private_locks` になる。
+
+`mise-upgrade` は lockfile と sidecar を一括して退避・再生成・検証し、両方の chezmoi source 更新が完了してから commit する。lockfile と sidecar は `.gitattributes` で Git の改行変換を無効にし、生成時の byte 列を保持する。詳細な判断は [ADR-029](adr/029-mise-lockfile-v2-sidecars.md)、操作手順は [`operations.md`](operations.md#mise-upgrade) を参照する。
+
 ## MSVC リンカー解決 (Windows)
 
 Windows で cargo が `windows-msvc` ターゲットをビルドするには MSVC の `link.exe` が必要（[ADR-017](adr/017-msvc-linker-env-var-override-windows.md)）。winget で導入する Coreutils for Windows の `link.exe`（ハードリンク作成コマンド）と名前が衝突し、Machine PATH 側が優先されるため PATH の並び替えでは解決できない。
@@ -140,6 +146,6 @@ Windows で cargo が `windows-msvc` ターゲットをビルドするには MSV
 
 chezmoi は `run_*_before_*`、通常ファイル、`run_*_after_*` の順に適用し、同じフェーズではファイル名の番号順に実行する。全件一覧は変化しやすいため、gh-stack の導入と Git hook の確認を含む全実装は `home/run_*` を正本とする。
 
-mise 関連では、本体を導入する `run_once_before_20-install-mise`、lockfile 変更を同期する `run_onchange_after_15-mise-sync-tools`、通常適用時にツールを導入する `run_once_after_20-mise-install`、macOS の shim symlink を更新する `run_onchange_after_21-link-mise-shims`、LSP 用 TypeScript を確認する `run_after_22-install-typescript-lsp` の依存関係を保つ。変更時は、mise 本体と設定の配置前に `mise install` を実行しないこと、LSP 用 TypeScript の導入前に Node が利用可能であること、Codespaces と Dev Container の分岐を壊さないことを確認する。
+mise 関連では、本体を導入する `run_once_before_20-install-mise`、lockfile 変更を同期する `run_onchange_after_15-mise-sync-tools`、通常適用時にツールを導入する `run_once_after_20-mise-install`、macOS の shim symlink を更新する `run_onchange_after_21-link-mise-shims`、LSP 用 TypeScript を確認する `run_after_22-install-typescript-lsp` の依存関係を保つ。通常ファイルの適用時に lockfile と `locks/` sidecar が揃ってから同期フックが動く。変更時は、mise 本体と設定の配置前に `mise install` を実行しないこと、LSP 用 TypeScript の導入前に Node が利用可能であること、Codespaces と Dev Container の分岐を壊さないことを確認する。
 
 `.ps1` スクリプトの実行系は `.chezmoi.toml.tmpl` の `[interpreters.ps1]` で `pwsh -NoLogo -NoProfile -File` に固定している（ADR-023）。プロファイルを読まないため、スクリプトは Machine+User の PATH に載るものだけに依存できる。プロファイル経由でしか PATH に入らないツールは使えない。

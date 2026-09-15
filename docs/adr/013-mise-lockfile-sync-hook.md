@@ -26,3 +26,4 @@ Accepted
 - install / reshim の失敗時は apply が失敗し、lockfile と実体の不整合が残ったことを利用者が認識して明示的に再実行できる。
 - lockfile 以外の理由（手動 `mise uninstall` 等）で shim が欠落したケースは本フックでは復元されないため、その場合は手動で `mise install && mise reshim` を実行する（`docs/troubleshooting.md` 参照）。
 - ADR-009（Windows での mise rust home 分離）の症状（junction marker と install 判定の揺れ）を直接修正するわけではないが、結果として顕在化を抑止する。
+- lockfile revision 2 の sidecar を含む生成物管理は ADR-029 に従う。
