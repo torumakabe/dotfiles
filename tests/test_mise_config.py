@@ -1310,7 +1310,7 @@ $result = @{{
             [
                 "gh auth token",
                 "mise upgrade",
-                f"mise lock --global --platform {MISE_LOCK_PLATFORM_CSV}",
+                f"mise lock --global --platform {MISE_LOCK_PLATFORM_CSV} --bump",
             ],
         )
         self.assertTrue(state["log_exists"])
@@ -1337,7 +1337,7 @@ $result = @{{
             [
                 "gh auth token",
                 "mise upgrade",
-                f"mise lock --global --platform {MISE_LOCK_PLATFORM_CSV}",
+                f"mise lock --global --platform {MISE_LOCK_PLATFORM_CSV} --bump",
             ],
         )
         self.assertTrue(state["log_exists"])
@@ -1454,11 +1454,11 @@ $result = @{{
         platform_csv = ",".join(platforms)
         self.assertEqual(platforms, list(MISE_LOCK_PLATFORMS))
         self.assertIn(
-            f"mise lock --global --platform {platform_csv}",
+            f"mise lock --global --platform {platform_csv} --bump",
             zshrc,
         )
         self.assertIn(
-            f'-Arguments @("lock", "--global", "--platform", "{platform_csv}")',
+            f'-Arguments @("lock", "--global", "--platform", "{platform_csv}", "--bump")',
             profile,
         )
 
