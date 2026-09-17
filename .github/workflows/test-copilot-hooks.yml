@@ -40,12 +40,11 @@ jobs:
         with:
           enable-cache: false
 
-      - name: Install and verify test shells
+      - name: Install and verify test shell
         run: |
           sudo apt-get update
           sudo apt-get install --yes zsh
           command -v zsh
-          command -v pwsh
 
       # chezmoi renders the config template in tests/test_chezmoi_config_template.py.
       # install.sh は版と checksum の正本なので、それを再利用すれば CI は実際の

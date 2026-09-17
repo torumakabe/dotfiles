@@ -27,6 +27,22 @@
 - 利用者向け機能は Windows/PowerShell、macOS/zsh、Linux/zsh、WSL/zsh で等価にする
 - 公開関数、alias、補完、ツール導入を追加・変更するときは、全対象の実装と `tests/test_platform_parity.py` の共有テストを更新する。実装しない環境がある場合は、理由と適用範囲を同テストの契約と関連文書へ記録する
 
+## テスト対象と実行環境
+
+- 動作テストは、そのコードを実際に利用する OS、shell、sandbox backend、コンテナ種別で実行する。別環境にパス変換、仮想 drive、shim、偽の OS 情報を追加して実行結果を再現しない
+- 対象環境を用意できない場合は、テンプレートの分岐、生成物、構文、共有契約の静的検査までに留める。別環境での実行を対象環境の動作確認として扱わず、必要な実機検証を関連文書へ記録する
+- OS API、filesystem、process、package manager に依存しない共有の純粋ロジックは、実行ホストを限定せず単体テストしてよい
+
+今後、次の組み合わせを動作テストとして追加しない:
+
+- Linux、macOS、WSL 上で Windows 用 PowerShell profile、Windows sandbox 同期スクリプト、WinGet/DSC、WindowsApps alias を実行するテスト
+- Windows 上の Git Bash や WSL interop を使い、macOS/Linux/WSL 用の zsh、POSIX shell、bubblewrap 処理を実行するテスト
+- Linux/WSL 上で macOS の Seatbelt、Homebrew 固有処理、macOS 固有パスを実行するテスト、および macOS 上で apt/dpkg、Linux 固有パスを実行するテスト
+- 通常の Linux 上で WSL interop、Codespaces、Dev Container 固有のライフサイクルや sandbox 動作を再現するテスト
+- Windows 以外で ProcessContainer、macOS 以外で Seatbelt、Linux/WSL/コンテナ以外で bubblewrap の実動作を再現するテスト
+
+クロスプラットフォーム契約の確認には、対象外環境での擬似実行ではなく、`tests/test_platform_parity.py` の分類、chezmoi のテンプレート生成結果、構文検査、対象環境でのテストを組み合わせる。
+
 ## chezmoi 操作のトラップ
 
 - `private_` は属性でありターゲット名から除かれる。ソースの `private_mise.lock` はデプロイ先で `mise.lock` になる。文書ではどちらを指すかで表記を使い分ける

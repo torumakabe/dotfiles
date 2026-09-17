@@ -49,6 +49,11 @@ def extract_unshadow_block() -> str:
 
 @unittest.skipUnless(shutil.which("bash"), "bash is required")
 @unittest.skipUnless(shutil.which("dpkg"), "dpkg --compare-versions is required")
+@unittest.skipUnless(
+    sys.platform == "linux"
+    and bool(os.environ.get("CODESPACES") or os.environ.get("REMOTE_CONTAINERS")),
+    "Codespaces or Dev Container only",
+)
 class GitUnshadowBehaviourTests(unittest.TestCase):
     """Run the real block against fake bin directories."""
 
@@ -249,6 +254,11 @@ renders_the_apt_branch = unittest.skipUnless(
 
 @unittest.skipUnless(shutil.which("bash"), "bash is required")
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi renders the check script")
+@unittest.skipUnless(
+    sys.platform == "linux"
+    and bool(os.environ.get("CODESPACES") or os.environ.get("REMOTE_CONTAINERS")),
+    "Codespaces or Dev Container only",
+)
 class GitHookWarningBehaviourTests(unittest.TestCase):
     """Run the rendered check script against a fake git.
 

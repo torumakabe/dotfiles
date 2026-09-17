@@ -6,6 +6,7 @@ import pathlib
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -175,11 +176,11 @@ def _run_posix_script(
     home: pathlib.Path,
     settings_path: pathlib.Path,
     *,
-    codespaces: bool = False,
-    devcontainer: bool = False,
-    platform: str = "linux",
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    platform = "darwin" if sys.platform == "darwin" else "linux"
+    codespaces = bool(os.environ.get("CODESPACES"))
+    devcontainer = bool(os.environ.get("REMOTE_CONTAINERS"))
     env = _posix_env(home, settings_path, extra_env)
     script_path = home / "configure-sandbox.sh"
     script_path.write_text(_render(
@@ -385,6 +386,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                 cache=home.resolve() / ".cache/github-copilot/uv",
             )
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_merge_preserves_paths_and_removes_stale_network_keys(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -412,6 +414,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                 cache=str(home.resolve() / ".cache/github-copilot/uv"),
             )
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_normalizes_missing_or_null_filesystem_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -436,6 +439,7 @@ class CopilotSandboxMergeTests(unittest.TestCase):
                 filesystem_paths=POSIX_FILESYSTEM_PATHS,
             )
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_rejects_non_array_filesystem_paths(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -455,11 +459,17 @@ VALID_ENABLED_CASES = (
 INVALID_ENABLED_CASES = (
     ("null", None), ("string", "disabled"), ("number", 1), ("array", [True]),
 )
-POSIX_ENVIRONMENT_CASES = (
-    ("ordinary-linux", False, False, True),
-    ("codespaces", True, False, False),
-    ("devcontainer", False, True, False),
-)
+
+
+def _current_posix_environment_case() -> tuple[str, bool, bool, bool]:
+    if os.environ.get("CODESPACES"):
+        return ("codespaces", True, False, False)
+    if os.environ.get("REMOTE_CONTAINERS"):
+        return ("devcontainer", False, True, False)
+    return ("ordinary", False, False, True)
+
+
+POSIX_ENVIRONMENT_CASES = (_current_posix_environment_case(),)
 
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
@@ -473,7 +483,7 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
             with self.subTest(environment=environment), tempfile.TemporaryDirectory() as root:
                 home = pathlib.Path(root)
                 settings_path = home / ".copilot/settings.json"
-                result = _run_posix_script(home, settings_path, codespaces=codespaces, devcontainer=devcontainer)
+                result = _run_posix_script(home, settings_path)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 settings = json.loads(settings_path.read_text(encoding="utf-8"))
                 self.assertIs(settings["sandbox"]["enabled"], expected)
@@ -488,11 +498,12 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                 with self.subTest(environment=environment, case=case_name), tempfile.TemporaryDirectory() as root:
                     home = pathlib.Path(root)
                     settings_path = _seed_settings(home, enabled=seeded)
-                    result = _run_posix_script(home, settings_path, codespaces=codespaces, devcontainer=devcontainer)
+                    result = _run_posix_script(home, settings_path)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIs(json.loads(settings_path.read_text(encoding="utf-8"))["sandbox"]["enabled"], expected)
                     self.assertEqual(stat.S_IMODE(settings_path.stat().st_mode), 0o600)
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_preserves_or_defaults_enabled(self) -> None:
         for case_name, seeded, expected in VALID_ENABLED_CASES:
@@ -518,12 +529,13 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                     home = pathlib.Path(root)
                     settings_path = _seed_settings(home, enabled=seeded)
                     original = settings_path.read_bytes()
-                    result = _run_posix_script(home, settings_path, codespaces=codespaces, devcontainer=devcontainer)
+                    result = _run_posix_script(home, settings_path)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("non-boolean", result.stderr)
                     self.assertIn("sandbox.enabled", result.stderr)
                     self.assertEqual(settings_path.read_bytes(), original)
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_rejects_non_boolean_enabled(self) -> None:
         for case_name, seeded in INVALID_ENABLED_CASES:
@@ -554,31 +566,27 @@ class PosixDedicatedUvCacheTests(unittest.TestCase):
             return UVE.copilot_uv_cache_dir()
 
     def test_sync_and_hook_use_the_same_idempotent_cache_grant(self) -> None:
-        for platform in ("linux", "darwin"):
-            with self.subTest(platform=platform), tempfile.TemporaryDirectory() as root:
-                home = pathlib.Path(root).resolve()
-                settings = _seed_settings(home, filesystem_paths=POSIX_FILESYSTEM_PATHS)
-                expected = (
-                    home / "Library/Caches/github-copilot/uv"
-                    if platform == "darwin"
-                    else home / ".cache/github-copilot/uv"
+        platform = "darwin" if sys.platform == "darwin" else "linux"
+        with tempfile.TemporaryDirectory() as root:
+            home = pathlib.Path(root).resolve()
+            settings = _seed_settings(home, filesystem_paths=POSIX_FILESYSTEM_PATHS)
+            expected = (
+                home / "Library/Caches/github-copilot/uv"
+                if platform == "darwin"
+                else home / ".cache/github-copilot/uv"
+            )
+            for _ in range(2):
+                result = _run_posix_script(home, settings)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    _filesystem(settings)["readwritePaths"],
+                    [*POSIX_FILESYSTEM_PATHS["readwritePaths"], str(expected)],
                 )
-                for _ in range(2):
-                    result = _run_posix_script(
-                        home,
-                        settings,
-                        platform=platform,
-                    )
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(
-                        _filesystem(settings)["readwritePaths"],
-                        [*POSIX_FILESYSTEM_PATHS["readwritePaths"], str(expected)],
-                    )
-                    self.assertEqual(
-                        self._hook_path(home, settings, platform, {}),
-                        str(expected),
-                    )
-                self.assertTrue(expected.is_dir())
+                self.assertEqual(
+                    self._hook_path(home, settings, platform, {}),
+                    str(expected),
+                )
+            self.assertTrue(expected.is_dir())
 
     def test_restrictive_rules_are_not_overridden(self) -> None:
         for category in ("readonlyPaths", "deniedPaths"):

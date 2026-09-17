@@ -350,10 +350,9 @@ class PlatformParityTests(unittest.TestCase):
 
         self.assertEqual(workflow.count("- 'home/**'"), 2)
         shell_check = workflow.index("command -v zsh")
-        powershell_check = workflow.index("command -v pwsh")
         test_run = workflow.index("uv run -m unittest discover -s tests -v")
-        self.assertLess(shell_check, powershell_check)
-        self.assertLess(powershell_check, test_run)
+        self.assertNotIn("command -v pwsh", workflow)
+        self.assertLess(shell_check, test_run)
 
     def test_gh_stack_contract_components_exist_for_each_platform(self) -> None:
         for feature, paths in GH_STACK_COMPONENT_PATHS.items():
@@ -506,6 +505,7 @@ class PlatformParityTests(unittest.TestCase):
                 config = tomllib.loads(result.stdout)
                 self.assertEqual(config["tools"]["lefthook"], "latest")
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
     def test_powershell_completion_cache_executes_generated_sources(self) -> None:
         pwsh = shutil.which("pwsh")
         if pwsh is None:
@@ -601,6 +601,7 @@ $result = @{{
             self.assertEqual(set(state["sourced"]), powershell_initializers)
             self.assertEqual(set(state["registered"]), {"kubectl", "k"})
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
     def test_copilot_winget_alias_resolution(self) -> None:
         pwsh = shutil.which("pwsh")
         if pwsh is None:
