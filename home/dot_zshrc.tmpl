@@ -200,8 +200,24 @@ mise-self-update() {
     return 1
   fi
 
+  local github_token=""
+  if [[ -z "${MISE_GITHUB_TOKEN:-}" &&
+        -z "${GITHUB_API_TOKEN:-}" &&
+        -z "${GITHUB_TOKEN:-}" ]]; then
+    if [[ -n "${GH_TOKEN:-}" ]]; then
+      github_token="${GH_TOKEN}"
+    elif command -v gh >/dev/null 2>&1; then
+      github_token=$(gh auth token 2>/dev/null) || github_token=""
+    fi
+  fi
+
   echo "==> mise: 本体を self-update..."
-  if ! mise self-update --yes --no-plugins; then
+  if [[ -n "${github_token}" ]]; then
+    MISE_GITHUB_TOKEN="${github_token}" mise self-update --yes --no-plugins
+  else
+    mise self-update --yes --no-plugins
+  fi
+  if (( $? != 0 )); then
     echo "❌ mise self-update に失敗しました" >&2
     return 1
   fi

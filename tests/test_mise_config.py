@@ -63,6 +63,13 @@ RECOVERED_FALLBACK_WARNING = (
     "tag=v3.1.2 outcome=failed status=502 fallback=true "
     'error="HTTP status server error (502 Bad Gateway): Failed to fetch GitHub release"'
 )
+MISE_GITHUB_TOKEN_ENV_NAMES = (
+    "MISE_GITHUB_TOKEN",
+    "GITHUB_API_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "TEST_GH_TOKEN",
+)
 WARNING_CASES = (
     ("allowed-minimum-release-age", f"{ALLOWED_WARNING}\n", True),
     (
@@ -166,6 +173,14 @@ def _powershell_mise_upgrade_function() -> str:
     return profile[start : start + 1 + next_function.start()]
 
 
+def _mise_token_test_env(overrides: dict[str, str] | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    for name in MISE_GITHUB_TOKEN_ENV_NAMES:
+        env.pop(name, None)
+    env.update(overrides or {})
+    return env
+
+
 class MiseSelfUpdateCommandTests(unittest.TestCase):
     def test_zsh_mise_self_update_updates_binary_then_reshims(self) -> None:
         if shutil.which("zsh") is None:
@@ -198,6 +213,114 @@ expected=$'mise self-update --yes --no-plugins\nmise reshim'
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_zsh_mise_self_update_resolves_token_without_persisting_it(self) -> None:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise-self-update tests")
+
+        cases = (
+            (
+                "mise-token",
+                {"MISE_GITHUB_TOKEN": "mise-token"},
+                None,
+                "mise=mise-token;api=<unset>;github=<unset>;gh=<unset>",
+                "after=mise-token",
+                0,
+            ),
+            (
+                "api-token",
+                {"GITHUB_API_TOKEN": "api-token"},
+                None,
+                "mise=<unset>;api=api-token;github=<unset>;gh=<unset>",
+                "after=<unset>",
+                0,
+            ),
+            (
+                "github-token",
+                {"GITHUB_TOKEN": "github-token"},
+                None,
+                "mise=<unset>;api=<unset>;github=github-token;gh=<unset>",
+                "after=<unset>",
+                0,
+            ),
+            (
+                "gh-environment",
+                {"GH_TOKEN": "gh-token"},
+                None,
+                "mise=gh-token;api=<unset>;github=<unset>;gh=gh-token",
+                "after=<unset>",
+                0,
+            ),
+            (
+                "gh-cli",
+                {},
+                "cli-token",
+                "mise=cli-token;api=<unset>;github=<unset>;gh=<unset>",
+                "after=<unset>",
+                1,
+            ),
+            (
+                "unauthenticated",
+                {},
+                None,
+                "mise=<unset>;api=<unset>;github=<unset>;gh=<unset>",
+                "after=<unset>",
+                1,
+            ),
+        )
+        for name, token_env, gh_token, expected_during, expected_after, gh_calls in cases:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temp_dir:
+                script = (
+                    _zsh_mise_self_functions()
+                    + r"""
+token_file="$1/token.txt"
+gh_calls_file="$1/gh-calls.txt"
+
+gh() {
+  print -r -- "call" >> "$gh_calls_file"
+  if [[ -n "${TEST_GH_TOKEN:-}" ]]; then
+    print -r -- "${TEST_GH_TOKEN}"
+    return 0
+  fi
+  return 1
+}
+
+mise() {
+  if [[ "$1" == "self-update" ]]; then
+    print -r -- \
+      "mise=${MISE_GITHUB_TOKEN-<unset>};api=${GITHUB_API_TOKEN-<unset>};github=${GITHUB_TOKEN-<unset>};gh=${GH_TOKEN-<unset>}" \
+      > "$token_file"
+  fi
+  return 0
+}
+
+mise-self-update || exit 1
+print -r -- "after=${MISE_GITHUB_TOKEN-<unset>}" >> "$token_file"
+"""
+                )
+                env = _mise_token_test_env(token_env)
+                if gh_token is not None:
+                    env["TEST_GH_TOKEN"] = gh_token
+                result = subprocess.run(
+                    ["zsh", "-c", script, "mise-self-update-token-test", temp_dir],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                token_lines = (
+                    pathlib.Path(temp_dir) / "token.txt"
+                ).read_text(encoding="utf-8").splitlines()
+                calls_path = pathlib.Path(temp_dir) / "gh-calls.txt"
+                actual_gh_calls = (
+                    len(calls_path.read_text(encoding="utf-8").splitlines())
+                    if calls_path.exists()
+                    else 0
+                )
+                self.assertEqual(token_lines, [expected_during, expected_after])
+                self.assertEqual(actual_gh_calls, gh_calls)
 
     def test_zsh_mise_self_update_does_not_reshim_after_update_failure(self) -> None:
         if shutil.which("zsh") is None:
@@ -303,6 +426,8 @@ mise-self-update() {
         *,
         self_update_exit: int = 0,
         reshim_exit: int = 0,
+        token_env: dict[str, str] | None = None,
+        gh_token: str | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         if os.name != "nt":
             self.skipTest("Windows only")
@@ -318,14 +443,34 @@ mise-self-update() {
 $PSStyle.OutputRendering = 'PlainText'
 $historyPath = $env:TEST_HISTORY
 $PSNativeCommandUseErrorActionPreference = $true
+$script:ghCalls = 0
+$script:selfUpdateTokens = $null
+$script:reshimMiseToken = $null
+
+function gh {{
+    $script:ghCalls++
+    if ($env:TEST_GH_TOKEN) {{
+        $global:LASTEXITCODE = 0
+        $env:TEST_GH_TOKEN
+        return
+    }}
+    $global:LASTEXITCODE = 1
+}}
 
 function mise {{
     Add-Content -Path $historyPath -Value "mise $($args -join ' ')" -Encoding utf8
     if ($args[0] -eq 'self-update') {{
+        $script:selfUpdateTokens = @{{
+            mise = if (Test-Path Env:\\MISE_GITHUB_TOKEN) {{ $env:MISE_GITHUB_TOKEN }} else {{ $null }}
+            api = if (Test-Path Env:\\GITHUB_API_TOKEN) {{ $env:GITHUB_API_TOKEN }} else {{ $null }}
+            github = if (Test-Path Env:\\GITHUB_TOKEN) {{ $env:GITHUB_TOKEN }} else {{ $null }}
+            gh = if (Test-Path Env:\\GH_TOKEN) {{ $env:GH_TOKEN }} else {{ $null }}
+        }}
         $global:LASTEXITCODE = [int]$env:TEST_SELF_UPDATE_EXIT
         return
     }}
     if ($args[0] -eq 'reshim') {{
+        $script:reshimMiseToken = if (Test-Path Env:\\MISE_GITHUB_TOKEN) {{ $env:MISE_GITHUB_TOKEN }} else {{ $null }}
         $global:LASTEXITCODE = [int]$env:TEST_RESHIM_EXIT
         return
     }}
@@ -339,12 +484,17 @@ $history = if (Test-Path $historyPath) {{ Get-Content -Path $historyPath }} else
 $result = @{{
     lastExitCode = $global:LASTEXITCODE
     history = @($history)
+    selfUpdateTokens = $script:selfUpdateTokens
+    reshimMiseToken = $script:reshimMiseToken
+    ghCalls = $script:ghCalls
+    miseTokenAfterPresent = Test-Path Env:\\MISE_GITHUB_TOKEN
+    miseTokenAfter = if (Test-Path Env:\\MISE_GITHUB_TOKEN) {{ $env:MISE_GITHUB_TOKEN }} else {{ $null }}
 }}
 "RESULT_JSON=$($result | ConvertTo-Json -Compress)"
 """,
                 encoding="utf-8",
             )
-            env = os.environ.copy()
+            env = _mise_token_test_env(token_env)
             env.update(
                 {
                     "TEST_HISTORY": str(history_file),
@@ -352,6 +502,8 @@ $result = @{{
                     "TEST_RESHIM_EXIT": str(reshim_exit),
                 }
             )
+            if gh_token is not None:
+                env["TEST_GH_TOKEN"] = gh_token
             result = subprocess.run(
                 [pwsh, "-NoProfile", "-NonInteractive", "-File", str(script_file)],
                 check=False,
@@ -377,14 +529,107 @@ $result = @{{
             ["mise self-update --yes --no-plugins", "mise reshim"],
         )
 
+    def test_powershell_mise_self_update_resolves_token_without_persisting_it(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "mise-token",
+                {"MISE_GITHUB_TOKEN": "mise-token"},
+                None,
+                {"mise": "mise-token", "api": None, "github": None, "gh": None},
+                "mise-token",
+                True,
+                "mise-token",
+                0,
+            ),
+            (
+                "api-token",
+                {"GITHUB_API_TOKEN": "api-token"},
+                None,
+                {"mise": None, "api": "api-token", "github": None, "gh": None},
+                None,
+                False,
+                None,
+                0,
+            ),
+            (
+                "github-token",
+                {"GITHUB_TOKEN": "github-token"},
+                None,
+                {"mise": None, "api": None, "github": "github-token", "gh": None},
+                None,
+                False,
+                None,
+                0,
+            ),
+            (
+                "gh-environment",
+                {"GH_TOKEN": "gh-token"},
+                None,
+                {"mise": "gh-token", "api": None, "github": None, "gh": "gh-token"},
+                None,
+                False,
+                None,
+                0,
+            ),
+            (
+                "gh-cli",
+                {},
+                "cli-token",
+                {"mise": "cli-token", "api": None, "github": None, "gh": None},
+                None,
+                False,
+                None,
+                1,
+            ),
+            (
+                "unauthenticated",
+                {},
+                None,
+                {"mise": None, "api": None, "github": None, "gh": None},
+                None,
+                False,
+                None,
+                1,
+            ),
+        )
+        for (
+            name,
+            token_env,
+            gh_token,
+            expected_during,
+            expected_reshim_token,
+            expected_after_present,
+            expected_after,
+            gh_calls,
+        ) in cases:
+            with self.subTest(name=name):
+                result, state = self._run_powershell_mise_self_update(
+                    token_env=token_env,
+                    gh_token=gh_token,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(state["lastExitCode"], 0)
+                self.assertEqual(state["selfUpdateTokens"], expected_during)
+                self.assertEqual(state["reshimMiseToken"], expected_reshim_token)
+                self.assertEqual(state["miseTokenAfterPresent"], expected_after_present)
+                self.assertEqual(state["miseTokenAfter"], expected_after)
+                self.assertEqual(state["ghCalls"], gh_calls)
+
     def test_powershell_mise_self_update_does_not_reshim_after_update_failure(
         self,
     ) -> None:
-        result, state = self._run_powershell_mise_self_update(self_update_exit=9)
+        result, state = self._run_powershell_mise_self_update(
+            self_update_exit=9,
+            token_env={"GH_TOKEN": "gh-token"},
+        )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(state["lastExitCode"], 1)
         self.assertEqual(state["history"], ["mise self-update --yes --no-plugins"])
+        self.assertFalse(state["miseTokenAfterPresent"])
 
     def test_powershell_mise_self_update_fails_when_reshim_fails(self) -> None:
         result, state = self._run_powershell_mise_self_update(reshim_exit=9)
@@ -487,6 +732,22 @@ $result = @{{
         self,
     ) -> None:
         result, state = self._run_powershell_mise_self_upgrade(winget_exit=0x8A15002B)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["lastExitCode"], 0)
+        self.assertEqual(
+            state["history"],
+            [
+                "winget upgrade --id jdx.mise --source winget --disable-interactivity --force",
+            ],
+        )
+
+    def test_powershell_mise_self_upgrade_accepts_signed_already_latest_code(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_self_upgrade(
+            winget_exit=-1978335189,
+        )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(state["lastExitCode"], 0)

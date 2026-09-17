@@ -54,14 +54,43 @@ function Invoke-MiseSelfUpdate {
     $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
     $ErrorActionPreference = 'Stop'
     $PSNativeCommandUseErrorActionPreference = $false
+    $setTemporaryMiseGitHubToken = $false
     try {
         if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
             throw "mise が見つかりません"
         }
 
+        $processEnvironment = [Environment]::GetEnvironmentVariables('Process')
+        if (
+            -not $processEnvironment.Contains('MISE_GITHUB_TOKEN') -and
+            -not $processEnvironment.Contains('GITHUB_API_TOKEN') -and
+            -not $processEnvironment.Contains('GITHUB_TOKEN')
+        ) {
+            $token = $env:GH_TOKEN
+            if (-not $token -and (Get-Command gh -ErrorAction SilentlyContinue)) {
+                $token = gh auth token 2>$null
+                if ($LASTEXITCODE -ne 0) {
+                    $token = $null
+                }
+            }
+            if ($token) {
+                $env:MISE_GITHUB_TOKEN = $token
+                $setTemporaryMiseGitHubToken = $true
+            }
+        }
+
         Write-Host "==> mise: 本体を self-update..."
-        mise self-update --yes --no-plugins
-        if ($LASTEXITCODE -ne 0) { throw "mise self-update に失敗しました" }
+        try {
+            mise self-update --yes --no-plugins
+            $selfUpdateExitCode = $LASTEXITCODE
+        }
+        finally {
+            if ($setTemporaryMiseGitHubToken) {
+                Remove-Item Env:\MISE_GITHUB_TOKEN -ErrorAction SilentlyContinue
+                $setTemporaryMiseGitHubToken = $false
+            }
+        }
+        if ($selfUpdateExitCode -ne 0) { throw "mise self-update に失敗しました" }
 
         Write-Host "==> mise: shim を再生成..."
         mise reshim
@@ -75,6 +104,9 @@ function Invoke-MiseSelfUpdate {
         $global:LASTEXITCODE = 1
     }
     finally {
+        if ($setTemporaryMiseGitHubToken) {
+            Remove-Item Env:\MISE_GITHUB_TOKEN -ErrorAction SilentlyContinue
+        }
         $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
         $ErrorActionPreference = $prevErrorAction
     }
@@ -116,6 +148,7 @@ function Invoke-MiseSelfUpgrade {
         $wingetExitCode = $LASTEXITCODE
 
         if ($wingetExitCode -ne 0) {
+            # ネイティブ終了コードは符号付き Int32 または符号なし値として現れる。
             if ($wingetExitCode -eq 0x8A15002B -or $wingetExitCode -eq 2316632107) {
                 Write-Host "✅ mise 本体は最新です"
                 $global:LASTEXITCODE = 0

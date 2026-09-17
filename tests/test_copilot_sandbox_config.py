@@ -3,6 +3,7 @@
 import json
 import os
 import pathlib
+import re
 import shutil
 import stat
 import subprocess
@@ -229,6 +230,11 @@ def _run_powershell_script(
 
 def _filesystem(settings_path: pathlib.Path) -> dict:
     return json.loads(settings_path.read_text(encoding="utf-8-sig"))["sandbox"]["userPolicy"]["filesystem"]
+
+
+def _normalized_process_error(result: subprocess.CompletedProcess[str]) -> str:
+    without_ansi = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", result.stderr)
+    return " ".join(without_ansi.split())
 
 
 class CopilotSandboxPolicyTests(unittest.TestCase):
@@ -601,15 +607,23 @@ class PosixDedicatedUvCacheTests(unittest.TestCase):
                 original = settings.read_bytes()
                 result = _run_posix_script(home, settings)
                 self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    f"conflicts with {category} rule",
+                    _normalized_process_error(result),
+                )
                 self.assertEqual(settings.read_bytes(), original)
 
     def test_sync_and_hook_reject_unsafe_environment(self) -> None:
         cases = (
-            ("HOME", "relative"),
-            ("XDG_CACHE_HOME", "relative"),
-            ("UV_CACHE_DIR", "/explicit-cache"),
+            ("HOME", "relative", "HOME must be absolute"),
+            ("XDG_CACHE_HOME", "relative", "XDG_CACHE_HOME must be absolute"),
+            (
+                "UV_CACHE_DIR",
+                "/explicit-cache",
+                "unset launch-environment UV_CACHE_DIR",
+            ),
         )
-        for name, value in cases:
+        for name, value, expected_error in cases:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as root:
                 home = pathlib.Path(root).resolve()
                 settings = _seed_settings(home, filesystem_paths=POSIX_FILESYSTEM_PATHS)
@@ -619,6 +633,7 @@ class PosixDedicatedUvCacheTests(unittest.TestCase):
                 result = _run_posix_script(home, settings, extra_env=env)
 
                 self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected_error, _normalized_process_error(result))
                 with self.assertRaises((ValueError, OSError)):
                     self._hook_path(home, settings, "linux", env)
                 self.assertEqual(settings.read_bytes(), original)
@@ -635,6 +650,7 @@ class PosixDedicatedUvCacheTests(unittest.TestCase):
             result = _run_posix_script(home, settings)
 
             self.assertNotEqual(result.returncode, 0)
+            self.assertIn("cache path must not contain symlinks", result.stderr)
             with self.assertRaises((ValueError, OSError)):
                 self._hook_path(home, settings, "linux", {})
             self.assertEqual(settings.read_bytes(), original)
@@ -704,16 +720,28 @@ class WindowsDedicatedUvCacheTests(unittest.TestCase):
                 )
 
                 self.assertNotEqual(result.returncode, 0)
+                error = _normalized_process_error(result)
+                self.assertIn("uv cache", error)
+                self.assertIn("conflicts with", error)
+                self.assertIn(f"{category} rule", error)
                 self.assertEqual(settings.read_bytes(), original)
 
     def test_sync_and_hook_reject_unsafe_environment(self) -> None:
         cases = (
-            ("LOCALAPPDATA", "relative"),
-            ("LOCALAPPDATA", r"C:\temp\..\cache"),
-            ("LOCALAPPDATA", r"\\server\share\cache"),
-            ("UV_CACHE_DIR", r"C:\explicit-cache"),
+            ("LOCALAPPDATA", "relative", "must be a local absolute"),
+            (
+                "LOCALAPPDATA",
+                r"C:\temp\..\cache",
+                "must not contain redundant separators",
+            ),
+            ("LOCALAPPDATA", r"\\server\share\cache", "must be a local absolute"),
+            (
+                "UV_CACHE_DIR",
+                r"C:\explicit-cache",
+                "Unset launch-environment UV_CACHE_DIR",
+            ),
         )
-        for name, value in cases:
+        for name, value, expected_error in cases:
             with self.subTest(name=name, value=value), tempfile.TemporaryDirectory() as root:
                 root_path = pathlib.Path(root)
                 home = _windows_test_home(root_path)
@@ -731,6 +759,7 @@ class WindowsDedicatedUvCacheTests(unittest.TestCase):
                 )
 
                 self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected_error, _normalized_process_error(result))
                 env = {
                     "LOCALAPPDATA": str(local_app_data),
                     "USERPROFILE": str(home),
@@ -769,6 +798,10 @@ class WindowsDedicatedUvCacheTests(unittest.TestCase):
             )
 
             self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "must not contain symlinks or reparse points",
+                _normalized_process_error(result),
+            )
             with self.assertRaises((ValueError, OSError)):
                 self._hook_path(redirected_local_app_data)
             self.assertEqual(settings.read_bytes(), original)

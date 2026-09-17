@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-ADR-026 は、macOS と Linux（WSL を含む）だけで uv コマンド専用キャッシュを配布し、Windows には hook の書き換えと `readwritePaths` 追加を行わなかった。その後の実機検証で、Windows sandbox は `%LOCALAPPDATA%`、`%TEMP%`、`%TMP%` を隔離先へ再配置し、ホスト既定の uv キャッシュ書き込みは拒否する一方、ホストで解決した `%LOCALAPPDATA%\github-copilot\uv` を `readwritePaths` に追加すると書き込みが成功することを確認した。PowerShell の `preToolUse` hook でコマンド単位の `UV_CACHE_DIR` 前置も実 CLI で機能した。`mise activate pwsh` 済みの通常シェルでは `uv` が実体バイナリへ解決されるため、shim 起因の別問題は今回の変更対象に含めない。`%TEMP%` / `%TMP%` の全面的な切替も uv 実行の必須条件ではないため扱わない。
+ADR-026 は、macOS と Linux（WSL を含む）だけで uv コマンド専用キャッシュを配布し、Windows には hook の書き換えと `readwritePaths` 追加を行わなかった。その後の実機検証で、Windows sandbox は `%LOCALAPPDATA%`、`%TEMP%`、`%TMP%` を隔離先へ再配置し、ホスト既定の uv キャッシュ書き込みは拒否する一方、ホストで解決した `%LOCALAPPDATA%\github-copilot\uv` を `readwritePaths` に追加すると書き込みが成功することを確認した。PowerShell の `preToolUse` hook でコマンド単位の `UV_CACHE_DIR` 前置も実 CLI で機能した。`mise activate pwsh` 済みの通常シェルでは `uv` が実体バイナリへ解決されるため、shim 起因の別問題は今回の変更対象に含めない。`%TEMP%` / `%TMP%` の全面的な切替も uv 実行の必須条件ではないため扱わない。ADR-026 の他の判断は置換しない。
 
 ## Decision
 

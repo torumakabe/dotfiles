@@ -12,7 +12,7 @@ mise 本体の更新には、mise 組み込みの `self-update` と、OS ごと�
 
 ## Decision
 
-- `mise-self-update` は全環境で `mise self-update --yes --no-plugins` を実行し、成功後に `mise reshim` を実行する。追加引数は受け付けない。
+- `mise-self-update` は全環境で `mise self-update --yes --no-plugins` を実行し、成功後に `mise reshim` を実行する。mise 用の GitHub token が未設定なら、`GH_TOKEN` または認証済みの `gh auth token` を `MISE_GITHUB_TOKEN` として self-update のプロセスだけへ渡す。追加引数は受け付けない。
 - `mise-self-upgrade` は各環境の通常推奨手段を使う。
 - Windows では `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、実行中の mise プロセスを確認する。成功後は `mise reshim` を実行する。
 - macOS、Linux、WSL では `mise-self-update` へ委譲する。Homebrew などの導入元を自動検出して更新する処理は追加しない。

@@ -8,6 +8,7 @@ working, which docs/copilot-cli.md and docs/operations.md document.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import importlib.util
 import json
 import os
@@ -16,6 +17,19 @@ import subprocess
 import sys
 from types import ModuleType
 from typing import Iterator, Mapping
+
+
+def _restore_environment_value(name: str, value: str) -> None:
+    os.environ[name] = value
+    if sys.platform != "win32" or value != "":
+        return
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    set_environment_variable = kernel32.SetEnvironmentVariableW
+    set_environment_variable.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p]
+    set_environment_variable.restype = ctypes.c_int
+    if not set_environment_variable(name, ""):
+        raise ctypes.WinError(ctypes.get_last_error())
 
 
 @contextlib.contextmanager
@@ -44,7 +58,7 @@ def scoped_environ(
             if value is sentinel:
                 os.environ.pop(name, None)
             else:
-                os.environ[name] = value
+                _restore_environment_value(name, value)
 
 
 def load_script(module_name: str, path: pathlib.Path) -> ModuleType:
