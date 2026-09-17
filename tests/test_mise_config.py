@@ -304,6 +304,8 @@ mise-self-update() {
         self_update_exit: int = 0,
         reshim_exit: int = 0,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+        if os.name != "nt":
+            self.skipTest("Windows only")
         pwsh = shutil.which("pwsh")
         if pwsh is None:
             self.skipTest("pwsh is required for PowerShell mise-self-update tests")
@@ -399,6 +401,8 @@ $result = @{{
         *,
         winget_exit: int = 0,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+        if os.name != "nt":
+            self.skipTest("Windows only")
         pwsh = shutil.which("pwsh")
         if pwsh is None:
             self.skipTest("pwsh is required for PowerShell mise-self-upgrade tests")
@@ -1318,6 +1322,8 @@ fi
         empty_lockfile: bool = False,
         aube_path: str = "locks/new/2",
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+        if os.name != "nt":
+            self.skipTest("Windows only")
         pwsh = shutil.which("pwsh")
         if pwsh is None:
             self.skipTest("pwsh is required for PowerShell mise-upgrade tests")

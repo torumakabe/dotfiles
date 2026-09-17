@@ -100,6 +100,7 @@ class CopilotHooksConfigTests(unittest.TestCase):
             )
             self.assertEqual(capture.read_text(encoding="utf-8"), "uv")
 
+    @unittest.skipUnless(os.name == "nt", "Windows only")
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_exports_uv_allowlist_to_hook_process(self) -> None:
         command = _commands()[0]["powershell"]
