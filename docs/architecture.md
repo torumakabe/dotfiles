@@ -74,7 +74,7 @@ gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテ�
 
 理由付き例外は次のとおりである。
 
-- Windows の `e` は、Microsoft Edit を winget/DSC で管理する Windows 固有機能である（ADR-011）。`mise-self-upgrade` も winget 管理の mise を更新するため Windows 固有である
+- Windows の `e` は、Microsoft Edit を winget/DSC で管理する Windows 固有機能である（ADR-011）
 - Terraform は公式の PowerShell completion を提供していないため、補完はzshだけで提供する
 - RadicleはWindows向け公式配布を確認できないため、`rad` の補完はzshだけで提供する
 - bubblewrap は Linux と WSL の sandbox backend に必要である。macOS は Seatbelt、Windows は ProcessContainer を使うため導入しない

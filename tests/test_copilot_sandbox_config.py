@@ -1,4 +1,4 @@
-"""Verify sandbox defaults, preservation, and the dedicated POSIX uv cache."""
+"""Verify sandbox defaults, preservation, and the dedicated uv cache."""
 
 import json
 import os
@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from tests._helpers import load_script
+from tests._helpers import load_script, scoped_environ
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -27,7 +27,7 @@ UVE = load_script(
     SOURCE_ROOT / "private_dot_copilot/hooks/scripts/executable_uv-enforcer.py",
 )
 
-FILESYSTEM_PATHS = {
+POSIX_FILESYSTEM_PATHS = {
     "readwritePaths": ["/tmp/readwrite"],
     "readonlyPaths": ["/tmp/readonly"],
     "deniedPaths": ["/tmp/denied"],
@@ -65,6 +65,43 @@ DEEP_UNKNOWN = _nested_unknown(25)
 _ENABLED_KEY_ABSENT = object()
 
 
+def _windows_test_home(root: pathlib.Path) -> pathlib.Path:
+    return root / "Users" / "TestUser"
+
+
+def _windows_test_local_app_data(home: pathlib.Path) -> pathlib.Path:
+    return home / "AppData" / "Local"
+
+
+def _windows_path(path: pathlib.Path, root: pathlib.Path) -> str:
+    relative = path.resolve().relative_to(root.resolve())
+    return str(pathlib.PureWindowsPath("C:/") / relative.as_posix())
+
+
+def _windows_filesystem_paths(home: pathlib.Path, root: pathlib.Path) -> dict[str, list[str]]:
+    policy_root = home / "policy-fixtures"
+    for name in ("readwrite", "readonly", "denied"):
+        (policy_root / name).mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        return {
+            "readwritePaths": [str((policy_root / "readwrite").resolve())],
+            "readonlyPaths": [str((policy_root / "readonly").resolve())],
+            "deniedPaths": [str((policy_root / "denied").resolve())],
+        }
+    return {
+        "readwritePaths": [_windows_path(policy_root / "readwrite", root)],
+        "readonlyPaths": [_windows_path(policy_root / "readonly", root)],
+        "deniedPaths": [_windows_path(policy_root / "denied", root)],
+    }
+
+
+def _expected_windows_cache(home: pathlib.Path, root: pathlib.Path) -> str:
+    cache = _windows_test_local_app_data(home) / "github-copilot" / "uv"
+    if os.name == "nt":
+        return str(cache.resolve())
+    return _windows_path(cache, root)
+
+
 def _render(
     path: pathlib.Path,
     platform: str,
@@ -90,15 +127,21 @@ def _render(
     return result.stdout
 
 
-def _seed_settings(home: pathlib.Path, enabled: object = _ENABLED_KEY_ABSENT) -> pathlib.Path:
+def _seed_settings(
+    home: pathlib.Path,
+    *,
+    filesystem_paths: dict[str, list[str]] | None = None,
+    enabled: object = _ENABLED_KEY_ABSENT,
+) -> pathlib.Path:
     settings_path = home / ".copilot/settings.json"
-    settings_path.parent.mkdir(parents=True)
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    filesystem_paths = filesystem_paths or POSIX_FILESYSTEM_PATHS
     sandbox: dict = {
         "keep": UNKNOWN_SETTINGS["sandbox"]["keep"],
         "userPolicy": {
             "version": 1,
             "keep": UNKNOWN_SETTINGS["userPolicy"]["keep"],
-            "filesystem": {**FILESYSTEM_PATHS, **UNKNOWN_SETTINGS["filesystem"]},
+            "filesystem": {**filesystem_paths, **UNKNOWN_SETTINGS["filesystem"]},
             "network": {
                 "allowedHosts": ["api.github.com"],
                 "blockedHosts": ["example.invalid"],
@@ -149,18 +192,42 @@ def _run_posix_script(
     )
 
 
-def _run_powershell_script(home: pathlib.Path, settings_path: pathlib.Path):
+def _run_powershell_script(
+    home: pathlib.Path,
+    settings_path: pathlib.Path,
+    *,
+    local_app_data: pathlib.Path | None = None,
+    extra_env: dict[str, str] | None = None,
+    create_local_app_data: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    if os.name != "nt":
+        raise unittest.SkipTest("Windows PowerShell sandbox tests run only on Windows")
+
     script_path = home / "configure-sandbox.ps1"
     script_path.write_text(_render(POWERSHELL_SCRIPT_PATH, "windows"), encoding="utf-8")
+    local_app_data = local_app_data or _windows_test_local_app_data(home)
+    if create_local_app_data:
+        local_app_data.mkdir(parents=True, exist_ok=True)
+    extra_env = extra_env or {}
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "LOCALAPPDATA": str(local_app_data),
+        "COPILOT_HOME": str(settings_path.parent),
+        **extra_env,
+    }
     return subprocess.run(
         ["pwsh", "-NoLogo", "-NoProfile", "-File", str(script_path)],
-        env={**os.environ, "COPILOT_HOME": str(settings_path.parent)},
-        check=False, capture_output=True, encoding="utf-8",
+        env=env,
+        check=False,
+        capture_output=True,
+        encoding="utf-8",
     )
 
 
 def _filesystem(settings_path: pathlib.Path) -> dict:
-    return json.loads(settings_path.read_text())["sandbox"]["userPolicy"]["filesystem"]
+    return json.loads(settings_path.read_text(encoding="utf-8-sig"))["sandbox"]["userPolicy"]["filesystem"]
 
 
 class CopilotSandboxPolicyTests(unittest.TestCase):
@@ -170,7 +237,7 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         for script_path in (POSIX_SCRIPT_PATH, POWERSHELL_SCRIPT_PATH):
             matches = [
                 line.removeprefix(marker)
-                for line in script_path.read_text().splitlines()
+                for line in script_path.read_text(encoding="utf-8").splitlines()
                 if line.startswith(marker)
             ]
             self.assertEqual(len(matches), 1, script_path)
@@ -178,7 +245,7 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         self.assertEqual(versions[0], versions[1])
 
     def test_user_policy_has_the_cross_platform_defaults(self) -> None:
-        policy = json.loads(USER_POLICY_PATH.read_text())
+        policy = json.loads(USER_POLICY_PATH.read_text(encoding="utf-8"))
         self.assertTrue(policy["experimental"])
         self.assertEqual(
             policy["extraKnownMarketplaces"]["torumakabe-agent-plugins"],
@@ -196,24 +263,31 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         })
 
     def test_guardrails_aliases_keep_allow_all(self) -> None:
-        self.assertIn("--allow-all", ZSHRC_PATH.read_text())
-        self.assertIn("--allow-all", POWERSHELL_PROFILE_PATH.read_text())
+        self.assertIn("--allow-all", ZSHRC_PATH.read_text(encoding="utf-8"))
+        self.assertIn("--allow-all", POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8"))
 
     def test_posix_merge_uses_private_atomic_staging(self) -> None:
-        script = POSIX_SCRIPT_PATH.read_text()
+        script = POSIX_SCRIPT_PATH.read_text(encoding="utf-8")
         self.assertIn('settings_tmp="${settings_dir}/.settings.json.$$"', script)
         self.assertIn("set -o noclobber", script)
         self.assertIn('chmod 0600 "${settings_tmp}"', script)
         self.assertIn('mv -f "${settings_tmp}" "${settings_path}"', script)
 
     def test_powershell_merge_replaces_settings_atomically(self) -> None:
-        script = POWERSHELL_SCRIPT_PATH.read_text()
+        script = POWERSHELL_SCRIPT_PATH.read_text(encoding="utf-8")
         self.assertIn("[System.IO.File]::Replace", script)
         self.assertIn("[System.IO.File]::Move($temporaryPath, $settingsPath, $true)", script)
 
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
 class CopilotSandboxMergeTests(unittest.TestCase):
-    def _assert_settings(self, settings: dict, expected_enabled=True, cache=None) -> None:
+    def _assert_settings(
+        self,
+        settings: dict,
+        *,
+        filesystem_paths: dict[str, list[str]],
+        expected_enabled=True,
+        cache=None,
+    ) -> None:
         self.assertEqual(settings["unrelated"], {"keep": True})
         self.assertEqual(settings["deepUnknown"], DEEP_UNKNOWN)
         self.assertTrue(settings["experimental"])
@@ -235,11 +309,11 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         policy = sandbox["userPolicy"]
         self.assertEqual(policy["keep"], UNKNOWN_SETTINGS["userPolicy"]["keep"])
         self.assertNotIn("version", policy)
-        expected = {**FILESYSTEM_PATHS}
+        expected = {**filesystem_paths}
         if cache:
             expected["readwritePaths"] = [*expected["readwritePaths"], str(cache)]
         self.assertEqual(
-            {name: policy["filesystem"][name] for name in FILESYSTEM_PATHS}, expected,
+            {name: policy["filesystem"][name] for name in filesystem_paths}, expected,
         )
         self.assertEqual(policy["filesystem"]["keep"], UNKNOWN_SETTINGS["filesystem"]["keep"])
         self.assertFalse(policy["filesystem"]["clearPolicyOnExit"])
@@ -249,36 +323,47 @@ class CopilotSandboxMergeTests(unittest.TestCase):
         self.assertNotIn("allowedHosts", policy["network"])
         self.assertNotIn("blockedHosts", policy["network"])
 
-    def _assert_normalizes_empty_filesystem_paths(self, run_script) -> None:
-        for path_name in FILESYSTEM_PATHS:
+    def _assert_normalizes_empty_filesystem_paths(
+        self,
+        run_script,
+        *,
+        home: pathlib.Path,
+        filesystem_paths: dict[str, list[str]],
+        cache: str,
+    ) -> None:
+        for path_name in filesystem_paths:
             for remove_key in (True, False):
-                with self.subTest(path=path_name, remove=remove_key), tempfile.TemporaryDirectory() as root:
-                    home = pathlib.Path(root)
-                    settings_path = _seed_settings(home)
-                    settings = json.loads(settings_path.read_text())
+                with self.subTest(path=path_name, remove=remove_key):
+                    settings_path = _seed_settings(home, filesystem_paths=filesystem_paths)
+                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
                     fs = settings["sandbox"]["userPolicy"]["filesystem"]
                     if remove_key:
                         fs.pop(path_name)
                     else:
                         fs[path_name] = None
-                    settings_path.write_text(json.dumps(settings))
+                    settings_path.write_text(json.dumps(settings), encoding="utf-8")
                     result = run_script(home, settings_path)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     merged = json.loads(settings_path.read_text(encoding="utf-8-sig"))
                     expected = []
-                    if run_script is _run_posix_script and path_name == "readwritePaths":
-                        expected = [str(home.resolve() / ".cache/github-copilot/uv")]
+                    if path_name == "readwritePaths":
+                        expected = [cache]
                     self.assertEqual(merged["sandbox"]["userPolicy"]["filesystem"][path_name], expected)
 
-    def _assert_rejects_invalid_filesystem_paths(self, run_script) -> None:
-        for path_name in FILESYSTEM_PATHS:
+    def _assert_rejects_invalid_filesystem_paths(
+        self,
+        run_script,
+        *,
+        home: pathlib.Path,
+        filesystem_paths: dict[str, list[str]],
+    ) -> None:
+        for path_name in filesystem_paths:
             for value in ("/tmp/not-an-array", 1, True, {"path": "/tmp"}):
-                with self.subTest(path=path_name, value=value), tempfile.TemporaryDirectory() as root:
-                    home = pathlib.Path(root)
-                    settings_path = _seed_settings(home)
-                    settings = json.loads(settings_path.read_text())
+                with self.subTest(path=path_name, value=value):
+                    settings_path = _seed_settings(home, filesystem_paths=filesystem_paths)
+                    settings = json.loads(settings_path.read_text(encoding="utf-8"))
                     settings["sandbox"]["userPolicy"]["filesystem"][path_name] = value
-                    settings_path.write_text(json.dumps(settings))
+                    settings_path.write_text(json.dumps(settings), encoding="utf-8")
                     original = settings_path.read_bytes()
                     result = run_script(home, settings_path)
                     self.assertNotEqual(result.returncode, 0)
@@ -291,37 +376,77 @@ class CopilotSandboxMergeTests(unittest.TestCase):
     def test_posix_merge_preserves_paths_and_removes_stale_network_keys(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             home = pathlib.Path(root)
-            settings_path = _seed_settings(home)
+            settings_path = _seed_settings(home, filesystem_paths=POSIX_FILESYSTEM_PATHS)
             result = _run_posix_script(home, settings_path)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self._assert_settings(json.loads(settings_path.read_text()), cache=home.resolve() / ".cache/github-copilot/uv")
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8")),
+                filesystem_paths=POSIX_FILESYSTEM_PATHS,
+                cache=home.resolve() / ".cache/github-copilot/uv",
+            )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_merge_preserves_paths_and_removes_stale_network_keys(self) -> None:
         with tempfile.TemporaryDirectory() as root:
-            home = pathlib.Path(root)
-            settings_path = _seed_settings(home)
+            root_path = pathlib.Path(root)
+            home = _windows_test_home(root_path)
+            filesystem_paths = _windows_filesystem_paths(home, root_path)
+            settings_path = _seed_settings(home, filesystem_paths=filesystem_paths)
             result = _run_powershell_script(home, settings_path)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self._assert_settings(json.loads(settings_path.read_text(encoding="utf-8-sig")))
+            self._assert_settings(
+                json.loads(settings_path.read_text(encoding="utf-8-sig")),
+                filesystem_paths=filesystem_paths,
+                cache=_expected_windows_cache(home, root_path),
+            )
 
     @unittest.skipIf(os.name == "nt", "POSIX only")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq required")
     def test_posix_normalizes_missing_or_null_filesystem_paths(self) -> None:
-        self._assert_normalizes_empty_filesystem_paths(_run_posix_script)
+        with tempfile.TemporaryDirectory() as root:
+            home = pathlib.Path(root)
+            self._assert_normalizes_empty_filesystem_paths(
+                _run_posix_script,
+                home=home,
+                filesystem_paths=POSIX_FILESYSTEM_PATHS,
+                cache=str(home.resolve() / ".cache/github-copilot/uv"),
+            )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_normalizes_missing_or_null_filesystem_paths(self) -> None:
-        self._assert_normalizes_empty_filesystem_paths(_run_powershell_script)
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            home = _windows_test_home(root_path)
+            filesystem_paths = _windows_filesystem_paths(home, root_path)
+            self._assert_normalizes_empty_filesystem_paths(
+                _run_powershell_script,
+                home=home,
+                filesystem_paths=filesystem_paths,
+                cache=_expected_windows_cache(home, root_path),
+            )
 
     @unittest.skipIf(os.name == "nt", "POSIX only")
     @unittest.skipUnless(shutil.which("bash") and shutil.which("jq"), "bash and jq required")
     def test_posix_rejects_non_array_filesystem_paths(self) -> None:
-        self._assert_rejects_invalid_filesystem_paths(_run_posix_script)
+        with tempfile.TemporaryDirectory() as root:
+            home = pathlib.Path(root)
+            self._assert_rejects_invalid_filesystem_paths(
+                _run_posix_script,
+                home=home,
+                filesystem_paths=POSIX_FILESYSTEM_PATHS,
+            )
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_rejects_non_array_filesystem_paths(self) -> None:
-        self._assert_rejects_invalid_filesystem_paths(_run_powershell_script)
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            home = _windows_test_home(root_path)
+            filesystem_paths = _windows_filesystem_paths(home, root_path)
+            self._assert_rejects_invalid_filesystem_paths(
+                _run_powershell_script,
+                home=home,
+                filesystem_paths=filesystem_paths,
+            )
 
 
 VALID_ENABLED_CASES = (
@@ -350,7 +475,7 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                 settings_path = home / ".copilot/settings.json"
                 result = _run_posix_script(home, settings_path, codespaces=codespaces, devcontainer=devcontainer)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                settings = json.loads(settings_path.read_text())
+                settings = json.loads(settings_path.read_text(encoding="utf-8"))
                 self.assertIs(settings["sandbox"]["enabled"], expected)
                 self.assertEqual(stat.S_IMODE(settings_path.stat().st_mode), 0o600)
 
@@ -365,15 +490,20 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
                     settings_path = _seed_settings(home, enabled=seeded)
                     result = _run_posix_script(home, settings_path, codespaces=codespaces, devcontainer=devcontainer)
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertIs(json.loads(settings_path.read_text())["sandbox"]["enabled"], expected)
+                    self.assertIs(json.loads(settings_path.read_text(encoding="utf-8"))["sandbox"]["enabled"], expected)
                     self.assertEqual(stat.S_IMODE(settings_path.stat().st_mode), 0o600)
 
     @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
     def test_powershell_preserves_or_defaults_enabled(self) -> None:
         for case_name, seeded, expected in VALID_ENABLED_CASES:
             with self.subTest(case=case_name), tempfile.TemporaryDirectory() as root:
-                home = pathlib.Path(root)
-                settings_path = _seed_settings(home, enabled=seeded)
+                root_path = pathlib.Path(root)
+                home = _windows_test_home(root_path)
+                settings_path = _seed_settings(
+                    home,
+                    filesystem_paths=_windows_filesystem_paths(home, root_path),
+                    enabled=seeded,
+                )
                 result = _run_powershell_script(home, settings_path)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 settings = json.loads(settings_path.read_text(encoding="utf-8-sig"))
@@ -398,8 +528,13 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
     def test_powershell_rejects_non_boolean_enabled(self) -> None:
         for case_name, seeded in INVALID_ENABLED_CASES:
             with self.subTest(case=case_name), tempfile.TemporaryDirectory() as root:
-                home = pathlib.Path(root)
-                settings_path = _seed_settings(home, enabled=seeded)
+                root_path = pathlib.Path(root)
+                home = _windows_test_home(root_path)
+                settings_path = _seed_settings(
+                    home,
+                    filesystem_paths=_windows_filesystem_paths(home, root_path),
+                    enabled=seeded,
+                )
                 original = settings_path.read_bytes()
                 result = _run_powershell_script(home, settings_path)
                 self.assertNotEqual(result.returncode, 0)
@@ -413,7 +548,7 @@ class CopilotSandboxEnabledPreservationTests(unittest.TestCase):
     shutil.which("chezmoi") and shutil.which("bash") and shutil.which("jq"),
     "chezmoi, bash and jq required",
 )
-class DedicatedUvCacheTests(unittest.TestCase):
+class PosixDedicatedUvCacheTests(unittest.TestCase):
     def _hook_path(self, home, settings, platform, env):
         with mock.patch.dict(os.environ, _posix_env(home, settings, env), clear=True), mock.patch.object(UVE.sys, "platform", platform):
             return UVE.copilot_uv_cache_dir()
@@ -422,7 +557,7 @@ class DedicatedUvCacheTests(unittest.TestCase):
         for platform in ("linux", "darwin"):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as root:
                 home = pathlib.Path(root).resolve()
-                settings = _seed_settings(home)
+                settings = _seed_settings(home, filesystem_paths=POSIX_FILESYSTEM_PATHS)
                 expected = (
                     home / "Library/Caches/github-copilot/uv"
                     if platform == "darwin"
@@ -437,7 +572,7 @@ class DedicatedUvCacheTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(
                         _filesystem(settings)["readwritePaths"],
-                        [*FILESYSTEM_PATHS["readwritePaths"], str(expected)],
+                        [*POSIX_FILESYSTEM_PATHS["readwritePaths"], str(expected)],
                     )
                     self.assertEqual(
                         self._hook_path(home, settings, platform, {}),
@@ -449,12 +584,12 @@ class DedicatedUvCacheTests(unittest.TestCase):
         for category in ("readonlyPaths", "deniedPaths"):
             with self.subTest(category=category), tempfile.TemporaryDirectory() as root:
                 home = pathlib.Path(root).resolve()
-                settings = _seed_settings(home)
-                document = json.loads(settings.read_text())
+                settings = _seed_settings(home, filesystem_paths=POSIX_FILESYSTEM_PATHS)
+                document = json.loads(settings.read_text(encoding="utf-8"))
                 document["sandbox"]["userPolicy"]["filesystem"][category].append(
                     "~/.cache"
                 )
-                settings.write_text(json.dumps(document))
+                settings.write_text(json.dumps(document), encoding="utf-8")
                 original = settings.read_bytes()
                 result = _run_posix_script(home, settings)
                 self.assertNotEqual(result.returncode, 0)
@@ -469,7 +604,7 @@ class DedicatedUvCacheTests(unittest.TestCase):
         for name, value in cases:
             with self.subTest(name=name), tempfile.TemporaryDirectory() as root:
                 home = pathlib.Path(root).resolve()
-                settings = _seed_settings(home)
+                settings = _seed_settings(home, filesystem_paths=POSIX_FILESYSTEM_PATHS)
                 original = settings.read_bytes()
                 env = {name: value}
 
@@ -486,7 +621,7 @@ class DedicatedUvCacheTests(unittest.TestCase):
             target = home / "redirect"
             target.mkdir()
             (home / ".cache").symlink_to(target)
-            settings = _seed_settings(home)
+            settings = _seed_settings(home, filesystem_paths=POSIX_FILESYSTEM_PATHS)
             original = settings.read_bytes()
 
             result = _run_posix_script(home, settings)
@@ -496,6 +631,140 @@ class DedicatedUvCacheTests(unittest.TestCase):
                 self._hook_path(home, settings, "linux", {})
             self.assertEqual(settings.read_bytes(), original)
             self.assertEqual(list(target.iterdir()), [])
+
+
+@unittest.skipIf(os.name != "nt", "Windows only")
+@unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+class WindowsDedicatedUvCacheTests(unittest.TestCase):
+    def _hook_path(self, local_app_data: pathlib.Path) -> str:
+        env = {
+            "LOCALAPPDATA": str(local_app_data),
+            "USERPROFILE": str(local_app_data.parent.parent),
+        }
+        with scoped_environ(env, unset=("UV_CACHE_DIR",)), mock.patch.object(
+            UVE.sys, "platform", "win32"
+        ):
+            return UVE.copilot_uv_cache_dir_windows()
+
+    def _create_junction(self, path: pathlib.Path, target: pathlib.Path) -> None:
+        result = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(path), str(target)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            self.fail(result.stderr or result.stdout or "failed to create junction")
+
+    def test_sync_and_hook_use_the_same_idempotent_cache_grant(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            home = _windows_test_home(root_path)
+            filesystem_paths = _windows_filesystem_paths(home, root_path)
+            settings = _seed_settings(home, filesystem_paths=filesystem_paths)
+            local_app_data = _windows_test_local_app_data(home)
+            expected = local_app_data / "github-copilot" / "uv"
+            for _ in range(2):
+                result = _run_powershell_script(home, settings, local_app_data=local_app_data)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    _filesystem(settings)["readwritePaths"],
+                    [*filesystem_paths["readwritePaths"], str(expected)],
+                )
+                self.assertEqual(self._hook_path(local_app_data), str(expected))
+            self.assertTrue(expected.is_dir())
+
+    def test_restrictive_rules_are_not_overridden(self) -> None:
+        for category in ("readonlyPaths", "deniedPaths"):
+            with self.subTest(category=category), tempfile.TemporaryDirectory() as root:
+                root_path = pathlib.Path(root)
+                home = _windows_test_home(root_path)
+                settings = _seed_settings(
+                    home,
+                    filesystem_paths=_windows_filesystem_paths(home, root_path),
+                )
+                local_app_data = _windows_test_local_app_data(home)
+                document = json.loads(settings.read_text(encoding="utf-8"))
+                document["sandbox"]["userPolicy"]["filesystem"][category].append(
+                    str(local_app_data)
+                )
+                settings.write_text(json.dumps(document), encoding="utf-8")
+                original = settings.read_bytes()
+
+                result = _run_powershell_script(
+                    home, settings, local_app_data=local_app_data
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(settings.read_bytes(), original)
+
+    def test_sync_and_hook_reject_unsafe_environment(self) -> None:
+        cases = (
+            ("LOCALAPPDATA", "relative"),
+            ("LOCALAPPDATA", r"C:\temp\..\cache"),
+            ("LOCALAPPDATA", r"\\server\share\cache"),
+            ("UV_CACHE_DIR", r"C:\explicit-cache"),
+        )
+        for name, value in cases:
+            with self.subTest(name=name, value=value), tempfile.TemporaryDirectory() as root:
+                root_path = pathlib.Path(root)
+                home = _windows_test_home(root_path)
+                settings = _seed_settings(
+                    home,
+                    filesystem_paths=_windows_filesystem_paths(home, root_path),
+                )
+                local_app_data = _windows_test_local_app_data(home)
+                original = settings.read_bytes()
+                result = _run_powershell_script(
+                    home,
+                    settings,
+                    local_app_data=local_app_data,
+                    extra_env={name: value},
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                env = {
+                    "LOCALAPPDATA": str(local_app_data),
+                    "USERPROFILE": str(home),
+                }
+                unset = ("UV_CACHE_DIR",)
+                if name == "UV_CACHE_DIR":
+                    env["UV_CACHE_DIR"] = value
+                    unset = ()
+                else:
+                    env["LOCALAPPDATA"] = value
+                with scoped_environ(env, unset=unset), mock.patch.object(
+                    UVE.sys, "platform", "win32"
+                ):
+                    with self.assertRaises((ValueError, OSError)):
+                        UVE.copilot_uv_cache_dir_windows()
+                self.assertEqual(settings.read_bytes(), original)
+
+    def test_sync_and_hook_reject_redirected_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            home = _windows_test_home(root_path)
+            target = home / "redirect-target"
+            target.mkdir(parents=True)
+            local_app_parent = _windows_test_local_app_data(home).parent
+            local_app_parent.mkdir(parents=True, exist_ok=True)
+            self._create_junction(local_app_parent / "Local", target)
+            settings = _seed_settings(
+                home,
+                filesystem_paths=_windows_filesystem_paths(home, root_path),
+            )
+            original = settings.read_bytes()
+            redirected_local_app_data = local_app_parent / "Local"
+
+            result = _run_powershell_script(
+                home, settings, local_app_data=redirected_local_app_data
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            with self.assertRaises((ValueError, OSError)):
+                self._hook_path(redirected_local_app_data)
+            self.assertEqual(settings.read_bytes(), original)
+            self.assertFalse((target / "github-copilot").exists())
 
 
 if __name__ == "__main__":

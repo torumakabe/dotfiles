@@ -290,8 +290,10 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 
 ## uv キャッシュ許可の実 CLI 検証（2026-09-11）
 
-現在の実装は POSIX のコマンド内で専用キャッシュを選び、通常シェルの uv 設定は変更しない。commit `34b6fba` の配布対象 hook、通常 HOME と PATH、Python 自動探索を使い、検証専用の Python RO を追加せず比較した。
+現在の実装は全プラットフォームのコマンド内で専用キャッシュを選び、通常シェルの uv 設定は変更しない。commit `34b6fba` の配布対象 hook、通常 HOME と PATH、Python 自動探索を使い、検証専用の Python RO を追加せず比較した。
 
 macOS では、RW なしの場合に専用キャッシュの初期化が `Operation not permitted` で失敗し、uv は終了コード2、検証ファイルは残らなかった。RW ありでは管理下の Python 3.14を自動選択し、uv は終了コード0となり、`CACHEDIR.TAG` と検証ファイルがホストへ残った。通常設定へ適用後、新しい Copilot CLI プロセスを localhost の固定応答 provider で起動し、hookが `~/Library/Caches/github-copilot/uv` を選択することと、検証ファイルのホスト永続化を確認した。適用前のファイルは `~/.cache/copilot-uv-deploy.5hv61N` へ保存した。
 
 WSL2 では、RW なしでも uv は終了コード0となったが、検証ファイルはホストへ残らなかった。RW ありでは `/usr/bin/python3` を自動選択し、uv は終了コード0となり、`CACHEDIR.TAG` と検証ファイルがホストへ残った。commit `34b6fba` を通常設定へ適用した後、再起動した Copilot CLI で hook が `~/.cache/github-copilot/uv` を選択し、通常の WSL 端末から検証ファイルを読み取れることを確認した。適用前のファイルは `~/.cache/copilot-uv-deploy.sOzKbf/backup` へ保存した。
+
+Windows native では、sandbox が `%LOCALAPPDATA%`、`%TEMP%`、`%TMP%` を隔離先へ再配置し、ホスト既定の `%LOCALAPPDATA%\uv\cache` への書き込みは拒否された。`%LOCALAPPDATA%\github-copilot\uv` を `readwritePaths` に追加し、PowerShell hook が各コマンドへ `UV_CACHE_DIR` を前置した場合は、`CACHEDIR.TAG` と検証ファイルのホスト永続化を確認した。`mise activate pwsh` 済みの通常シェルでは `uv` が shim ではなく実体へ解決されることも確認したため、shim 起因の別問題と `%TEMP%` / `%TMP%` の全面的な切替はこの判断に含めない。

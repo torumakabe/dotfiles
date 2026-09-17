@@ -7,12 +7,44 @@ working, which docs/copilot-cli.md and docs/operations.md document.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
+import os
 import pathlib
 import subprocess
 import sys
 from types import ModuleType
+from typing import Iterator, Mapping
+
+
+@contextlib.contextmanager
+def scoped_environ(
+    overrides: Mapping[str, str] | None = None,
+    *,
+    unset: tuple[str, ...] = (),
+) -> Iterator[None]:
+    """Temporarily modify only the specified environment variables.
+
+    Avoid clearing and restoring the complete environment. On Windows,
+    restoring an empty value through ``os.environ`` removes that variable
+    from the native process environment and can break later subprocesses.
+    """
+    overrides = overrides or {}
+    sentinel = object()
+    touched = set(overrides) | set(unset)
+    saved = {name: os.environ.get(name, sentinel) for name in touched}
+    try:
+        for name in unset:
+            os.environ.pop(name, None)
+        os.environ.update(overrides)
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is sentinel:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def load_script(module_name: str, path: pathlib.Path) -> ModuleType:

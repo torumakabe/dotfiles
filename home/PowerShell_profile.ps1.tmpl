@@ -42,6 +42,44 @@ function ghcd {
 
 function ll { Get-ChildItem -Force @args }
 
+# mise 本体を mise 組み込み機能で更新する（プラグインは更新しない）
+function Invoke-MiseSelfUpdate {
+    if ($args.Count -ne 0) {
+        Write-Error "❌ mise-self-update は追加引数を受け付けません" -ErrorAction Continue
+        $global:LASTEXITCODE = 2
+        return
+    }
+
+    $prevErrorAction = $ErrorActionPreference
+    $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+    $ErrorActionPreference = 'Stop'
+    $PSNativeCommandUseErrorActionPreference = $false
+    try {
+        if (-not (Get-Command mise -ErrorAction SilentlyContinue)) {
+            throw "mise が見つかりません"
+        }
+
+        Write-Host "==> mise: 本体を self-update..."
+        mise self-update --yes --no-plugins
+        if ($LASTEXITCODE -ne 0) { throw "mise self-update に失敗しました" }
+
+        Write-Host "==> mise: shim を再生成..."
+        mise reshim
+        if ($LASTEXITCODE -ne 0) { throw "mise reshim に失敗しました" }
+
+        Write-Host "✅ mise 本体の更新が完了しました"
+        $global:LASTEXITCODE = 0
+    }
+    catch {
+        Write-Error "❌ $($_.Exception.Message)" -ErrorAction Continue
+        $global:LASTEXITCODE = 1
+    }
+    finally {
+        $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
+        $ErrorActionPreference = $prevErrorAction
+    }
+}
+
 # mise 本体を winget で更新する（winget portable の誤検知回避）
 function Invoke-MiseSelfUpgrade {
     param(
@@ -49,7 +87,9 @@ function Invoke-MiseSelfUpgrade {
     )
 
     $prevErrorAction = $ErrorActionPreference
+    $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
     $ErrorActionPreference = 'Stop'
+    $PSNativeCommandUseErrorActionPreference = $false
     try {
         if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
             throw "winget が見つかりません。Windows App Installer を確認してください"
@@ -76,7 +116,7 @@ function Invoke-MiseSelfUpgrade {
         $wingetExitCode = $LASTEXITCODE
 
         if ($wingetExitCode -ne 0) {
-            if ($wingetExitCode -eq 0x8A15002B) {
+            if ($wingetExitCode -eq 0x8A15002B -or $wingetExitCode -eq 2316632107) {
                 Write-Host "✅ mise 本体は最新です"
                 $global:LASTEXITCODE = 0
                 return
@@ -90,11 +130,14 @@ function Invoke-MiseSelfUpgrade {
         if ($LASTEXITCODE -ne 0) { throw "mise reshim に失敗しました" }
 
         Write-Host "✅ mise 本体の更新が完了しました"
+        $global:LASTEXITCODE = 0
     }
     catch {
-        Write-Error "❌ $($_.Exception.Message)"
+        Write-Error "❌ $($_.Exception.Message)" -ErrorAction Continue
+        $global:LASTEXITCODE = 1
     }
     finally {
+        $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
         $ErrorActionPreference = $prevErrorAction
     }
 }
@@ -503,6 +546,7 @@ function Invoke-GitHooksAudit {
 # === Aliases ===
 Set-Alias -Name e -Value Open-EditInNewConsole
 Set-Alias -Name k -Value kubectl
+Set-Alias -Name mise-self-update -Value Invoke-MiseSelfUpdate
 Set-Alias -Name mise-self-upgrade -Value Invoke-MiseSelfUpgrade
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 Set-Alias -Name git-hooks-audit -Value Invoke-GitHooksAudit
