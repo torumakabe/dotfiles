@@ -226,12 +226,11 @@ def _run_powershell_script(
     root = home.parents[1]
     windows_home = _windows_path(home, root)
     windows_local_app_data = _windows_path(local_app_data, root)
-    windows_copilot_home = _windows_path(settings_path.parent, root)
     windows_env = {
         "HOME": windows_home,
         "USERPROFILE": windows_home,
         "LOCALAPPDATA": windows_local_app_data,
-        "COPILOT_HOME": windows_copilot_home,
+        "COPILOT_HOME": str(settings_path.parent),
         **extra_env,
     }
     wrapper_path = home / "run-configure-sandbox.ps1"
