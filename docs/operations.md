@@ -94,6 +94,8 @@ mise-self-upgrade
 
 `mise self-update` は既定でプラグインも更新するため、`mise-self-update` は `--no-plugins` を付けて本体だけを対象にする。追加引数は受け付けない。
 
+mise 用の GitHub token が未設定の場合、`mise-self-update` は `GH_TOKEN`、続いて認証済みの `gh auth token` を探し、見つかった token を self-update のプロセスだけへ渡す。シェル環境やユーザー環境には保存しない。token を取得できない場合は未認証で実行し、GitHub API のレート制限を含むmiseのエラーをそのまま報告する。
+
 Windows の `mise-self-upgrade` は `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、更新があった場合は続けて `mise reshim` を実行する。更新がない場合は正常終了する。winget portable package の symlink 判定により通常の upgrade が「変更済み」と誤検知されることがあるため、WinGet 管理として更新・修復したい場合はこの関数を使う。
 
 Windows で `mise-self-update` を使うと更新は速いが、WinGet/DSC の管理記録と実ファイルの版が一時的に異なり得る。管理記録との一致を優先する保守では `mise-self-upgrade` を使う。
