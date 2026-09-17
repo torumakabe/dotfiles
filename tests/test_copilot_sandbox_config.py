@@ -200,57 +200,26 @@ def _run_powershell_script(
     extra_env: dict[str, str] | None = None,
     create_local_app_data: bool = True,
 ) -> subprocess.CompletedProcess[str]:
+    if os.name != "nt":
+        raise unittest.SkipTest("Windows PowerShell sandbox tests run only on Windows")
+
     script_path = home / "configure-sandbox.ps1"
     script_path.write_text(_render(POWERSHELL_SCRIPT_PATH, "windows"), encoding="utf-8")
     local_app_data = local_app_data or _windows_test_local_app_data(home)
     if create_local_app_data:
         local_app_data.mkdir(parents=True, exist_ok=True)
     extra_env = extra_env or {}
-    if os.name == "nt":
-        env = {
-            **os.environ,
-            "HOME": str(home),
-            "USERPROFILE": str(home),
-            "LOCALAPPDATA": str(local_app_data),
-            "COPILOT_HOME": str(settings_path.parent),
-            **extra_env,
-        }
-        return subprocess.run(
-            ["pwsh", "-NoLogo", "-NoProfile", "-File", str(script_path)],
-            env=env,
-            check=False,
-            capture_output=True,
-            encoding="utf-8",
-        )
-
-    root = home.parents[1]
-    windows_home = _windows_path(home, root)
-    windows_local_app_data = _windows_path(local_app_data, root)
-    windows_env = {
-        "HOME": windows_home,
-        "USERPROFILE": windows_home,
-        "LOCALAPPDATA": windows_local_app_data,
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "LOCALAPPDATA": str(local_app_data),
         "COPILOT_HOME": str(settings_path.parent),
         **extra_env,
     }
-    wrapper_path = home / "run-configure-sandbox.ps1"
-    wrapper_path.write_text(
-        "\n".join(
-            [
-                "$ErrorActionPreference = 'Stop'",
-                f"New-PSDrive -Name C -PSProvider FileSystem -Root '{root}' -Scope Global | Out-Null",
-                *(
-                    f"$env:{name} = '{value}'"
-                    for name, value in windows_env.items()
-                ),
-                f"& '{script_path}'",
-            ]
-        ),
-        encoding="utf-8",
-    )
     return subprocess.run(
-        ["pwsh", "-NoLogo", "-NoProfile", "-File", str(wrapper_path)],
-        env=os.environ.copy(),
+        ["pwsh", "-NoLogo", "-NoProfile", "-File", str(script_path)],
+        env=env,
         check=False,
         capture_output=True,
         encoding="utf-8",

@@ -139,7 +139,7 @@ function Resolve-WindowsPolicyPath {
   }
 
   $normalized = '{0}\{1}' -f $candidate.Substring(0, 2), ($suffix -replace '/', '\')
-  $root = $normalized.Substring(0, 3)
+  $root = [System.IO.Path]::GetPathRoot($normalized)
   $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction Stop
   if (-not $rootItem.PSIsContainer) {
     Fail-SandboxSettings "$PathName must not contain non-directories: $root"
@@ -176,10 +176,8 @@ function Resolve-WindowsPolicyPath {
     if ($current.IndexOfAny(@([char]13, [char]10)) -ge 0) {
       Fail-SandboxSettings "$PathName must resolve to a non-root, single-line directory."
     }
-    if (
-      $rootItem.FullName.TrimEnd('\', '/') -ceq
-      $current.TrimEnd('\', '/')
-    ) {
+    $resolvedRoot = [System.IO.Path]::GetPathRoot($current)
+    if ($resolvedRoot.TrimEnd('\') -ceq $current.TrimEnd('\')) {
       Fail-SandboxSettings "$PathName must not resolve to a drive root."
     }
   }
