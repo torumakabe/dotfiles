@@ -37,7 +37,7 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。既存のパス指定は保持し、POSIX では下記の uv キャッシュ許可を追加する。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。既存のパス指定は保持し、全プラットフォームで下記の uv 専用キャッシュ許可を追加する。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 
@@ -53,16 +53,15 @@ WSL2、macOS、Codespaces、Dev Container でリモートブランチを検証�
 
 ### uv 専用キャッシュの書き込み許可
 
-対象と撤去条件は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。macOS と Linux（WSL を含む）では、`uv-enforcer.py` が許可済みの Bash tool コマンドへ `UV_CACHE_DIR` を追加し、設定同期が専用キャッシュを `readwritePaths` に追加する。
+対象と撤去条件は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。`uv-enforcer.py` は、macOS と Linux（WSL を含む）では許可済みの Bash tool コマンドへ、Windows では許可済みの PowerShell tool コマンドへ、コマンド単位の `UV_CACHE_DIR` を追加する。設定同期は同じ専用キャッシュを `readwritePaths` に追加する。
 
 | 環境 | 専用キャッシュ |
 |---|---|
 | macOS | `~/Library/Caches/github-copilot/uv` |
 | Linux、WSL | `${XDG_CACHE_HOME:-$HOME/.cache}/github-copilot/uv` |
+| Windows | `%LOCALAPPDATA%\github-copilot\uv` |
 
-Copilot CLI を終了してから `chezmoi apply` を実行し、hook と RW 許可を同時に配布する。既存の RO、deny、利用者が追加した RW、通常シェルの uv 設定は変更しない。コマンド内で別の `UV_CACHE_DIR` や `--cache-dir` を指定した場合、その保存先は自動許可しない。
-
-Windows は `UV_CACHE_DIR` の切替と RW 追加の対象外である。比較手順と観測結果は [実機検証](copilot-sandbox-verification.md#uv-キャッシュ許可の実-cli-検証2026-09-11) を参照する。
+Copilot CLI を終了してから `chezmoi apply` を実行し、hook と RW 許可を同時に配布する。既存の RO、deny、利用者が追加した RW、通常シェルの uv 設定は変更しない。コマンド内で別の `UV_CACHE_DIR` や `--cache-dir` を指定した場合、その保存先は自動許可しない。比較手順と観測結果は [実機検証](copilot-sandbox-verification.md#uv-キャッシュ許可の実-cli-検証2026-09-11) を参照する。
 
 ## chezmoi での編集
 
@@ -79,15 +78,25 @@ chezmoi diff && chezmoi apply
 
 macOS と Linux は、mise が未導入の場合に `home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。既存の mise は導入元と版を問わず置き換えない。Windows は DSC の `jdx.mise` を使い、winget が公式 GitHub Releases ZIP を配置する。導入方法は OS ごとに異なるが、リポジトリが新規導入する mise には公式成果物を使う（[ADR-028](adr/028-mise-bootstrap-preserves-existing-installations.md)）。
 
-### `mise-self-upgrade`
+### `mise-self-update` / `mise-self-upgrade`
 
-Windows で mise 本体を winget 管理として更新する。
+mise 本体の更新は、全プラットフォームで次の公開コマンドを使い分ける（[ADR-030](adr/030-mise-self-update-and-upgrade.md)）。
 
-```powershell
+| コマンド | 役割 | Windows | macOS / Linux / WSL |
+| --- | --- | --- | --- |
+| `mise-self-update` | mise 組み込み機能で本体だけを直接更新する | `mise self-update --yes --no-plugins` の後に `mise reshim` | 同左 |
+| `mise-self-upgrade` | 環境の通常推奨手段で本体を更新する | WinGet で `jdx.mise` を更新し、更新時に `mise reshim` | `mise-self-update` へ委譲 |
+
+```bash
+mise-self-update
 mise-self-upgrade
 ```
 
-このコマンドは `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、更新があった場合は続けて `mise reshim` を実行する。更新がない場合は正常終了する。winget portable package の symlink 判定により通常の upgrade が「変更済み」と誤検知されることがあるため、mise 本体の更新ではこの関数を使う。
+`mise self-update` は既定でプラグインも更新するため、`mise-self-update` は `--no-plugins` を付けて本体だけを対象にする。追加引数は受け付けない。
+
+Windows の `mise-self-upgrade` は `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、更新があった場合は続けて `mise reshim` を実行する。更新がない場合は正常終了する。winget portable package の symlink 判定により通常の upgrade が「変更済み」と誤検知されることがあるため、WinGet 管理として更新・修復したい場合はこの関数を使う。
+
+Windows で `mise-self-update` を使うと更新は速いが、WinGet/DSC の管理記録と実ファイルの版が一時的に異なり得る。管理記録との一致を優先する保守では `mise-self-upgrade` を使う。
 
 Copilot CLI など mise shim 経由のプロセスが動いていると winget が `mise.exe` を削除できないため、実行前に検出して停止を促す。
 
@@ -223,7 +232,7 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
 
-`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は macOS と Linux で `mise self-update`、Windows で `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
+`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update`、Windows で WinGet 管理として更新・修復したい場合は `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
 最低限の確認:
 

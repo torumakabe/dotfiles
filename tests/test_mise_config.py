@@ -136,11 +136,25 @@ def _mise_warning_helpers() -> str:
     return zshrc[start:end]
 
 
+def _zsh_mise_self_functions() -> str:
+    zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
+    start = zshrc.index("mise-self-update() {")
+    end = zshrc.index("\n# mise 管理ツールの一括更新", start)
+    return zshrc[start:end]
+
+
 def _mise_upgrade_function() -> str:
     zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
     start = zshrc.index("mise-upgrade() {")
     end = zshrc.index("\n}\n\n{{ end -}}", start) + 2
     return zshrc[start:end]
+
+
+def _powershell_mise_self_functions() -> str:
+    profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
+    start = profile.index("function Invoke-MiseSelfUpdate {")
+    end = profile.index("\n# mise 管理ツールの一括更新", start)
+    return profile[start:end]
 
 
 def _powershell_mise_upgrade_function() -> str:
@@ -150,6 +164,348 @@ def _powershell_mise_upgrade_function() -> str:
     if next_function is None:
         raise AssertionError("Invoke-MiseUpgrade の次のトップレベル関数がありません")
     return profile[start : start + 1 + next_function.start()]
+
+
+class MiseSelfUpdateCommandTests(unittest.TestCase):
+    def test_zsh_mise_self_update_updates_binary_then_reshims(self) -> None:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise-self-update tests")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            script = (
+                _zsh_mise_self_functions()
+                + r"""
+history_file="$1/history.txt"
+
+mise() {
+  print -r -- "mise $*" >> "$history_file"
+  return 0
+}
+
+mise-self-update || exit 1
+expected=$'mise self-update --yes --no-plugins\nmise reshim'
+[[ "$(<"$history_file")" == "$expected" ]] || {
+  print -u2 -- "$(<"$history_file")"
+  exit 2
+}
+"""
+            )
+            result = subprocess.run(
+                ["zsh", "-c", script, "mise-self-update-test", temp_dir],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_zsh_mise_self_update_does_not_reshim_after_update_failure(self) -> None:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise-self-update tests")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            script = (
+                _zsh_mise_self_functions()
+                + r"""
+history_file="$1/history.txt"
+
+mise() {
+  print -r -- "mise $*" >> "$history_file"
+  if [[ "$1" == "self-update" ]]; then
+    return 9
+  fi
+  return 0
+}
+
+if mise-self-update; then
+  print -u2 -- "mise-self-update unexpectedly succeeded"
+  exit 1
+fi
+[[ "$(<"$history_file")" == "mise self-update --yes --no-plugins" ]] || {
+  print -u2 -- "$(<"$history_file")"
+  exit 2
+}
+"""
+            )
+            result = subprocess.run(
+                ["zsh", "-c", script, "mise-self-update-failure-test", temp_dir],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_zsh_mise_self_update_fails_when_reshim_fails(self) -> None:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise-self-update tests")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            script = (
+                _zsh_mise_self_functions()
+                + r"""
+history_file="$1/history.txt"
+
+mise() {
+  print -r -- "mise $*" >> "$history_file"
+  if [[ "$1" == "reshim" ]]; then
+    return 9
+  fi
+  return 0
+}
+
+if mise-self-update; then
+  print -u2 -- "mise-self-update unexpectedly succeeded"
+  exit 1
+fi
+expected=$'mise self-update --yes --no-plugins\nmise reshim'
+[[ "$(<"$history_file")" == "$expected" ]] || {
+  print -u2 -- "$(<"$history_file")"
+  exit 2
+}
+"""
+            )
+            result = subprocess.run(
+                ["zsh", "-c", script, "mise-self-update-reshim-test", temp_dir],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_zsh_mise_self_upgrade_delegates_to_self_update(self) -> None:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise-self-upgrade tests")
+
+        script = (
+            _zsh_mise_self_functions()
+            + r"""
+mise-self-update() {
+  print -r -- "delegated"
+  return 0
+}
+
+[[ "$(mise-self-upgrade)" == "delegated" ]] || exit 1
+"""
+        )
+        result = subprocess.run(
+            ["zsh", "-c", script],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def _run_powershell_mise_self_update(
+        self,
+        *,
+        self_update_exit: int = 0,
+        reshim_exit: int = 0,
+    ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+        pwsh = shutil.which("pwsh")
+        if pwsh is None:
+            self.skipTest("pwsh is required for PowerShell mise-self-update tests")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_file = pathlib.Path(temp_dir) / "history.txt"
+            script_file = pathlib.Path(temp_dir) / "test-mise-self-update.ps1"
+            script_file.write_text(
+                f"""
+$PSStyle.OutputRendering = 'PlainText'
+$historyPath = $env:TEST_HISTORY
+$PSNativeCommandUseErrorActionPreference = $true
+
+function mise {{
+    Add-Content -Path $historyPath -Value "mise $($args -join ' ')" -Encoding utf8
+    if ($args[0] -eq 'self-update') {{
+        $global:LASTEXITCODE = [int]$env:TEST_SELF_UPDATE_EXIT
+        return
+    }}
+    if ($args[0] -eq 'reshim') {{
+        $global:LASTEXITCODE = [int]$env:TEST_RESHIM_EXIT
+        return
+    }}
+    $global:LASTEXITCODE = 99
+}}
+
+{_powershell_mise_self_functions()}
+
+Invoke-MiseSelfUpdate
+$history = if (Test-Path $historyPath) {{ Get-Content -Path $historyPath }} else {{ @() }}
+$result = @{{
+    lastExitCode = $global:LASTEXITCODE
+    history = @($history)
+}}
+"RESULT_JSON=$($result | ConvertTo-Json -Compress)"
+""",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env.update(
+                {
+                    "TEST_HISTORY": str(history_file),
+                    "TEST_SELF_UPDATE_EXIT": str(self_update_exit),
+                    "TEST_RESHIM_EXIT": str(reshim_exit),
+                }
+            )
+            result = subprocess.run(
+                [pwsh, "-NoProfile", "-NonInteractive", "-File", str(script_file)],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+            )
+            match = re.search(r"(?m)^RESULT_JSON=(.+)$", result.stdout)
+            self.assertIsNotNone(
+                match,
+                f"PowerShell result marker missing\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            return result, json.loads(match.group(1))
+
+    def test_powershell_mise_self_update_updates_binary_then_reshims(self) -> None:
+        result, state = self._run_powershell_mise_self_update()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["lastExitCode"], 0)
+        self.assertEqual(
+            state["history"],
+            ["mise self-update --yes --no-plugins", "mise reshim"],
+        )
+
+    def test_powershell_mise_self_update_does_not_reshim_after_update_failure(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_self_update(self_update_exit=9)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["lastExitCode"], 1)
+        self.assertEqual(state["history"], ["mise self-update --yes --no-plugins"])
+
+    def test_powershell_mise_self_update_fails_when_reshim_fails(self) -> None:
+        result, state = self._run_powershell_mise_self_update(reshim_exit=9)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["lastExitCode"], 1)
+        self.assertEqual(
+            state["history"],
+            ["mise self-update --yes --no-plugins", "mise reshim"],
+        )
+
+    def _run_powershell_mise_self_upgrade(
+        self,
+        *,
+        winget_exit: int = 0,
+    ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+        pwsh = shutil.which("pwsh")
+        if pwsh is None:
+            self.skipTest("pwsh is required for PowerShell mise-self-upgrade tests")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history_file = pathlib.Path(temp_dir) / "history.txt"
+            script_file = pathlib.Path(temp_dir) / "test-mise-self-upgrade.ps1"
+            script_file.write_text(
+                f"""
+$PSStyle.OutputRendering = 'PlainText'
+$historyPath = $env:TEST_HISTORY
+$PSNativeCommandUseErrorActionPreference = $true
+
+function Add-TestHistory {{
+    param([string]$Entry)
+    Add-Content -Path $historyPath -Value $Entry -Encoding utf8
+}}
+
+function Get-CimInstance {{
+    param([string]$ClassName)
+    @()
+}}
+
+function winget {{
+    Add-TestHistory "winget $($args -join ' ')"
+    $global:LASTEXITCODE = [long]$env:TEST_WINGET_EXIT
+}}
+
+function mise {{
+    Add-TestHistory "mise $($args -join ' ')"
+    $global:LASTEXITCODE = 0
+}}
+
+{_powershell_mise_self_functions()}
+
+Invoke-MiseSelfUpgrade
+$history = if (Test-Path $historyPath) {{ Get-Content -Path $historyPath }} else {{ @() }}
+$result = @{{
+    lastExitCode = $global:LASTEXITCODE
+    history = @($history)
+}}
+"RESULT_JSON=$($result | ConvertTo-Json -Compress)"
+""",
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env.update(
+                {
+                    "TEST_HISTORY": str(history_file),
+                    "TEST_WINGET_EXIT": str(winget_exit),
+                }
+            )
+            result = subprocess.run(
+                [pwsh, "-NoProfile", "-NonInteractive", "-File", str(script_file)],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+            )
+            match = re.search(r"(?m)^RESULT_JSON=(.+)$", result.stdout)
+            self.assertIsNotNone(
+                match,
+                f"PowerShell result marker missing\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            return result, json.loads(match.group(1))
+
+    def test_powershell_mise_self_upgrade_uses_winget_then_reshims(self) -> None:
+        result, state = self._run_powershell_mise_self_upgrade()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["lastExitCode"], 0)
+        self.assertEqual(
+            state["history"],
+            [
+                "winget upgrade --id jdx.mise --source winget --disable-interactivity --force",
+                "mise reshim",
+            ],
+        )
+
+    def test_powershell_mise_self_upgrade_treats_already_latest_as_success(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_self_upgrade(winget_exit=0x8A15002B)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["lastExitCode"], 0)
+        self.assertEqual(
+            state["history"],
+            [
+                "winget upgrade --id jdx.mise --source winget --disable-interactivity --force",
+            ],
+        )
+
+    def test_powershell_mise_self_upgrade_does_not_reshim_after_winget_failure(
+        self,
+    ) -> None:
+        result, state = self._run_powershell_mise_self_upgrade(winget_exit=1)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(state["lastExitCode"], 1)
+        self.assertEqual(
+            state["history"],
+            [
+                "winget upgrade --id jdx.mise --source winget --disable-interactivity --force",
+            ],
+        )
 
 
 class MiseConfigTests(unittest.TestCase):

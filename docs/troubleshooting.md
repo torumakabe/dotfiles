@@ -145,10 +145,7 @@ mise --version
 
 `lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。`run_once_before_20-install-mise.sh` は既存バイナリを版にかかわらず保持するため、自分で更新する。
 
-```text
-macOS / Linux: mise self-update
-Windows:       mise-self-upgrade
-```
+通常は全環境で `mise-self-update` を実行する。Windows で WinGet/DSC の管理記録と実ファイルの版を一致させたい場合は、`mise-self-upgrade` を実行する。
 
 mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。
 

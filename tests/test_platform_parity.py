@@ -94,9 +94,8 @@ PLATFORM_CONTRACT = {
     ),
     "shell:ghcd": _implemented_everywhere(),
     "shell:git-hooks-audit": _implemented_everywhere(),
-    "shell:mise-self-upgrade": _windows_only(
-        "exception: docs/operations.md platform exception rationale"
-    ),
+    "shell:mise-self-update": _implemented_everywhere(),
+    "shell:mise-self-upgrade": _implemented_everywhere(),
     "shell:mise-upgrade": _implemented_everywhere(),
     "shell:kubectl-shortcut": _implemented_everywhere(),
     "shell:ll": _implemented_everywhere(),
@@ -106,12 +105,8 @@ PLATFORM_CONTRACT = {
     ),
     "shell:zoxide": _implemented_everywhere(),
     "feature:copilot-local-sandbox": _implemented_everywhere(),
-    "feature:copilot-uv-cache-grant": _zsh_only(
-        "exception: docs/operations.md Windows cache writes already work in the reported environment"
-    ),
-    "feature:copilot-uv-cache-hook": _zsh_only(
-        "exception: docs/operations.md Windows cache selection remains unchanged"
-    ),
+    "feature:copilot-uv-cache-grant": _implemented_everywhere(),
+    "feature:copilot-uv-cache-hook": _implemented_everywhere(),
     "skill:gh-stack": _implemented_everywhere(),
     "completion:azure-cli": _implemented_everywhere(),
     "completion:kubectl": _implemented_everywhere(),
@@ -153,6 +148,8 @@ POWERSHELL_INTERNAL_FUNCTIONS = {
 ZSH_PUBLIC_SYMBOLS = {
     ("function", "ghcd"): "shell:ghcd",
     ("function", "git-hooks-audit"): "shell:git-hooks-audit",
+    ("function", "mise-self-update"): "shell:mise-self-update",
+    ("function", "mise-self-upgrade"): "shell:mise-self-upgrade",
     ("function", "mise-upgrade"): "shell:mise-upgrade",
     ("alias", "k"): "shell:kubectl-shortcut",
     ("alias", "ll"): "shell:ll",
@@ -165,12 +162,14 @@ POWERSHELL_PUBLIC_SYMBOLS = {
     ("function", "zi"): "shell:zoxide",
     ("function", "ghcd"): "shell:ghcd",
     ("function", "ll"): "shell:ll",
+    ("function", "Invoke-MiseSelfUpdate"): "shell:mise-self-update",
     ("function", "Invoke-MiseSelfUpgrade"): "shell:mise-self-upgrade",
     ("function", "Invoke-MiseUpgrade"): "shell:mise-upgrade",
     ("function", "Invoke-GitHooksAudit"): "shell:git-hooks-audit",
     ("function", "Invoke-CopilotGuardrails"): "shell:copilot-guardrails",
     ("alias", "e"): "shell:edit-shortcut",
     ("alias", "k"): "shell:kubectl-shortcut",
+    ("alias", "mise-self-update"): "shell:mise-self-update",
     ("alias", "mise-self-upgrade"): "shell:mise-self-upgrade",
     ("alias", "mise-upgrade"): "shell:mise-upgrade",
     ("alias", "git-hooks-audit"): "shell:git-hooks-audit",
@@ -186,7 +185,14 @@ SHELL_ANCHORS = {
         "zsh": "git-hooks-audit() {",
         "powershell": "function Invoke-GitHooksAudit {",
     },
-    "shell:mise-self-upgrade": {"powershell": "function Invoke-MiseSelfUpgrade {"},
+    "shell:mise-self-update": {
+        "zsh": "mise-self-update() {",
+        "powershell": "function Invoke-MiseSelfUpdate {",
+    },
+    "shell:mise-self-upgrade": {
+        "zsh": "mise-self-upgrade() {",
+        "powershell": "function Invoke-MiseSelfUpgrade {",
+    },
     "shell:mise-upgrade": {
         "zsh": "mise-upgrade() {",
         "powershell": "function Invoke-MiseUpgrade {",
@@ -253,10 +259,7 @@ SOURCE_INITIALIZERS = {
 }
 
 EXCEPTION_DOCUMENT_IDENTIFIERS = {
-    "feature:copilot-uv-cache-grant": ("Windows", "uv", "readwritePaths"),
-    "feature:copilot-uv-cache-hook": ("Windows", "uv-enforcer.py", "UV_CACHE_DIR"),
     "shell:edit-shortcut": ("Microsoft Edit",),
-    "shell:mise-self-upgrade": ("mise-self-upgrade",),
     "shell:copilot-winget-launcher": ("WindowsApps", "WinGet", "macOS/Linux/WSL"),
     "completion:terraform": ("Terraform", "PowerShell completion"),
     "completion:rad": ("Radicle", "Windows"),

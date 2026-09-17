@@ -8,18 +8,23 @@ $ErrorActionPreference = 'Stop'
 $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
 $settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
-New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
 
 $desiredSettings = @'
 {{ include ".chezmoitemplates/copilot-user-settings.json" }}
 '@ | ConvertFrom-Json
 
+function Fail-SandboxSettings {
+  param([Parameter(Mandatory = $true)] [string] $Message)
+
+  Write-Error "Copilot sandbox settings: $Message"
+  exit 1
+}
+
 if (Test-Path -LiteralPath $settingsPath) {
   try {
     $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
   } catch {
-    Write-Error "Failed to parse $settingsPath as JSON. Configure Copilot sandbox manually or remove JSONC comments before chezmoi apply."
-    exit 1
+    Fail-SandboxSettings "Failed to parse $settingsPath as JSON. Configure Copilot sandbox manually or remove JSONC comments before chezmoi apply."
   }
 } else {
   $settings = [pscustomobject]@{}
@@ -88,6 +93,119 @@ function Remove-JsonProperty {
   }
 }
 
+function Resolve-WindowsPolicyPath {
+  param(
+    [Parameter(Mandatory = $true)] [string] $PathValue,
+    [Parameter(Mandatory = $true)] [string] $PathName,
+    [string] $HomeDir,
+    [switch] $AllowTilde,
+    [switch] $RequireExistingDirectory
+  )
+
+  if ($null -eq $PathValue) {
+    $PathValue = ''
+  }
+  if ($PathValue.IndexOfAny(@([char]13, [char]10)) -ge 0) {
+    Fail-SandboxSettings "$PathName must be single-line."
+  }
+
+  $candidate = $PathValue
+  if ($AllowTilde) {
+    if ($candidate -eq '~') {
+      $candidate = $HomeDir
+    } elseif ($candidate.StartsWith('~/') -or $candidate.StartsWith('~\')) {
+      $candidate = Join-Path $HomeDir (($candidate.Substring(2)) -replace '/', '\')
+    }
+  }
+
+  if (
+    [string]::IsNullOrEmpty($candidate) -or
+    $candidate.StartsWith('\\') -or
+    $candidate.StartsWith('//') -or
+    $candidate.StartsWith('\\?\') -or
+    $candidate.StartsWith('//?/') -or
+    $candidate -notmatch '^[A-Za-z]:[\\/].*'
+  ) {
+    Fail-SandboxSettings "$PathName must be a local absolute, single-line directory."
+  }
+
+  $suffix = $candidate.Substring(3)
+  if (
+    $suffix -match '[\\/]{2,}' -or
+    $suffix -match '(^|[\\/])\.(?:[\\/]|$)' -or
+    $suffix -match '(^|[\\/])\.\.(?:[\\/]|$)'
+  ) {
+    Fail-SandboxSettings "$PathName must not contain redundant separators or '.'/'..' components."
+  }
+
+  $normalized = '{0}\{1}' -f $candidate.Substring(0, 2), ($suffix -replace '/', '\')
+  $root = [System.IO.Path]::GetPathRoot($normalized)
+  $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction Stop
+  if (-not $rootItem.PSIsContainer) {
+    Fail-SandboxSettings "$PathName must not contain non-directories: $root"
+  }
+  if ($rootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+    Fail-SandboxSettings "$PathName must not contain symlinks or reparse points: $root"
+  }
+
+  $current = $rootItem.FullName
+  $hasMissingAncestor = $false
+  foreach ($component in ([regex]::Split($normalized.Substring($root.Length), '[\\/]') | Where-Object { $_ -ne '' })) {
+    $next = Join-Path $current $component
+    if (-not $hasMissingAncestor -and (Test-Path -LiteralPath $next)) {
+      $item = Get-Item -LiteralPath $next -Force -ErrorAction Stop
+      if (-not $item.PSIsContainer) {
+        Fail-SandboxSettings "$PathName must not contain non-directories: $next"
+      }
+      if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        Fail-SandboxSettings "$PathName must not contain symlinks or reparse points: $next"
+      }
+      $current = $item.FullName
+    } else {
+      $hasMissingAncestor = $true
+      $current = $next
+    }
+  }
+
+  if ($RequireExistingDirectory) {
+    $finalItem = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+    if (-not $finalItem.PSIsContainer) {
+      Fail-SandboxSettings "$PathName must resolve to a non-root, single-line directory."
+    }
+    $current = $finalItem.FullName
+    if ($current.IndexOfAny(@([char]13, [char]10)) -ge 0) {
+      Fail-SandboxSettings "$PathName must resolve to a non-root, single-line directory."
+    }
+    $resolvedRoot = [System.IO.Path]::GetPathRoot($current)
+    if ($resolvedRoot.TrimEnd('\') -ceq $current.TrimEnd('\')) {
+      Fail-SandboxSettings "$PathName must not resolve to a drive root."
+    }
+  }
+
+  return $current
+}
+
+function Test-PathPrefix {
+  param(
+    [Parameter(Mandatory = $true)] [string] $Path,
+    [Parameter(Mandatory = $true)] [string] $Prefix
+  )
+
+  $normalizedPath = (($Path -replace '/', '\').TrimEnd('\')) + '\'
+  $normalizedPrefix = (($Prefix -replace '/', '\').TrimEnd('\')) + '\'
+  return $normalizedPath.StartsWith($normalizedPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+if ($env:UV_CACHE_DIR) {
+  Fail-SandboxSettings "Unset launch-environment UV_CACHE_DIR before applying settings and starting Copilot; command-local overrides remain supported."
+}
+
+$homeSource = if ($env:USERPROFILE) { $env:USERPROFILE } elseif ($HOME) { $HOME } else { '' }
+$homeDir = Resolve-WindowsPolicyPath -PathValue $homeSource -PathName 'HOME' -RequireExistingDirectory
+$localAppDataDir = Resolve-WindowsPolicyPath -PathValue $env:LOCALAPPDATA -PathName 'LOCALAPPDATA' -RequireExistingDirectory
+$uvCacheDir = Join-Path (Join-Path $localAppDataDir 'github-copilot') 'uv'
+$cacheCovered = $false
+
 # `/sandbox disable` persists sandbox.enabled=$false in settings.json, and that
 # must survive this template update until `/sandbox enable` restores it.
 # PSObject.Properties['enabled'] must be inspected on the pre-merge object,
@@ -100,15 +218,14 @@ $preMergeEnabledProperty = if ($null -ne $preMergeSandbox) { $preMergeSandbox.PS
 $preserveEnabled = $false
 $preservedEnabledValue = $null
 if ($null -ne $preMergeEnabledProperty) {
-  $preMergeEnabledValue = $preMergeEnabledProperty.Value
-  if ($preMergeEnabledValue -is [bool]) {
-    $preserveEnabled = $true
-    $preservedEnabledValue = $preMergeEnabledValue
-  } else {
-    $enabledTypeDescription = if ($null -eq $preMergeEnabledValue) { 'null' } else { $preMergeEnabledValue.GetType().Name }
-    Write-Error "$settingsPath has a non-boolean sandbox.enabled ($enabledTypeDescription); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply."
-    exit 1
-  }
+$preMergeEnabledValue = $preMergeEnabledProperty.Value
+if ($preMergeEnabledValue -is [bool]) {
+  $preserveEnabled = $true
+  $preservedEnabledValue = $preMergeEnabledValue
+} else {
+  $enabledTypeDescription = if ($null -eq $preMergeEnabledValue) { 'null' } else { $preMergeEnabledValue.GetType().Name }
+  Fail-SandboxSettings "$settingsPath has a non-boolean sandbox.enabled ($enabledTypeDescription); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply."
+}
 }
 
 $preMergePolicy = Get-JsonProperty -Object $preMergeSandbox -Name 'userPolicy'
@@ -121,8 +238,25 @@ foreach ($pathName in @('readwritePaths', 'readonlyPaths', 'deniedPaths')) {
   }
   if ($null -ne $pathProperty -and $null -ne $pathProperty.Value -and $pathProperty.Value -isnot [array]) {
     $pathTypeDescription = $pathProperty.Value.GetType().Name
-    Write-Error "$settingsPath has a non-array sandbox.userPolicy.filesystem.$pathName ($pathTypeDescription); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply."
-    exit 1
+    Fail-SandboxSettings "$settingsPath has a non-array sandbox.userPolicy.filesystem.$pathName ($pathTypeDescription); refusing to overwrite it. Fix or remove the value and re-run chezmoi apply."
+  }
+
+  $pathValues = if ($null -ne $pathProperty) { $pathProperty.Value } else { $null }
+  foreach ($rule in (Get-JsonArrayOrEmpty $pathValues)) {
+    if ($rule -isnot [string] -or [string]::IsNullOrEmpty($rule) -or $rule.IndexOfAny(@([char]13, [char]10)) -ge 0) {
+      Fail-SandboxSettings "$pathName must contain nonempty, single-line path strings."
+    }
+    $resolvedRule = Resolve-WindowsPolicyPath -PathValue $rule -PathName 'policy path' -HomeDir $homeDir -AllowTilde
+    if (Test-PathPrefix -Path $uvCacheDir -Prefix $resolvedRule) {
+      if ($pathName -eq 'readwritePaths') {
+        $cacheCovered = $true
+      } else {
+        Fail-SandboxSettings "uv cache $uvCacheDir conflicts with $pathName rule $rule; no permission was changed."
+      }
+    }
+    if ($pathName -ne 'readwritePaths' -and (Test-PathPrefix -Path $resolvedRule -Prefix $uvCacheDir)) {
+      Fail-SandboxSettings "uv cache $uvCacheDir contains $pathName rule $rule; no permission was changed."
+    }
   }
 }
 
@@ -140,7 +274,11 @@ $userPolicy = if ($null -ne $existingPolicy) { $existingPolicy } else { [pscusto
 $filesystem = if ($null -ne $existingFilesystem) { $existingFilesystem } else { [pscustomobject]@{} }
 $network = if ($null -ne $existingNetwork) { $existingNetwork } else { [pscustomobject]@{} }
 
-Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths'))
+$readwritePaths = @(
+  (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths')) +
+  $(if ($cacheCovered) { @() } else { @($uvCacheDir) })
+)
+Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value $readwritePaths
 Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
 Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
 Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
@@ -159,6 +297,9 @@ if ($preserveEnabled) {
 }
 
 Set-JsonProperty -Object $settings -Name 'sandbox' -Value $sandbox
+
+New-Item -ItemType Directory -Path $uvCacheDir -Force | Out-Null
+New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
 
 $settingsJson = $settings | ConvertTo-Json -Depth 100
 $temporaryPath = Join-Path $settingsDir ([System.IO.Path]::GetRandomFileName())

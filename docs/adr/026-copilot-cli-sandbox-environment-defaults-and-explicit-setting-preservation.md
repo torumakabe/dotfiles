@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by ADR-031
 
 ## Context
 
@@ -22,7 +22,7 @@ MCP と LSP は対象外とし、`sandboxMcpServers=false` と `sandboxLspServer
 
 - POSIX の uv-enforcer は既存の拒否判定をすべて済ませた後、許可された Bash ツールの引数に限り、コマンド単位の `UV_CACHE_DIR` 指定を加える。専用キャッシュは macOS で `~/Library/Caches/github-copilot/uv`、Linux と WSL で `${XDG_CACHE_HOME:-~/.cache}/github-copilot/uv` とする。CLI 起動環境には `UV_CACHE_DIR` を設定しない。
 - POSIX の設定同期は専用キャッシュを作成し、その実体パスに限定した `readwritePaths`（RW）を確保する。既存の利用者規則の readonly、denied、順序を保持し、安全でないパスや競合は規則を緩めず拒否する。所有権の別状態ファイル、ジャーナル、旧規則の自動撤去は導入しない。
-- ホストの `uv.toml` と通常の uv キャッシュは変更せず、設定ファイルへの追加 RO も与えない。Windows にはコマンドの書き換えも grant の追加も行わない。
+- ホストの `uv.toml` と通常の uv キャッシュは変更せず、設定ファイルへの追加 RO も与えない。Windows 向けの専用キャッシュ対応は ADR-031 で定義する。
 - 回避策の適用範囲と撤去条件は[リポジトリの共通指示](../../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)に集約する。
 
 ## Consequences

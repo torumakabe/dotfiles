@@ -27,7 +27,7 @@
 
 `installed-plugins/` と `plugin-data/` は Copilot CLI が管理し、chezmoi の対象外とする。
 
-macOS と Linux（WSL を含む）では、`uv-enforcer.py` が Bash tool のコマンド内で専用の `UV_CACHE_DIR` を設定し、sandbox 同期がそのキャッシュの RW を追加する。通常シェルの uv 設定と Windows の実行動作は変更しない。適用範囲と注意点は[運用手順](operations.md#uv-専用キャッシュの書き込み許可)を参照する。
+全プラットフォームで、`uv-enforcer.py` が shell tool のコマンド内だけ専用の `UV_CACHE_DIR` を設定し、sandbox 同期がそのキャッシュの RW を追加する。通常シェルの uv 設定は変更しない。Windows は PowerShell tool、macOS と Linux（WSL を含む）は Bash tool を対象にする。適用範囲と注意点は[運用手順](operations.md#uv-専用キャッシュの書き込み許可)を参照する。
 
 ## CLI 本体の導入元
 
@@ -93,7 +93,7 @@ uv run -m unittest tests.test_copilot_guard -v
 
 - `--allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。
 - local sandbox は shell command と filesystem policy を対象とする。MCP と LSP は対象外であり、Copilot CLI 組み込みファイルツールの filesystem policy は software-only safeguard である。
-- sandbox 設定同期は `~/.copilot/settings.json` の管理対象外キーと利用者指定の filesystem path rules を保持する。POSIX は毎回の apply で uv 専用キャッシュの許可を確認する。hook と設定の適用方法は [`operations.md`](operations.md#uv-専用キャッシュの書き込み許可) を参照する。共通設定の定義元は `home/.chezmoitemplates/copilot-user-settings.json` である。
+- sandbox 設定同期は `~/.copilot/settings.json` の管理対象外キーと利用者指定の filesystem path rules を保持する。全プラットフォームで毎回の apply 時に uv 専用キャッシュの許可を確認する。hook と設定の適用方法は [`operations.md`](operations.md#uv-専用キャッシュの書き込み許可) を参照する。共通設定の定義元は `home/.chezmoitemplates/copilot-user-settings.json` である。
 - `sandbox.enabled` の初回値、設定保持、組織管理設定との優先関係は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) に記録する。
 - Linux 系の bubblewrap 診断は `sandbox.enabled` が `true` または未設定の場合に実行し、`false` の場合は probe を省略する。
 - `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。

@@ -11,10 +11,13 @@ Run via: uv run uv-enforcer.py
 from __future__ import annotations
 
 import json
+import ntpath
 import os
 from pathlib import Path
+from pathlib import PureWindowsPath
 import re
 import shlex
+import stat
 import sys
 from typing import Any
 
@@ -206,6 +209,71 @@ def copilot_uv_cache_dir() -> str:
     return str(cache)
 
 
+def _has_reparse_point(path: Path) -> bool:
+    try:
+        file_attributes = os.lstat(path).st_file_attributes
+    except (AttributeError, OSError):
+        return False
+    return bool(file_attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+
+
+def _check_existing_windows_components(path: PureWindowsPath, label: str) -> None:
+    current = Path(path.anchor)
+    if _has_reparse_point(current):
+        raise ValueError(f"{label} must not contain symlinks or reparse points: {current}")
+    if current.exists() and not current.is_dir():
+        raise ValueError(f"{label} must not contain non-directories: {current}")
+    for component in path.parts[1:]:
+        current = current / component
+        if not current.exists():
+            continue
+        if _has_reparse_point(current):
+            raise ValueError(f"{label} must not contain symlinks or reparse points: {current}")
+        if not current.is_dir():
+            raise ValueError(f"{label} must not contain non-directories: {current}")
+
+
+def copilot_uv_cache_dir_windows() -> str:
+    """Return the dedicated Windows cache, rejecting redirected or unsafe paths."""
+    if "UV_CACHE_DIR" in os.environ:
+        raise ValueError("Unset launch-environment UV_CACHE_DIR before applying settings and starting Copilot; command-local overrides remain supported.")
+    local_app_data_value = os.environ.get("LOCALAPPDATA", "")
+    local_app_data = PureWindowsPath(local_app_data_value)
+    if (
+        not local_app_data_value
+        or any(c in local_app_data_value for c in "\r\n")
+        or not local_app_data.is_absolute()
+        or not local_app_data.drive
+        or local_app_data_value.startswith(("\\\\", "//"))
+        or local_app_data.drive.startswith("\\\\")
+    ):
+        raise ValueError("LOCALAPPDATA must be a local absolute, single-line directory.")
+    suffix = local_app_data_value[len(local_app_data.anchor):]
+    if (
+        re.search(r"[\\/]{2,}", suffix)
+        or re.search(r"(^|[\\/])\.(?:[\\/]|$)", suffix)
+        or re.search(r"(^|[\\/])\.\.(?:[\\/]|$)", suffix)
+    ):
+        raise ValueError("LOCALAPPDATA must not contain redundant separators or '.'/'..' components.")
+    _check_existing_windows_components(local_app_data, "LOCALAPPDATA")
+    resolved_local_app_data = Path(local_app_data_value).resolve(strict=True)
+    if (
+        not resolved_local_app_data.is_dir()
+        or any(c in str(resolved_local_app_data) for c in "\r\n")
+    ):
+        raise ValueError("LOCALAPPDATA must resolve to a non-root, single-line directory.")
+    drive_root = Path(ntpath.splitdrive(str(resolved_local_app_data))[0] + "\\")
+    if resolved_local_app_data == drive_root:
+        raise ValueError("LOCALAPPDATA must not resolve to a drive root.")
+    cache = resolved_local_app_data / "github-copilot" / "uv"
+    for component in reversed((cache, *cache.parents)):
+        if _has_reparse_point(component):
+            raise ValueError(f"Cache path must not contain symlinks or reparse points: {component}")
+        if component.exists() and not component.is_dir():
+            raise ValueError(f"Cache path must not contain symlinks or non-directories: {component}")
+    return str(cache)
+
+
 def main() -> None:
     try:
         input_data = read_input()
@@ -236,6 +304,17 @@ def main() -> None:
         # Command-local only: launch-time UV_CACHE_DIR causes ROOT_RO conflicts.
         # Scope/removal conditions: repository .github/copilot-instructions.md workarounds.
         prefix = f"export UV_CACHE_DIR={shlex.quote(cache_dir)}; "
+        if not command.startswith(prefix):
+            print(json.dumps({"modifiedArgs": {**tool_args, "command": prefix + command}}))
+    elif tool_name == "powershell" and sys.platform == "win32":
+        try:
+            cache_dir = copilot_uv_cache_dir_windows()
+        except (ValueError, OSError) as exc:
+            deny(str(exc))
+        # Command-local only: launch-time UV_CACHE_DIR follows the sandboxed
+        # LOCALAPPDATA redirect, so set the host cache path per command instead.
+        escaped_cache_dir = cache_dir.replace("'", "''")
+        prefix = f"$env:UV_CACHE_DIR = '{escaped_cache_dir}'; "
         if not command.startswith(prefix):
             print(json.dumps({"modifiedArgs": {**tool_args, "command": prefix + command}}))
 
