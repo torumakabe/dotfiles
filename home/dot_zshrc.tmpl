@@ -231,6 +231,38 @@ mise-self-update() {
   echo "✅ mise 本体の更新が完了しました"
 }
 
+# uv tool で管理するツールを更新する
+uv-tools-upgrade() {
+  emulate -L zsh
+
+  if (( $# != 0 )); then
+    echo "❌ uv-tools-upgrade は追加引数を受け付けません" >&2
+    return 2
+  fi
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "❌ uv が見つかりません" >&2
+    return 1
+  fi
+
+  local failed=0
+  echo "==> uv tool: ty を更新..."
+  if ! uv tool upgrade ty; then
+    echo "❌ ty の更新に失敗しました" >&2
+    failed=1
+  fi
+
+  echo "==> uv tool: specify-cli を更新..."
+  if ! uv tool install --force specify-cli; then
+    echo "❌ specify-cli の更新に失敗しました" >&2
+    failed=1
+  fi
+
+  if (( failed != 0 )); then
+    return 1
+  fi
+  echo "✅ uv tool 管理ツールの更新が完了しました"
+}
+
 # mise 管理ツールの一括更新（日常操作）
 # upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
 _mise_normalize_log_line() {
