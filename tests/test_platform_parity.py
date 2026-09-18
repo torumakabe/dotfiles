@@ -96,6 +96,7 @@ PLATFORM_CONTRACT = {
     "shell:git-hooks-audit": _implemented_everywhere(),
     "shell:mise-self-update": _implemented_everywhere(),
     "shell:mise-upgrade": _implemented_everywhere(),
+    "shell:uv-tools-upgrade": _implemented_everywhere(),
     "shell:kubectl-shortcut": _implemented_everywhere(),
     "shell:ll": _implemented_everywhere(),
     "shell:copilot-guardrails": _implemented_everywhere(),
@@ -149,6 +150,7 @@ ZSH_PUBLIC_SYMBOLS = {
     ("function", "git-hooks-audit"): "shell:git-hooks-audit",
     ("function", "mise-self-update"): "shell:mise-self-update",
     ("function", "mise-upgrade"): "shell:mise-upgrade",
+    ("function", "uv-tools-upgrade"): "shell:uv-tools-upgrade",
     ("alias", "k"): "shell:kubectl-shortcut",
     ("alias", "ll"): "shell:ll",
     ("alias", "copilot-guardrails"): "shell:copilot-guardrails",
@@ -162,12 +164,14 @@ POWERSHELL_PUBLIC_SYMBOLS = {
     ("function", "ll"): "shell:ll",
     ("function", "Invoke-MiseSelfUpdate"): "shell:mise-self-update",
     ("function", "Invoke-MiseUpgrade"): "shell:mise-upgrade",
+    ("function", "Invoke-UvToolsUpgrade"): "shell:uv-tools-upgrade",
     ("function", "Invoke-GitHooksAudit"): "shell:git-hooks-audit",
     ("function", "Invoke-CopilotGuardrails"): "shell:copilot-guardrails",
     ("alias", "e"): "shell:edit-shortcut",
     ("alias", "k"): "shell:kubectl-shortcut",
     ("alias", "mise-self-update"): "shell:mise-self-update",
     ("alias", "mise-upgrade"): "shell:mise-upgrade",
+    ("alias", "uv-tools-upgrade"): "shell:uv-tools-upgrade",
     ("alias", "git-hooks-audit"): "shell:git-hooks-audit",
     ("alias", "copilot"): "shell:copilot-winget-launcher",
     ("alias", "copilot-guardrails"): "shell:copilot-guardrails",
@@ -188,6 +192,10 @@ SHELL_ANCHORS = {
     "shell:mise-upgrade": {
         "zsh": "mise-upgrade() {",
         "powershell": "function Invoke-MiseUpgrade {",
+    },
+    "shell:uv-tools-upgrade": {
+        "zsh": "uv-tools-upgrade() {",
+        "powershell": "function Invoke-UvToolsUpgrade {",
     },
     "shell:kubectl-shortcut": {
         "zsh": "alias k=kubectl",
@@ -454,20 +462,28 @@ class PlatformParityTests(unittest.TestCase):
             with self.subTest(feature=feature):
                 self.assertIn(feature, PLATFORM_CONTRACT)
 
-    def test_spec_kit_installers_use_the_pinned_github_release(self) -> None:
-        version = tomllib.loads(CHEZMOI_DATA_PATH.read_text(encoding="utf-8"))[
-            "specKit"
-        ]["version"]
-        source = (
-            "git+https://github.com/github/spec-kit.git@v{{ .specKit.version }}"
+    def test_spec_kit_installers_use_the_latest_pypi_release(self) -> None:
+        chezmoi_data = tomllib.loads(
+            CHEZMOI_DATA_PATH.read_text(encoding="utf-8")
         )
-
-        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        self.assertNotIn("specKit", chezmoi_data)
         for installer_path in (INSTALL_SH_PATH, INSTALL_PS1_PATH):
             with self.subTest(installer=installer_path.name):
                 installer = installer_path.read_text(encoding="utf-8")
                 self.assertIn("uv tool install --quiet specify-cli", installer)
-                self.assertIn(source, installer)
+                self.assertNotRegex(
+                    installer,
+                    r"uv tool install --quiet specify-cli\s+--from\b",
+                )
+
+    def test_uv_tool_upgraders_only_update_managed_tools(self) -> None:
+        for profile_path in (ZSHRC_PATH, POWERSHELL_PROFILE_PATH):
+            with self.subTest(profile=profile_path.name):
+                profile = profile_path.read_text(encoding="utf-8")
+                self.assertIn("uv tool upgrade ty", profile)
+                self.assertIn("uv tool install --force specify-cli", profile)
+                self.assertNotIn("uv tool upgrade specify-cli", profile)
+                self.assertNotIn("uv tool upgrade --all", profile)
 
     @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
     def test_lefthook_is_managed_by_mise_on_every_platform(self) -> None:
@@ -727,6 +743,34 @@ class WindowsPosixRcManagementTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "")
+
+
+class MacOsAppleSiliconOnlyTests(unittest.TestCase):
+    """macOS 向けの Intel (x86_64) 分岐が再混入していないことを検査する (ADR-034)。"""
+
+    INTEL_MARKERS = {
+        REPO_ROOT / "install.sh": ("darwin-amd64", "darwin_amd64"),
+        REPO_ROOT / "home/run_once_before_10-install-packages.sh.tmpl": (
+            "Darwin-x86_64",
+            "x86_64-apple-darwin",
+        ),
+        REPO_ROOT / "home/run_once_before_15-install-copilot-cli.sh.tmpl": (
+            "copilot-darwin-x64",
+            "x86_64",
+        ),
+        REPO_ROOT / "home/run_once_before_20-install-mise.sh.tmpl": (
+            "Darwin:x86_64",
+            "macos-x64",
+        ),
+        REPO_ROOT / "home/dot_profile.tmpl": ("/usr/local/bin/brew",),
+    }
+
+    def test_no_intel_macos_branches(self) -> None:
+        for path, markers in self.INTEL_MARKERS.items():
+            source = path.read_text(encoding="utf-8")
+            for marker in markers:
+                with self.subTest(path=path.name, marker=marker):
+                    self.assertNotIn(marker, source)
 
 
 if __name__ == "__main__":

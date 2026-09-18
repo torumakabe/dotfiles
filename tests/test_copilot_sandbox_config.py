@@ -39,6 +39,13 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         self.assertEqual(len(posix_version), 1)
         self.assertEqual(posix_version, powershell_version)
 
+    def test_platform_scripts_describe_the_full_settings_update(self) -> None:
+        expected_message = "Configured GitHub Copilot user settings in "
+        obsolete_message = "Configured Copilot CLI local sandbox in "
+        for script in (self.posix, self.powershell):
+            self.assertIn(expected_message, script)
+            self.assertNotIn(obsolete_message, script)
+
     def test_user_policy_has_cross_platform_defaults_and_guardrail_aliases(self) -> None:
         policy = json.loads(USER_POLICY_PATH.read_text(encoding="utf-8"))
         self.assertTrue(policy["experimental"])

@@ -11,7 +11,7 @@
 | Codespaces / Dev Container | ベースイメージ / Feature + `mise` | コンテナ基盤側ツール、開発ツール |
 | Windows | `winget` (DSC) + `mise` | GUI/CLI アプリ、Azure CLI、開発ツール |
 | 全環境共通 | `rustup` | Rust toolchain |
-| 全環境共通 | `uv` | Python スクリプト実行 |
+| 全環境共通 | `uv` | Python スクリプト実行、`ty` と `specify-cli` の導入と更新 |
 | 全環境共通 | `gh extension` + `gh skill` | `gh-stack` extension と Copilot skill |
 
 ## 定期チェック対象の制約
@@ -156,7 +156,7 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 
 この設定には、運用上で把握しておくべき性質が四つある。
 
-- **厳密な許可リストではない。実行中のプラットフォームは設定値に無くても必ず加わる。** 上記に無い環境（musl 系の `linux-x64-musl` など）で `mise install` を実行すると、その環境の分だけエントリが増える。この dotfiles は macOS を Apple Silicon に限定しているため、`macos-x64` は集合に含めていない。
+- **厳密な許可リストではない。実行中のプラットフォームは設定値に無くても必ず加わる。** 上記に無い環境（musl 系の `linux-x64-musl` など）で `mise install` を実行すると、その環境の分だけエントリが増える。この dotfiles は macOS を Apple Silicon に限定しているため（[ADR-034](adr/034-macos-apple-silicon-only.md)）、`macos-x64` は集合に含めていない。
 - **明示した `--platform` が設定より優先される。** 別の集合を書きたいときは CLI で指定する。
 - **既存エントリは削除されない。** 設定を絞っても、すでに lockfile にあるプラットフォームはそのまま残る。不要なエントリを消すには lockfile を削除して再生成する。
 - **グローバル設定なので、他のリポジトリでの lockfile 操作にも及ぶ。** auto-lock が影響を受けるのは、そのリポジトリ自身が `lockfile = true` を有効にしている場合に限る（`lockfile = true` はグローバルからリポジトリへ波及しない）。一方、そのリポジトリで `mise lock` を明示実行した場合は、`lockfile = true` の有無に関わらずこの基準集合が使われる。
@@ -202,6 +202,20 @@ chezmoi add --exact ~/.config/mise/locks
 `chezmoi source-path ~/.config/mise/locks` が未管理として失敗した場合は、初回追加なので `chezmoi forget` を省略して `chezmoi add --exact` を実行する。`mise lock <tool>` は指定したツールだけを処理し、`--bump` を指定しないため、既存の一致する lockfile バージョンを更新しない。
 
 lockfile と sidecar を削除して再生成したいケースは、新プラットフォーム追加、不要プラットフォーム除去、生成物の破損である。通常は `mise-upgrade` を使い、手動で lockfile だけを書き戻さない。
+
+## uv tool 管理ツールの更新
+
+Astral の `ty` と GitHub Spec Kit の `specify-cli` は、全 OS で `uv tool` を使って管理する。新規環境では `run_once_after_30-install-tools` が、その時点の最新安定版を公式の Python パッケージインデックスから導入する。
+
+導入済み環境では、zsh と PowerShell のどちらでも次のコマンドを実行する。
+
+```text
+uv-tools-upgrade
+```
+
+このコマンドは `uv tool upgrade ty` と `uv tool install --force specify-cli` を順に実行する。一方の更新に失敗した場合も、もう一方の更新を試み、いずれかが失敗した場合は終了コード 1 を返す。`specify-cli` は従来の固定 Git tag から PyPI 版へ取得元を変更するため、`--force` で再インストールする。リポジトリが管理していない個人用の `uv tool` を変更しないため、`uv tool upgrade --all` は実行しない。
+
+`uv-tools-upgrade` は CLI 本体だけを更新する。既存プロジェクトへ配置した Spec Kit の integration や extension は更新しない。必要な場合は、対象プロジェクトで `specify integration upgrade <key>` と `specify extension update` を実行する。
 
 ## Rust toolchain の更新
 

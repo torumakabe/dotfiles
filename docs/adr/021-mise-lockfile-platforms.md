@@ -38,6 +38,7 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 ## 関連
 
 - ADR-013（mise lockfile 同期フック）は置き換えない。同 ADR の sync hook が実行する `mise install` が lockfile を書き戻し得る、という前提を補う。
+- `macos-x64` を除く前提（macOS は Apple Silicon 限定）は ADR-034 に記録した。
 
 ## 引き継ぐ検証
 

@@ -46,6 +46,7 @@
 | [031](031-windows-uv-dedicated-cache.md) | Windows でも Copilot sandbox の uv 専用キャッシュを配布する | Accepted |
 | [032](032-protect-self-updated-winget-packages-with-blocking-pins.md) | 独自 updater で更新する WinGet パッケージを blocking pin で保護する | Accepted |
 | [033](033-manage-azd-and-copilot-cli-via-official-os-channels.md) | azd と Copilot CLI を OS 別の公式経路で管理する | Accepted |
+| [034](034-macos-apple-silicon-only.md) | macOS のサポートは Apple Silicon (arm64) 限定とする | Accepted |
 
 ## テンプレート
 

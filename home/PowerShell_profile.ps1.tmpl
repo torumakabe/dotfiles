@@ -112,6 +112,50 @@ function Invoke-MiseSelfUpdate {
     }
 }
 
+# uv tool で管理するツールを更新する
+function Invoke-UvToolsUpgrade {
+    if ($args.Count -ne 0) {
+        Write-Error "❌ uv-tools-upgrade は追加引数を受け付けません" -ErrorAction Continue
+        $global:LASTEXITCODE = 2
+        return
+    }
+
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        Write-Error "❌ uv が見つかりません" -ErrorAction Continue
+        $global:LASTEXITCODE = 1
+        return
+    }
+
+    $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+    $PSNativeCommandUseErrorActionPreference = $false
+    $failed = $false
+    try {
+        Write-Host "==> uv tool: ty を更新..."
+        uv tool upgrade ty
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "❌ ty の更新に失敗しました" -ErrorAction Continue
+            $failed = $true
+        }
+
+        Write-Host "==> uv tool: specify-cli を更新..."
+        uv tool install --force specify-cli
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "❌ specify-cli の更新に失敗しました" -ErrorAction Continue
+            $failed = $true
+        }
+
+        if ($failed) {
+            $global:LASTEXITCODE = 1
+            return
+        }
+        Write-Host "✅ uv tool 管理ツールの更新が完了しました"
+        $global:LASTEXITCODE = 0
+    }
+    finally {
+        $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
+    }
+}
+
 # mise 管理ツールの一括更新（日常操作）
 # upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
 function Invoke-MiseUpgrade {
@@ -518,6 +562,7 @@ Set-Alias -Name e -Value Open-EditInNewConsole
 Set-Alias -Name k -Value kubectl
 Set-Alias -Name mise-self-update -Value Invoke-MiseSelfUpdate
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
+Set-Alias -Name uv-tools-upgrade -Value Invoke-UvToolsUpgrade
 Set-Alias -Name git-hooks-audit -Value Invoke-GitHooksAudit
 
 # Bypass the broken WindowsApps execution alias; see docs/troubleshooting.md.

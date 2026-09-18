@@ -50,10 +50,6 @@ RUSTUP_RELEASES = {
         "aarch64-unknown-linux-gnu",
         "9732d6c5e2a098d3521fca8145d826ae0aaa067ef2385ead08e6feac88fa5792",
     ),
-    "Darwin-x86_64": (
-        "x86_64-apple-darwin",
-        "33cf85df9142bc6d29cbc62fa5ca1d4c29622cddb55213a4c1a43c457fb9b2d7",
-    ),
     "Darwin-arm64": (
         "aarch64-apple-darwin",
         "aeb4105778ca1bd3c6b0e75768f581c656633cd51368fa61289b6a71696ac7e1",
