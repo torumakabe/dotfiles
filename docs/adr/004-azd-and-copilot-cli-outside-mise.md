@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by ADR-033
 
 ## Context
 
@@ -12,6 +12,8 @@ Accepted
 - `copilot-cli`: mise の更新タイミング遅延があり、さらに CLI 自身の `copilot update` 後は mise が旧バージョンを認識してしまう
 
 いずれも公式配布チャネルは完備されている。
+
+その後、macOS の Copilot CLI を Homebrew 管理から公式アーカイブ管理へ変更したため、ADR-033 が本 ADR を置換する。
 
 ## Decision
 

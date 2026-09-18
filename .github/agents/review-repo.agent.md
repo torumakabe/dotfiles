@@ -50,7 +50,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 ## mise とプラットフォーム契約
 
-- `home/dot_config/mise/config.toml.tmpl` と `home/run_once_before_10-install-packages.sh.tmpl` の重複と欠落、ADR-004 の `azd` と `copilot-cli` の管理境界を確認する
+- `home/dot_config/mise/config.toml.tmpl`、`home/run_once_before_10-install-packages.sh.tmpl`、`home/run_once_before_15-install-copilot-cli.sh.tmpl` の重複と欠落、ADR-033 の `azd` と Copilot CLI の管理範囲を確認する
 - lockfile 操作と backend 移行は[リポジトリの mise 操作規則](../copilot-instructions.md#mise-操作のトラップ)に照合する。任意の実機検査では `mise ls` の Source が空の孤児ツールと余剰版も確認する
 - 公開関数、alias、補完、ツール導入を[プラットフォーム機能契約](../copilot-instructions.md#プラットフォーム機能契約)、`tests/test_platform_parity.py`、`.github/workflows/test-copilot-hooks.yml` と照合する。未分類の機能、理由と範囲のない例外、片方の shell だけの検査を見落とさない
 

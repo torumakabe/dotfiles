@@ -34,10 +34,12 @@
 | 環境 | 導入元 |
 |------|--------|
 | Linux / WSL / Codespaces / Dev Container | 固定した公式リリースアーカイブを SHA-256 検証（[`docs/operations.md`](operations.md#bootstrap--shell-pin-の更新)） |
-| macOS | `brew` |
+| macOS | 固定した公式リリースアーカイブを SHA-256 検証 |
 | Windows | `winget` (`reference/windows/configuration.dsc.yaml`) |
 
 更新は全 OS で `copilot update`。
+
+macOS では `home/run_once_before_15-install-copilot-cli.sh.tmpl` が `~/.local/bin/copilot` を配置し、既存の Homebrew formula 版を削除する。公式バイナリの配置と実行確認が完了するまでは formula を削除しない（[ADR-033](adr/033-manage-azd-and-copilot-cli-via-official-os-channels.md)）。
 
 Codespaces / Dev Container のベースイメージには `/usr/local/bin/copilot` が同梱されていることがあり、`copilot update` の対象外のまま古くなる。このため導入判定は `command -v copilot` ではなく `~/.local/bin/copilot` の実体で行う（[`docs/troubleshooting.md`](troubleshooting.md#codespaces--dev-container-で-copilot-のバージョンが古い)）。
 

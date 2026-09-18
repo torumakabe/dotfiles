@@ -16,7 +16,7 @@
 
 ## 定期チェック対象の制約
 
-制約の対象と撤去条件は [リポジトリ指示](../.github/copilot-instructions.md#プラットフォーム制約定期チェック対象) と [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) で管理する。`azd` と Copilot CLI を mise 外で管理する判断は [ADR-004](adr/004-azd-and-copilot-cli-outside-mise.md)、Microsoft Edit を Windows のみで管理する判断は [ADR-011](adr/011-edit-windows-via-winget-dsc.md) を参照する。
+制約の対象と撤去条件は [リポジトリ指示](../.github/copilot-instructions.md#プラットフォーム制約定期チェック対象) と [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) で管理する。`azd` と Copilot CLI を mise 外で管理する判断は [ADR-033](adr/033-manage-azd-and-copilot-cli-via-official-os-channels.md)、Microsoft Edit を Windows のみで管理する判断は [ADR-011](adr/011-edit-windows-via-winget-dsc.md) を参照する。
 
 TypeScript language server の除外を撤去するときは、`home/dot_config/mise/config.toml.tmpl` の版限定エントリを削除し、`mise install --force npm:typescript-language-server` で既存導入済み版も再検証する。成功後に `uv run -m unittest tests.test_mise_config -v` を実行する。失敗時の確認は [`troubleshooting.md`](troubleshooting.md#mise-install-が-aube-install-failed-failed-to-resolve-dependencies-で止まる) を参照する。
 
@@ -92,6 +92,8 @@ mise 用の GitHub token が未設定の場合、`mise-self-update` は `GH_TOKE
 
 Windows でも mise 自身を更新主体とし、WinGet/DSC の登録版と実ファイルの版が一時的に異なることを許容する。WinGetによる再導入や登録修復は日常更新から分離し、必要な場合だけ [`troubleshooting.md`](troubleshooting.md#winget-blocking-pin-を確認修復する) の手順を使う。
 
+macOS でリポジトリが新規導入する mise は Homebrew 管理外である。既存の Homebrew formula 版 mise は bootstrap で置換しないため、`mise-self-update` の実行前に `command -v mise` と `mise --version` で利用中の実体を確認する。
+
 ## Windows の更新主体と WinGet blocking pin
 
 Windows では DSC がパッケージの導入と存在保証を担当し、日常更新にはリポジトリが定めた updater を使う（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。同じ実体を独自 updater が更新する次のパッケージには blocking pin を設定し、`winget upgrade --all` による置換を防ぐ。
@@ -110,7 +112,20 @@ blocking pin は WinGet 外の updater を止めない。WinGet で管理状態�
 
 pin の対象を廃止するときは、DSC の管理対象を一度 `Pinned = false` にして既存端末から pin を削除する。その変更を適用した後、別の変更で管理対象配列からエントリを削除する。
 
-macOS の Homebrew と独自 updater の併用は別途調査する。Linux と WSL は、現行構成では公式 installer と各 updater が同じ実体を管理するため追加対策を設けない。apt/dpkg と独自 updater の二重管理や複数ディレクトリへの重複配置を導入する場合は再評価する。
+## macOS の更新主体
+
+macOS では、独自 updater を使う実体を Homebrew の管理対象と重複させない（[ADR-033](adr/033-manage-azd-and-copilot-cli-via-official-os-channels.md)）。
+
+| 対象 | 導入元 | 日常更新 |
+| --- | --- | --- |
+| Copilot CLI | 固定した公式リリースアーカイブ | `copilot update` |
+| mise | 固定した公式リリースアーカイブ（新規環境） | `mise-self-update` |
+| rustup | 固定した公式 `rustup-init` | `rustup self update` |
+| azd | Homebrew | `azd update`（Homebrew へ委譲） |
+
+`home/run_once_before_15-install-copilot-cli.sh.tmpl` は、公式バイナリを `~/.local/bin/copilot` へ原子的に配置して実行確認した後、既存の `copilot-cli` formula を削除する。ダウンロード、checksum 検証、formula の削除のいずれかが失敗した場合は処理を失敗させ、次回の `chezmoi apply` で再試行する。
+
+Linux と WSL は、現行構成では公式 installer と各 updater が同じ実体を管理するため追加対策を設けない。apt/dpkg と独自 updater の二重管理や複数ディレクトリへの重複配置を導入する場合は再評価する。
 
 ### `mise-upgrade`
 
@@ -236,13 +251,16 @@ GITHUB_TOKEN=$(gh auth token) mise install
 |------|-----|
 | `install.sh` | `CHEZMOI_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_before_20-install-mise.sh.tmpl` | `MISE_VERSION` とアーキテクチャ別 SHA-256 |
-| `home/run_once_before_10-install-packages.sh.tmpl` | `COPILOT_VERSION`、`AZD_VERSION`、`RUSTUP_VERSION` と各プラットフォーム別 SHA-256、Microsoft 署名鍵の primary-key fingerprint |
+| `home/run_once_before_10-install-packages.sh.tmpl` | Linux 用 `COPILOT_VERSION`、`AZD_VERSION`、`RUSTUP_VERSION` と各プラットフォーム別 SHA-256、Microsoft 署名鍵の primary-key fingerprint |
+| `home/run_once_before_15-install-copilot-cli.sh.tmpl` | macOS 用 `COPILOT_VERSION` と arm64 SHA-256 |
 | `home/run_once_after_30-install-tools.sh.tmpl` | `DRAWIO_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_after_10-setup-shell.sh.tmpl` | `OH_MY_ZSH_COMMIT`、zsh-completions の更新確認用 `ZSH_COMPLETIONS_TAG` と取得を強制する `ZSH_COMPLETIONS_COMMIT` |
 
 成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。現在の draw.io 配布フローには公式 checksum がないため、更新担当者が対象リリース asset の SHA-256 を計算し、上流リリースの出所と asset を確認してから pin を更新する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
+
+macOS の Copilot CLI 移行は例外とする。公式バイナリを配置できない状態で処理を成功させると `run_once` が完了扱いになり、Homebrew formula からの移行を再試行できない。このためダウンロード失敗も異常終了させ、次回の `chezmoi apply` で再実行する。
 
 `run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
@@ -252,6 +270,8 @@ GITHUB_TOKEN=$(gh auth token) mise install
 shellcheck install.sh
 sed '/^[[:space:]]*{{/d' home/run_once_before_10-install-packages.sh.tmpl | shellcheck -e SC1091 -
 sed '/^[[:space:]]*{{/d' home/run_once_before_10-install-packages.sh.tmpl | bash -n
+sed '/^[[:space:]]*{{/d' home/run_once_before_15-install-copilot-cli.sh.tmpl | shellcheck -
+sed '/^[[:space:]]*{{/d' home/run_once_before_15-install-copilot-cli.sh.tmpl | bash -n
 sed '/^[[:space:]]*{{/d' home/run_once_before_20-install-mise.sh.tmpl | bash -n
 sed '/^[[:space:]]*{{/d' home/run_once_after_10-setup-shell.sh.tmpl | shellcheck -e SC2034 -
 sed '/^[[:space:]]*{{/d' home/run_once_after_10-setup-shell.sh.tmpl | bash -n
