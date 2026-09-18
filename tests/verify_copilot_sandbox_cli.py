@@ -2,7 +2,7 @@
 
 Run from an ordinary shell with COPILOT_UV_PROBE_PATH="$PATH",
 COPILOT_UV_PROBE_VIRTUAL_ENV="${VIRTUAL_ENV-}", and COPILOT_CLI_INTEGRATION=1
-before invoking uv run -m unittest tests.test_copilot_sandbox_cli -v.
+before invoking uv run -m unittest tests.verify_copilot_sandbox_cli -v.
 Only cloned CLI settings are changed. No external model service is used.
 """
 
