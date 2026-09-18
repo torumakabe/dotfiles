@@ -87,15 +87,6 @@ git diff --check
 
 テストによる設定変更は一時ディレクトリへ隔離される。実ユーザーの `~/.copilot/settings.json` をテスト用データで置き換えない。
 
-## 設定同期を隔離して確認する
-
-実ユーザーの設定を変更せず、レンダリング済みスクリプトによる `sandbox.enabled` の保持を検査する。
-
-```bash
-uv run -m unittest \
-  tests.test_copilot_sandbox_config.CopilotSandboxEnabledPreservationTests -v
-```
-
 ## 実 CLI でキャッシュの永続化を比較する
 
 通常の HOME とツール構成を使い、インストール済みの CLI で比較する。Copilot 設定は一時ディレクトリへ複製し、実ユーザーの設定ファイルは変更しない。専用キャッシュには実際に書き込み、検証用の一意なファイルだけを終了時に削除する。
@@ -103,7 +94,7 @@ uv run -m unittest \
 ```bash
 COPILOT_UV_PROBE_PATH="$PATH" COPILOT_UV_PROBE_VIRTUAL_ENV="${VIRTUAL_ENV-}" \
   COPILOT_CLI_INTEGRATION=1 PYTHONDONTWRITEBYTECODE=1 \
-  uv run -m unittest tests.test_copilot_sandbox_cli -v
+  uv run -m unittest tests.verify_copilot_sandbox_cli -v
 ```
 
 localhost の固定応答 provider が uv コマンドを選び、実 CLI が sandbox を構築する。外部モデルとログインは不要である。毎回新しい CLI プロセスと隔離設定を使い、`allowDevToolAccess=true`、`allowBypass=false` を維持する。`--allow-all-tools` / `--allow-all-paths` は承認省略のためであり、OS sandbox は無効にしない。
