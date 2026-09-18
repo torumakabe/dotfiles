@@ -57,12 +57,33 @@ properties:
         id: GitHub.Copilot
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: GitHubCopilotApp
       directives:
         description: "Install GitHub Copilot app"
         allowPrerelease: false
       settings:
         id: GitHub.CopilotApp
         source: winget
+        ensure: Present
+    - resource: PSDscResources/Script
+      id: GitHubCopilotAppBlockingPin
+      dependsOn:
+        - GitHubCopilotApp
+      directives:
+        description: "Block WinGet from replacing the self-updating GitHub Copilot app"
+      settings:
+        GetScript: |
+          $output = winget pin list --id GitHub.CopilotApp --exact --source winget --accept-source-agreements --disable-interactivity | Out-String
+          return @{ Result = $output }
+        TestScript: |
+          $output = winget pin list --id GitHub.CopilotApp --exact --source winget --accept-source-agreements --disable-interactivity | Out-String
+          return ($LASTEXITCODE -eq 0 -and $output -match '(?m)\bGitHub\.CopilotApp\s+\S+\s+winget\s+Blocking(?:\s|$)')
+        SetScript: |
+          winget pin remove --id GitHub.CopilotApp --exact --source winget --accept-source-agreements --disable-interactivity 2>$null
+          winget pin add --id GitHub.CopilotApp --exact --source winget --blocking --accept-source-agreements --disable-interactivity
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to add a blocking WinGet pin for GitHub.CopilotApp."
+          }
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: "Install Azure Developer CLI"
