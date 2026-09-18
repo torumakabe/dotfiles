@@ -231,18 +231,6 @@ mise-self-update() {
   echo "✅ mise 本体の更新が完了しました"
 }
 
-# macOS/Linux/WSL では通常の本体更新として mise 組み込み更新を使う（ADR-030）
-mise-self-upgrade() {
-  emulate -L zsh
-
-  if (( $# != 0 )); then
-    echo "❌ mise-self-upgrade は追加引数を受け付けません" >&2
-    return 2
-  fi
-
-  mise-self-update
-}
-
 # mise 管理ツールの一括更新（日常操作）
 # upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
 _mise_normalize_log_line() {

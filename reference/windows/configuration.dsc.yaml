@@ -51,6 +51,7 @@ properties:
         id: GitHub.cli
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: GitHubCopilotCli
       directives:
         description: "Install GitHub Copilot CLI"
         allowPrerelease: false
@@ -66,25 +67,6 @@ properties:
         id: GitHub.CopilotApp
         source: winget
         ensure: Present
-    - resource: PSDscResources/Script
-      id: GitHubCopilotAppBlockingPin
-      dependsOn:
-        - GitHubCopilotApp
-      directives:
-        description: "Block WinGet from replacing the self-updating GitHub Copilot app"
-      settings:
-        GetScript: |
-          $output = winget pin list --id GitHub.CopilotApp --exact --source winget --accept-source-agreements --disable-interactivity | Out-String
-          return @{ Result = $output }
-        TestScript: |
-          $output = winget pin list --id GitHub.CopilotApp --exact --source winget --accept-source-agreements --disable-interactivity | Out-String
-          return ($LASTEXITCODE -eq 0 -and $output -match '(?m)\bGitHub\.CopilotApp\s+\S+\s+winget\s+Blocking(?:\s|$)')
-        SetScript: |
-          winget pin remove --id GitHub.CopilotApp --exact --source winget --accept-source-agreements --disable-interactivity 2>$null
-          winget pin add --id GitHub.CopilotApp --exact --source winget --blocking --accept-source-agreements --disable-interactivity
-          if ($LASTEXITCODE -ne 0) {
-            throw "Failed to add a blocking WinGet pin for GitHub.CopilotApp."
-          }
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       directives:
         description: "Install Azure Developer CLI"
@@ -93,6 +75,7 @@ properties:
         id: Microsoft.Azd
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: Mise
       directives:
         description: "Install mise"
         allowPrerelease: false
@@ -100,6 +83,7 @@ properties:
         id: jdx.mise
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: Rustup
       directives:
         # rust-toolchain.toml を持つプロジェクトでの version pinning を機能させるため、
         # mise ではなく公式インストーラー (rustup) で管理する。
@@ -109,6 +93,113 @@ properties:
       settings:
         id: Rustlang.Rustup
         source: winget
+    - resource: PSDscResources/Script
+      id: SelfUpdatedPackageBlockingPins
+      dependsOn:
+        - GitHubCopilotCli
+        - GitHubCopilotApp
+        - Mise
+        - Rustup
+      directives:
+        description: "Protect self-updated WinGet packages with blocking pins"
+      settings:
+        GetScript: |
+          $managedPins = @(
+            @{ Id = 'GitHub.CopilotApp'; Pinned = $true }
+            @{ Id = 'GitHub.Copilot'; Pinned = $true }
+            @{ Id = 'jdx.mise'; Pinned = $true }
+            @{ Id = 'Rustlang.Rustup'; Pinned = $true }
+          )
+          $output = winget pin list --source winget --accept-source-agreements --disable-interactivity | Out-String
+          return @{
+            Result = [pscustomobject]@{
+              ManagedPins = $managedPins
+              PinList = $output
+            } | ConvertTo-Json -Depth 4 -Compress
+          }
+        TestScript: |
+          $managedPins = @(
+            @{ Id = 'GitHub.CopilotApp'; Pinned = $true }
+            @{ Id = 'GitHub.Copilot'; Pinned = $true }
+            @{ Id = 'jdx.mise'; Pinned = $true }
+            @{ Id = 'Rustlang.Rustup'; Pinned = $true }
+          )
+          function Get-WinGetPinType {
+            param([string]$Output, [string]$Id)
+            foreach ($line in ($Output -split "`r?`n")) {
+              $columns = @($line -split '\s+' | Where-Object { $_ })
+              $idx = [array]::IndexOf($columns, $Id)
+              if ($idx -ge 0 -and $columns.Count -gt ($idx + 3) -and $columns[$idx + 2] -eq 'winget') {
+                return $columns[$idx + 3]
+              }
+            }
+            return $null
+          }
+
+          $output = winget pin list --source winget --accept-source-agreements --disable-interactivity | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            return $false
+          }
+          foreach ($pin in $managedPins) {
+            $pinType = Get-WinGetPinType -Output $output -Id $pin.Id
+            if ($pin.Pinned -and $pinType -ne 'Blocking') {
+              return $false
+            }
+            if (-not $pin.Pinned -and $null -ne $pinType) {
+              return $false
+            }
+          }
+          return $true
+        SetScript: |
+          $managedPins = @(
+            @{ Id = 'GitHub.CopilotApp'; Pinned = $true }
+            @{ Id = 'GitHub.Copilot'; Pinned = $true }
+            @{ Id = 'jdx.mise'; Pinned = $true }
+            @{ Id = 'Rustlang.Rustup'; Pinned = $true }
+          )
+          function Get-WinGetPinType {
+            param([string]$Output, [string]$Id)
+            foreach ($line in ($Output -split "`r?`n")) {
+              $columns = @($line -split '\s+' | Where-Object { $_ })
+              $idx = [array]::IndexOf($columns, $Id)
+              if ($idx -ge 0 -and $columns.Count -gt ($idx + 3) -and $columns[$idx + 2] -eq 'winget') {
+                return $columns[$idx + 3]
+              }
+            }
+            return $null
+          }
+
+          $output = winget pin list --source winget --accept-source-agreements --disable-interactivity | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to list WinGet pins."
+          }
+          $failures = [System.Collections.Generic.List[string]]::new()
+          foreach ($pin in $managedPins) {
+            $pinType = Get-WinGetPinType -Output $output -Id $pin.Id
+            if ($pin.Pinned -and $pinType -eq 'Blocking') {
+              continue
+            }
+            if (-not $pin.Pinned -and $null -eq $pinType) {
+              continue
+            }
+
+            if ($null -ne $pinType) {
+              winget pin remove --id $pin.Id --exact --source winget --accept-source-agreements --disable-interactivity
+              if ($LASTEXITCODE -ne 0) {
+                $failures.Add("$($pin.Id): failed to remove the existing pin")
+                continue
+              }
+            }
+            if ($pin.Pinned) {
+              winget pin add --id $pin.Id --exact --source winget --blocking --accept-source-agreements --disable-interactivity
+              if ($LASTEXITCODE -ne 0) {
+                $failures.Add("$($pin.Id): failed to add a blocking pin")
+              }
+            }
+          }
+          if ($failures.Count -ne 0) {
+            throw "Failed to converge WinGet pins: $($failures -join '; ')"
+          }
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: VisualStudioBuildTools
       directives:

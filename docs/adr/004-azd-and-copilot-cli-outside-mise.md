@@ -29,3 +29,4 @@ Accepted
 - 公式更新経路と mise のズレに悩まされない
 - ただし mise 中心の世界観から外れるツールが 2 つ存在することを運用者が意識する必要がある
 - `copilot-cli` は `~/.copilot/config.json` の `staff: true` で prerelease チャネルに切替え可能
+- Windows での WinGet と独自 updater の競合防止は ADR-032 に従う

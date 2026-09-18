@@ -1,12 +1,14 @@
 """Validate declarative Windows package-management safeguards."""
 
 import pathlib
+import re
 import unittest
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "reference/windows/configuration.dsc.yaml"
 README_PATH = REPO_ROOT / "README.md"
+OPERATIONS_PATH = REPO_ROOT / "docs/operations.md"
 TROUBLESHOOTING_PATH = REPO_ROOT / "docs/troubleshooting.md"
 
 
@@ -15,48 +17,100 @@ class WindowsConfigurationTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.config = CONFIG_PATH.read_text(encoding="utf-8")
         cls.readme = README_PATH.read_text(encoding="utf-8")
+        cls.operations = OPERATIONS_PATH.read_text(encoding="utf-8")
         cls.troubleshooting = TROUBLESHOOTING_PATH.read_text(encoding="utf-8")
 
-    def test_copilot_app_install_is_followed_by_blocking_pin(self) -> None:
-        package_id = "id: GitHubCopilotApp"
-        pin_id = "id: GitHubCopilotAppBlockingPin"
+    def test_self_updated_packages_are_followed_by_integrated_blocking_pins(
+        self,
+    ) -> None:
+        resource_ids = (
+            "GitHubCopilotCli",
+            "GitHubCopilotApp",
+            "Mise",
+            "Rustup",
+        )
+        pin_id = "id: SelfUpdatedPackageBlockingPins"
 
-        self.assertIn(package_id, self.config)
-        self.assertIn("id: GitHub.CopilotApp", self.config)
         self.assertIn("resource: PSDscResources/Script", self.config)
         self.assertIn(pin_id, self.config)
-        self.assertLess(self.config.index(package_id), self.config.index(pin_id))
-        self.assertIn(
-            "dependsOn:\n        - GitHubCopilotApp",
-            self.config[self.config.index(pin_id) :],
-        )
+        for resource_id in resource_ids:
+            package_id = f"id: {resource_id}"
+            self.assertIn(package_id, self.config)
+            self.assertLess(self.config.index(package_id), self.config.index(pin_id))
+            self.assertIn(
+                f"        - {resource_id}",
+                self.config[self.config.index(pin_id) :],
+            )
 
-    def test_copilot_app_pin_converges_to_blocking(self) -> None:
+    def test_integrated_pin_policy_converges_both_desired_states(self) -> None:
         pin_block = self.config[
-            self.config.index("id: GitHubCopilotAppBlockingPin") :
+            self.config.index("id: SelfUpdatedPackageBlockingPins") :
             self.config.index(
                 "resource: Microsoft.WinGet.DSC/WinGetPackage",
-                self.config.index("id: GitHubCopilotAppBlockingPin"),
+                self.config.index("id: SelfUpdatedPackageBlockingPins"),
             )
         ]
 
-        self.assertIn(
-            "winget pin list --id GitHub.CopilotApp --exact --source winget",
+        expected_ids = {
+            "GitHub.CopilotApp",
+            "GitHub.Copilot",
+            "jdx.mise",
+            "Rustlang.Rustup",
+        }
+        configured_ids = re.findall(
+            r"@\{ Id = '([^']+)'; Pinned = \$true \}",
             pin_block,
         )
-        self.assertIn(r"GitHub\.CopilotApp", pin_block)
-        self.assertIn("Blocking", pin_block)
+        self.assertEqual(set(configured_ids), expected_ids)
+        self.assertEqual(len(configured_ids), len(expected_ids) * 3)
+        self.assertNotIn("Microsoft.Azd", pin_block)
         self.assertIn(
-            "winget pin remove --id GitHub.CopilotApp --exact --source winget",
+            "winget pin list --source winget",
+            pin_block,
+        )
+        self.assertNotIn("winget pin list --id", pin_block)
+        self.assertIn("[array]::IndexOf($columns, $Id)", pin_block)
+        self.assertIn("$columns[$idx + 2] -eq 'winget'", pin_block)
+        self.assertIn("return $columns[$idx + 3]", pin_block)
+        self.assertNotIn("$columns[-1]", pin_block)
+        self.assertNotIn(r"GitHub\.Copilot", pin_block)
+        self.assertIn("$pin.Pinned -and $pinType -ne 'Blocking'", pin_block)
+        self.assertIn("-not $pin.Pinned -and $null -ne $pinType", pin_block)
+        self.assertIn("-not $pin.Pinned -and $null -eq $pinType", pin_block)
+        self.assertIn(
+            "winget pin remove --id $pin.Id --exact --source winget",
             pin_block,
         )
         self.assertIn(
-            "winget pin add --id GitHub.CopilotApp --exact --source winget --blocking",
+            "winget pin add --id $pin.Id --exact --source winget --blocking",
             pin_block,
         )
+        self.assertIn("$failures.Add(\"$($pin.Id):", pin_block)
         self.assertIn(
-            'throw "Failed to add a blocking WinGet pin for GitHub.CopilotApp."',
+            'throw "Failed to converge WinGet pins: $($failures -join \'; \')"',
             pin_block,
+        )
+
+    def test_operations_document_matches_integrated_pin_policy(self) -> None:
+        expected_ids = {
+            "GitHub.CopilotApp",
+            "GitHub.Copilot",
+            "jdx.mise",
+            "Rustlang.Rustup",
+        }
+        documented_ids = set(
+            re.findall(r"^\| `([^`]+)` \| .* \| あり \|$", self.operations, re.MULTILINE)
+        )
+        self.assertEqual(documented_ids, expected_ids)
+        self.assertIn("`Microsoft.Azd`", self.operations)
+        self.assertIn("`winget upgrade --all`", self.operations)
+        self.assertIn("管理していないパッケージの結果は保証しない", self.operations)
+        self.assertIn("`Pinned = false`", self.operations)
+        self.assertIn(
+            "Windows の pin を転用できるとは仮定せず",
+            (REPO_ROOT / "docs/adr/032-protect-self-updated-winget-packages-with-blocking-pins.md").read_text(
+                encoding="utf-8"
+            ),
         )
 
     def test_visual_studio_workload_avoids_broken_elevated_units(self) -> None:

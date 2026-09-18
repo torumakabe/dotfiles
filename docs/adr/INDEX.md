@@ -42,8 +42,9 @@
 | [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Superseded by ADR-028 |
 | [028](028-mise-bootstrap-preserves-existing-installations.md) | mise bootstrap は既存導入を置換しない | Accepted |
 | [029](029-mise-lockfile-v2-sidecars.md) | mise lockfile revision 2 の npm sidecar を不可分に管理する | Accepted |
-| [030](030-mise-self-update-and-upgrade.md) | mise 本体の self-update と self-upgrade を使い分ける | Accepted |
+| [030](030-mise-self-update-and-upgrade.md) | mise 本体の self-update と self-upgrade を使い分ける | Superseded by ADR-032 |
 | [031](031-windows-uv-dedicated-cache.md) | Windows でも Copilot sandbox の uv 専用キャッシュを配布する | Accepted |
+| [032](032-protect-self-updated-winget-packages-with-blocking-pins.md) | 独自 updater で更新する WinGet パッケージを blocking pin で保護する | Accepted |
 
 ## テンプレート
 
