@@ -66,6 +66,7 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 - **Copilot sandbox の uv 専用キャッシュ**: macOS/Linux/WSL の Bash tool と Windows の PowerShell tool で `UV_CACHE_DIR` をコマンド単位で切り替え、専用キャッシュを `readwritePaths` に追加する。hook なしで Python 自動探索とホストへのキャッシュ永続化が成功したら、hook、RW 許可、関連テストを撤去する。判定手順は `docs/copilot-sandbox-verification.md` を参照する
 - **Copilot CLI の WindowsApps 実行エイリアス**: Windows/PowerShell だけで、WinGet 管理下の `copilot.exe` を alias に設定する。管理対象端末で WindowsApps の実行エイリアスから起動できるようになったら、alias、関連テスト、復旧手順を撤去する
+- **Visual Studio Build Tools の WinGet Configuration v2 昇格**: Build Tools 本体は通常権限の `WinGetPackage`、C++ ワークロードは `vswhere.exe` で MSVC の `link.exe` を検査して必要時だけ対話型セッションから Visual Studio Installer を UAC 昇格する `PSDscResources/Script` で管理する。通常権限から `securityContext: elevated` のユニットを実行しても `0x800706BA` が発生せず、管理者 PowerShellでも `WinGetPackage` のカタログ接続が成功するようになったら、公式の `Microsoft.VisualStudio.DSC/VSComponents` 構成へ戻す
 - **azure-deploy の `.azure/deployment-plan.md` 参照**: このファイルだけを Copilot Guard の拒否対象から除外する。PreToolUse で呼び出し元 skill を限定できるようになるか、上流 skill が直接参照しなくなったら、許可規則と関連テストを撤去する
 - **core:dotnet の Windows 導入時検証**: mise 管理の dotnet root を `DOTNET_ROOT` と PATH の先頭へ設定する。`core:dotnet` が管理下の dotnet を自動選択するようになったら、`install_env`、関連テスト、復旧手順を撤去する
 - **op-ssh-sign-wsl.exe の CRLF（ADR-012）**: WSL 用 wrapper が stdout と stderr の CR を除去する。1Password が LF を出力するか、全対応 WSL で Git 2.36 以上を保証できたら wrapper と Git 設定の切替を撤去する
