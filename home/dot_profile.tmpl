@@ -29,13 +29,10 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
   # Homebrew: GUI/launchd-started processes inherit a minimal PATH from launchd
   # that does not include /opt/homebrew/bin. brew shellenv fixes this and also
   # exports HOMEBREW_PREFIX / HOMEBREW_CELLAR / HOMEBREW_REPOSITORY.
-  for __brew in /opt/homebrew/bin/brew /usr/local/bin/brew; do
-    if [ -x "$__brew" ]; then
-      eval "$("$__brew" shellenv)"
-      break
-    fi
-  done
-  unset __brew
+  # Apple Silicon 限定のため Intel の prefix (/usr/local) は見ない (ADR-034)。
+  if [ -x /opt/homebrew/bin/brew ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  fi
 {{ end }}
   export GOPATH="${HOME}/go"
 

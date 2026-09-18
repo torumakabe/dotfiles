@@ -729,5 +729,33 @@ class WindowsPosixRcManagementTests(unittest.TestCase):
                 self.assertEqual(result.stdout, "")
 
 
+class MacOsAppleSiliconOnlyTests(unittest.TestCase):
+    """macOS 向けの Intel (x86_64) 分岐が再混入していないことを検査する (ADR-034)。"""
+
+    INTEL_MARKERS = {
+        REPO_ROOT / "install.sh": ("darwin-amd64", "darwin_amd64"),
+        REPO_ROOT / "home/run_once_before_10-install-packages.sh.tmpl": (
+            "Darwin-x86_64",
+            "x86_64-apple-darwin",
+        ),
+        REPO_ROOT / "home/run_once_before_15-install-copilot-cli.sh.tmpl": (
+            "copilot-darwin-x64",
+            "x86_64",
+        ),
+        REPO_ROOT / "home/run_once_before_20-install-mise.sh.tmpl": (
+            "Darwin:x86_64",
+            "macos-x64",
+        ),
+        REPO_ROOT / "home/dot_profile.tmpl": ("/usr/local/bin/brew",),
+    }
+
+    def test_no_intel_macos_branches(self) -> None:
+        for path, markers in self.INTEL_MARKERS.items():
+            source = path.read_text(encoding="utf-8")
+            for marker in markers:
+                with self.subTest(path=path.name, marker=marker):
+                    self.assertNotIn(marker, source)
+
+
 if __name__ == "__main__":
     unittest.main()

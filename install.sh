@@ -80,10 +80,6 @@ if ! command -v chezmoi >/dev/null 2>&1; then
       archive="chezmoi_${CHEZMOI_VERSION}_linux_arm64.tar.gz"
       expected_sha256="e79a27621256390f03166d3965e6a1946f983a096c4d90f02c43d2aa5b563728"
       ;;
-    darwin-amd64)
-      archive="chezmoi_${CHEZMOI_VERSION}_darwin_amd64.tar.gz"
-      expected_sha256="41be255eacf46b1b333591b4ddc7e90e2aa98ccb8dce47609b8284b856841652"
-      ;;
     darwin-arm64)
       archive="chezmoi_${CHEZMOI_VERSION}_darwin_arm64.tar.gz"
       expected_sha256="53e576042afba703290bbc320e64d0b6bdf1082a8fb9f0d13b97e68a6e6c059f"
