@@ -1,0 +1,81 @@
+{{ if eq .chezmoi.os "darwin" -}}
+#!/bin/bash
+set -euo pipefail
+
+# Copilot CLI is updated by `copilot update`, so keep it outside Homebrew's
+# package database and place the upstream binary in the user-local PATH.
+COPILOT_VERSION="1.0.80"
+COPILOT_BIN_DIR="${HOME}/.local/bin"
+COPILOT_BIN="${COPILOT_BIN_DIR}/copilot"
+
+is_user_local_copilot() {
+  [ -f "${COPILOT_BIN}" ] \
+    && [ ! -L "${COPILOT_BIN}" ] \
+    && [ -x "${COPILOT_BIN}" ] \
+    && "${COPILOT_BIN}" --version >/dev/null 2>&1
+}
+
+case "$(uname -m)" in
+  arm64)
+    copilot_archive="copilot-darwin-arm64.tar.gz"
+    expected_sha256="2346bb691981c2997d65c1c5bc3cef1aeddc9edd37dcb2f970b911aa597e59f6"
+    ;;
+  *)
+    echo "error: unsupported architecture for Copilot CLI: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+if ! is_user_local_copilot; then
+  echo "Installing GitHub Copilot CLI ${COPILOT_VERSION}..."
+  tmp_dir="$(mktemp -d)"
+  staged_dir=""
+  cleanup() {
+    rm -rf "${tmp_dir}"
+    if [ -n "${staged_dir}" ]; then
+      rm -rf "${staged_dir}"
+    fi
+  }
+  trap cleanup EXIT
+
+  archive_path="${tmp_dir}/${copilot_archive}"
+  if ! curl --proto '=https' --tlsv1.2 -fsSL \
+    -o "${archive_path}" \
+    "https://github.com/github/copilot-cli/releases/download/v${COPILOT_VERSION}/${copilot_archive}"; then
+    echo "error: failed to download GitHub Copilot CLI ${COPILOT_VERSION}" >&2
+    exit 1
+  fi
+
+  actual_sha256="$(shasum -a 256 "${archive_path}" | awk '{print $1}')"
+  if [ "${actual_sha256}" != "${expected_sha256}" ]; then
+    echo "error: checksum verification failed for ${copilot_archive}" >&2
+    echo "expected: ${expected_sha256}" >&2
+    echo "actual:   ${actual_sha256}" >&2
+    exit 1
+  fi
+
+  mkdir -p "${COPILOT_BIN_DIR}"
+  tar -xzf "${archive_path}" -C "${tmp_dir}" copilot
+  staged_dir="$(mktemp -d "${COPILOT_BIN_DIR}/.copilot.XXXXXX")"
+  staged_path="${staged_dir}/copilot"
+  install -m 0755 "${tmp_dir}/copilot" "${staged_path}"
+  "${staged_path}" --version
+  mv -f "${staged_path}" "${COPILOT_BIN}"
+fi
+
+if ! is_user_local_copilot; then
+  echo "error: the user-local Copilot CLI failed verification" >&2
+  exit 1
+fi
+
+if command -v brew >/dev/null 2>&1; then
+  if brew list --formula copilot-cli >/dev/null 2>&1; then
+    echo "Removing the Homebrew-managed Copilot CLI..."
+    brew uninstall --formula copilot-cli
+  fi
+else
+  echo "Warning: Homebrew was not found; unable to check for the legacy copilot-cli formula." >&2
+fi
+
+"${COPILOT_BIN}" --version
+{{ end -}}

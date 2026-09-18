@@ -317,8 +317,10 @@ brew update --quiet
 brew trust --formula azure/azd/azd \
   || echo "Warning: 'brew trust' unavailable or failed; azd install may be skipped under tap-trust enforcement." >&2
 # gh: mise install 前にトークン取得手段を確保する（mise 版 gh が shim で shadow する）
-# azure-cli / azd / copilot-cli: GUI アプリや github: バックエンド都合を避けるため
+# azure-cli / azd: GUI アプリや github: バックエンド都合を避けるため
 # macOS では brew で管理
+# copilot-cli は独自 updater と Homebrew の管理競合を避けるため、後続の
+# run_once_before_15-install-copilot-cli.sh が公式アーカイブから導入する。
 # git: Apple Git は 2.50 系で停滞しており、設定ベースフック (git >= 2.54) を
 # 使えない。ADR-020 の gitleaks フックはこの機能に依存するため、brew 版を入れる。
 # PATH で Apple Git より優先させる処理は ~/.zprofile 側にある（後述の理由により
@@ -326,7 +328,6 @@ brew trust --formula azure/azd/azd \
 brew install \
   azure-cli \
   azure/azd/azd \
-  copilot-cli \
   gh \
   git \
   poppler \

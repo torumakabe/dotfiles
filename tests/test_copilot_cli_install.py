@@ -1,17 +1,28 @@
-"""Guard the Copilot CLI install predicate in the Linux package bootstrap.
+"""Guard the Copilot CLI installation contracts on Unix platforms.
 
 Codespaces / Dev Container base images ship /usr/local/bin/copilot, which is
 never refreshed by `copilot update`. Gating the official installer on
 `command -v copilot` therefore pins an old CLI, so the gate must test the
 repo-managed binary at ~/.local/bin/copilot instead.
+
+macOS also uses the repo-managed binary because `copilot update` must not
+modify a Homebrew formula while leaving Homebrew's package record stale.
 """
+import json
+import os
 import pathlib
 import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 BOOTSTRAP_PATH = REPO_ROOT / "home/run_once_before_10-install-packages.sh.tmpl"
+MACOS_COPILOT_PATH = (
+    REPO_ROOT / "home/run_once_before_15-install-copilot-cli.sh.tmpl"
+)
 TOOLS_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 SHELL_SETUP_PATH = REPO_ROOT / "home/run_once_after_10-setup-shell.sh.tmpl"
 
@@ -23,6 +34,12 @@ COPILOT_RELEASES = {
     "arm64": (
         "copilot-linux-arm64.tar.gz",
         "3ed85e711955e13be523bf492bc6c93b40b69925bcb7f817c9d08abf4839cf89",
+    ),
+}
+MACOS_COPILOT_RELEASES = {
+    "arm64": (
+        "copilot-darwin-arm64.tar.gz",
+        "2346bb691981c2997d65c1c5bc3cef1aeddc9edd37dcb2f970b911aa597e59f6",
     ),
 }
 AZD_RELEASES = {
@@ -84,10 +101,33 @@ def _parse_checksums(block: str) -> dict[str, str]:
     }
 
 
+def _render_macos_copilot() -> str:
+    chezmoi = shutil.which("chezmoi")
+    if chezmoi is None:
+        raise unittest.SkipTest("chezmoi is required")
+    result = subprocess.run(
+        [
+            chezmoi,
+            "execute-template",
+            "--override-data",
+            json.dumps({"chezmoi": {"os": "darwin", "arch": "arm64"}}),
+            "--file",
+            str(MACOS_COPILOT_PATH),
+        ],
+        check=False,
+        capture_output=True,
+        encoding="utf-8",
+    )
+    if result.returncode != 0:
+        raise AssertionError(result.stderr)
+    return result.stdout
+
+
 class CopilotCliInstallTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.bootstrap = BOOTSTRAP_PATH.read_text(encoding="utf-8")
+        cls.macos_copilot = MACOS_COPILOT_PATH.read_text(encoding="utf-8")
         cls.tools = TOOLS_PATH.read_text(encoding="utf-8")
         cls.shell_setup = SHELL_SETUP_PATH.read_text(encoding="utf-8")
 
@@ -124,6 +164,207 @@ class CopilotCliInstallTests(unittest.TestCase):
         )
         self.assertIn("exit 0", install_block)
         self.assertIn("exit 1", install_block)
+
+    def test_macos_copilot_uses_pinned_verified_release(self) -> None:
+        self.assertIn('COPILOT_VERSION="1.0.80"', self.macos_copilot)
+        self.assertIn(
+            '[ -f "${COPILOT_BIN}" ]',
+            self.macos_copilot,
+        )
+        self.assertIn(
+            '[ ! -L "${COPILOT_BIN}" ]',
+            self.macos_copilot,
+        )
+        block = _case_block(self.macos_copilot, "COPILOT_VERSION")
+        self.assertEqual(
+            _parse_archives_and_checksums(block),
+            MACOS_COPILOT_RELEASES,
+        )
+        self.assertIn(
+            '"https://github.com/github/copilot-cli/releases/download/'
+            'v${COPILOT_VERSION}/${copilot_archive}"',
+            self.macos_copilot,
+        )
+        self.assertLess(
+            self.macos_copilot.index(
+                'actual_sha256="$(shasum -a 256 "${archive_path}"'
+            ),
+            self.macos_copilot.index('tar -xzf "${archive_path}"'),
+        )
+        self.assertIn(
+            'mv -f "${staged_path}" "${COPILOT_BIN}"',
+            self.macos_copilot,
+        )
+        self.assertRegex(
+            self.macos_copilot,
+            r"(?s)if ! curl .*?"
+            r"failed to download GitHub Copilot CLI.*?exit 1",
+        )
+
+    def test_copilot_release_versions_match_across_unix_platforms(self) -> None:
+        linux_version = re.search(
+            r'^\s*COPILOT_VERSION="([^"]+)"$',
+            self.bootstrap,
+            re.MULTILINE,
+        )
+        macos_version = re.search(
+            r'^\s*COPILOT_VERSION="([^"]+)"$',
+            self.macos_copilot,
+            re.MULTILINE,
+        )
+        self.assertIsNotNone(linux_version)
+        self.assertIsNotNone(macos_version)
+        self.assertEqual(linux_version.group(1), macos_version.group(1))
+
+    def test_macos_copilot_removes_homebrew_formula_after_install(self) -> None:
+        self.assertNotRegex(
+            self.bootstrap,
+            r"(?m)^\s*copilot-cli\s*\\?$",
+        )
+        install_index = self.macos_copilot.index(
+            'mv -f "${staged_path}" "${COPILOT_BIN}"'
+        )
+        uninstall_index = self.macos_copilot.index(
+            "brew uninstall --formula copilot-cli"
+        )
+        self.assertLess(install_index, uninstall_index)
+        self.assertIn(
+            "brew list --formula copilot-cli",
+            self.macos_copilot,
+        )
+        self.assertIn(
+            "if command -v brew >/dev/null 2>&1; then",
+            self.macos_copilot,
+        )
+        verification_index = self.macos_copilot.index(
+            'if ! is_user_local_copilot; then',
+            install_index + 1,
+        )
+        self.assertLess(verification_index, uninstall_index)
+
+    def test_macos_copilot_replaces_homebrew_symlink_before_uninstall(self) -> None:
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("bash is required")
+
+        rendered = _render_macos_copilot()
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            home = root_path / "home"
+            fake_bin = root_path / "bin"
+            brew_bin = root_path / "homebrew/bin"
+            local_bin = home / ".local/bin"
+            for directory in (fake_bin, brew_bin, local_bin):
+                directory.mkdir(parents=True, exist_ok=True)
+
+            brew_copilot = brew_bin / "copilot"
+            brew_copilot.write_text(
+                "#!/bin/sh\nprintf '%s\\n' 'copilot version 1.0.80'\n",
+                encoding="utf-8",
+            )
+            brew_copilot.chmod(0o755)
+            (local_bin / "copilot").symlink_to(brew_copilot)
+
+            fake_commands = {
+                "uname": "#!/bin/sh\nprintf '%s\\n' arm64\n",
+                "curl": (
+                    "#!/bin/sh\n"
+                    "while [ \"$#\" -gt 0 ]; do\n"
+                    "  if [ \"$1\" = -o ]; then shift; : > \"$1\"; exit 0; fi\n"
+                    "  shift\n"
+                    "done\n"
+                    "exit 1\n"
+                ),
+                "shasum": (
+                    "#!/bin/sh\n"
+                    "printf '%s  archive\\n' "
+                    "2346bb691981c2997d65c1c5bc3cef1aeddc9edd37dcb2f970b911aa597e59f6\n"
+                ),
+                "tar": (
+                    "#!/bin/sh\n"
+                    "while [ \"$#\" -gt 0 ]; do\n"
+                    "  if [ \"$1\" = -C ]; then shift; dest=$1; fi\n"
+                    "  shift\n"
+                    "done\n"
+                    "printf '%s\\n' '#!/bin/sh' "
+                    "'echo \"copilot version 1.0.80\"' > \"$dest/copilot\"\n"
+                    "chmod 755 \"$dest/copilot\"\n"
+                ),
+                "brew": (
+                    "#!/bin/sh\n"
+                    "if [ \"$1\" = list ]; then exit 0; fi\n"
+                    "if [ \"$1\" = uninstall ]; then\n"
+                    "  printf '%s\\n' \"$*\" >> \"$BREW_LOG\"\n"
+                    "  exit 0\n"
+                    "fi\n"
+                    "exit 1\n"
+                ),
+            }
+            for name, content in fake_commands.items():
+                command = fake_bin / name
+                command.write_text(content, encoding="utf-8")
+                command.chmod(0o755)
+
+            brew_log = root_path / "brew.log"
+            env = os.environ.copy()
+            env.update(
+                {
+                    "HOME": str(home),
+                    "PATH": f"{fake_bin}:{env['PATH']}",
+                    "BREW_LOG": str(brew_log),
+                }
+            )
+            result = subprocess.run(
+                [bash],
+                input=rendered,
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((local_bin / "copilot").is_symlink())
+            self.assertTrue((local_bin / "copilot").is_file())
+            self.assertEqual(
+                brew_log.read_text(encoding="utf-8").strip(),
+                "uninstall --formula copilot-cli",
+            )
+
+    def test_macos_copilot_rejects_unsupported_architecture(self) -> None:
+        bash = shutil.which("bash")
+        if bash is None:
+            self.skipTest("bash is required")
+
+        rendered = _render_macos_copilot()
+        with tempfile.TemporaryDirectory() as root:
+            root_path = pathlib.Path(root)
+            fake_bin = root_path / "bin"
+            fake_bin.mkdir()
+            uname = fake_bin / "uname"
+            uname.write_text("#!/bin/sh\nprintf '%s\\n' x86_64\n", encoding="utf-8")
+            uname.chmod(0o755)
+            env = os.environ.copy()
+            env.update(
+                {
+                    "HOME": str(root_path / "home"),
+                    "PATH": f"{fake_bin}:{env['PATH']}",
+                }
+            )
+            result = subprocess.run(
+                [bash],
+                input=rendered,
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                "unsupported architecture for Copilot CLI: x86_64",
+                result.stderr,
+            )
 
     def test_azure_cli_uses_verified_microsoft_repository(self) -> None:
         self.assertNotIn("InstallAzureCLIDeb", self.bootstrap)
