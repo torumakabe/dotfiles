@@ -30,3 +30,4 @@ mise の役割は「クロスプラットフォームで揃えたい CLI ラン�
 - mise lockfile から edit エントリが消えるため、mise の対象が CLI ランタイムに整理される
 - Linux で edit を使いたくなった場合は別途インストール手段を選定する必要がある（本 ADR の更新で対応）
 - `home/PowerShell_profile.ps1.tmpl` の `$env:EDITOR = 'edit'` は PATH 経由で winget 配置のバイナリを解決するため変更不要
+- Windows の DSC と更新手段の責務分離は ADR-032 に従う

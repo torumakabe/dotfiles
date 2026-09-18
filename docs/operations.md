@@ -78,29 +78,39 @@ chezmoi diff && chezmoi apply
 
 macOS と Linux は、mise が未導入の場合に `home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。既存の mise は導入元と版を問わず置き換えない。Windows は DSC の `jdx.mise` を使い、winget が公式 GitHub Releases ZIP を配置する。導入方法は OS ごとに異なるが、リポジトリが新規導入する mise には公式成果物を使う（[ADR-028](adr/028-mise-bootstrap-preserves-existing-installations.md)）。
 
-### `mise-self-update` / `mise-self-upgrade`
+### `mise-self-update`
 
-mise 本体の更新は、全プラットフォームで次の公開コマンドを使い分ける（[ADR-030](adr/030-mise-self-update-and-upgrade.md)）。
-
-| コマンド | 役割 | Windows | macOS / Linux / WSL |
-| --- | --- | --- | --- |
-| `mise-self-update` | mise 組み込み機能で本体だけを直接更新する | `mise self-update --yes --no-plugins` の後に `mise reshim` | 同左 |
-| `mise-self-upgrade` | 環境の通常推奨手段で本体を更新する | WinGet で `jdx.mise` を更新し、更新時に `mise reshim` | `mise-self-update` へ委譲 |
+mise 本体の更新は、全プラットフォームで `mise-self-update` に統一する（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。
 
 ```bash
 mise-self-update
-mise-self-upgrade
 ```
 
 `mise self-update` は既定でプラグインも更新するため、`mise-self-update` は `--no-plugins` を付けて本体だけを対象にする。追加引数は受け付けない。
 
 mise 用の GitHub token が未設定の場合、`mise-self-update` は `GH_TOKEN`、続いて認証済みの `gh auth token` を探し、見つかった token を self-update のプロセスだけへ渡す。シェル環境やユーザー環境には保存しない。token を取得できない場合は未認証で実行し、GitHub API のレート制限を含むmiseのエラーをそのまま報告する。
 
-Windows の `mise-self-upgrade` は `winget upgrade --id jdx.mise --source winget --disable-interactivity --force` を実行し、更新があった場合は続けて `mise reshim` を実行する。更新がない場合は正常終了する。winget portable package の symlink 判定により通常の upgrade が「変更済み」と誤検知されることがあるため、WinGet 管理として更新・修復したい場合はこの関数を使う。
+Windows でも mise 自身を更新主体とし、WinGet/DSC の登録版と実ファイルの版が一時的に異なることを許容する。WinGetによる再導入や登録修復は日常更新から分離し、必要な場合だけ [`troubleshooting.md`](troubleshooting.md#winget-blocking-pin-を確認修復する) の手順を使う。
 
-Windows で `mise-self-update` を使うと更新は速いが、WinGet/DSC の管理記録と実ファイルの版が一時的に異なり得る。管理記録との一致を優先する保守では `mise-self-upgrade` を使う。
+## Windows の更新主体と WinGet blocking pin
 
-Copilot CLI など mise shim 経由のプロセスが動いていると winget が `mise.exe` を削除できないため、実行前に検出して停止を促す。
+Windows では DSC がパッケージの導入と存在保証を担当し、日常更新にはリポジトリが定めた updater を使う（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。同じ実体を独自 updater が更新する次のパッケージには blocking pin を設定し、`winget upgrade --all` による置換を防ぐ。
+
+| WinGet ID | 日常更新 | blocking pin |
+| --- | --- | --- |
+| `GitHub.CopilotApp` | アプリ内 updater | あり |
+| `GitHub.Copilot` | `copilot update` | あり |
+| `jdx.mise` | `mise-self-update` | あり |
+| `Rustlang.Rustup` | `rustup self update` | あり |
+| `Microsoft.Azd` | `azd update`（WindowsではWinGetへ委譲） | なし |
+
+`winget upgrade --all` は引き続き利用できる。blocking pin の対象を除く、WinGet が検出したパッケージは更新対象になる。このリポジトリが導入・更新方法を管理していないパッケージの結果は保証しない。PowerToys、draw.io、Azure CLI、chezmoi は、現在の運用手順で独自 updater を正式採用していないため blocking pin の対象に含めない。
+
+blocking pin は WinGet 外の updater を止めない。WinGet で管理状態を同期または修復する場合は、対象を完全一致で指定して `--force` を使う。WinGet 1.29.380 では `--force` が blocking pin を上書きすることを実機で確認している。pin の確認と復旧は [`troubleshooting.md`](troubleshooting.md#winget-blocking-pin-を確認修復する) を参照する。
+
+pin の対象を廃止するときは、DSC の管理対象を一度 `Pinned = false` にして既存端末から pin を削除する。その変更を適用した後、別の変更で管理対象配列からエントリを削除する。
+
+macOS の Homebrew と独自 updater の併用は別途調査する。Linux と WSL は、現行構成では公式 installer と各 updater が同じ実体を管理するため追加対策を設けない。apt/dpkg と独自 updater の二重管理や複数ディレクトリへの重複配置を導入する場合は再評価する。
 
 ### `mise-upgrade`
 
@@ -234,7 +244,7 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
 
-`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update`、Windows で WinGet 管理として更新・修復したい場合は `mise-self-upgrade` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
+`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
 
 最低限の確認:
 

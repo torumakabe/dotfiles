@@ -2,13 +2,15 @@
 
 ## Status
 
-Accepted
+Superseded by ADR-032
 
 ## Context
 
 mise 本体の更新には、mise 組み込みの `self-update` と、OS ごとの導入元が推奨する更新手段がある。導入後の利用者向け操作として、全プラットフォームで本体だけを更新する操作と、導入元の管理記録を維持する操作を分ける必要がある。
 
 `mise self-update` は既定でプラグインも更新する。また、Windows では WinGet/DSC の記録と実ファイルの版が一時的に異なる可能性がある。ADR-028 は bootstrap で既存導入を置換しない判断であり、本 ADR は導入後の更新操作を対象とする。
+
+その後、全環境の日常更新を `mise-self-update` に統一し、WinGet の登録修復を例外的な手動操作へ分離する判断に変更したため、ADR-032 が本 ADR を置換する。
 
 ## Decision
 
@@ -23,3 +25,5 @@ mise 本体の更新には、mise 組み込みの `self-update` と、OS ごと�
 全環境で `mise-self-update` によりプラグインを変更せず、本体だけを同じ手順で更新できる。macOS、Linux、WSL では既存の導入元を問わず、利用者が選択した導入方法を維持できる。
 
 Windows では `mise-self-update` を使うと WinGet/DSC の記録と実ファイルの版が一時的に異なり得るため、管理記録の整合性が必要な場合は `mise-self-upgrade` を選ぶ。OS ごとの更新手段の差異と、更新後の reshim が利用者向けコマンドの契約になる。
+
+Windows の `jdx.mise` blocking pin と `--force` による修復は ADR-032 に従う。

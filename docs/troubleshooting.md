@@ -27,6 +27,49 @@ copilot-guardrails
 
 この回避策は CLI の起動先だけを変更し、Windows のパッケージ登録は修復しない。macOS/Linux/WSL は対象外である。対象範囲と撤去条件は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。
 
+## WinGet blocking pin を確認・修復する
+
+`winget upgrade --all` で Copilot App、Copilot CLI、mise、rustup が更新されないこと自体は正常である。これらは独自 updater を更新主体とし、DSC が blocking pin を設定する（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。
+
+現在の pin は次で確認する。
+
+```powershell
+winget pin list --source winget
+```
+
+WinGet 1.29.380 では、`pin list --id <ID> --exact` を指定しても一覧がIDで絞られない。表示された表のID列で、次の4件が `Blocking` になっていることを確認する。
+
+- `GitHub.CopilotApp`
+- `GitHub.Copilot`
+- `jdx.mise`
+- `Rustlang.Rustup`
+
+独自 updater は blocking pin を解除せずに実行する。Copilot CLI は `copilot update`、mise は `mise-self-update`、rustup 自体は `rustup self update` を使う。
+
+WinGet に更新候補があり、WinGet の管理記録と実体を同期する場合は、`--force` で blocking pin を上書きする。
+
+```powershell
+winget upgrade --id <ID> --exact --source winget --disable-interactivity --force
+```
+
+カタログの最新版と WinGet の登録版が同じ場合、`winget upgrade` は更新候補なし（`0x8A15002B`）で終了し、`--force` を付けても登録を修復できない。この場合は同じ版を再導入して登録を上書きする。
+
+```powershell
+winget install --id <ID> --exact --source winget --disable-interactivity --force
+```
+
+独自 updater が自己更新した実体は WinGet の管理記録の外にあるため、`winget uninstall` を実行しても実体と PATH 上の起動先が残ることがある。アンインストール後は、対象コマンドが解決されないことを `Get-Command <name> -All` で確認し、残っていれば実体を手動で削除する。
+
+mise の日常更新には `mise-self-update` を使う。WinGetによる再導入または登録修復が必要な場合は、mise shimを利用するCopilot CLIなどのプロセスを終了してから上記のWinGetコマンドを実行し、成功後に `mise reshim` を実行する。更新候補がない場合、実体の版を巻き戻してまで登録版へ合わせない。
+
+pin が欠落または別の種類になっている場合は、通常の対話型 PowerShell で DSC を再適用する。
+
+```powershell
+winget configure -f .\reference\windows\configuration.dsc.yaml
+```
+
+pin を方針から撤回するときは、管理対象配列から直接削除しない。まず `Pinned = false` を配布して DSC を適用し、端末から pin が削除されたことを確認してから、次の変更で配列のエントリを削除する。
+
 ## `warning: config file template has changed`
 
 `.chezmoi.toml.tmpl` の更新後に出る。`chezmoi update` は設定を再生成しないため、`chezmoi init` を実行するまで毎回出続ける。
@@ -145,7 +188,7 @@ mise --version
 
 `lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。`run_once_before_20-install-mise.sh` は既存バイナリを版にかかわらず保持するため、自分で更新する。
 
-通常は全環境で `mise-self-update` を実行する。Windows で WinGet/DSC の管理記録と実ファイルの版を一致させたい場合は、`mise-self-upgrade` を実行する。
+全環境で `mise-self-update` を実行する。WindowsでもWinGetの登録版と実ファイルの一時的な不一致を許容し、日常更新にWinGetは使わない。
 
 mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。
 

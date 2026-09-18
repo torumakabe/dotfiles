@@ -24,3 +24,4 @@ ADR-009 は Windows 限定で「外部 rustup が既に存在する」ことを�
 - mise lockfile が rust バージョンを追跡しなくなる。更新は `rustup update` / `rustup default` で個別管理する
 - ADR-009 が対処していた Windows 固有の mise/rustup home 分離の複雑さが不要になる（ADR-009 は本 ADR により Superseded）
 - 新規マシンでは rustup のインストールタイミングが `run_once_before_10` (mise install より前) になる
+- Windows の `Rustlang.Rustup` と rustup updater の競合防止は ADR-032 に従う

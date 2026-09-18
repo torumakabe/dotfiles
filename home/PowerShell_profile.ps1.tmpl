@@ -112,69 +112,6 @@ function Invoke-MiseSelfUpdate {
     }
 }
 
-# mise 本体を winget で更新する（winget portable の誤検知回避）
-function Invoke-MiseSelfUpgrade {
-    param(
-        [switch]$SkipProcessCheck
-    )
-
-    $prevErrorAction = $ErrorActionPreference
-    $previousNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
-    $ErrorActionPreference = 'Stop'
-    $PSNativeCommandUseErrorActionPreference = $false
-    try {
-        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-            throw "winget が見つかりません。Windows App Installer を確認してください"
-        }
-
-        if (-not $SkipProcessCheck) {
-            $miseProcesses = Get-CimInstance Win32_Process |
-                Where-Object {
-                    $_.Name -ieq 'mise.exe' -and
-                    ($_.ExecutablePath -like '*\Microsoft\WinGet\Links\mise.exe' -or
-                     $_.CommandLine -like '*\Microsoft\WinGet\Links\mise.exe*' -or
-                     $_.CommandLine -like 'mise*x --*')
-                } |
-                Select-Object ProcessId, ParentProcessId, CommandLine
-
-            if ($miseProcesses) {
-                Write-Warning ($miseProcesses | Format-Table -AutoSize | Out-String)
-                throw "mise.exe を使っているプロセスがあります。Copilot CLI など mise shim 経由のプロセスを閉じてから再実行してください"
-            }
-        }
-
-        Write-Host "==> winget: mise 本体を更新..."
-        winget upgrade --id jdx.mise --source winget --disable-interactivity --force
-        $wingetExitCode = $LASTEXITCODE
-
-        if ($wingetExitCode -ne 0) {
-            # ネイティブ終了コードは符号付き Int32 または符号なし値として現れる。
-            if ($wingetExitCode -eq 0x8A15002B -or $wingetExitCode -eq 2316632107) {
-                Write-Host "✅ mise 本体は最新です"
-                $global:LASTEXITCODE = 0
-                return
-            }
-
-            throw "winget による mise 本体更新に失敗しました"
-        }
-
-        Write-Host "==> mise: shim を再生成..."
-        mise reshim
-        if ($LASTEXITCODE -ne 0) { throw "mise reshim に失敗しました" }
-
-        Write-Host "✅ mise 本体の更新が完了しました"
-        $global:LASTEXITCODE = 0
-    }
-    catch {
-        Write-Error "❌ $($_.Exception.Message)" -ErrorAction Continue
-        $global:LASTEXITCODE = 1
-    }
-    finally {
-        $PSNativeCommandUseErrorActionPreference = $previousNativeErrorPreference
-        $ErrorActionPreference = $prevErrorAction
-    }
-}
-
 # mise 管理ツールの一括更新（日常操作）
 # upgrade → lockfile 更新 → chezmoi 反映 → git commit+push を一括実行
 function Invoke-MiseUpgrade {
@@ -580,7 +517,6 @@ function Invoke-GitHooksAudit {
 Set-Alias -Name e -Value Open-EditInNewConsole
 Set-Alias -Name k -Value kubectl
 Set-Alias -Name mise-self-update -Value Invoke-MiseSelfUpdate
-Set-Alias -Name mise-self-upgrade -Value Invoke-MiseSelfUpgrade
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 Set-Alias -Name git-hooks-audit -Value Invoke-GitHooksAudit
 
