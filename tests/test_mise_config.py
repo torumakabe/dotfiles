@@ -1309,24 +1309,26 @@ class MiseConfigTests(unittest.TestCase):
 test_root="$1"
 export HOME="${test_root}/home"
 export TMPDIR="${test_root}/tmp"
-lockfile="${HOME}/.config/mise/mise.lock"
-locks_dir="${HOME}/.config/mise/locks"
-source_home="${test_root}/source/home"
-source_lockfile="${source_home}/dot_config/mise/private_mise.lock"
-source_locks_dir="${source_home}/dot_config/mise/exact_locks"
+# zsh は動的スコープなので、mise-upgrade の local と同名の変数をここで使うと
+# スタブ内の参照が関数側の local を読んでしまう。tst_ を付けて衝突を避ける。
+tst_lockfile="${HOME}/.config/mise/mise.lock"
+tst_locks_dir="${HOME}/.config/mise/locks"
+tst_source_home="${test_root}/source/home"
+tst_source_lockfile="${tst_source_home}/dot_config/mise/private_mise.lock"
+tst_source_locks_dir="${tst_source_home}/dot_config/mise/exact_locks"
 
-mkdir -p "${locks_dir}/original/1" \
-  "${source_locks_dir}/exact_original/exact_1" "$TMPDIR"
-print -r -- "original-target-lock" > "$lockfile"
+mkdir -p "${tst_locks_dir}/original/1" \
+  "${tst_source_locks_dir}/exact_original/exact_1" "$TMPDIR"
+print -r -- "original-target-lock" > "$tst_lockfile"
 print -r -- "original-target-package" \
-  > "${locks_dir}/original/1/package.json"
+  > "${tst_locks_dir}/original/1/package.json"
 print -r -- "original-target-sidecar" \
-  > "${locks_dir}/original/1/aube-lock.yaml"
-print -r -- "original-source-lock" > "$source_lockfile"
+  > "${tst_locks_dir}/original/1/aube-lock.yaml"
+print -r -- "original-source-lock" > "$tst_source_lockfile"
 print -r -- "original-source-package" \
-  > "${source_locks_dir}/exact_original/exact_1/package.json"
+  > "${tst_source_locks_dir}/exact_original/exact_1/package.json"
 print -r -- "original-source-sidecar" \
-  > "${source_locks_dir}/exact_original/exact_1/aube-lock.yaml"
+  > "${tst_source_locks_dir}/exact_original/exact_1/aube-lock.yaml"
 
 gh() {
   print -r -- "test-token"
@@ -1337,14 +1339,14 @@ mise() {
     return 0
   fi
   if [[ "$1" == "lock" ]]; then
-    mkdir -p "${locks_dir}/new/2"
+    mkdir -p "${tst_locks_dir}/new/2"
     print -r -- 'lockfile_version = 2
 [[tools."npm:test"]]
 version = "2"
 aube = { path = "locks/new/2", digest = "sha256:test" }' \
-      > "$lockfile"
-    print -r -- "new-package" > "${locks_dir}/new/2/package.json"
-    print -r -- "new-sidecar" > "${locks_dir}/new/2/aube-lock.yaml"
+      > "$tst_lockfile"
+    print -r -- "new-package" > "${tst_locks_dir}/new/2/package.json"
+    print -r -- "new-sidecar" > "${tst_locks_dir}/new/2/aube-lock.yaml"
     return 0
   fi
   return 1
@@ -1353,23 +1355,23 @@ aube = { path = "locks/new/2", digest = "sha256:test" }' \
 chezmoi() {
   if [[ "$1" == "source-path" ]]; then
     if (( $# == 1 )); then
-      print -r -- "$source_home"
-    elif [[ "${@: -1}" == "$lockfile" ]]; then
-      print -r -- "$source_lockfile"
-    elif [[ "${@: -1}" == "$locks_dir" &&
-            -d "$source_locks_dir" ]]; then
-      print -r -- "$source_locks_dir"
+      print -r -- "$tst_source_home"
+    elif [[ "${@: -1}" == "$tst_lockfile" ]]; then
+      print -r -- "$tst_source_lockfile"
+    elif [[ "${@: -1}" == "$tst_locks_dir" &&
+            -d "$tst_source_locks_dir" ]]; then
+      print -r -- "$tst_source_locks_dir"
     else
       return 1
     fi
     return 0
   fi
   if [[ "$1" == "re-add" ]]; then
-    command cp "$lockfile" "$source_lockfile"
+    command cp "$tst_lockfile" "$tst_source_lockfile"
     return 1
   fi
   if [[ "$1" == "forget" ]]; then
-    command rm -rf "$source_locks_dir"
+    command rm -rf "$tst_source_locks_dir"
     return 0
   fi
   return 1
@@ -1386,11 +1388,11 @@ if mise-upgrade; then
   print -u2 -- "mise-upgrade unexpectedly succeeded"
   exit 1
 fi
-[[ "$(<"$lockfile")" == "original-target-lock" ]] || exit 2
-[[ "$(<"${locks_dir}/original/1/package.json")" == \
+[[ "$(<"$tst_lockfile")" == "original-target-lock" ]] || exit 2
+[[ "$(<"${tst_locks_dir}/original/1/package.json")" == \
   "original-target-package" ]] || exit 3
-[[ "$(<"$source_lockfile")" == "original-source-lock" ]] || exit 4
-[[ "$(<"${source_locks_dir}/exact_original/exact_1/package.json")" == \
+[[ "$(<"$tst_source_lockfile")" == "original-source-lock" ]] || exit 4
+[[ "$(<"${tst_source_locks_dir}/exact_original/exact_1/package.json")" == \
   "original-source-package" ]] || exit 5
 """
             )
