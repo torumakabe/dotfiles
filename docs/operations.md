@@ -106,7 +106,7 @@ Windows では DSC がパッケージの導入と存在保証を担当し、日�
 | `Rustlang.Rustup` | `rustup self update` | あり |
 | `Microsoft.Azd` | `azd update`（WindowsではWinGetへ委譲） | なし |
 
-`winget upgrade --all` は引き続き利用できる。blocking pin の対象を除く、WinGet が検出したパッケージは更新対象になる。このリポジトリが導入・更新方法を管理していないパッケージの結果は保証しない。PowerToys、draw.io、Azure CLI、chezmoi は、現在の運用手順で独自 updater を正式採用していないため blocking pin の対象に含めない。
+`winget upgrade --all` は引き続き利用できる。blocking pin の対象を除く、WinGet が検出したパッケージは更新対象になる。このリポジトリが導入・更新方法を管理していないパッケージの結果は保証しない。PowerToys、Azure CLI、chezmoi は、現在の運用手順で独自 updater を正式採用していないため blocking pin の対象に含めない。
 
 blocking pin は WinGet 外の updater を止めない。WinGet で管理状態を同期または修復する場合は、対象を完全一致で指定して `--force` を使う。WinGet 1.29.380 では `--force` が blocking pin を上書きすることを実機で確認している。pin の確認と復旧は [`troubleshooting.md`](troubleshooting.md#winget-blocking-pin-を確認修復する) を参照する。
 
@@ -267,16 +267,15 @@ GITHUB_TOKEN=$(gh auth token) mise install
 | `home/run_once_before_20-install-mise.sh.tmpl` | `MISE_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_before_10-install-packages.sh.tmpl` | Linux 用 `COPILOT_VERSION`、`AZD_VERSION`、`RUSTUP_VERSION` と各プラットフォーム別 SHA-256、Microsoft 署名鍵の primary-key fingerprint |
 | `home/run_once_before_15-install-copilot-cli.sh.tmpl` | macOS 用 `COPILOT_VERSION` と arm64 SHA-256 |
-| `home/run_once_after_30-install-tools.sh.tmpl` | `DRAWIO_VERSION` とアーキテクチャ別 SHA-256 |
 | `home/run_once_after_10-setup-shell.sh.tmpl` | `OH_MY_ZSH_COMMIT`、zsh-completions の更新確認用 `ZSH_COMPLETIONS_TAG` と取得を強制する `ZSH_COMPLETIONS_COMMIT` |
 
-成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。現在の draw.io 配布フローには公式 checksum がないため、更新担当者が対象リリース asset の SHA-256 を計算し、上流リリースの出所と asset を確認してから pin を更新する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。
+成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
 
 macOS の Copilot CLI 移行は例外とする。公式バイナリを配置できない状態で処理を成功させると `run_once` が完了扱いになり、Homebrew formula からの移行を再試行できない。このためダウンロード失敗も異常終了させ、次回の `chezmoi apply` で再実行する。
 
-`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Linux の draw.io を pin どおりに入れ直す場合は、既存パッケージを `sudo apt-get remove drawio` で削除し、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。Microsoft apt リポジトリの鍵や suite を更新した場合も、同じ再実行が必要になる。
+`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Microsoft apt リポジトリの鍵や suite を更新した場合は、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。
 
 最低限の確認:
 

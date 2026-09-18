@@ -55,10 +55,6 @@ RUSTUP_RELEASES = {
         "aeb4105778ca1bd3c6b0e75768f581c656633cd51368fa61289b6a71696ac7e1",
     ),
 }
-DRAWIO_RELEASES = {
-    "amd64": "f4c49ed84422ea4afd95818f53c54bc666e57b33bd036d468c7096619b47ffd9",
-    "arm64": "62a9ea636accada76076bd5a20f61b707e0e8093d3fd28c6583518663ca795d6",
-}
 
 
 def _case_block(source: str, version_variable: str) -> str:
@@ -314,21 +310,10 @@ class CopilotCliInstallTests(unittest.TestCase):
             self.bootstrap.index('"${rustup_init}" -y --no-modify-path'),
         )
 
-    def test_drawio_uses_pinned_verified_release(self) -> None:
-        self.assertIn('DRAWIO_VERSION="31.1.8"', self.tools)
-        self.assertNotIn("/releases/latest", self.tools)
-        block = _case_block(self.tools, "DRAWIO_VERSION")
-        self.assertEqual(_parse_checksums(block), DRAWIO_RELEASES)
-        self.assertIn(
-            '"https://github.com/jgraph/drawio-desktop/releases/download/'
-            'v${DRAWIO_VERSION}/${deb_name}"',
-            self.tools,
-        )
-        self.assertLess(
-            self.tools.index('actual_sha256="$(sha256_file "${deb_path}")"'),
-            self.tools.index('sudo dpkg -i "${deb_path}"'),
-        )
-        self.assertNotIn("installation failed, skipping", self.tools)
+    def test_retired_desktop_apps_are_not_installed(self) -> None:
+        managed_sources = self.bootstrap + self.tools
+        self.assertNotRegex(managed_sources, r"(?i)draw\.io|drawio")
+        self.assertNotRegex(managed_sources, r"(?i)libreoffice")
 
     def test_shell_git_dependencies_use_verified_commits(self) -> None:
         self.assertIsNotNone(
