@@ -113,6 +113,10 @@ class WindowsConfigurationTests(unittest.TestCase):
             ),
         )
 
+    def test_retired_desktop_apps_are_not_managed(self) -> None:
+        self.assertNotIn("TheDocumentFoundation.LibreOffice", self.config)
+        self.assertNotIn("JGraph.Draw", self.config)
+
     def test_visual_studio_workload_avoids_broken_elevated_units(self) -> None:
         build_tools_start = self.config.index("id: VisualStudioBuildTools")
         workload_start = self.config.index("id: VisualStudioVCTools")

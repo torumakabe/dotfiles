@@ -11,19 +11,6 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export PATH="${HOME}/.local/share/mise/shims:${HOME}/.local/bin:${GOPATH:-${HOME}/go}/bin:${PATH}"
 
-sha256_file() {
-  local file=$1
-
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "${file}" | awk '{print $1}'
-  elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "${file}" | awk '{print $1}'
-  else
-    echo "error: sha256sum or shasum required to verify draw.io" >&2
-    exit 1
-  fi
-}
-
 # --- Docker (Linux only, skip in WSL where Docker Desktop is used) ---
 {{ if and (eq .chezmoi.os "linux") (not .isWSL) -}}
 if ! command -v docker >/dev/null 2>&1; then
@@ -74,50 +61,6 @@ fi
 # --- macOS-specific brew cask packages ---
 if ! brew install --cask --force devtoys; then
   echo "Warning: failed to install DevToys via Homebrew. Retry manually with 'brew install --cask --force devtoys'." >&2
-fi
-if ! brew install --cask --force drawio; then
-  echo "Warning: failed to install draw.io via Homebrew. Retry manually with 'brew install --cask --force drawio'." >&2
-fi
-{{ end -}}
-
-{{ if and (eq .chezmoi.os "linux") (not .isWSL) -}}
-# --- draw.io (native Linux only) ---
-if ! command -v drawio >/dev/null 2>&1; then
-  DRAWIO_VERSION="31.1.8"
-  echo "Installing draw.io ${DRAWIO_VERSION}..."
-  (
-    arch="$(dpkg --print-architecture)"
-    case "${arch}" in
-      amd64) expected_sha256="f4c49ed84422ea4afd95818f53c54bc666e57b33bd036d468c7096619b47ffd9" ;;
-      arm64) expected_sha256="62a9ea636accada76076bd5a20f61b707e0e8093d3fd28c6583518663ca795d6" ;;
-      *)
-        echo "error: unsupported architecture for draw.io: ${arch}" >&2
-        exit 1
-        ;;
-    esac
-    tmp_root="${XDG_RUNTIME_DIR:-${HOME}/.cache}/dotfiles-install"
-    mkdir -p "${tmp_root}"
-    chmod 700 "${tmp_root}"
-    tmp_dir="$(mktemp -d "${tmp_root}/drawio.XXXXXX")"
-    trap 'rm -rf "${tmp_dir}"' EXIT
-    deb_name="drawio-${arch}-${DRAWIO_VERSION}.deb"
-    deb_path="${tmp_dir}/${deb_name}"
-    if ! curl --proto '=https' --tlsv1.2 -fsSL -o "${deb_path}" \
-      "https://github.com/jgraph/drawio-desktop/releases/download/v${DRAWIO_VERSION}/${deb_name}"; then
-      echo "Warning: failed to download draw.io ${DRAWIO_VERSION}; skipping installation." >&2
-      exit 0
-    fi
-    actual_sha256="$(sha256_file "${deb_path}")"
-    if [ "${actual_sha256}" != "${expected_sha256}" ]; then
-      echo "error: checksum verification failed for ${deb_name}" >&2
-      exit 1
-    fi
-    if ! sudo dpkg -i "${deb_path}"; then
-      if ! sudo apt-get -f -y install; then
-        echo "Warning: failed to install draw.io; continue and retry after network recovery." >&2
-      fi
-    fi
-  )
 fi
 {{ end -}}
 
