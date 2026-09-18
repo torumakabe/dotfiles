@@ -2,23 +2,6 @@
 
 lockfile_version = 2
 
-[[tools.1password]]
-version = "2.39.0"
-backend = "vfox:mise-plugins/vfox-1password"
-specifiers = ["latest"]
-
-[tools.1password."platforms.linux-arm64"]
-url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.39.0/op_linux_arm64_v2.39.0.zip"
-
-[tools.1password."platforms.linux-x64"]
-url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.39.0/op_linux_amd64_v2.39.0.zip"
-
-[tools.1password."platforms.macos-arm64"]
-url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.39.0/op_darwin_arm64_v2.39.0.zip"
-
-[tools.1password."platforms.windows-x64"]
-url = "https://cache.agilebits.com/dist/1P/op2/pkg/v2.39.0/op_windows_amd64_v2.39.0.zip"
-
 [[tools.azure-kubelogin]]
 version = "0.2.19"
 backend = "aqua:Azure/kubelogin"
