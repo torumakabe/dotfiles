@@ -181,5 +181,5 @@ jq --argjson desired "${desired}" --argjson enabled "${existing_enabled}" \
 ' <<<"${input}" >"${settings_tmp}"
 jq -e . "${settings_tmp}" >/dev/null
 mv -f "${settings_tmp}" "${settings_path}"
-echo "Configured Copilot CLI local sandbox in ${settings_path}"
+echo "Configured GitHub Copilot user settings in ${settings_path}"
 {{- end -}}
