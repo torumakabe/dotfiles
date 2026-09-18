@@ -22,12 +22,12 @@ coreutils の `link.exe` 自体は変更・削除・リネームしない。代�
 
 値（MSVC `link.exe` の絶対パス）は `vswhere.exe` で毎回動的に解決し、ハードコードは持たない。実装は `home/run_onchange_after_20-resolve-msvc-linker.ps1.tmpl`（Windows 限定）。安定した変更検知元が無いため `{{ now }}` を埋め込み `chezmoi apply` の度に強制再実行させ、解決結果が現在値と同じ場合は書き込みを行わない（冪等）。VS Build Tools/vswhere が未導入でもエラーにせず fail-soft で継続する。
 
-併せて `reference/windows/configuration.dsc.yaml` に VS 2022 Build Tools 本体と C++ ワークロード（`Microsoft.VisualStudio.DSC/VSComponents`, `Microsoft.VisualStudio.Workload.VCTools`）を追加した。`WinGetPackage` リソースにはインストーラー追加引数を渡すプロパティが無いため。
+併せて `reference/windows/configuration.dsc.yaml` に VS 2022 Build Tools 本体と C++ ワークロードを追加した。Build Tools 本体は通常権限の `WinGetPackage` で管理し、C++ ワークロード（`Microsoft.VisualStudio.Workload.VCTools`）は `vswhere.exe` で MSVC の `link.exe` を検査する `PSDscResources/Script` で管理する。ワークロードが不足するときだけ、対話型セッションから Visual Studio Installer を UAC 昇格して実行する。WinGet Configuration v2 の `securityContext: elevated` はこの端末で `0x800706BA` によりプロセス生成に失敗し、管理者 PowerShell から実行すると全 `WinGetPackage` のカタログ接続が失敗するため使用しない。
 
 ## Consequences
 
 - coreutils の `link` コマンドは PATH 上に存在し続ける。Cargo のビルドだけが環境変数経由で正しい MSVC リンカーを使う
 - `chezmoi apply` の実行時間がわずかに伸びる（vswhere 実行分）
-- 新規マシンでは `winget configure -f reference/windows/configuration.dsc.yaml` を管理者権限で手動実行するまで解決が効かない
+- 新規マシンでは通常の対話型 PowerShell から `winget configure -f reference/windows/configuration.dsc.yaml` を手動実行し、Build Tools または C++ ワークロードの導入時に表示される UAC を承認するまで解決が効かない。Visual Studio Installer が終了コード `3010` を返した場合は Windows の再起動も必要
 - 他プロジェクトが独自の `CARGO_TARGET_*_LINKER` を `.cargo/config.toml` で設定している場合、環境変数側が優先され意図しない上書きになりうる（現状未確認）
 - amd64 Windows のみ対応。環境変数名 (`CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER`) と vswhere 検索パターン (`Hostx64\x64`) がターゲットトリプル/ホスト固定のため、ARM64 Windows（Coreutils ARM64 版でも同種の衝突が起こりうる）は未対応。将来的に `.chezmoi.arch` での分岐が必要

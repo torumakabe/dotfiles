@@ -70,6 +70,8 @@ chezmoi apply
 
 ### Windows
 
+以下は通常の対話型 PowerShell で実行する。管理者権限が必要なパッケージや Visual Studio ワークロードの導入時には UAC が表示されるため、内容を確認して承認する。再起動を求める警告が表示された場合は、Windows を再起動してから後続の操作を行う。
+
 ```powershell
 winget install twpayne.chezmoi
 chezmoi init torumakabe

@@ -318,9 +318,10 @@ command -v copilot uv
 
 復旧:
 
-1. Visual Studio 2022 Build Tools（C++ によるデスクトップ開発ワークロード）が未導入なら、管理者権限の PowerShell で `winget configure -f reference\windows\configuration.dsc.yaml` を実行する
-2. `chezmoi apply` を実行する（`run_onchange_after_20-resolve-msvc-linker.ps1` は毎回再評価されるため、追加の手動操作は不要）
-3. 環境変数が設定されているか確認する（新しいシェルで反映される）
+1. Visual Studio 2022 Build Tools（C++ によるデスクトップ開発ワークロード）が未導入なら、通常の対話型 PowerShell で `winget configure -f reference\windows\configuration.dsc.yaml` を実行する。Visual Studio Installer の UAC が表示された場合は内容を確認して承認する
+2. 再起動を求める警告が表示された場合は Windows を再起動する
+3. `chezmoi apply` を実行する（`run_onchange_after_20-resolve-msvc-linker.ps1` は毎回再評価されるため、追加の手動操作は不要）
+4. 環境変数が設定されているか確認する（新しいシェルで反映される）
 
     ```powershell
     [Environment]::GetEnvironmentVariable('CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER', 'User')
