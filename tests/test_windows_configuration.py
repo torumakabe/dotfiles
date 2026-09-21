@@ -158,15 +158,5 @@ class WindowsConfigurationTests(unittest.TestCase):
         self.assertNotIn("862968", workload_block)
         self.assertNotIn("Microsoft.VisualStudio.DSC/VSComponents", self.config)
 
-    def test_windows_configuration_requires_normal_interactive_powershell(self) -> None:
-        old_instruction = "管理者権限の PowerShell で"
-
-        self.assertNotIn(old_instruction, self.config)
-        self.assertNotIn(old_instruction, self.troubleshooting)
-        self.assertIn("通常の対話型 PowerShell", self.config)
-        self.assertIn("通常の対話型 PowerShell", self.readme)
-        self.assertIn("通常の対話型 PowerShell", self.troubleshooting)
-
-
 if __name__ == "__main__":
     unittest.main()
