@@ -318,7 +318,7 @@ chezmoi apply
 
 イメージ内の Git を維持する理由は [ADR-020](adr/020-git-hooks-via-config.md)、PowerShell を含むクロスプラットフォーム検査の保証範囲は [ADR-019](adr/019-cross-platform-parity-contract.md) を参照する。
 
-Windows ホストでは、`tests/test_git_shadow_resolution.py` のうち POSIX 版のチェックスクリプトを実行するテストが skip される。`bash` が WSL の interop 版に解決され、テストが用意した偽の git を参照できないためである。全件を実行するには、このコンテナか WSL、または CI を使う。
+Windows ホストでは、`tests/test_git_shadow_resolution.py` のうち POSIX 版のチェックスクリプトを実行するテストが skip される。`bash` が WSL の interop 版に解決され、テストが用意した偽の git を参照できないためである。このテストはコンテナ、WSL、または Ubuntu CI で実行する。
 
 構成を更新した後は、コンテナ内で全テストを実行する。
 
@@ -334,7 +334,7 @@ PYTHONDONTWRITEBYTECODE=1 uv run -m unittest discover -s tests
 uv run -m unittest tests.test_platform_parity tests.test_mise_config -v
 ```
 
-CIはzshとpwshの存在を確認した後、全テストをdiscover形式で実行する。
+CI は Ubuntu と Windows のジョブを並列実行する。Ubuntu ジョブは zsh を導入して全単体テストと POSIX shell の hook smoke test を実行する。Windows ジョブは固定版の chezmoi と runner 標準の PowerShell を使い、全単体テストを discover 形式で実行する。Windows 以外の OS に固有のテストは、各テストの条件に従って skip する。
 
 ## git pre-commit フック
 

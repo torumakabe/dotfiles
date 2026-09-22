@@ -97,3 +97,55 @@ jobs:
           RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"npm install -g typescript"}}' \
             | uv run home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py)
           echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
+
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      CHEZMOI_WINDOWS_AMD64_SHA256: b01b6d449db1e4ca62694482d53ab8395c891cade237c404defc1701ebd2bf66
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: false
+
+      - name: Install and verify the pinned chezmoi
+        shell: pwsh
+        run: |
+          $versionMatch = Select-String -Path install.sh -Pattern '^CHEZMOI_VERSION="([^"]+)"$'
+          if ($null -eq $versionMatch) {
+              throw 'install.sh からピン版を取得できない'
+          }
+          $version = $versionMatch.Matches[0].Groups[1].Value
+          $archive = "chezmoi_${version}_windows_amd64.zip"
+          $archivePath = Join-Path $env:RUNNER_TEMP $archive
+          $binDir = Join-Path $env:RUNNER_TEMP 'chezmoi-bin'
+
+          Invoke-WebRequest `
+              -Uri "https://github.com/twpayne/chezmoi/releases/download/v${version}/${archive}" `
+              -OutFile $archivePath
+          $actualSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath).Hash.ToLowerInvariant()
+          if ($actualSha256 -ne $env:CHEZMOI_WINDOWS_AMD64_SHA256) {
+              throw "chezmoi checksum mismatch: expected $env:CHEZMOI_WINDOWS_AMD64_SHA256, got $actualSha256"
+          }
+
+          Expand-Archive -LiteralPath $archivePath -DestinationPath $binDir
+          $chezmoi = Join-Path $binDir 'chezmoi.exe'
+          $versionOutput = & $chezmoi --version
+          if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch [regex]::Escape("v${version}")) {
+              throw "unexpected chezmoi version: $versionOutput"
+          }
+          $binDir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Run all unit tests
+        shell: pwsh
+        run: |
+          foreach ($command in @('pwsh', 'uv', 'git', 'chezmoi')) {
+              if (-not (Get-Command $command -ErrorAction SilentlyContinue)) {
+                  throw "Required command is unavailable: $command"
+              }
+          }
+          $env:PYTHONUTF8 = '1'
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          uv run -m unittest discover -s tests -v
