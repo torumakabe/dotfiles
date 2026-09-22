@@ -1,2 +1,4 @@
+*.sh text eol=lf
+*.sh.tmpl text eol=lf
 home/dot_config/mise/private_mise.lock -text
 home/dot_config/mise/*locks/** -text

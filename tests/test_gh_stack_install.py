@@ -6,6 +6,7 @@ import unittest
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+GIT_ATTRIBUTES = REPO_ROOT / ".gitattributes"
 SHELL_INSTALLER = REPO_ROOT / "home/run_after_31-install-gh-stack.sh.tmpl"
 POWERSHELL_INSTALLER = REPO_ROOT / "home/run_after_31-install-gh-stack.ps1.tmpl"
 CHEZMOIIGNORE = REPO_ROOT / "home/.chezmoiignore"
@@ -105,6 +106,9 @@ class GhStackInstallTests(unittest.TestCase):
         self.assertTrue(POWERSHELL_INSTALLER.name.startswith("run_after_"))
         self.assertIn("run_after_31-", SHELL_INSTALLER.name)
         self.assertIn("run_after_31-", POWERSHELL_INSTALLER.name)
+        attributes = GIT_ATTRIBUTES.read_text(encoding="utf-8")
+        self.assertIn("*.sh text eol=lf", attributes)
+        self.assertIn("*.sh.tmpl text eol=lf", attributes)
         self.assertNotIn(b"\r\n", SHELL_INSTALLER.read_bytes())
 
         non_windows_blocks = re.findall(

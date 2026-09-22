@@ -349,9 +349,14 @@ class PlatformParityTests(unittest.TestCase):
         workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
 
         self.assertEqual(workflow.count("- 'home/**'"), 2)
+        self.assertEqual(workflow.count("runs-on: ubuntu-latest"), 1)
+        self.assertEqual(workflow.count("runs-on: windows-latest"), 1)
         shell_check = workflow.index("command -v zsh")
         test_run = workflow.index("uv run -m unittest discover -s tests -v")
-        self.assertNotIn("command -v pwsh", workflow)
+        self.assertEqual(
+            workflow.count("uv run -m unittest discover -s tests -v"),
+            2,
+        )
         self.assertLess(shell_check, test_run)
 
     def test_gh_stack_contract_components_exist_for_each_platform(self) -> None:
