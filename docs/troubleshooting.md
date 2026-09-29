@@ -88,7 +88,7 @@ chezmoi init torumakabe
 
 ### `dependency sidecar ... path not found` で停止する
 
-mise lockfile revision 2 の `aube.path` が指す `~/.config/mise/locks/` を、lockfile と同時に配布できていない状態である。TypeScript の版や npm の接続障害ではない。
+mise lockfile の `aube.path` が指す `~/.config/mise/locks/` を、lockfile と同時に配布できていない状態である。TypeScript の版や npm の接続障害ではない。
 
 リポジトリに対応する sidecar が含まれている場合は、設定と sidecar を先に適用してから全体を再適用する。
 
