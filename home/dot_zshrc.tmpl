@@ -402,6 +402,19 @@ _mise_validate_lock_sidecars() {
   print -r -- "$extracted_count"
 }
 
+_mise_validate_lockfile_version() {
+  emulate -L zsh
+
+  local lockfile="$1"
+  local version_count
+  version_count=$(command grep -Ec '^[[:space:]]*lockfile_version[[:space:]]*=' "$lockfile") || version_count=0
+  if (( version_count != 1 )) ||
+      ! command grep -Eq '^[[:space:]]*lockfile_version[[:space:]]*=[[:space:]]*3[[:space:]]*$' "$lockfile"; then
+    echo "❌ 未対応の mise lockfile version です。生成物を復元して更新を中止します" >&2
+    return 1
+  fi
+}
+
 mise-upgrade() {
   emulate -L zsh
 
@@ -497,6 +510,13 @@ mise-upgrade() {
       "$lockfile" "$locks_dir" "$target_backup" \
       "$had_lockfile" "$had_locks_dir" || :
     echo "chezmoi re-add、commit、push は実行していません" >&2
+    echo "実行ログ: $mise_log" >&2
+    return 1
+  fi
+  if ! _mise_validate_lockfile_version "$lockfile"; then
+    _mise_restore_artifacts \
+      "$lockfile" "$locks_dir" "$target_backup" \
+      "$had_lockfile" "$had_locks_dir" || :
     echo "実行ログ: $mise_log" >&2
     return 1
   fi

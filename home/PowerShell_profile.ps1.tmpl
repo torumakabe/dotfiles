@@ -321,6 +321,19 @@ function Invoke-MiseUpgrade {
         if ([string]::IsNullOrWhiteSpace($lockText)) {
             throw "lockfile が存在しないか空です"
         }
+        $lockfileVersions = [regex]::Matches(
+            $lockText,
+            '(?m)^[ \t]*lockfile_version[ \t]*=[ \t]*([0-9]+)[ \t]*\r?$'
+        )
+        $versionDeclarations = [regex]::Matches(
+            $lockText,
+            '(?m)^[ \t]*lockfile_version[ \t]*='
+        )
+        if ($versionDeclarations.Count -ne 1 -or
+            $lockfileVersions.Count -ne 1 -or
+            $lockfileVersions[0].Groups[1].Value -ne '3') {
+            throw "未対応の mise lockfile version です。生成物を復元して更新を中止します"
+        }
         $aubePaths = [regex]::Matches(
             $lockText,
             '(?m)^\s*aube\s*=\s*\{\s*path\s*=\s*"([^"]+)"'

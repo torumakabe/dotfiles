@@ -128,9 +128,11 @@ mise の npm backend はパッケージごとにインストール先を分け�
 
 Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、この安定 prefix 配下の `node_modules/typescript/lib/tsserver.js` を指定する。mise の language server インストール先とバージョンをパスに含めないため、language server の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` を正本とする。
 
-### mise lockfile revision 2 の sidecar
+### mise lockfile の npm sidecar
 
-mise lockfile revision 2 は、npm ツールの推移依存関係を `~/.config/mise/locks/` の `aube-lock.yaml` と `package.json` に分離する。chezmoi source では再帰的な exact directory として管理し、`private_mise.lock` が参照しないパッケージや旧版のディレクトリを適用時に削除する。source 名は通常 `exact_locks` であり、権限属性が付く環境では `exact_private_locks` になる。
+mise は npm ツールの推移依存関係を `~/.config/mise/locks/` の `aube-lock.yaml` と `package.json` に保存し、`mise.lock` の `aube.path` と `aube.digest` から参照する。chezmoi source では再帰的な exact directory として管理し、`private_mise.lock` が参照しないパッケージや旧版のディレクトリを適用時に削除する。source 名は通常 `exact_locks` であり、権限属性が付く環境では `exact_private_locks` になる。
+
+現行の `mise-upgrade` が検証して配布する lockfile の形式番号は 3 である。別の形式番号が生成された場合、両シェルの更新処理は source 更新と commit の前に停止する。
 
 `mise-upgrade` は lockfile と sidecar を一括して退避・再生成・検証し、両方の chezmoi source 更新が完了してから commit する。lockfile と sidecar は `.gitattributes` で Git の改行変換を無効にし、生成時の byte 列を保持する。詳細な判断は [ADR-029](adr/029-mise-lockfile-v2-sidecars.md)、操作手順は [`operations.md`](operations.md#mise-upgrade) を参照する。
 

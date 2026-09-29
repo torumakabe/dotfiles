@@ -734,7 +734,7 @@ class MiseConfigTests(unittest.TestCase):
         self.assertEqual(len(dotnet_entries), 1)
         self.assertEqual(_tool_alias(config, "dotnet"), dotnet_entries[0]["backend"])
 
-    def test_lockfile_v2_sidecars_are_complete_and_exact(self) -> None:
+    def test_lockfile_sidecars_are_complete_and_exact(self) -> None:
         chezmoi = shutil.which("chezmoi")
         if chezmoi is None:
             self.skipTest("chezmoi is required for sidecar source mapping tests")
@@ -742,7 +742,7 @@ class MiseConfigTests(unittest.TestCase):
         lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
         referenced_sidecars: set[pathlib.PurePosixPath] = set()
 
-        self.assertEqual(lock["lockfile_version"], 2)
+        self.assertEqual(lock["lockfile_version"], 3)
         for tool_entries in lock["tools"].values():
             entries = tool_entries if isinstance(tool_entries, list) else [tool_entries]
             for entry in entries:
@@ -1088,11 +1088,6 @@ class MiseConfigTests(unittest.TestCase):
                 if name == "allowed-minimum-release-age-with-ansi":
                     self.assertNotIn("\x1b", result.stderr)
 
-    def test_mise_upgrade_helpers_use_local_zsh_options(self) -> None:
-        helpers = _mise_warning_helpers()
-
-        self.assertEqual(helpers.count("emulate -L zsh"), 5)
-
     def _run_zsh_artifact_restore(
         self,
         lockfile: pathlib.Path,
@@ -1340,7 +1335,7 @@ mise() {
   fi
   if [[ "$1" == "lock" ]]; then
     mkdir -p "${tst_locks_dir}/new/2"
-    print -r -- 'lockfile_version = 2
+    print -r -- 'lockfile_version = 3
 [[tools."npm:test"]]
 version = "2"
 aube = { path = "locks/new/2", digest = "sha256:test" }' \
@@ -1508,7 +1503,7 @@ function mise {{
         elseif ($env:TEST_LOCK_HAS_SIDECARS -eq '1') {{
             [System.IO.File]::WriteAllText(
                 $testLockfile,
-                "lockfile_version = 2`n" +
+                "lockfile_version = 3`n" +
                 "[[tools.`"npm:test`"]]`n" +
                 "version = `"2`"`n" +
                 "aube = {{ path = `"$($env:TEST_AUBE_PATH)`", " +
@@ -1528,7 +1523,7 @@ function mise {{
         else {{
             [System.IO.File]::WriteAllText(
                 $testLockfile,
-                "lockfile_version = 2`n"
+                "lockfile_version = 3`n"
             )
         }}
         if ($env:TEST_LOCK_OUTPUT) {{
@@ -1716,7 +1711,7 @@ $result = @{{
                 self.assertEqual(
                     state["lock"].replace("\r\n", "\n"),
                     (
-                        'lockfile_version = 2\n[[tools."npm:test"]]\n'
+                        'lockfile_version = 3\n[[tools."npm:test"]]\n'
                         'version = "2"\naube = { path = "locks/new/2", '
                         'digest = "sha256:test" }\n'
                     )

@@ -139,6 +139,7 @@ ZSH_INTERNAL_FUNCTIONS = {
     "_mise_check_warnings",
     "_mise_restore_artifacts",
     "_mise_validate_lock_sidecars",
+    "_mise_validate_lockfile_version",
 }
 POWERSHELL_INTERNAL_FUNCTIONS = {
     "Get-CachedSourcePath",
