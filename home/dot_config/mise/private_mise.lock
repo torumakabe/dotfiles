@@ -229,34 +229,34 @@ url = "https://github.com/junegunn/fzf/releases/download/v0.74.4/fzf-0.74.4-wind
 url_api = "https://api.github.com/repos/junegunn/fzf/releases/assets/558287758"
 
 [[tools.ghq]]
-version = "1.10.1"
+version = "1.11.2"
 backend = "aqua:x-motemen/ghq"
 specifiers = ["latest"]
 
 [tools.ghq."platforms.linux-arm64"]
-checksum = "sha256:7ed154f62751e91c8a2d415280caeeba3d114050d01e39f3d0f4aa1be15f3954"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_linux_arm64.zip"
-url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/394135805"
+checksum = "sha256:0a083c5d5b214dd0f4f693cf8839b15f6b5cc4e2d91b0cb4abb8748dcdb353c9"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_linux_arm64.zip"
+url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741476"
 
 [tools.ghq."platforms.linux-x64"]
-checksum = "sha256:32e380aa8ac76fdd58758cc06174d9ee5db7270bd0cbcc18138b5d36def91b6b"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_linux_amd64.zip"
-url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/394135802"
+checksum = "sha256:efa5c1de4e763565b71649229449d8123ceb7131a8d0ed25755aaee73969cdf1"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_linux_amd64.zip"
+url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741424"
 
 [tools.ghq."platforms.macos-arm64"]
-checksum = "sha256:5e3100de0c5a248eebe6ab176ad94d6e12386af70a58c535368a4301861b1398"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_darwin_arm64.zip"
-url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/394135804"
+checksum = "sha256:8317f8ea5671bccb31e7747eb0a892a77a472dbc7c988f9d47cdfc969a59e242"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_darwin_arm64.zip"
+url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741463"
 
 [tools.ghq."platforms.windows-arm64"]
-checksum = "sha256:a84a149636cf934c3c1773de76f9758cb146e5f376e96d2861cb279176ddb768"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_windows_arm64.zip"
-url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/394135803"
+checksum = "sha256:9d0bef6da668fd9f1a2db3261eb2f7086f779aa3b0040fea39e1ea028bc25a35"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_windows_arm64.zip"
+url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741425"
 
 [tools.ghq."platforms.windows-x64"]
-checksum = "sha256:a526da44d5f67250598fa95e5654815e9f672b2c05d1d98c28bce0e60d3cfa6c"
-url = "https://github.com/x-motemen/ghq/releases/download/v1.10.1/ghq_windows_amd64.zip"
-url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/394135809"
+checksum = "sha256:7ab0e759ac9f117f0b5eeea0985c58e693ecb8d2e29b7bcfbce657caac31bce8"
+url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_windows_amd64.zip"
+url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741479"
 
 [[tools.github-cli]]
 version = "2.101.0"
@@ -499,38 +499,38 @@ url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/
 url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/353160980"
 
 [[tools.lefthook]]
-version = "2.1.14"
+version = "2.1.15"
 backend = "aqua:evilmartians/lefthook"
 specifiers = ["latest"]
 
 [tools.lefthook."platforms.linux-arm64"]
-checksum = "sha256:2fd4b1f33aab4e4c8691a1a6a750b0638a40bdef871234cacb33781615dbf7ba"
-url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.14/lefthook_2.1.14_Linux_aarch64.gz"
-url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/563149908"
+checksum = "sha256:883bd1d697eb926b4f4c4fb08ff000fda0306432368199923e415f8e9a4c22d4"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.15/lefthook_2.1.15_Linux_aarch64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/598600348"
 provenance = "github-attestations"
 
 [tools.lefthook."platforms.linux-x64"]
-checksum = "sha256:2be3187101b3a2edd5edf8b546aa2e3820531c517b4cd0216601a9c06f07c42d"
-url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.14/lefthook_2.1.14_Linux_x86_64.gz"
-url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/563149839"
+checksum = "sha256:b3ed1e83389d0a98b5f243a8a1afcb0fdfad527834f87170f2a2ff9ddfe0f836"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.15/lefthook_2.1.15_Linux_x86_64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/598600261"
 provenance = "github-attestations"
 
 [tools.lefthook."platforms.macos-arm64"]
-checksum = "sha256:398e6a23dfe2de3fc113e091dd4b592795cc8f1665acf5501856858b8056d686"
-url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.14/lefthook_2.1.14_MacOS_arm64.gz"
-url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/563149840"
+checksum = "sha256:8b40280a2bae6a21a546e42c1f02cb190cfe9888ff541eb500a0b05bd38db17f"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.15/lefthook_2.1.15_MacOS_arm64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/598600263"
 provenance = "github-attestations"
 
 [tools.lefthook."platforms.windows-arm64"]
-checksum = "sha256:2a5885f7fea3a99d8ad9cc6ef3eaca70df2b307efff7317db9593ed6eef76996"
-url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.14/lefthook_2.1.14_Windows_arm64.gz"
-url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/563149876"
+checksum = "sha256:e6a6976b40b00b4c985ac7bd1fce1ca195aef0f53f11bd58bbbaecff94a381e1"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.15/lefthook_2.1.15_Windows_arm64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/598600226"
 provenance = "github-attestations"
 
 [tools.lefthook."platforms.windows-x64"]
-checksum = "sha256:61a0f47c75c741fa2788aff55f85dfa0a34307257b176cb6b20fd821ae030454"
-url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.14/lefthook_2.1.14_Windows_x86_64.gz"
-url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/563149872"
+checksum = "sha256:1c38250090d3755305809dfc568bc4aa4d83c25e9c203b603fb1bd93da847b50"
+url = "https://github.com/evilmartians/lefthook/releases/download/v2.1.15/lefthook_2.1.15_Windows_x86_64.gz"
+url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/598600347"
 provenance = "github-attestations"
 
 [[tools.node]]
@@ -749,73 +749,73 @@ url_api = "https://api.github.com/repos/aquasecurity/trivy/releases/assets/51433
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.12.20"
+version = "0.12.21"
 backend = "aqua:astral-sh/uv"
 specifiers = ["latest"]
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:8a7aad7bc76a2fae5151566ff3e43eacce0b2a113d5e4de3e4afe3e58fa2441e"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.20/uv-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/596657756"
+checksum = "sha256:030b69227b40af8c1981b7301793dc66e71ed3c796ea8688209dd268bd91ec51"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.21/uv-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/599237845"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:6590717592ace991ff83a63fef799e3ad9d33ecc8f96c5d6bdd732496e79337f"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.20/uv-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/596657933"
+checksum = "sha256:23f02075b652bb1df64178cfae41b5caf160822e720e2663568f3f5d63bc52c0"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.21/uv-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/599238020"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:848fdeb602ff1a1baacd4f6c8b7bdc6cf1ad026a6d9cf59475fda17c179743ca"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.20/uv-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/596657737"
+checksum = "sha256:b88bda573e566ef9bced66b155fe0408626fbbc053aee1c30ba686f0728c9447"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.21/uv-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/599237829"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:95f9bc30fbb3574d276e28ac4a6de932d25153645853d13da8c21eec3bc88d06"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.20/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/596657920"
+checksum = "sha256:5d223efa0bf00208c3853246af09420419dfbd352536aa6bb8163d6170e23890"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.21/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/599238008"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:95f9bc30fbb3574d276e28ac4a6de932d25153645853d13da8c21eec3bc88d06"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.20/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/596657920"
+checksum = "sha256:5d223efa0bf00208c3853246af09420419dfbd352536aa6bb8163d6170e23890"
+url = "https://github.com/astral-sh/uv/releases/download/0.12.21/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/599238008"
 provenance = "github-attestations"
 
 [[tools.yq]]
-version = "4.53.6"
+version = "4.54.1"
 backend = "aqua:mikefarah/yq"
 specifiers = ["latest"]
 
 [tools.yq."platforms.linux-arm64"]
-checksum = "sha256:88a1016bc1d657375a35864e4f44b6f333df8ff97b559f51bba0adcb2169df09"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_arm64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/522028007"
+checksum = "sha256:189088da0c6429ec5178dfaab1a114805f6cab0b61b165ab236efedf1d57a71b"
+url = "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_arm64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/597222603"
 provenance = "cosign"
 
 [tools.yq."platforms.linux-x64"]
-checksum = "sha256:c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/522028022"
+checksum = "sha256:8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f"
+url = "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_linux_amd64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/597222595"
 provenance = "cosign"
 
 [tools.yq."platforms.macos-arm64"]
-checksum = "sha256:cceb0b8d71ea5294334121f8429f33f92b920e7217d904a2f9f35443968ac424"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_darwin_arm64"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/522028033"
+checksum = "sha256:fee511a181bd8b3e6b7da98842b41973bfac8cd3bcd341ed29a584620b5b2844"
+url = "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_darwin_arm64"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/597222609"
 provenance = "cosign"
 
 [tools.yq."platforms.windows-arm64"]
-checksum = "sha256:9a0ec8f648b0749d3d71286df96384f358c0eeca486bbcdec04e747307021d3a"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_windows_arm64.exe"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/522027986"
+checksum = "sha256:c46a295a98c31173e72220da7c35f86fbcc1c2cd2da5188105f326b32585e984"
+url = "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_windows_arm64.exe"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/597222577"
 provenance = "cosign"
 
 [tools.yq."platforms.windows-x64"]
-checksum = "sha256:ece3dd8bb50d39f93610506273ea262feb91e5c486bbddbb10abf91b2a6c0f14"
-url = "https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_windows_amd64.exe"
-url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/522027974"
+checksum = "sha256:b645f47ebb3a0d2fbab52998550bbd0a1706f23b5ca5f5b48e638c580bb70928"
+url = "https://github.com/mikefarah/yq/releases/download/v4.54.1/yq_windows_amd64.exe"
+url_api = "https://api.github.com/repos/mikefarah/yq/releases/assets/597222575"
 provenance = "cosign"
 
 [[tools.zoxide]]
