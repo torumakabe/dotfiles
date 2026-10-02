@@ -310,7 +310,6 @@ function Invoke-MiseUpgrade {
 
         Write-Host "==> mise lock: lockfile と dependency sidecar を再生成..."
         Remove-Item -Path $lockfile -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path $locksDir -Recurse -Force -ErrorAction SilentlyContinue
         Invoke-MiseChecked `
             -Phase "mise lock" `
             -FailureMessage "lockfile と dependency sidecar の再生成に失敗しました。実行ログを確認してください。" `
@@ -358,8 +357,44 @@ function Invoke-MiseUpgrade {
                 }
             }
         }
+        $sidecarPackageFiles = @(
+            Get-ChildItem -LiteralPath $locksDir -Recurse -File `
+                -Filter "package.json"
+        )
+        foreach ($sidecarPackageFile in $sidecarPackageFiles) {
+            $relativePackage = [System.IO.Path]::GetRelativePath(
+                $locksDir,
+                $sidecarPackageFile.FullName
+            ) -replace '\\', '/'
+            $relativeSidecar = $relativePackage -replace '/package\.json\z', ''
+            $aubePath = "locks/$relativeSidecar"
+            if ($aubePaths -notcontains $aubePath) {
+                Remove-Item -LiteralPath (
+                    Join-Path $locksDir ($relativeSidecar -replace '/', '\')
+                ) -Recurse -Force -ErrorAction Stop
+                if (Test-Path -LiteralPath (
+                        Join-Path $locksDir ($relativeSidecar -replace '/', '\')
+                    )) {
+                    throw "未参照の dependency sidecar を削除できませんでした: $aubePath"
+                }
+            }
+        }
+        $emptyDirectories = Get-ChildItem -LiteralPath $locksDir -Recurse -Directory |
+            Sort-Object { $_.FullName.Length } -Descending
+        foreach ($emptyDirectory in $emptyDirectories) {
+            if (-not (Get-ChildItem -LiteralPath $emptyDirectory.FullName -Force)) {
+                Remove-Item -LiteralPath $emptyDirectory.FullName -Force -ErrorAction Stop
+            }
+        }
         if ($aubePaths.Count -eq 0) {
             [System.IO.File]::WriteAllText((Join-Path $locksDir ".keep"), "")
+        }
+        else {
+            Remove-Item -LiteralPath (Join-Path $locksDir ".keep") `
+                -Force -ErrorAction Stop
+            if (Test-Path -LiteralPath (Join-Path $locksDir ".keep")) {
+                throw "不要な dependency sidecar の .keep を削除できませんでした"
+            }
         }
 
         $sourceHome = "$(& chezmoi source-path)".Trim()

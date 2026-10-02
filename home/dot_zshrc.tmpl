@@ -494,7 +494,6 @@ mise-upgrade() {
 
   echo "==> mise lock: lockfile と dependency sidecar を再生成..."
   rm -f "$lockfile"
-  rm -rf "$locks_dir"
   : > "$mise_log"
   NO_COLOR=1 GITHUB_TOKEN="$token" mise lock --global --platform linux-x64,linux-arm64,macos-arm64,windows-x64,windows-arm64 --bump 2>&1 | tee "$mise_log"
   if (( pipestatus[1] != 0 )); then
@@ -536,14 +535,52 @@ mise-upgrade() {
     echo "実行ログ: $mise_log" >&2
     return 1
   fi
+  local -a aube_paths
+  aube_paths=("${(@f)$(command sed -n \
+    's/^[[:space:]]*aube[[:space:]]*=[[:space:]]*{[[:space:]]*path[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "$lockfile")}")
+  if [[ -d "$locks_dir" ]]; then
+    local package_path package_relative relative_sidecar candidate_path
+    local declared_path referenced
+    while IFS= read -r package_path; do
+      package_relative="${package_path#${locks_dir}/}"
+      relative_sidecar="${package_relative%/package.json}"
+      candidate_path="locks/${relative_sidecar}"
+      referenced=0
+      for declared_path in "${aube_paths[@]}"; do
+        if [[ "$declared_path" == "$candidate_path" ]]; then
+          referenced=1
+          break
+        fi
+      done
+      if (( ! referenced )); then
+        rm -rf "${locks_dir}/${relative_sidecar}" || {
+          echo "❌ 未参照の dependency sidecar を削除できませんでした: ${candidate_path}" >&2
+          return 1
+        }
+        if [[ -e "${locks_dir}/${relative_sidecar}" ]]; then
+          echo "❌ 未参照の dependency sidecar を削除できませんでした: ${candidate_path}" >&2
+          return 1
+        fi
+      fi
+    done < <(command find "$locks_dir" -type f -name package.json -print)
+    command find "$locks_dir" -depth -type d ! -path "$locks_dir" -empty -delete || {
+      echo "❌ 空の dependency sidecar ディレクトリを削除できませんでした" >&2
+      return 1
+    }
+  fi
   if (( sidecar_count == 0 )); then
     : > "${locks_dir}/.keep" || {
-      _mise_restore_artifacts \
-        "$lockfile" "$locks_dir" "$target_backup" \
-        "$had_lockfile" "$had_locks_dir" || :
       echo "❌ 空の dependency sidecar ディレクトリを管理対象にできません" >&2
       return 1
     }
+  else
+    if [[ -e "${locks_dir}/.keep" ]]; then
+      rm -f "${locks_dir}/.keep" || {
+        echo "❌ 不要な dependency sidecar の .keep を削除できませんでした" >&2
+        return 1
+      }
+    fi
   fi
 
   local source_home source_root branch
