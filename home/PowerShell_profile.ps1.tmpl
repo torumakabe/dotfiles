@@ -390,10 +390,12 @@ function Invoke-MiseUpgrade {
             [System.IO.File]::WriteAllText((Join-Path $locksDir ".keep"), "")
         }
         else {
-            Remove-Item -LiteralPath (Join-Path $locksDir ".keep") `
-                -Force -ErrorAction Stop
-            if (Test-Path -LiteralPath (Join-Path $locksDir ".keep")) {
-                throw "不要な dependency sidecar の .keep を削除できませんでした"
+            $keepFile = Join-Path $locksDir ".keep"
+            if (Test-Path -LiteralPath $keepFile) {
+                Remove-Item -LiteralPath $keepFile -Force -ErrorAction Stop
+                if (Test-Path -LiteralPath $keepFile) {
+                    throw "不要な dependency sidecar の .keep を削除できませんでした"
+                }
             }
         }
 
