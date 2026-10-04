@@ -1433,6 +1433,7 @@ fi
         lock_has_sidecars: bool = True,
         empty_lockfile: bool = False,
         aube_path: str = "locks/new/2",
+        target_keep: bool = True,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         if os.name != "nt":
             self.skipTest("Windows only")
@@ -1453,7 +1454,8 @@ fi
             (locks_dir / "original/1/package.json").write_text(
                 "original-package", encoding="utf-8"
             )
-            (locks_dir / ".keep").write_text("", encoding="utf-8")
+            if target_keep:
+                (locks_dir / ".keep").write_text("", encoding="utf-8")
             source_home = test_root / "source/home"
             source_mise_dir = source_home / "dot_config/mise"
             source_locks_dir = source_mise_dir / "exact_private_locks"
@@ -1787,6 +1789,14 @@ $result = @{{
         self.assertTrue(
             any(item.endswith(" add -A") for item in state["history"])
         )
+
+    def test_powershell_mise_lock_allows_missing_keep_marker(self) -> None:
+        result, state = self._run_powershell_mise_upgrade(target_keep=False)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(state["caught"])
+        self.assertEqual(state["sidecar"], "new-package")
+        self.assertFalse(state["target_keep"])
 
     def test_powershell_mise_lock_restores_on_blocking_warning(self) -> None:
         result, state = self._run_powershell_mise_upgrade(
