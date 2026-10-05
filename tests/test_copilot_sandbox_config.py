@@ -217,6 +217,15 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             "New-Item -ItemType Directory -Path $uvCacheDir",
             self.powershell,
         )
+        self.assertIn(
+            "$uvCacheEnvironmentName = 'COPILOT_DOTFILES_UV_CACHE_DIR'",
+            self.powershell,
+        )
+        self.assertIn(
+            "[EnvironmentVariableTarget]::User",
+            self.powershell,
+        )
+        self.assertIn("Publish-EnvironmentChange", self.powershell)
         self.assertIn("Test-PathOverlap", self.powershell)
         self.assertNotIn('mkdir -p "${uv_cache_dir}"', self.posix)
 

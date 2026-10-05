@@ -152,11 +152,11 @@ chezmoi apply
 uv --offline --directory / --project / cache dir
 ```
 
-Windows では Copilot CLI を終了し、通常 PowerShell で `Remove-Item Env:\UV_CACHE_DIR -ErrorAction SilentlyContinue; chezmoi apply` を実行する。再起動後の PowerShell tool で `uv cache dir` が `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を返すことを確認する。通常 PowerShell の uv 既定 cache は変更しない。
+Windows では Copilot CLI を終了し、通常 PowerShell で `Remove-Item Env:\UV_CACHE_DIR -ErrorAction SilentlyContinue; chezmoi apply` を実行する。Copilot CLI を再起動し、`[Environment]::GetEnvironmentVariable('COPILOT_DOTFILES_UV_CACHE_DIR', 'User')` と PowerShell tool 内の `uv cache dir` が `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を返すことを確認する。通常 PowerShell の uv 既定 cache は変更しない。
 
 `/sandbox policy` の表示だけでは書き込み成功を確認できない。sandbox 内の `uv cache dir` が意図した保存先を返すことと、通常の Python 自動探索による `uv run` の成功、ホストへのキャッシュ永続化を確認する。WSL の調査では、許可なしでもコマンドが成功し、ホストには何も残らない場合があった。[実 CLI の比較試験](copilot-sandbox-verification.md#実-cli-でキャッシュの永続化を比較する)は終了コードとホスト側のファイルを分けて判定する。
 
-設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、既存の RO / deny との競合を確認する。Windows で `%LOCALAPPDATA%\Packages\sandbox.{GUID}\AC\uv\cache` が表示される場合は、`uv-enforcer.py` の PowerShell command rewrite が適用されていない。mise の config、state、downloads や `%LOCALAPPDATA%\uv\cache` の許可を追加して回避しない。
+設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、`COPILOT_DOTFILES_UV_CACHE_DIR`、既存の RO / deny との競合を確認する。Windows で `%LOCALAPPDATA%\Packages\sandbox.{GUID}\AC\uv\cache` が表示される場合は、Copilot CLI が補助環境変数を継承していることと、`uv-enforcer.py` の PowerShell command rewrite を確認する。mise の config、state、downloads や `%LOCALAPPDATA%\uv\cache` の許可を追加して回避しない。
 
 hook launcher が `missing .../python-runtime.env`、`recorded interpreter is not a regular file`、`python must live under ...` を報告する場合は、Copilot CLI を終了して `chezmoi apply` を再実行する。適用時に uv managed Python 3.14 を provision し、runtime env と `readonlyPaths` を更新してから launcher のスモークテストを実行する。
 

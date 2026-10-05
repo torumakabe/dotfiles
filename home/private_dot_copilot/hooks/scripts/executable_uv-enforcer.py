@@ -118,10 +118,11 @@ BLOCKED_COMMANDS: dict[str, str] = {
 
 VERSIONED_PYTHON_RE = re.compile(r"^python3(?:\.\d+)+(?:\.exe)?$")
 VERSIONED_PIP_RE = re.compile(r"^pip3(?:\.\d+)+(?:\.exe)?$")
+WINDOWS_UV_CACHE_ENV = "COPILOT_DOTFILES_UV_CACHE_DIR"
 WINDOWS_UV_CACHE_PREFIX = (
-    "$env:UV_CACHE_DIR = [System.IO.Path]::Combine("
-    "$(if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }), "
-    "'.cache\\github-copilot\\uv\\powershell-tool'); "
+    f"if ([string]::IsNullOrWhiteSpace($env:{WINDOWS_UV_CACHE_ENV})) {{ "
+    f"throw '{WINDOWS_UV_CACHE_ENV} is not configured; run chezmoi apply and restart Copilot CLI' "
+    f"}}; $env:UV_CACHE_DIR = $env:{WINDOWS_UV_CACHE_ENV}; "
 )
 
 

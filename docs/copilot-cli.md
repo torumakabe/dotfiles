@@ -27,7 +27,7 @@
 
 `installed-plugins/` と `plugin-data/` は Copilot CLI が管理し、chezmoi の対象外とする。
 
-`uv-enforcer.py` は Python と pip の直接実行を拒否する。macOS、Linux、WSL は Copilot CLI 1.0.92-4 以降の既定 cache grant を使う。Windows の PowerShell tool だけは、ProcessContainer の `%LOCALAPPDATA%` 仮想化を避けるため、コマンド内の `UV_CACHE_DIR` を `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` へ設定する。sandbox 同期は同じ exact path を write 許可する。
+`uv-enforcer.py` は Python と pip の直接実行を拒否する。macOS、Linux、WSL は Copilot CLI 1.0.92-4 以降の既定 cache grant を使う。Windows の PowerShell tool だけは、ProcessContainer の `%LOCALAPPDATA%` 仮想化を避けるため、user environment の `COPILOT_DOTFILES_UV_CACHE_DIR` をコマンド内の `UV_CACHE_DIR` へ渡す。sandbox 同期は `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を補助環境変数と exact write grant に設定する。
 
 command hook は sandbox 内で mise と uv を起動しない。`run_after_25-provision-copilot-hook-python` が uv managed Python 3.14 を用意し、`~/.copilot/hooks/python-runtime.env` に install root と interpreter の絶対パスを記録する。OS 別 launcher はこの記録を検証して Python を直接起動する。設定同期は `~/.copilot/hooks` と同じ install root を `readonlyPaths` へ追加する。mise のデータと実体への読み取り許可は、通常の Bash / PowerShell tool が mise 管理コマンドを起動するために維持する。実機検証の範囲と未確認の環境は[運用手順](operations.md#copilot-local-sandbox-の既定値)を参照する。
 

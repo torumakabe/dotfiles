@@ -148,6 +148,12 @@ class MainIntegrationTests(unittest.TestCase):
             uve.WINDOWS_UV_CACHE_PREFIX + "uv run script.py",
         )
         self.assertEqual(output["modifiedArgs"]["description"], "Run script")
+        self.assertIn(
+            "$env:COPILOT_DOTFILES_UV_CACHE_DIR",
+            output["modifiedArgs"]["command"],
+        )
+        self.assertNotIn(".cache\\github-copilot", output["modifiedArgs"]["command"])
+        self.assertNotIn("Path]::Combine", output["modifiedArgs"]["command"])
 
     def test_powershell_cache_prefix_is_idempotent(self) -> None:
         command = uve.WINDOWS_UV_CACHE_PREFIX + "uv run script.py"

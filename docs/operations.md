@@ -55,7 +55,7 @@ WSL2、macOS、Codespaces、Dev Container でリモートブランチを検証�
 
 macOS、Linux、WSL は Copilot CLI 1.0.92-4 以降が追加する uv 既定 cache の `readwritePaths` を利用する。CLI 起動環境へ `UV_CACHE_DIR` は設定しない。
 
-Windows ProcessContainer は `%LOCALAPPDATA%` を package 固有 path へ仮想化する。ホスト側の `%LOCALAPPDATA%\uv\cache` を許可しても sandbox 内の uv には適用されないため、`uv-enforcer.py` は許可済み PowerShell tool のコマンド内だけで `UV_CACHE_DIR` を `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` に設定する。設定同期は同じ exact path を作成し、`readwritePaths` へ追加する。command hook は pinned Python を直接実行するため、この cache に依存しない。
+Windows ProcessContainer は `%LOCALAPPDATA%` を package 固有 path へ仮想化する。ホスト側の `%LOCALAPPDATA%\uv\cache` を許可しても sandbox 内の uv には適用されないため、設定同期は `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を作成し、同じ exact path を `readwritePaths` と user environment の `COPILOT_DOTFILES_UV_CACHE_DIR` に設定する。`uv-enforcer.py` は PowerShell tool のコマンド内に path を含めず、補助環境変数の値を `UV_CACHE_DIR` に設定する。command hook は pinned Python を直接実行するため、この cache に依存しない。
 
 設定同期は利用者が追加した既存の filesystem policy を保持する。過去の dotfiles が追加した専用 cache の entry は、OS ごとの旧 path と完全一致する場合だけ移行時に除去する。cache ディレクトリ自体や、利用者が追加した親子 path は削除しない。
 

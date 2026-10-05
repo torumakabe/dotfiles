@@ -22,7 +22,7 @@ MCP と LSP は対象外とし、`sandboxMcpServers=false` と `sandboxLspServer
 
 macOS、Linux、WSL の uv は Copilot CLI 1.0.92-4 以降の既定キャッシュ自動 grant を利用する。これらの環境では専用 `github-copilot/uv` キャッシュ、command-local `UV_CACHE_DIR` rewrite、対応する専用 `readwritePaths` を使用しない。
 
-Windows の uv は ADR-031 に従い、`%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` への exact read-write grant と、許可済み PowerShell tool コマンドだけに適用する command-local `UV_CACHE_DIR` rewrite を使用する。CLI 起動環境全体の `UV_CACHE_DIR` は変更しない。
+Windows の uv は ADR-031 に従い、`%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` への exact read-write grant、同じ path を持つ `COPILOT_DOTFILES_UV_CACHE_DIR`、許可済み PowerShell tool コマンドだけに適用する command-local `UV_CACHE_DIR` rewrite を使用する。CLI 起動環境全体の `UV_CACHE_DIR` は変更しない。
 
 Copilot CLI 1.0.92-4 より前に macOS、Linux、WSL で使用した環境別専用キャッシュと grant は撤去済みである。Windows でも一度は既定 grant へ統一したが、ProcessContainer の仮想化による不整合が判明したため、ADR-031 の Windows 専用対策を再導入した。
 
@@ -32,6 +32,6 @@ Copilot CLI 1.0.92-4 より前に macOS、Linux、WSL で使用した環境別�
 
 - sandbox 初期値と利用者の明示設定保持は、uv の環境別処理と独立して有効である。
 - macOS、Linux、WSL の uv キャッシュ権限は Copilot CLI の現行仕様に依存する。
-- Windows は専用 grant と command-local rewrite の保守が必要だが、`%LOCALAPPDATA%` 仮想化を回避できる。
+- Windows は補助環境変数、専用 grant、command-local rewrite の保守が必要だが、`%LOCALAPPDATA%` 仮想化と非対話の path permission 要求を回避できる。
 - 完全一致だけを変更するため、類似する利用者所有 entry を誤って削除しない。
 - コンテナで手動有効化した場合の実行可否は dotfiles の保証外となる。
