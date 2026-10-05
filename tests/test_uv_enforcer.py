@@ -1,12 +1,7 @@
 import json
-import os
 import pathlib
-import shlex
-import subprocess
 import sys
-import tempfile
 import unittest
-from unittest import mock
 
 from tests._helpers import load_script, run_hook, scoped_environ
 
@@ -114,7 +109,7 @@ class MainIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(output["permissionDecision"], "deny")
 
-    def test_python_deny_precedes_cache_validation(self) -> None:
+    def test_python_deny_is_independent_of_home_format(self) -> None:
         with scoped_environ({"HOME": "relative"}):
             output = self._decision(
                 {
@@ -126,69 +121,10 @@ class MainIntegrationTests(unittest.TestCase):
         self.assertEqual(output["permissionDecision"], "deny")
         self.assertIn("uv run python", output["permissionDecisionReason"])
 
-    def test_allow_uv_run(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            if sys.platform == "win32":
-                local_app_data = pathlib.Path(root) / "local-app-data"
-                local_app_data.mkdir()
-                env = {
-                    "LOCALAPPDATA": str(local_app_data),
-                    "USERPROFILE": root,
-                }
-                payload = {
-                    "toolName": "powershell",
-                    "toolArgs": {"command": "uv run python script.py"},
-                }
-            else:
-                env = {"HOME": root}
-                payload = {
-                    "toolName": "bash",
-                    "toolArgs": {"command": "uv run python script.py"},
-                }
-            with scoped_environ(
-                env,
-                unset=("UV_CACHE_DIR", "XDG_CACHE_HOME"),
-            ):
-                result = run_hook(SCRIPT_PATH, payload)
-        self.assertEqual(result.returncode, 0)
-        if sys.platform == "win32":
-            command = json.loads(result.stdout)["modifiedArgs"]["command"]
-            cache = pathlib.Path(root).resolve() / "local-app-data/github-copilot/uv"
-            self.assertEqual(
-                command,
-                f"$env:UV_CACHE_DIR = '{cache}'; uv run python script.py",
-            )
-        else:
-            command = json.loads(result.stdout)["modifiedArgs"]["command"]
-            cache = pathlib.Path(root).resolve() / (
-                "Library/Caches/github-copilot/uv"
-                if sys.platform == "darwin"
-                else ".cache/github-copilot/uv"
-            )
-            self.assertEqual(
-                command,
-                f"export UV_CACHE_DIR={shlex.quote(str(cache))}; "
-                "uv run python script.py",
-            )
-
-    def test_rewrite_preserves_other_tool_arguments(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            if sys.platform == "win32":
-                local_app_data = pathlib.Path(root) / "local-app-data"
-                local_app_data.mkdir()
-                env = {
-                    "LOCALAPPDATA": str(local_app_data),
-                    "USERPROFILE": root,
-                }
-                tool_name = "powershell"
-            else:
-                env = {"HOME": root}
-                tool_name = "bash"
-            with scoped_environ(
-                env,
-                unset=("UV_CACHE_DIR", "XDG_CACHE_HOME"),
-            ):
-                output = self._decision(
+    def test_allows_uv_run_without_rewriting_tool_arguments(self) -> None:
+        for tool_name in ("bash", "powershell"):
+            with self.subTest(tool_name=tool_name):
+                self._assert_allowed(
                     {
                         "toolName": tool_name,
                         "toolArgs": {
@@ -198,100 +134,14 @@ class MainIntegrationTests(unittest.TestCase):
                     }
                 )
 
-        self.assertEqual(output["modifiedArgs"]["description"], "Run script")
-
-    def test_allows_non_bash_tools_without_rewriting(self) -> None:
-        platform_payload = (
-            {
-                "toolName": "bash",
-                "toolArgs": {"command": "uv run script.py"},
-            }
-            if sys.platform == "win32"
-            else {
-                "toolName": "powershell",
-                "toolArgs": {"command": "uv run script.py"},
-            }
+    def test_allows_non_shell_tools(self) -> None:
+        self._assert_allowed(
+            {"toolName": "edit", "toolArgs": {"path": "/tmp/foo.txt"}}
         )
-        for payload in (
-            {"toolName": "edit", "toolArgs": {"path": "/tmp/foo.txt"}},
-            platform_payload,
-        ):
-            with self.subTest(tool_name=payload["toolName"]):
-                self._assert_allowed(payload)
 
     def test_invalid_json_denies(self) -> None:
         output = self._decision("not valid json")
         self.assertEqual(output["permissionDecision"], "deny")
-
-
-@unittest.skipUnless(sys.platform == "win32", "Windows only")
-class WindowsCachePathTests(unittest.TestCase):
-    def _create_junction(self, path: pathlib.Path, target: pathlib.Path) -> None:
-        result = subprocess.run(
-            ["cmd", "/c", "mklink", "/J", str(path), str(target)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            self.fail(result.stderr or result.stdout or "failed to create junction")
-
-    def test_windows_cache_path_uses_local_app_data(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            local_app_data = pathlib.Path(root) / "local-app-data"
-            local_app_data.mkdir()
-            with scoped_environ(
-                {
-                    "LOCALAPPDATA": str(local_app_data),
-                    "USERPROFILE": root,
-                },
-                unset=("UV_CACHE_DIR",),
-            ), mock.patch.object(uve.sys, "platform", "win32"):
-                self.assertEqual(
-                    uve.copilot_uv_cache_dir_windows(),
-                    str(local_app_data.resolve() / "github-copilot" / "uv"),
-                )
-
-    def test_windows_cache_path_rejects_unsafe_environment(self) -> None:
-        cases = (
-            {"LOCALAPPDATA": "relative"},
-            {"LOCALAPPDATA": r"C:\temp\..\cache"},
-            {"LOCALAPPDATA": r"\\server\share\cache"},
-            {"LOCALAPPDATA": r"C:\\"},
-            {
-                "LOCALAPPDATA": r"C:\Users\TestUser\AppData\Local",
-                "UV_CACHE_DIR": r"C:\explicit-cache",
-            },
-        )
-        for env in cases:
-            with self.subTest(env=env):
-                unset = () if "UV_CACHE_DIR" in env else ("UV_CACHE_DIR",)
-                with scoped_environ(
-                    {**env, "USERPROFILE": r"C:\Users\TestUser"},
-                    unset=unset,
-                ), mock.patch.object(uve.sys, "platform", "win32"):
-                    with self.assertRaises((ValueError, OSError)):
-                        uve.copilot_uv_cache_dir_windows()
-
-    def test_windows_cache_path_rejects_junction(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            root_path = pathlib.Path(root)
-            home = root_path / "home"
-            target = home / "redirect-target"
-            target.mkdir(parents=True)
-            app_data = home / "AppData"
-            app_data.mkdir(parents=True)
-            local_app_data = app_data / "Local"
-            self._create_junction(local_app_data, target)
-            with scoped_environ(
-                {
-                    "LOCALAPPDATA": str(local_app_data),
-                    "USERPROFILE": str(home),
-                },
-                unset=("UV_CACHE_DIR",),
-            ), mock.patch.object(uve.sys, "platform", "win32"):
-                with self.assertRaises((ValueError, OSError)):
-                    uve.copilot_uv_cache_dir_windows()
 
 
 if __name__ == "__main__":

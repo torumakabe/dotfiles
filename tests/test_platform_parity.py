@@ -105,8 +105,6 @@ PLATFORM_CONTRACT = {
     ),
     "shell:zoxide": _implemented_everywhere(),
     "feature:copilot-local-sandbox": _implemented_everywhere(),
-    "feature:copilot-uv-cache-grant": _implemented_everywhere(),
-    "feature:copilot-uv-cache-hook": _implemented_everywhere(),
     "skill:gh-stack": _implemented_everywhere(),
     "completion:azure-cli": _implemented_everywhere(),
     "completion:kubectl": _implemented_everywhere(),

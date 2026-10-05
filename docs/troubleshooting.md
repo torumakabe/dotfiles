@@ -144,7 +144,7 @@ bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true
 
 ## Copilot sandbox 内で uv がキャッシュを書き込めない
 
-macOS または WSL で発生した場合は、専用キャッシュの RW 許可と、配布済み `uv-enforcer.py` のキャッシュ切替処理を両方確認する。許可だけが残っていても、古い hook は専用キャッシュを選ばない。CLI 起動環境の `UV_CACHE_DIR` と、hook がコマンド内で設定する値は区別する。
+Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `readwritePaths` へ自動追加する。CLI 起動環境や hook のコマンド内で `UV_CACHE_DIR` を設定して専用 cache へ切り替える構成は、このリポジトリでは使用しない。
 
 ```bash
 unset UV_CACHE_DIR
@@ -152,11 +152,11 @@ chezmoi apply
 uv --offline --directory / --project / cache dir
 ```
 
-適用は Copilot CLI を終了してから行う。上の `uv cache dir` は通常シェルの保存先であり、変更しない。CLI を再起動して Bash tool 内で確認すると、macOS では `~/Library/Caches/github-copilot/uv`、Linux系では `${XDG_CACHE_HOME:-$HOME/.cache}/github-copilot/uv` を選ぶ。
+適用は Copilot CLI を終了してから行う。上の `uv cache dir` は通常シェルの保存先であり、変更しない。CLI を再起動して shell tool 内で確認し、通常の uv 既定 cache へ書き込めることを確認する。
 
 `/sandbox policy` の表示だけでは書き込み成功を確認できない。sandbox 内の `uv cache dir` が意図した保存先を返すことと、通常の Python 自動探索による `uv run` の成功、ホストへのキャッシュ永続化を確認する。WSL の調査では、許可なしでもコマンドが成功し、ホストには何も残らない場合があった。[実 CLI の比較試験](copilot-sandbox-verification.md#実-cli-でキャッシュの永続化を比較する)は終了コードとホスト側のファイルを分けて判定する。
 
-設定同期や hook が保存先のエラーを報告した場合は、相対パス、symlink、不正な文字、既存の RO / deny との競合を確認する。権限を広げて解消しない。明示的な `--cache-dir` やコマンド内の環境変数設定を使う場合、その保存先は自動許可されない。`--no-cache` などでキャッシュを無効にした実行は、専用キャッシュの永続化の確認には使わない。
+設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、既存の RO / deny との競合を確認する。権限を広げて解消しない。明示的な `--cache-dir` やコマンド内の環境変数設定を使う場合、その保存先は自動許可されない。`--no-cache` などでキャッシュを無効にした実行は、既定 cache の書き込み確認には使わない。
 
 配布済み設定を調べずに、過去のブランチが追加した RW 許可を削除しない。今回の同期処理は既存許可の所有者を推測せず、通常の uv 設定やキャッシュ内容も保持する。
 

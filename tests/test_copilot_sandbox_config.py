@@ -104,7 +104,7 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         )
 
     def test_validation_precedes_writes_in_both_scripts(self) -> None:
-        posix_write = self.posix.index('mkdir -p "${uv_cache_dir}"')
+        posix_write = self.posix.index('mkdir -p "${settings_dir}"')
         self.assertLess(self.posix.index("non-boolean sandbox.enabled"), posix_write)
         self.assertLess(
             self.posix.index("non-array sandbox.userPolicy.filesystem"),
@@ -112,7 +112,7 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         )
 
         powershell_write = self.powershell.index(
-            "New-Item -ItemType Directory -Path $uvCacheDir"
+            "New-Item -ItemType Directory -Path $settingsDir"
         )
         self.assertLess(
             self.powershell.index("non-boolean sandbox.enabled"),
@@ -148,25 +148,19 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
                 self.powershell,
             )
 
-    def test_unsafe_cache_configuration_is_rejected_before_creation(self) -> None:
-        posix_cache_creation = self.posix.index('mkdir -p "${uv_cache_dir}"')
-        powershell_cache_creation = self.powershell.index(
-            "New-Item -ItemType Directory -Path $uvCacheDir"
-        )
-        self.assertLess(
-            self.posix.index("unset launch-environment UV_CACHE_DIR"),
-            posix_cache_creation,
-        )
-        self.assertLess(
-            self.powershell.index("Unset launch-environment UV_CACHE_DIR"),
-            powershell_cache_creation,
-        )
-        for script in (self.posix, self.powershell):
-            self.assertIn("conflicts with", script)
-        self.assertIn("cache path must not contain symlinks", self.posix)
-        self.assertIn("refusing a settings.json symlink", self.posix)
+    def test_legacy_cache_grant_is_removed_without_replacement(self) -> None:
+        self.assertIn("map(select(. != $legacy_cache))", self.posix)
         self.assertIn(
-            "must not contain symlinks or reparse points",
+            "[System.StringComparison]::OrdinalIgnoreCase",
+            self.powershell,
+        )
+        self.assertIn("-not [string]::Equals(", self.powershell)
+        for script in (self.posix, self.powershell):
+            self.assertNotIn("UV_CACHE_DIR", script)
+            self.assertNotIn("cacheCovered", script)
+        self.assertNotIn('mkdir -p "${uv_cache_dir}"', self.posix)
+        self.assertNotIn(
+            "New-Item -ItemType Directory -Path $uvCacheDir",
             self.powershell,
         )
 

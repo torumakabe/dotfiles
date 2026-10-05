@@ -67,7 +67,7 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 ## ワークアラウンド（定期チェック対象）
 
-- **Copilot sandbox の uv 専用キャッシュ**: macOS/Linux/WSL の Bash tool と Windows の PowerShell tool で `UV_CACHE_DIR` をコマンド単位で切り替え、専用キャッシュを `readwritePaths` に追加する。hook なしで Python 自動探索とホストへのキャッシュ永続化が成功したら、hook、RW 許可、関連テストを撤去する。判定手順は `docs/copilot-sandbox-verification.md` を参照する
+- **Copilot sandbox の uv 既定 cache grant**: Copilot CLI 1.0.92-4 以降の既定 cache grant を利用する。`uv-enforcer.py` の cache rewrite と専用 cache の `readwritePaths` 追加は撤去済みで、旧専用 cache の設定 entry だけを移行時に完全一致で除去する。Windows native と WSL2 の実機検証が完了するまで、Linux native の動作保証は静的検査の範囲に限る
 - **Copilot CLI の WindowsApps 実行エイリアス**: Windows/PowerShell だけで、WinGet 管理下の `copilot.exe` を alias に設定する。管理対象端末で WindowsApps の実行エイリアスから起動できるようになったら、alias、関連テスト、復旧手順を撤去する
 - **Visual Studio Build Tools の WinGet Configuration v2 昇格**: Build Tools 本体は通常権限の `WinGetPackage`、C++ ワークロードは `vswhere.exe` で MSVC の `link.exe` を検査して必要時だけ対話型セッションから Visual Studio Installer を UAC 昇格する `PSDscResources/Script` で管理する。通常権限から `securityContext: elevated` のユニットを実行しても `0x800706BA` が発生せず、管理者 PowerShellでも `WinGetPackage` のカタログ接続が成功するようになったら、公式の `Microsoft.VisualStudio.DSC/VSComponents` 構成へ戻す
 - **azure-deploy の `.azure/deployment-plan.md` 参照**: このファイルだけを Copilot Guard の拒否対象から除外する。PreToolUse で呼び出し元 skill を限定できるようになるか、上流 skill が直接参照しなくなったら、許可規則と関連テストを撤去する

@@ -4,7 +4,7 @@ set -euo pipefail
 
 # Copilot CLI is updated by `copilot update`, so keep it outside Homebrew's
 # package database and place the upstream binary in the user-local PATH.
-COPILOT_VERSION="1.0.80"
+COPILOT_VERSION="1.0.92-4"
 COPILOT_BIN_DIR="${HOME}/.local/bin"
 COPILOT_BIN="${COPILOT_BIN_DIR}/copilot"
 
@@ -18,7 +18,7 @@ is_user_local_copilot() {
 case "$(uname -m)" in
   arm64)
     copilot_archive="copilot-darwin-arm64.tar.gz"
-    expected_sha256="2346bb691981c2997d65c1c5bc3cef1aeddc9edd37dcb2f970b911aa597e59f6"
+    expected_sha256="4beb6c5e94c5fd3243651e7c692a0ab051ebeb8ab0a3e48ce524450346f1d97c"
     ;;
   *)
     echo "error: unsupported architecture for Copilot CLI: $(uname -m)" >&2
