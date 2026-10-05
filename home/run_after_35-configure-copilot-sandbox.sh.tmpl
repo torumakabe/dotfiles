@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # Copilot CLI local sandbox 設定 (Linux/macOS)
 #
-# Copilot sandbox policy version: 9
+# Copilot sandbox policy version: 10
 
 set -euo pipefail
 umask 077
@@ -52,21 +52,32 @@ add_directory_grant() {
   fi
 }
 
+copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
+hooks_dir="${copilot_home}/hooks"
+hook_runtime_file="${hooks_dir}/python-runtime.env"
+
+# mise shims と install ディレクトリは agent の Bash tool が jq/rg/node/uv を
+# 解決するために必要で、hook interpreter とは別の理由で読み取り許可が要る。
 mise_data_dir="${MISE_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/mise}"
+
+# hook interpreter の root は run_after_25 が記録した値を使う。sandbox 設定の
+# ために mise や uv を起動すると、hook が実際に使う interpreter と食い違う。
 uv_python_dir="${UV_PYTHON_INSTALL_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/uv/python}"
-if command -v uv >/dev/null 2>&1; then
-  detected_uv_python_dir="$(MISE_ENABLE_TOOLS=uv uv python dir 2>/dev/null || true)"
-  case "${detected_uv_python_dir}" in
-  /*) uv_python_dir="${detected_uv_python_dir}" ;;
+if [ -r "${hook_runtime_file}" ]; then
+  recorded_python_root="$(
+    sed -n 's/^python_root=//p' "${hook_runtime_file}" | head -n 1
+  )"
+  case "${recorded_python_root}" in
+  /*) uv_python_dir="${recorded_python_root}" ;;
   "") ;;
-  *) fail "uv python dir returned a non-absolute path: ${detected_uv_python_dir}" ;;
+  *) fail "${hook_runtime_file} has a non-absolute python_root: ${recorded_python_root}" ;;
   esac
 fi
 
 add_directory_grant "${mise_data_dir}"
+add_directory_grant "${hooks_dir}"
 add_directory_grant "${uv_python_dir}"
 
-copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
 settings_path="${copilot_home}/settings.json"
 settings_dir="$(dirname "${settings_path}")"
 [ ! -L "${settings_path}" ] || fail "refusing a settings.json symlink."

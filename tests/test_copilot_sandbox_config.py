@@ -155,14 +155,19 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             "mise_data_dir",
             "uv_python_dir",
             "readonly_grants",
-            "uv python dir",
+            "hooks_dir",
+            "python-runtime.env",
+            "s/^python_root=//p",
         ):
             self.assertIn(expected, self.posix)
         for expected in (
             "$miseDataDir",
             "$uvPythonDir",
+            "$hooksDir",
             "$miseExe",
             "$uvExe",
+            "$hookRuntimeFile",
+            "python_root=",
             "Get-ResolvedPathTarget",
         ):
             self.assertIn(expected, self.powershell)

@@ -1,7 +1,7 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 9
+# Copilot sandbox policy version: 10
 
 $ErrorActionPreference = 'Stop'
 
@@ -170,6 +170,25 @@ $uvPythonDir = if ($env:UV_PYTHON_INSTALL_DIR) {
   Join-Path $env:APPDATA 'uv\python'
 }
 
+# hook interpreter の root は run_after_25 が記録した値を使う。sandbox 設定の
+# ために mise や uv を起動すると、hook が実際に使う interpreter と食い違う。
+$hooksDir = Join-Path $copilotHome 'hooks'
+$hookRuntimeFile = Join-Path $hooksDir 'python-runtime.env'
+if (Test-Path -LiteralPath $hookRuntimeFile -PathType Leaf) {
+  foreach ($line in [System.IO.File]::ReadAllLines($hookRuntimeFile)) {
+    if (-not $line.StartsWith('python_root=', [System.StringComparison]::Ordinal)) { continue }
+    $recordedPythonRoot = $line.Substring('python_root='.Length).Trim()
+    if (-not $recordedPythonRoot) { continue }
+    if (-not [System.IO.Path]::IsPathFullyQualified($recordedPythonRoot)) {
+      Fail-SandboxSettings "$hookRuntimeFile has a non-absolute python_root: $recordedPythonRoot"
+    }
+    $uvPythonDir = $recordedPythonRoot
+    break
+  }
+}
+
+# mise shims と install ディレクトリは agent の PowerShell tool が jq/rg/node/uv
+# を解決するために必要で、hook interpreter とは別の理由で読み取り許可が要る。
 $miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
   Select-Object -First 1).Source
 if (-not $miseExe) {
@@ -187,16 +206,6 @@ if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {
 if (-not $uvExe) {
   $uvExe = (Get-Command -CommandType Application -Name 'uv.exe' -ErrorAction SilentlyContinue |
     Select-Object -First 1).Source
-}
-if ($uvExe -and (Test-Path -LiteralPath $uvExe)) {
-  $uvPythonOutput = & $uvExe python dir 2>$null
-  if ($LASTEXITCODE -eq 0 -and $uvPythonOutput) {
-    $detectedUvPythonDir = ([string]$uvPythonOutput).Trim()
-    if (-not [System.IO.Path]::IsPathFullyQualified($detectedUvPythonDir)) {
-      Fail-SandboxSettings "uv python dir returned a non-absolute path: $detectedUvPythonDir"
-    }
-    $uvPythonDir = $detectedUvPythonDir
-  }
 }
 
 # `/sandbox disable` persists sandbox.enabled=$false in settings.json, and that
@@ -272,6 +281,7 @@ $readonlyPaths = @(
   Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths')
 )
 $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $miseDataDir)
+$readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $hooksDir)
 $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvPythonDir)
 
 if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {

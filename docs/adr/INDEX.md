@@ -19,7 +19,7 @@
 | [004](004-azd-and-copilot-cli-outside-mise.md) | azd と copilot-cli を mise 外で管理する | Superseded by ADR-033 |
 | [005](005-no-github-token-in-shell-env.md) | GITHUB_TOKEN を環境変数に常駐させない | Accepted |
 | [006](006-pretooluse-hook-no-allow.md) | Copilot CLI preToolUse フックは allow を出力しない | Accepted |
-| [007](007-python-with-uv-and-pep723.md) | Python スクリプトは uv run + PEP 723 で実行する | Accepted |
+| [007](007-python-with-uv-and-pep723.md) | Python スクリプトは uv run + PEP 723 を原則とする | Accepted |
 | [008](008-zshenv-sources-profile.md) | ~/.zshenv は ~/.profile を source する | Accepted |
 | [009](009-mise-rust-windows-isolate-home.md) | Windows では mise の rust home を外部 rustup から分離する | Superseded by ADR-016 |
 | [010](010-url-allowlist-via-pretooluse-hook.md) | Copilot CLI の URL 包括制御は preToolUse Hook で行う | Superseded by ADR-015 |
@@ -38,12 +38,12 @@
 | [023](023-chezmoi-ps1-interpreter-noprofile.md) | chezmoi の ps1 実行系を固定しプロファイルを読ませない | Accepted |
 | [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension は公式 CLI で導入する | Accepted |
 | [025](025-copilot-cli-sandbox-user-level-default.md) | Copilot CLI local sandbox は user-level settings で既定有効にする | Superseded by ADR-026 |
-| [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 既定値と uv コマンド専用キャッシュ | Accepted |
+| [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 既定値と明示設定保持 | Accepted |
 | [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Superseded by ADR-028 |
 | [028](028-mise-bootstrap-preserves-existing-installations.md) | mise bootstrap は既存導入を置換しない | Accepted |
 | [029](029-mise-lockfile-v2-sidecars.md) | mise lockfile revision 2 の npm sidecar を不可分に管理する | Accepted |
 | [030](030-mise-self-update-and-upgrade.md) | mise 本体の self-update と self-upgrade を使い分ける | Superseded by ADR-032 |
-| [031](031-windows-uv-dedicated-cache.md) | Windows でも Copilot sandbox の uv 専用キャッシュを配布する | Accepted |
+| [031](031-windows-uv-dedicated-cache.md) | Windows でも Copilot sandbox の uv 専用キャッシュを配布する | Deprecated |
 | [032](032-protect-self-updated-winget-packages-with-blocking-pins.md) | 独自 updater で更新する WinGet パッケージを blocking pin で保護する | Accepted |
 | [033](033-manage-azd-and-copilot-cli-via-official-os-channels.md) | azd と Copilot CLI を OS 別の公式経路で管理する | Accepted |
 | [034](034-macos-apple-silicon-only.md) | macOS のサポートは Apple Silicon (arm64) 限定とする | Accepted |

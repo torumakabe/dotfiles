@@ -1,0 +1,62 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+# Copilot CLI hook interpreter の確定 (Linux/macOS)
+#
+# hook は sandbox 内で mise も uv も起動できないため、uv managed interpreter の
+# 絶対パスをここで記録し、run-hook.sh から直接実行する。
+
+set -euo pipefail
+umask 077
+
+python_version="3.14"
+copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
+hooks_dir="${copilot_home}/hooks"
+runtime_file="${hooks_dir}/python-runtime.env"
+launcher="${hooks_dir}/run-hook.sh"
+
+fail() {
+  echo "Error: Copilot hook interpreter: $*" >&2
+  exit 1
+}
+
+[ -x "${launcher}" ] || fail "launcher is missing or not executable: ${launcher}"
+
+if command -v uv >/dev/null 2>&1; then
+  MISE_ENABLE_TOOLS=uv uv python install "${python_version}" >/dev/null ||
+    fail "uv python install ${python_version} failed."
+  python_root="$(MISE_ENABLE_TOOLS=uv uv python dir)" ||
+    fail "uv python dir failed."
+  python_path="$(MISE_ENABLE_TOOLS=uv uv python find --managed-python "${python_version}")" ||
+    fail "uv python find ${python_version} failed."
+
+  case "${python_root}" in
+  /*) ;;
+  *) fail "uv python dir returned a non-absolute path: ${python_root}" ;;
+  esac
+  case "${python_path}" in
+  "${python_root}"/*) ;;
+  *) fail "uv python find returned a path outside ${python_root}: ${python_path}" ;;
+  esac
+  [ -x "${python_path}" ] || fail "interpreter is not executable: ${python_path}"
+
+  mkdir -p "${hooks_dir}"
+  runtime_tmp="${runtime_file}.$$"
+  (set -o noclobber; : >"${runtime_tmp}") || fail "cannot create staging file."
+  chmod 0600 "${runtime_tmp}"
+  trap 'rm -f "${runtime_tmp}"' EXIT
+  printf 'python_root=%s\npython=%s\n' "${python_root}" "${python_path}" >"${runtime_tmp}"
+  mv -f "${runtime_tmp}" "${runtime_file}"
+elif [ ! -r "${runtime_file}" ]; then
+  fail "uv not found on PATH and ${runtime_file} is absent."
+fi
+
+# 実際の hook payload で起動を確認する。--version だけでは、stdin 経由の
+# 判定出力まで到達できることを確認できない。
+smoke_input='{"toolName":"bash","toolArgs":{"command":"python3 -c pass"}}'
+smoke_output="$(printf '%s' "${smoke_input}" | "${launcher}" uv-enforcer.py)" ||
+  fail "launcher smoke test failed."
+printf '%s' "${smoke_output}" | jq -e '.permissionDecision == "deny"' >/dev/null ||
+  fail "launcher smoke test returned an unexpected decision: ${smoke_output}"
+
+echo "Configured Copilot hook interpreter in ${runtime_file}"
+{{- end -}}

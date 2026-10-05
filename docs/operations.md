@@ -37,7 +37,7 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。既存のパス指定は保持し、uv の専用 cache 用 path は追加しない。command hook の暫定措置として、mise と uv managed Python に必要な path は `readonlyPaths` へ重複なく追記する。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。既存のパス指定は保持し、uv の専用 cache 用 path は追加しない。通常の shell tool に必要な mise の path、`~/.copilot/hooks`、command hook の固定 interpreter を含む uv managed Python root は `readonlyPaths` へ重複なく追記する。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 
@@ -65,13 +65,22 @@ Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `filesystem.
 
 Copilot CLI の実機検証では、CLI 起動時の `UV_CACHE_DIR` を設定せず、通常の uv 既定 cache へ marker を書き込めることを確認する。Windows native と WSL2 の検証は候補実装を共有して実施する。
 
-### command hook の mise と uv managed Python
+### command hook の固定 Python interpreter
 
-command hook は `MISE_ENABLE_TOOLS=uv uv run` で Python スクリプトを起動する。Copilot CLI が launcher の委譲先と managed runtime の標準ライブラリを自動許可しない版では、mise shim から mise 本体を起動できないか、uv managed Python の実行ファイルだけが見えて標準ライブラリを読めない。
+`chezmoi apply` は sandbox 設定の同期前に `run_after_25-provision-copilot-hook-python` を実行する。このスクリプトは通常環境で `uv python install 3.14` と `uv python find --managed-python 3.14` を実行し、次の2行を `~/.copilot/hooks/python-runtime.env` へ原子的に書き込む。
 
-設定同期は、POSIX では `${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}` と `uv python dir`、Windows では `%LOCALAPPDATA%\mise`、`mise.exe` の実体ディレクトリ、`mise which uv` の実体ディレクトリ、`uv python dir` を `readonlyPaths` へ追加する。ディレクトリが symlink または reparse point の場合は実体も追加する。`UV_PYTHON_INSTALL_DIR` が設定されている場合はその値を優先する。uv の設定と認証情報を含み得る `~/.config/uv` は追加しない。
+```text
+python_root=<uv managed Python の install root>
+python=<Python 3.14 interpreter の絶対パス>
+```
 
-この許可は command hook の起動に必要な読み取りだけを対象とする。cache の書き込みは Copilot CLI の既定 grant を使用し、専用 `UV_CACHE_DIR` は設定しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
+POSIX では PATH 上の uv を使う。Windows では PATH 上の `uv.exe`、`mise which uv`、WinGet Links の `mise.exe` の順に uv 実体を探す。uv を利用できない場合でも既存の runtime env があれば、その interpreter でスモークテストを実行する。runtime env も無い場合は適用を失敗させる。
+
+各 command hook は `run-hook.sh` または `run-hook.ps1` を起動する。launcher は script 名が単一のファイル名であること、interpreter が記録済み root 配下の通常ファイルであることを検査し、その interpreter から hook script を直接実行する。hook 実行時に mise と uv は起動しない。hook scripts は標準ライブラリだけを使い、Python の要件は PEP 723 にも残す。
+
+後続の sandbox 設定同期は `~/.copilot/hooks` と runtime env の `python_root` を読み、symlink または reparse point の実体を含めて `readonlyPaths` へ追加する。Copilot CLI は command hook の launcher を自動許可しないため、hook ディレクトリの許可には launcher、payload、runtime env が含まれる。runtime env が無い場合は `UV_PYTHON_INSTALL_DIR` または OS の uv 既定 install root を使う。uv の設定と認証情報を含み得る `~/.config/uv` は追加しない。
+
+mise のデータディレクトリ、mise と uv の実体ディレクトリへの読み取り許可は、通常の Bash / PowerShell tool が mise 管理コマンドを解決するために維持する。command hook 自体はこれらに依存しない。cache の書き込みは Copilot CLI の既定 grant を使用し、専用 `UV_CACHE_DIR` は設定しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
 ## chezmoi での編集
 

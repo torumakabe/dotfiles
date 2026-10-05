@@ -158,7 +158,9 @@ uv --offline --directory / --project / cache dir
 
 設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、既存の RO / deny との競合を確認する。権限を広げて解消しない。明示的な `--cache-dir` やコマンド内の環境変数設定を使う場合、その保存先は自動許可されない。`--no-cache` などでキャッシュを無効にした実行は、既定 cache の書き込み確認には使わない。
 
-hook が `mise-shim: failed to execute mise` を報告する場合は、生成 policy の `readonlyPaths` に mise 本体の実体ディレクトリがあるか確認する。Python が `ModuleNotFoundError: No module named 'encodings'` で停止する場合は、`uv python dir` の結果と symlink の実体が `readonlyPaths` にあるか確認する。設定同期はこれらを自動追加するが、実体の配置が変わった場合は Copilot CLI を終了して `chezmoi apply` を再実行し、再起動後に確認する。`~/.config/uv` 全体の許可や sandbox の無効化で回避しない。
+hook launcher が `missing .../python-runtime.env`、`recorded interpreter is not a regular file`、`python must live under ...` を報告する場合は、Copilot CLI を終了して `chezmoi apply` を再実行する。適用時に uv managed Python 3.14 を provision し、runtime env と `readonlyPaths` を更新してから launcher のスモークテストを実行する。
+
+適用が `uv python install 3.14 failed` または `uv was not found` で停止した場合は、通常シェルで `uv --version`、`uv python dir`、`uv python find --managed-python 3.14` を確認する。Windows では `Get-Command uv.exe -All` と `mise which uv` も確認する。hook の sandbox 内へ mise config、state、downloads の許可を追加して回避しない。`~/.config/uv` 全体の許可や sandbox の無効化も行わない。
 
 配布済み設定を調べずに、過去のブランチが追加した RW 許可を削除しない。今回の同期処理は既存許可の所有者を推測せず、通常の uv 設定やキャッシュ内容も保持する。
 
@@ -485,6 +487,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
 
-本リポジトリの command hook は `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象を `uv` に限定する。`uv` の未導入版は自動導入されるが、dotnet など他ツールの missing 状態は hook 起動時に解決しない。標準エラーに他ツールのインストールログが出る場合は、`~/.copilot/hooks/hooks.json` が最新か確認し、`chezmoi apply` で配り直す。
+本リポジトリの command hook は OS 別 launcher から記録済みの uv managed Python を直接起動し、sandbox 内で mise と uv を起動しない。標準エラーに mise の config、state、downloads、shim 解決、uv cache 初期化のエラーが出る場合は、`~/.copilot/hooks/hooks.json` が古い可能性がある。Copilot CLI を終了し、`chezmoi apply` で hooks、runtime env、sandbox 設定を配り直してから新しいセッションを開始する。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

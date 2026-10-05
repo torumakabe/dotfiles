@@ -87,7 +87,7 @@ git diff --check
 
 テストによる設定変更は一時ディレクトリへ隔離される。実ユーザーの `~/.copilot/settings.json` をテスト用データで置き換えない。
 
-## 実 CLI で uv の既定 cache grant を確認する
+## 実 CLI で hook interpreter と uv の既定 cache grant を確認する
 
 Copilot CLI 1.0.92-4 以降では、CLI 起動環境から `UV_CACHE_DIR` を除いた状態で、uv の既定 cache が sandbox の `filesystem.readwritePaths` に追加されることを確認する。候補実装の実機検証では、Copilot 設定と hook を一時ディレクトリへ複製し、実ユーザーの設定ファイルを変更しない。
 
@@ -95,13 +95,14 @@ Copilot CLI 1.0.92-4 以降では、CLI 起動環境から `UV_CACHE_DIR` を除
 
 各環境で、次を確認する。
 
-- 全5件の hook を登録した状態で shell tool 内の `uv run` が成功する
-- mise shim から mise 本体と uv の実体へ委譲できる
+- `chezmoi apply` が `python-runtime.env` を生成し、記録した interpreter で launcher のスモークテストが成功する
+- 全5件の hook が launcher から起動し、hook プロセス内で mise と uv を起動しない
+- 記録した interpreter が uv managed Python root 配下にあり、標準ライブラリの `encodings` を読み込める
+- 通常の shell tool 内では mise 管理コマンドを従来どおり実行できる
 - uv が自動探索した Python で `--offline --no-project --no-env-file --no-python-downloads` を指定した実行が成功する
-- uv managed Python が標準ライブラリの `encodings` を読み込める
 - 通常の shell から取得した uv の既定 cache に marker を書き込める
 - 生成 policy が同じ既定 cache を `readwritePaths` に含む
-- 生成 policy が mise と `uv python dir` の実体を `readonlyPaths` に含む
+- 生成 policy が `~/.copilot/hooks`、通常の shell tool に必要な mise path、runtime env の `python_root` を `readonlyPaths` に含む
 - 旧専用 `github-copilot/uv` を生成 policy に追加しない
 - `python` と `pip` の直接実行拒否、および `uv run` と `uv pip` の無変更通過を維持する
 
