@@ -10,6 +10,10 @@ param(
   [Parameter(Mandatory = $true, Position = 0)]
   [string] $ScriptName,
 
+  [Parameter(ValueFromPipeline = $true)]
+  [AllowNull()]
+  [object] $HookInput,
+
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]] $HookArguments
 )
@@ -73,5 +77,9 @@ if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
   Exit-HookLauncher "recorded interpreter is not a regular file: $pythonPath"
 }
 
-& $pythonPath $scriptPath @HookArguments
+if ($PSBoundParameters.ContainsKey('HookInput')) {
+  $HookInput | & $pythonPath $scriptPath @HookArguments
+} else {
+  & $pythonPath $scriptPath @HookArguments
+}
 exit $LASTEXITCODE
