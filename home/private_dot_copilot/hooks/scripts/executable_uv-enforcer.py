@@ -118,6 +118,11 @@ BLOCKED_COMMANDS: dict[str, str] = {
 
 VERSIONED_PYTHON_RE = re.compile(r"^python3(?:\.\d+)+(?:\.exe)?$")
 VERSIONED_PIP_RE = re.compile(r"^pip3(?:\.\d+)+(?:\.exe)?$")
+WINDOWS_UV_CACHE_PREFIX = (
+    "$env:UV_CACHE_DIR = [System.IO.Path]::Combine("
+    "$(if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }), "
+    "'.cache\\github-copilot\\uv\\powershell-tool'); "
+)
 
 
 def blocked_command_reason(command_name: str) -> str | None:
@@ -183,6 +188,18 @@ def main() -> None:
     reason = check_command(command)
     if reason:
         deny(reason)
+
+    if tool_name == "powershell" and not command.startswith(WINDOWS_UV_CACHE_PREFIX):
+        print(
+            json.dumps(
+                {
+                    "modifiedArgs": {
+                        **tool_args,
+                        "command": WINDOWS_UV_CACHE_PREFIX + command,
+                    }
+                }
+            )
+        )
 
     return  # Command is fine — defer to CLI default
 

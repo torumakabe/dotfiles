@@ -37,7 +37,7 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。既存のパス指定は保持し、uv の専用 cache 用 path は追加しない。通常の shell tool に必要な mise の path、`~/.copilot/hooks`、command hook の固定 interpreter を含む uv managed Python root は `readonlyPaths` へ重複なく追記する。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。通常の shell tool に必要な mise の path、`~/.copilot/hooks`、command hook の固定 interpreter を含む uv managed Python root は `readonlyPaths` へ重複なく追記する。Windows では `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` の exact path だけを `readwritePaths` へ追加する。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 
@@ -53,7 +53,9 @@ WSL2、macOS、Codespaces、Dev Container でリモートブランチを検証�
 
 ### uv cache の sandbox grant
 
-Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `filesystem.readwritePaths` へ追加する。dotfiles は cache 用の `UV_CACHE_DIR` を shell tool のコマンドへ追加せず、専用 cache の `readwritePaths` も追加しない。
+macOS、Linux、WSL は Copilot CLI 1.0.92-4 以降が追加する uv 既定 cache の `readwritePaths` を利用する。CLI 起動環境へ `UV_CACHE_DIR` は設定しない。
+
+Windows ProcessContainer は `%LOCALAPPDATA%` を package 固有 path へ仮想化する。ホスト側の `%LOCALAPPDATA%\uv\cache` を許可しても sandbox 内の uv には適用されないため、`uv-enforcer.py` は許可済み PowerShell tool のコマンド内だけで `UV_CACHE_DIR` を `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` に設定する。設定同期は同じ exact path を作成し、`readwritePaths` へ追加する。command hook は pinned Python を直接実行するため、この cache に依存しない。
 
 設定同期は利用者が追加した既存の filesystem policy を保持する。過去の dotfiles が追加した専用 cache の entry は、OS ごとの旧 path と完全一致する場合だけ移行時に除去する。cache ディレクトリ自体や、利用者が追加した親子 path は削除しない。
 
@@ -63,7 +65,7 @@ Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `filesystem.
 | Linux、WSL | `${XDG_CACHE_HOME:-$HOME/.cache}/github-copilot/uv` |
 | Windows | `%LOCALAPPDATA%\github-copilot\uv` |
 
-Copilot CLI の実機検証では、CLI 起動時の `UV_CACHE_DIR` を設定せず、通常の uv 既定 cache へ marker を書き込めることを確認する。Windows native と WSL2 の検証は候補実装を共有して実施する。
+Copilot CLI の実機検証では、CLI 起動時の `UV_CACHE_DIR` を設定しない。POSIX は uv 既定 cache、Windows は PowerShell tool 内の relocated cache へ marker を書き込み、ホストから同じ内容を読めることを確認する。
 
 ### command hook の固定 Python interpreter
 
@@ -80,7 +82,7 @@ POSIX では PATH 上の uv を使う。Windows では PATH 上の `uv.exe`、`m
 
 後続の sandbox 設定同期は `~/.copilot/hooks` と runtime env の `python_root` を読み、symlink または reparse point の実体を含めて `readonlyPaths` へ追加する。Copilot CLI は command hook の launcher を自動許可しないため、hook ディレクトリの許可には launcher、payload、runtime env が含まれる。runtime env が無い場合は `UV_PYTHON_INSTALL_DIR` または OS の uv 既定 install root を使う。uv の設定と認証情報を含み得る `~/.config/uv` は追加しない。
 
-mise のデータディレクトリ、mise と uv の実体ディレクトリへの読み取り許可は、通常の Bash / PowerShell tool が mise 管理コマンドを解決するために維持する。command hook 自体はこれらに依存しない。cache の書き込みは Copilot CLI の既定 grant を使用し、専用 `UV_CACHE_DIR` は設定しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
+mise のデータディレクトリと実体ディレクトリへの読み取り許可は、通常の shell tool が mise 管理コマンドを起動するために維持する。Windows の非対話プロセスは `mise bin-paths` から同期した User PATH を使い、shim 実行時の config、state、downloads を sandbox へ許可しない。command hook 自体は mise と uv に依存しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
 ## chezmoi での編集
 

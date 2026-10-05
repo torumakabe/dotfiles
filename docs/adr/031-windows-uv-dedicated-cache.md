@@ -1,21 +1,34 @@
-# ADR-031: Windows でも Copilot sandbox の uv 専用キャッシュを配布する
+# ADR-031: Windows Copilot sandbox の uv cache を非仮想化パスへ分離する
 
 ## Status
 
-Deprecated
+Accepted
 
 ## Context
 
-ADR-026 は、macOS と Linux（WSL を含む）だけで uv コマンド専用キャッシュを配布し、Windows には hook の書き換えと `readwritePaths` 追加を行わなかった。その後の実機検証で、Windows sandbox は `%LOCALAPPDATA%`、`%TEMP%`、`%TMP%` を隔離先へ再配置し、ホスト既定の uv キャッシュ書き込みは拒否する一方、ホストで解決した `%LOCALAPPDATA%\github-copilot\uv` を `readwritePaths` に追加すると書き込みが成功することを確認した。PowerShell の `preToolUse` hook でコマンド単位の `UV_CACHE_DIR` 前置も実 CLI で機能した。`mise activate pwsh` 済みの通常シェルでは `uv` が実体バイナリへ解決されるため、shim 起因の別問題は今回の変更対象に含めない。`%TEMP%` / `%TMP%` の全面的な切替も uv 実行の必須条件ではないため扱わない。ADR-026 の他の判断は置換しない。
+Copilot CLI 1.0.92-4 の Windows ProcessContainer は `%LOCALAPPDATA%` を
+`Packages\sandbox.{GUID}\AC` 配下へ仮想化する。このため、ホストの
+`%LOCALAPPDATA%\uv\cache` に対する write grant は sandbox 内の uv cache に効かない。
 
-Copilot CLI 1.0.92-4 以降が uv の既定キャッシュへ自動的に read-write grant を与えるようになり、本 ADR の専用キャッシュは不要になった。後継の Windows 固有判断はなく、共通方針は更新後の ADR-026 に記録するため、本 ADR を廃止する。
+以前採用した `%LOCALAPPDATA%\github-copilot\uv` も同じ仮想化の対象であり、
+専用 cache として不適切だった。実機検証では、`%USERPROFILE%` 配下の exact path への
+write grant と PowerShell tool command 内だけの `UV_CACHE_DIR` 設定により、
+`uv run`、managed Python、marker の永続化が成功した。
 
 ## Decision
 
-当時は Windows でも、Copilot CLI の許可済み PowerShell tool コマンドだけに `UV_CACHE_DIR` を前置し、専用キャッシュ `%LOCALAPPDATA%\github-copilot\uv` を使わせると決定した。設定同期は同じ絶対パスを作成し、既存の `readwritePaths`、`readonlyPaths`、`deniedPaths` と安全に整合する場合だけ `readwritePaths` へ追加した。`LOCALAPPDATA` が unsafe な形式、非ディレクトリ、ドライブルート、symlink、junction などの reparse point を含む場合や、既存の restrictive rule と衝突する場合は拒否した。POSIX の挙動、shim 起因の課題、`TEMP` / `TMP` の扱いは変更しなかった。
+Windows の PowerShell tool command 用 uv cache を
+`%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` に固定し、この exact path
+だけを `readwritePaths` に追加する。PowerShell の最終 `preToolUse` hook は
+`$env:USERPROFILE` から同じ path を構築し、各 tool command にだけ
+`UV_CACHE_DIR` を設定する。Copilot CLI の起動環境には設定しない。
+
+POSIX は Copilot CLI の既定 uv cache grant を利用する。command hook の pinned
+Python 方式も変更しない。
 
 ## Consequences
 
-- 専用キャッシュ、`UV_CACHE_DIR` 書き換え、専用 `readwritePaths` は撤去済みである。
-- 移行時は旧専用キャッシュと完全一致する entry だけを除去し、利用者所有の他の grant は保持する。
-- Windows 固有の後継判断は設けず、Copilot CLI の既定動作を POSIX と共通利用する。
+- Windows の uv cache は `%LOCALAPPDATA%` の仮想化から分離される。
+- grant と command の cache path が一致し、sandbox 内の処理だけが専用 cache を使う。
+- `%LOCALAPPDATA%\github-copilot\uv` の旧 grant は移行時に完全一致で除去する。
+- ProcessContainer の仮想化仕様が変わるまで Windows 固有の回避策を維持する。

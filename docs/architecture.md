@@ -100,7 +100,7 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 | Unix 共通 | `~/.profile` | brew shellenv、`GOPATH`、`~/.local/bin` / `~/go/bin` / `~/.cargo/bin`、mise shims。`__DOTFILES_PROFILE_LOADED` で再実行抑止 |
 | Unix 共通 | `~/.zprofile` / `~/.zshenv` / `~/.bash_profile` / `~/.bashrc` | いずれも `~/.profile` を source（login / 非login / 対話 bash を網羅） |
 | macOS のみ | `~/.local/bin/<tool>` への mise shim symlink | `run_onchange_after_21-link-mise-shims.sh` が自動生成 |
-| Windows | ユーザー環境変数 `Path` | `run_once_after_05` が `%LOCALAPPDATA%\mise\shims` を先頭追記 |
+| Windows | ユーザー環境変数 `Path` | `run_onchange_after_15` が `mise bin-paths` の実体ディレクトリを同期 |
 
 ### 各シェルの読み込み経路
 
@@ -116,11 +116,13 @@ Dock / Spotlight / GitHub Desktop から起動された子プロセスは launch
 
 - 言語ランタイム本体と実行可能な補助ファイルは除外する。対象はスクリプト内の `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` を正本とする。Rust は mise の管理外であり、`cargo` / `rust` の shim は除外対象に含めない（ADR-016）
 - 作成 symlink は state file (`${XDG_STATE_HOME}/chezmoi-dotfiles/mise-shim-links`) に記録され、管理対象だった symlink のみ自動掃除。手動で作ったものには触れない
-- darwin 限定。Linux は `~/.profile` 経由、Windows は `run_once_after_05` で解決済み
+- darwin 限定。Linux は `~/.profile` 経由、Windows は `run_onchange_after_15` が実体ディレクトリを User PATH へ同期する
 
 ### mise shims の制約
 
-mise は shims と `mise activate` を併用する。対話 zsh では `mise activate zsh` が shims を除去して自前挿入し、`[env]` / hooks が効く。非対話シェルでは shims のみで解決する。shims では `[env]` / `hooks` / `_.file` が動かないが、本 repo の `config.toml` は `[tools]` / `[settings]` のみ使用するため影響なし（必要時は `mise exec -- <cmd>`）。詳細: <https://mise.jdx.dev/dev-tools/shims.html>
+mise は POSIX では shims と `mise activate` を併用する。Windows の対話 PowerShell は `mise activate pwsh` を使うが、非対話プロセスは User PATH に同期した実体ディレクトリからコマンドを起動する。`run_onchange_after_15` は前回同期したディレクトリを state file で追跡し、更新時に旧 entry と `%LOCALAPPDATA%\mise\shims` だけを除去する。利用者が追加した他の PATH entry は保持する。
+
+Windows の非対話プロセスで選ばれる版は、同期時のグローバル mise 設定に固定される。プロジェクト固有の `mise.toml` を反映する操作は、対話 PowerShell の activation または明示的な `mise exec -- <command>` を使う。同期後の User PATH が30,000文字を超える場合は、環境変数の切り詰めを避けるため apply を失敗させる。
 
 ### TypeScript language server の依存配置
 

@@ -1,7 +1,7 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 10
+# Copilot sandbox policy version: 11
 
 $ErrorActionPreference = 'Stop'
 
@@ -99,6 +99,80 @@ function Get-NormalizedPathKey {
   return (($Path -replace '/', '\').TrimEnd('\')).ToLowerInvariant()
 }
 
+function Get-ComparableWindowsPath {
+  param(
+    [Parameter(Mandatory = $true)] [string] $Path,
+    [Parameter(Mandatory = $true)] [string] $HomeDir
+  )
+
+  $candidate = [Environment]::ExpandEnvironmentVariables($Path)
+  if ($candidate -eq '~') {
+    $candidate = $HomeDir
+  } elseif ($candidate.StartsWith('~\') -or $candidate.StartsWith('~/')) {
+    $candidate = Join-Path $HomeDir $candidate.Substring(2)
+  }
+  if (
+    $candidate.IndexOfAny(@([char]13, [char]10)) -ge 0 -or
+    -not [System.IO.Path]::IsPathFullyQualified($candidate) -or
+    $candidate.StartsWith('\\') -or
+    $candidate.StartsWith('//')
+  ) {
+    return $null
+  }
+  return [System.IO.Path]::GetFullPath($candidate)
+}
+
+function Test-PathOverlap {
+  param(
+    [Parameter(Mandatory = $true)] [string] $First,
+    [Parameter(Mandatory = $true)] [string] $Second
+  )
+
+  $firstKey = (Get-NormalizedPathKey -Path $First) + '\'
+  $secondKey = (Get-NormalizedPathKey -Path $Second) + '\'
+  return $firstKey.StartsWith($secondKey, [System.StringComparison]::Ordinal) -or
+    $secondKey.StartsWith($firstKey, [System.StringComparison]::Ordinal)
+}
+
+function Get-SafeWindowsUvCache {
+  $homeSource = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+  if (
+    [string]::IsNullOrWhiteSpace($homeSource) -or
+    $homeSource.IndexOfAny(@([char]13, [char]10)) -ge 0 -or
+    -not [System.IO.Path]::IsPathFullyQualified($homeSource) -or
+    $homeSource.StartsWith('\\') -or
+    $homeSource.StartsWith('//')
+  ) {
+    Fail-SandboxSettings 'USERPROFILE must be a local absolute, single-line path.'
+  }
+
+  $homeItem = Get-Item -LiteralPath $homeSource -Force -ErrorAction Stop
+  if (-not $homeItem.PSIsContainer) {
+    Fail-SandboxSettings "USERPROFILE must be a directory: $homeSource"
+  }
+  if ($homeItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+    Fail-SandboxSettings "USERPROFILE must not be a reparse point: $homeSource"
+  }
+
+  $cacheDir = Join-Path $homeItem.FullName '.cache\github-copilot\uv\powershell-tool'
+  $current = $homeItem.FullName
+  foreach ($component in @('.cache', 'github-copilot', 'uv', 'powershell-tool')) {
+    $current = Join-Path $current $component
+    if (-not (Test-Path -LiteralPath $current)) { continue }
+    $item = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer) {
+      Fail-SandboxSettings "uv cache path contains a non-directory: $current"
+    }
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+      Fail-SandboxSettings "uv cache path contains a reparse point: $current"
+    }
+  }
+  return [pscustomobject]@{
+    HomeDir = $homeItem.FullName
+    CacheDir = $cacheDir
+  }
+}
+
 function Add-UniquePath {
   param(
     [object[]] $Paths,
@@ -159,6 +233,9 @@ function Add-ReadonlyDirectoryAndTarget {
 }
 
 $legacyUvCacheDir = Join-Path (Join-Path $env:LOCALAPPDATA 'github-copilot') 'uv'
+$uvCache = Get-SafeWindowsUvCache
+$uvCacheHomeDir = $uvCache.HomeDir
+$uvCacheDir = $uvCache.CacheDir
 $miseDataDir = if ($env:MISE_DATA_DIR) {
   $env:MISE_DATA_DIR
 } else {
@@ -248,6 +325,18 @@ foreach ($pathName in @('readwritePaths', 'readonlyPaths', 'deniedPaths')) {
     if ($rule -isnot [string] -or [string]::IsNullOrEmpty($rule) -or $rule.IndexOfAny(@([char]13, [char]10)) -ge 0) {
       Fail-SandboxSettings "$pathName must contain nonempty, single-line path strings."
     }
+    if ($pathName -in @('readonlyPaths', 'deniedPaths')) {
+      if ($rule.IndexOfAny(@([char]42, [char]63)) -ge 0) {
+        Fail-SandboxSettings "$pathName rule cannot contain wildcards when validating the uv cache: $rule"
+      }
+      $resolvedRule = Get-ComparableWindowsPath -Path $rule -HomeDir $uvCacheHomeDir
+      if (-not $resolvedRule) {
+        Fail-SandboxSettings "$pathName rule cannot be compared with the uv cache: $rule"
+      }
+      if (Test-PathOverlap -First $uvCacheDir -Second $resolvedRule) {
+        Fail-SandboxSettings "uv cache $uvCacheDir conflicts with $pathName rule $rule."
+      }
+    }
   }
 }
 
@@ -277,6 +366,7 @@ $readwritePaths = @(
       )
     }
 )
+$readwritePaths = @(Add-UniquePath -Paths $readwritePaths -Path $uvCacheDir)
 $readonlyPaths = @(
   Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths')
 )
@@ -317,6 +407,7 @@ if ($preserveEnabled) {
 
 Set-JsonProperty -Object $settings -Name 'sandbox' -Value $sandbox
 
+New-Item -ItemType Directory -Path $uvCacheDir -Force | Out-Null
 New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
 
 $settingsJson = $settings | ConvertTo-Json -Depth 100

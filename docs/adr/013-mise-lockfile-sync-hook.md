@@ -1,4 +1,4 @@
-# ADR-013: mise lockfile 変更時に install / reshim を自動同期する
+# ADR-013: mise lockfile 変更時に install と実行パスを同期する
 
 ## Status
 
@@ -6,24 +6,28 @@ Accepted
 
 ## Context
 
-`mise upgrade` 等で `~/.config/mise/mise.lock` が更新されても、ローカルの `mise install` / `mise reshim` は自動で走らない。結果として shim と install marker が古いまま残り、shell 起動時の `_mise_hook`（`mise hook-env`）で `mise WARN missing:` が出る。Windows では `installs\<tool>\<ver>` が junction として作られるため shim が一度欠落すると復元されにくく、`MISE_AUTO_INSTALL=true`（既定）により毎起動で再 install が試みられて rustup の `info: syncing channel updates ...` も繰り返し表示される。
+`~/.config/mise/mise.lock` が更新されても、ローカルの install、shim、実行パスは
+自動では更新されない。Windows の非対話プロセスで mise shim を User PATH に置くと、
+shim の解決や auto-install に依存し、lockfile と実体の不整合が起きやすい。
 
-`private_mise.lock` は chezmoi で管理しているため、lockfile が更新された apply の瞬間に install/reshim を流せば構造的に同期できる。
+`private_mise.lock` は chezmoi が管理するため、lockfile を適用した直後に install と
+実行パスを同期すれば、非対話プロセスも導入済みの実体を直接実行できる。
 
 ## Decision
 
-`home/run_onchange_after_15-mise-sync-tools.{sh,ps1}.tmpl` を新設し、`{{ include "dot_config/mise/private_mise.lock" | sha256sum }}` を template hash に埋め込む。chezmoi の `run_onchange` は hash 変化時のみ再実行するため、lockfile が変わるたびに `mise install` と `mise reshim` を流して install marker と shim を lockfile と同期させる。
+`run_onchange_after_15-mise-sync-tools` は lockfile の hash 変更時に `mise install` と
+`mise reshim` を実行する。Windows では両方の成功後に `mise bin-paths` が返す実体の
+directory を User PATH の先頭へ同期し、mise shim directory は永続 PATH に置かない。
 
-- 実行順は `run_once_before_20-install-mise`、`run_onchange_after_15-mise-sync-tools`、`run_once_after_20-mise-install`、`run_onchange_after_21-link-mise-shims` となる。番号 15 は、lockfile 変更の同期を通常のツール導入と macOS の shim symlink 更新より前に実行するために使う。
-- mise が PATH に無い環境（CI 等）は skip して exit 0、apply 全体を止めない。
-- mise 用の GitHub token が未設定で `gh` が認証済みの場合は、`gh auth token` から取得した token を `MISE_GITHUB_TOKEN` としてフックのプロセス内だけで `mise install` へ渡す。`gh` が未認証の環境では従来の動作を変更しない。
-- `mise install` / `mise reshim` は一括処理し、いずれかが失敗した場合は原因と `chezmoi apply` による再実行方法を表示して非ゼロ終了する。失敗した `run_onchange` の状態は成功として保存されないため、原因解消後の apply で再実行される。
+同期処理は前回管理した実体 directory を state file に記録する。次回は、その記録と
+旧 mise shim directory だけを除去してから現在の実体 directory を追加し、利用者が
+管理する他の PATH entry は保持する。install、reshim、bin path の検証に失敗した場合は
+PATH と state file を更新せず、`chezmoi apply` を失敗させる。
 
 ## Consequences
 
-- 起動時の `mise WARN missing:` と rustup の `info: syncing channel updates ...` が解消する。
-- lockfile が変わった `chezmoi apply` の所要時間が数秒〜数十秒延びる（unchanged 時の install は短時間で完了）。
-- install / reshim の失敗時は apply が失敗し、lockfile と実体の不整合が残ったことを利用者が認識して明示的に再実行できる。
-- lockfile 以外の理由（手動 `mise uninstall` 等）で shim が欠落したケースは本フックでは復元されないため、その場合は手動で `mise install && mise reshim` を実行する（`docs/troubleshooting.md` 参照）。
-- ADR-009（Windows での mise rust home 分離）の症状（junction marker と install 判定の揺れ）を直接修正するわけではないが、結果として顕在化を抑止する。
-- lockfile revision 2 の sidecar を含む生成物管理は ADR-029 に従う。
+- lockfile、install marker、shim、Windows の非対話プロセス用 PATH が一括で更新される。
+- Windows の非対話プロセスは shim や auto-install を介さず導入済み実体を実行する。
+- tool の追加、削除、version 変更で不要になった管理対象 directory を除去できる。
+- lockfile 変更時は install と PATH 同期の時間が `chezmoi apply` に加わる。
+- command hook の pinned Python 方式はこの PATH に依存せず、従来どおり維持する。

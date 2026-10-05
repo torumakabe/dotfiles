@@ -67,7 +67,7 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 ## ワークアラウンド（定期チェック対象）
 
-- **Copilot sandbox の uv 既定 cache grant**: Copilot CLI 1.0.92-4 以降の既定 cache grant を利用する。`uv-enforcer.py` の cache rewrite と専用 cache の `readwritePaths` 追加は撤去済みで、旧専用 cache の設定 entry だけを移行時に完全一致で除去する。Windows native と WSL2 の実機検証が完了するまで、Linux native の動作保証は静的検査の範囲に限る
+- **Copilot sandbox の Windows uv cache**: Windows ProcessContainer は `%LOCALAPPDATA%` を仮想化するため、PowerShell tool だけ `UV_CACHE_DIR` を `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` へ切り替え、同じ exact path を `readwritePaths` へ追加する。Copilot CLI が Windows の uv cache を仮想化後の path へ自動で write 許可するか、非仮想化 path を自動提供するようになったら rewrite、grant、関連テストを撤去する。POSIX は Copilot CLI 1.0.92-4 以降の既定 cache grant を使う
 - **Copilot command hook の固定 Python interpreter**: command hook では mise と uv を起動せず、`chezmoi apply` が uv managed Python 3.14 の絶対パスを `~/.copilot/hooks/python-runtime.env` に記録し、OS 別 launcher が直接実行する。設定同期は `~/.copilot/hooks` と記録した managed Python root を `readonlyPaths` へ追加する。Copilot CLI が command hook の launcher、payload、runtime env と、`uv run` に必要な実体、設定、cache、managed Python 標準ライブラリを自動許可し、macOS、Windows、WSL2 の実 CLI probe が追加 grant なしで成功したら、launcher、runtime env、追加許可、関連テストを撤去する
 - **Copilot CLI の WindowsApps 実行エイリアス**: Windows/PowerShell だけで、WinGet 管理下の `copilot.exe` を alias に設定する。管理対象端末で WindowsApps の実行エイリアスから起動できるようになったら、alias、関連テスト、復旧手順を撤去する
 - **Visual Studio Build Tools の WinGet Configuration v2 昇格**: Build Tools 本体は通常権限の `WinGetPackage`、C++ ワークロードは `vswhere.exe` で MSVC の `link.exe` を検査して必要時だけ対話型セッションから Visual Studio Installer を UAC 昇格する `PSDscResources/Script` で管理する。通常権限から `securityContext: elevated` のユニットを実行しても `0x800706BA` が発生せず、管理者 PowerShellでも `WinGetPackage` のカタログ接続が成功するようになったら、公式の `Microsoft.VisualStudio.DSC/VSComponents` 構成へ戻す

@@ -3,7 +3,8 @@
 # 実行順序: run_once_after_20-mise-install の後。mise でインストールされた uv 等が PATH に必要
 $ErrorActionPreference = 'Stop'
 
-# mise shims を PATH に追加 (非対話シェル対応)
+# この初回スクリプト内だけ mise shims を PATH に追加する。永続 User PATH は
+# run_onchange_after_15-mise-sync-tools が実体 bin directory へ同期する。
 $shimsDir = Join-Path $env:LOCALAPPDATA 'mise\shims'
 if (($env:Path -split ';') -notcontains $shimsDir) {
     $env:Path = "$shimsDir;$env:Path"

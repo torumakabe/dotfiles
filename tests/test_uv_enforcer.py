@@ -95,7 +95,7 @@ class MainIntegrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         return json.loads(result.stdout)
 
-    def _assert_allowed(self, payload: dict) -> None:
+    def _assert_unchanged(self, payload: dict) -> None:
         result = run_hook(SCRIPT_PATH, payload)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
@@ -121,21 +121,45 @@ class MainIntegrationTests(unittest.TestCase):
         self.assertEqual(output["permissionDecision"], "deny")
         self.assertIn("uv run python", output["permissionDecisionReason"])
 
-    def test_allows_uv_run_without_rewriting_tool_arguments(self) -> None:
-        for tool_name in ("bash", "powershell"):
-            with self.subTest(tool_name=tool_name):
-                self._assert_allowed(
-                    {
-                        "toolName": tool_name,
-                        "toolArgs": {
-                            "command": "uv run script.py",
-                            "description": "Run script",
-                        },
-                    }
-                )
+    def test_bash_allows_uv_run_without_rewriting_tool_arguments(self) -> None:
+        self._assert_unchanged(
+            {
+                "toolName": "bash",
+                "toolArgs": {
+                    "command": "uv run script.py",
+                    "description": "Run script",
+                },
+            }
+        )
+
+    def test_powershell_sets_the_non_virtualized_cache_per_command(self) -> None:
+        output = self._decision(
+            {
+                "toolName": "powershell",
+                "toolArgs": {
+                    "command": "uv run script.py",
+                    "description": "Run script",
+                },
+            }
+        )
+
+        self.assertEqual(
+            output["modifiedArgs"]["command"],
+            uve.WINDOWS_UV_CACHE_PREFIX + "uv run script.py",
+        )
+        self.assertEqual(output["modifiedArgs"]["description"], "Run script")
+
+    def test_powershell_cache_prefix_is_idempotent(self) -> None:
+        command = uve.WINDOWS_UV_CACHE_PREFIX + "uv run script.py"
+        self._assert_unchanged(
+            {
+                "toolName": "powershell",
+                "toolArgs": {"command": command},
+            }
+        )
 
     def test_allows_non_shell_tools(self) -> None:
-        self._assert_allowed(
+        self._assert_unchanged(
             {"toolName": "edit", "toolArgs": {"path": "/tmp/foo.txt"}}
         )
 

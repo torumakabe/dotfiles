@@ -197,21 +197,28 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
                 self.powershell,
             )
 
-    def test_legacy_cache_grant_is_removed_without_replacement(self) -> None:
+    def test_windows_relocated_cache_replaces_only_the_legacy_grant(self) -> None:
         self.assertIn("map(select(. != $legacy_cache))", self.posix)
         self.assertIn(
             "[System.StringComparison]::OrdinalIgnoreCase",
             self.powershell,
         )
         self.assertIn("-not [string]::Equals(", self.powershell)
-        for script in (self.posix, self.powershell):
-            self.assertNotIn("UV_CACHE_DIR", script)
-            self.assertNotIn("cacheCovered", script)
-        self.assertNotIn('mkdir -p "${uv_cache_dir}"', self.posix)
-        self.assertNotIn(
+        self.assertNotIn("UV_CACHE_DIR", self.posix)
+        self.assertIn(
+            "'.cache\\github-copilot\\uv\\powershell-tool'",
+            self.powershell,
+        )
+        self.assertIn(
+            "Add-UniquePath -Paths $readwritePaths -Path $uvCacheDir",
+            self.powershell,
+        )
+        self.assertIn(
             "New-Item -ItemType Directory -Path $uvCacheDir",
             self.powershell,
         )
+        self.assertIn("Test-PathOverlap", self.powershell)
+        self.assertNotIn('mkdir -p "${uv_cache_dir}"', self.posix)
 
 
 if __name__ == "__main__":

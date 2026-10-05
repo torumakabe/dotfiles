@@ -144,7 +144,7 @@ bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true
 
 ## Copilot sandbox 内で uv がキャッシュを書き込めない
 
-Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `readwritePaths` へ自動追加する。CLI 起動環境や hook のコマンド内で `UV_CACHE_DIR` を設定して専用 cache へ切り替える構成は、このリポジトリでは使用しない。
+macOS、Linux、WSL の Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `readwritePaths` へ自動追加する。Windows は `%LOCALAPPDATA%` が ProcessContainer 内で仮想化されるため、PowerShell tool のコマンド内だけ `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を使用する。
 
 ```bash
 unset UV_CACHE_DIR
@@ -152,11 +152,11 @@ chezmoi apply
 uv --offline --directory / --project / cache dir
 ```
 
-適用は Copilot CLI を終了してから行う。上の `uv cache dir` は通常シェルの保存先であり、変更しない。CLI を再起動して shell tool 内で確認し、通常の uv 既定 cache へ書き込めることを確認する。
+Windows では Copilot CLI を終了し、通常 PowerShell で `Remove-Item Env:\UV_CACHE_DIR -ErrorAction SilentlyContinue; chezmoi apply` を実行する。再起動後の PowerShell tool で `uv cache dir` が `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を返すことを確認する。通常 PowerShell の uv 既定 cache は変更しない。
 
 `/sandbox policy` の表示だけでは書き込み成功を確認できない。sandbox 内の `uv cache dir` が意図した保存先を返すことと、通常の Python 自動探索による `uv run` の成功、ホストへのキャッシュ永続化を確認する。WSL の調査では、許可なしでもコマンドが成功し、ホストには何も残らない場合があった。[実 CLI の比較試験](copilot-sandbox-verification.md#実-cli-でキャッシュの永続化を比較する)は終了コードとホスト側のファイルを分けて判定する。
 
-設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、既存の RO / deny との競合を確認する。権限を広げて解消しない。明示的な `--cache-dir` やコマンド内の環境変数設定を使う場合、その保存先は自動許可されない。`--no-cache` などでキャッシュを無効にした実行は、既定 cache の書き込み確認には使わない。
+設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、既存の RO / deny との競合を確認する。Windows で `%LOCALAPPDATA%\Packages\sandbox.{GUID}\AC\uv\cache` が表示される場合は、`uv-enforcer.py` の PowerShell command rewrite が適用されていない。mise の config、state、downloads や `%LOCALAPPDATA%\uv\cache` の許可を追加して回避しない。
 
 hook launcher が `missing .../python-runtime.env`、`recorded interpreter is not a regular file`、`python must live under ...` を報告する場合は、Copilot CLI を終了して `chezmoi apply` を再実行する。適用時に uv managed Python 3.14 を provision し、runtime env と `readonlyPaths` を更新してから launcher のスモークテストを実行する。
 
@@ -336,7 +336,7 @@ npm config set registry '<管理者指定の registry URL>'
 
 - **Unix**: `chezmoi apply` で `~/.profile` 系が配置されているか確認。新規 login シェル（新しい Terminal タブ）で有効化
 - **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）
-- **Windows**: `run_once_after_05-setup-mise-shims-path.ps1` を再実行
+- **Windows**: `chezmoi apply` で `run_onchange_after_15-mise-sync-tools.ps1` を再実行し、`mise bin-paths` の実体ディレクトリを User PATH へ同期
 
 それでも反映されないときは state を消して再実行:
 

@@ -25,7 +25,7 @@
 | [010](010-url-allowlist-via-pretooluse-hook.md) | Copilot CLI の URL 包括制御は preToolUse Hook で行う | Superseded by ADR-015 |
 | [011](011-edit-windows-via-winget-dsc.md) | Microsoft Edit は Windows のみ winget/DSC で管理する | Accepted |
 | [012](012-wsl-op-ssh-sign-crlf-wrapper.md) | WSL では op-ssh-sign-wsl.exe を CR 除去ラッパー経由で呼ぶ | Accepted |
-| [013](013-mise-lockfile-sync-hook.md) | mise lockfile 変更時に install / reshim を自動同期する | Accepted |
+| [013](013-mise-lockfile-sync-hook.md) | mise lockfile 変更時に install と実行パスを同期する | Accepted |
 | [014](014-github-multi-account-https-auth-per-owner.md) | GitHub 多アカウント HTTPS 認証は credential の URL パス方式 + gh auth token --user で解決する | Accepted |
 | [015](015-copilot-cli-shell-network-via-local-sandbox.md) | Copilot CLI shell のネットワーク制御は local sandbox で行う | Superseded by ADR-025 |
 | [016](016-rust-external-rustup.md) | Rust は全 OS で外部 rustup 管理とする (mise 管理から除外) | Accepted |
@@ -43,7 +43,7 @@
 | [028](028-mise-bootstrap-preserves-existing-installations.md) | mise bootstrap は既存導入を置換しない | Accepted |
 | [029](029-mise-lockfile-v2-sidecars.md) | mise lockfile revision 2 の npm sidecar を不可分に管理する | Accepted |
 | [030](030-mise-self-update-and-upgrade.md) | mise 本体の self-update と self-upgrade を使い分ける | Superseded by ADR-032 |
-| [031](031-windows-uv-dedicated-cache.md) | Windows でも Copilot sandbox の uv 専用キャッシュを配布する | Deprecated |
+| [031](031-windows-uv-dedicated-cache.md) | Windows Copilot sandbox の uv cache を非仮想化パスへ分離する | Accepted |
 | [032](032-protect-self-updated-winget-packages-with-blocking-pins.md) | 独自 updater で更新する WinGet パッケージを blocking pin で保護する | Accepted |
 | [033](033-manage-azd-and-copilot-cli-via-official-os-channels.md) | azd と Copilot CLI を OS 別の公式経路で管理する | Accepted |
 | [034](034-macos-apple-silicon-only.md) | macOS のサポートは Apple Silicon (arm64) 限定とする | Accepted |
