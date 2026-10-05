@@ -158,6 +158,8 @@ uv --offline --directory / --project / cache dir
 
 設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、既存の RO / deny との競合を確認する。権限を広げて解消しない。明示的な `--cache-dir` やコマンド内の環境変数設定を使う場合、その保存先は自動許可されない。`--no-cache` などでキャッシュを無効にした実行は、既定 cache の書き込み確認には使わない。
 
+hook が `mise-shim: failed to execute mise` を報告する場合は、生成 policy の `readonlyPaths` に mise 本体の実体ディレクトリがあるか確認する。Python が `ModuleNotFoundError: No module named 'encodings'` で停止する場合は、`uv python dir` の結果と symlink の実体が `readonlyPaths` にあるか確認する。設定同期はこれらを自動追加するが、実体の配置が変わった場合は Copilot CLI を終了して `chezmoi apply` を再実行し、再起動後に確認する。`~/.config/uv` 全体の許可や sandbox の無効化で回避しない。
+
 配布済み設定を調べずに、過去のブランチが追加した RW 許可を削除しない。今回の同期処理は既存許可の所有者を推測せず、通常の uv 設定やキャッシュ内容も保持する。
 
 ## Copilot sandbox.enabled が意図した値にならない

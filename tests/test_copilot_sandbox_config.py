@@ -133,6 +133,50 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
                 rf"-Object \$existingFilesystem -Name '{path_name}'\)",
             )
 
+    def test_powershell_path_arrays_are_not_wrapped_as_nested_arrays(self) -> None:
+        self.assertNotIn("return ,@()", self.powershell)
+        self.assertNotIn("return ,@($Value)", self.powershell)
+        self.assertIn(
+            "$readwritePaths = @(",
+            self.powershell,
+        )
+        self.assertIn(
+            "$readonlyPaths = @(",
+            self.powershell,
+        )
+        self.assertIn(
+            "Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' "
+            "-Value $readonlyPaths",
+            self.powershell,
+        )
+
+    def test_hook_runtime_readonly_grants_are_added_without_uv_config(self) -> None:
+        for expected in (
+            "mise_data_dir",
+            "uv_python_dir",
+            "readonly_grants",
+            "uv python dir",
+        ):
+            self.assertIn(expected, self.posix)
+        for expected in (
+            "$miseDataDir",
+            "$uvPythonDir",
+            "$miseExe",
+            "$uvExe",
+            "Get-ResolvedPathTarget",
+        ):
+            self.assertIn(expected, self.powershell)
+        for script in (self.posix, self.powershell):
+            self.assertNotIn(".config/uv", script)
+        self.assertIn(
+            "reduce $readonly_grants[] as $path",
+            self.posix,
+        )
+        self.assertIn(
+            "Add-ReadonlyDirectoryAndTarget",
+            self.powershell,
+        )
+
     def test_stale_policy_and_network_keys_are_removed(self) -> None:
         self.assertRegex(
             self.posix,

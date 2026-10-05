@@ -96,9 +96,12 @@ Copilot CLI 1.0.92-4 以降では、CLI 起動環境から `UV_CACHE_DIR` を除
 各環境で、次を確認する。
 
 - 全5件の hook を登録した状態で shell tool 内の `uv run` が成功する
+- mise shim から mise 本体と uv の実体へ委譲できる
 - uv が自動探索した Python で `--offline --no-project --no-env-file --no-python-downloads` を指定した実行が成功する
+- uv managed Python が標準ライブラリの `encodings` を読み込める
 - 通常の shell から取得した uv の既定 cache に marker を書き込める
 - 生成 policy が同じ既定 cache を `readwritePaths` に含む
+- 生成 policy が mise と `uv python dir` の実体を `readonlyPaths` に含む
 - 旧専用 `github-copilot/uv` を生成 policy に追加しない
 - `python` と `pip` の直接実行拒否、および `uv run` と `uv pip` の無変更通過を維持する
 

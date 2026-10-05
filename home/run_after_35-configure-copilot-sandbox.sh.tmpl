@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # Copilot CLI local sandbox 設定 (Linux/macOS)
 #
-# Copilot sandbox policy version: 8
+# Copilot sandbox policy version: 9
 
 set -euo pipefail
 umask 077
@@ -21,6 +21,50 @@ legacy_uv_cache_dir="${HOME}/Library/Caches/github-copilot/uv"
 {{ else -}}
 legacy_uv_cache_dir="${XDG_CACHE_HOME:-${HOME}/.cache}/github-copilot/uv"
 {{ end -}}
+
+readonly_grants='[]'
+
+add_readonly_grant() {
+  local path="$1"
+  case "${path}" in
+  /*) ;;
+  *) fail "readonly grant must be an absolute path: ${path}" ;;
+  esac
+  [[ "${path}" != *$'\n'* && "${path}" != *$'\r'* ]] ||
+    fail "readonly grant must be a single-line path."
+  readonly_grants="$(
+    jq -c --arg path "${path}" '
+      if index($path) then . else . + [$path] end
+    ' <<<"${readonly_grants}"
+  )"
+}
+
+add_directory_grant() {
+  local path="$1"
+  local resolved
+
+  add_readonly_grant "${path}"
+  if [ -d "${path}" ]; then
+    resolved="$(cd -P -- "${path}" && pwd -P)"
+    if [ "${resolved}" != "${path}" ]; then
+      add_readonly_grant "${resolved}"
+    fi
+  fi
+}
+
+mise_data_dir="${MISE_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/mise}"
+uv_python_dir="${UV_PYTHON_INSTALL_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/uv/python}"
+if command -v uv >/dev/null 2>&1; then
+  detected_uv_python_dir="$(MISE_ENABLE_TOOLS=uv uv python dir 2>/dev/null || true)"
+  case "${detected_uv_python_dir}" in
+  /*) uv_python_dir="${detected_uv_python_dir}" ;;
+  "") ;;
+  *) fail "uv python dir returned a non-absolute path: ${detected_uv_python_dir}" ;;
+  esac
+fi
+
+add_directory_grant "${mise_data_dir}"
+add_directory_grant "${uv_python_dir}"
 
 copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
 settings_path="${copilot_home}/settings.json"
@@ -67,14 +111,19 @@ chmod 0600 "${settings_tmp}"
 trap 'rm -f "${settings_tmp}"' EXIT
 
 jq --argjson desired "${desired}" --argjson enabled "${existing_enabled}" \
-  --arg legacy_cache "${legacy_uv_cache_dir}" '
+  --arg legacy_cache "${legacy_uv_cache_dir}" \
+  --argjson readonly_grants "${readonly_grants}" '
   . * $desired
   | .sandbox.enabled = $enabled
   | .sandbox.userPolicy |= (
     del(.version)
     | .filesystem |= (
       .readwritePaths = ((.readwritePaths // []) | map(select(. != $legacy_cache)))
-      | .readonlyPaths = (.readonlyPaths // [])
+      | .readonlyPaths = (
+          reduce $readonly_grants[] as $path
+            ((.readonlyPaths // []);
+             if index($path) then . else . + [$path] end)
+        )
       | .deniedPaths = (.deniedPaths // [])
       | .clearPolicyOnExit = false
     )

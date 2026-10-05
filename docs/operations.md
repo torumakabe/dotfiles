@@ -37,7 +37,7 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。既存のパス指定は保持し、uv の専用 cache 用 path は追加しない。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。既存のパス指定は保持し、uv の専用 cache 用 path は追加しない。command hook の暫定措置として、mise と uv managed Python に必要な path は `readonlyPaths` へ重複なく追記する。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 
@@ -64,6 +64,14 @@ Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `filesystem.
 | Windows | `%LOCALAPPDATA%\github-copilot\uv` |
 
 Copilot CLI の実機検証では、CLI 起動時の `UV_CACHE_DIR` を設定せず、通常の uv 既定 cache へ marker を書き込めることを確認する。Windows native と WSL2 の検証は候補実装を共有して実施する。
+
+### command hook の mise と uv managed Python
+
+command hook は `MISE_ENABLE_TOOLS=uv uv run` で Python スクリプトを起動する。Copilot CLI が launcher の委譲先と managed runtime の標準ライブラリを自動許可しない版では、mise shim から mise 本体を起動できないか、uv managed Python の実行ファイルだけが見えて標準ライブラリを読めない。
+
+設定同期は、POSIX では `${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}` と `uv python dir`、Windows では `%LOCALAPPDATA%\mise`、`mise.exe` の実体ディレクトリ、`mise which uv` の実体ディレクトリ、`uv python dir` を `readonlyPaths` へ追加する。ディレクトリが symlink または reparse point の場合は実体も追加する。`UV_PYTHON_INSTALL_DIR` が設定されている場合はその値を優先する。uv の設定と認証情報を含み得る `~/.config/uv` は追加しない。
+
+この許可は command hook の起動に必要な読み取りだけを対象とする。cache の書き込みは Copilot CLI の既定 grant を使用し、専用 `UV_CACHE_DIR` は設定しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
 ## chezmoi での編集
 

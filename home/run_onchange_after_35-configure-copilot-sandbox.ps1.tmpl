@@ -1,7 +1,7 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 8
+# Copilot sandbox policy version: 9
 
 $ErrorActionPreference = 'Stop'
 
@@ -46,8 +46,8 @@ function Set-JsonProperty {
 
 function Get-JsonArrayOrEmpty {
   param($Value)
-  if ($null -eq $Value) { return ,@() }
-  return ,@($Value)
+  if ($null -eq $Value) { return @() }
+  return @($Value)
 }
 
 function Get-JsonProperty {
@@ -93,7 +93,111 @@ function Remove-JsonProperty {
   }
 }
 
+function Get-NormalizedPathKey {
+  param([Parameter(Mandatory = $true)] [string] $Path)
+
+  return (($Path -replace '/', '\').TrimEnd('\')).ToLowerInvariant()
+}
+
+function Add-UniquePath {
+  param(
+    [object[]] $Paths,
+    [Parameter(Mandatory = $true)] [string] $Path
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Path) -or $Path.IndexOfAny(@([char]13, [char]10)) -ge 0) {
+    Fail-SandboxSettings 'readonly grant must be a nonempty, single-line path.'
+  }
+  if (-not [System.IO.Path]::IsPathFullyQualified($Path)) {
+    Fail-SandboxSettings "readonly grant must be an absolute path: $Path"
+  }
+
+  $result = @($Paths)
+  $pathKey = Get-NormalizedPathKey -Path $Path
+  $present = $result | Where-Object {
+    (Get-NormalizedPathKey -Path ([string]$_)) -eq $pathKey
+  }
+  if (-not $present) {
+    $result += $Path
+  }
+  return $result
+}
+
+function Get-ResolvedPathTarget {
+  param([Parameter(Mandatory = $true)] [string] $Path)
+
+  if (-not (Test-Path -LiteralPath $Path)) { return $null }
+  $item = Get-Item -LiteralPath $Path -Force
+  if (-not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+    return $item.FullName
+  }
+
+  $target = @($item.Target) | Select-Object -First 1
+  if (-not $target) { return $item.FullName }
+  if (-not [System.IO.Path]::IsPathFullyQualified($target)) {
+    $target = Join-Path $item.DirectoryName $target
+  }
+  return [System.IO.Path]::GetFullPath($target)
+}
+
+function Add-ReadonlyDirectoryAndTarget {
+  param(
+    [object[]] $Paths,
+    [Parameter(Mandatory = $true)] [string] $Path
+  )
+
+  $result = @(Add-UniquePath -Paths $Paths -Path $Path)
+  $resolved = Get-ResolvedPathTarget -Path $Path
+  if ($resolved -and -not [string]::Equals(
+    (Get-NormalizedPathKey -Path $resolved),
+    (Get-NormalizedPathKey -Path $Path),
+    [System.StringComparison]::Ordinal
+  )) {
+    $result = @(Add-UniquePath -Paths $result -Path $resolved)
+  }
+  return $result
+}
+
 $legacyUvCacheDir = Join-Path (Join-Path $env:LOCALAPPDATA 'github-copilot') 'uv'
+$miseDataDir = if ($env:MISE_DATA_DIR) {
+  $env:MISE_DATA_DIR
+} else {
+  Join-Path $env:LOCALAPPDATA 'mise'
+}
+$uvPythonDir = if ($env:UV_PYTHON_INSTALL_DIR) {
+  $env:UV_PYTHON_INSTALL_DIR
+} else {
+  Join-Path $env:APPDATA 'uv\python'
+}
+
+$miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
+  Select-Object -First 1).Source
+if (-not $miseExe) {
+  $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
+  if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
+}
+
+$uvExe = $null
+if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {
+  $uvOutput = & $miseExe which uv 2>$null
+  if ($LASTEXITCODE -eq 0 -and $uvOutput) {
+    $uvExe = ([string]$uvOutput).Trim()
+  }
+}
+if (-not $uvExe) {
+  $uvExe = (Get-Command -CommandType Application -Name 'uv.exe' -ErrorAction SilentlyContinue |
+    Select-Object -First 1).Source
+}
+if ($uvExe -and (Test-Path -LiteralPath $uvExe)) {
+  $uvPythonOutput = & $uvExe python dir 2>$null
+  if ($LASTEXITCODE -eq 0 -and $uvPythonOutput) {
+    $detectedUvPythonDir = ([string]$uvPythonOutput).Trim()
+    if (-not [System.IO.Path]::IsPathFullyQualified($detectedUvPythonDir)) {
+      Fail-SandboxSettings "uv python dir returned a non-absolute path: $detectedUvPythonDir"
+    }
+    $uvPythonDir = $detectedUvPythonDir
+  }
+}
 
 # `/sandbox disable` persists sandbox.enabled=$false in settings.json, and that
 # must survive this template update until `/sandbox enable` restores it.
@@ -153,7 +257,7 @@ $filesystem = if ($null -ne $existingFilesystem) { $existingFilesystem } else { 
 $network = if ($null -ne $existingNetwork) { $existingNetwork } else { [pscustomobject]@{} }
 
 $readwritePaths = @(
-  Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths') |
+  @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths')) |
     Where-Object {
       $normalizedRule = (($_ -replace '/', '\').TrimEnd('\'))
       $normalizedLegacy = (($legacyUvCacheDir -replace '/', '\').TrimEnd('\'))
@@ -164,9 +268,28 @@ $readwritePaths = @(
       )
     }
 )
+$readonlyPaths = @(
+  Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths')
+)
+$readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $miseDataDir)
+$readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvPythonDir)
+
+if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {
+  $resolvedMiseExe = Get-ResolvedPathTarget -Path $miseExe
+  $miseBinDir = Split-Path -Parent $resolvedMiseExe
+  $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $miseBinDir)
+}
+if ($uvExe -and (Test-Path -LiteralPath $uvExe)) {
+  $resolvedUvExe = Get-ResolvedPathTarget -Path $uvExe
+  $uvBinDir = Split-Path -Parent $resolvedUvExe
+  $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvBinDir)
+}
+
 Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value $readwritePaths
-Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
-Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
+Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value $readonlyPaths
+Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value @(
+  Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths')
+)
 Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
 
 Set-JsonProperty -Object $network -Name 'allowOutbound' -Value $true
