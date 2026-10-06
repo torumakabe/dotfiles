@@ -1079,6 +1079,16 @@ class MiseConfigTests(unittest.TestCase):
             profile,
         )
         self.assertIn("[string]::IsNullOrWhiteSpace($lockText)", profile)
+        self.assertNotIn('rm -rf "$locks_dir"\n', zshrc)
+        self.assertNotIn(
+            "Remove-Item -Path $locksDir -Recurse -Force",
+            profile,
+        )
+        self.assertIn('find "$locks_dir" -type f -name package.json', zshrc)
+        self.assertIn(
+            'Get-ChildItem -LiteralPath $locksDir -Recurse -File',
+            profile,
+        )
 
     def _check_mise_warnings(self, log: str) -> subprocess.CompletedProcess[str]:
         if shutil.which("zsh") is None:
@@ -1450,6 +1460,7 @@ fi
         lock_has_sidecars: bool = True,
         empty_lockfile: bool = False,
         aube_path: str = "locks/new/2",
+        target_keep: bool = True,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
         if os.name != "nt":
             self.skipTest("Windows only")
@@ -1470,6 +1481,8 @@ fi
             (locks_dir / "original/1/package.json").write_text(
                 "original-package", encoding="utf-8"
             )
+            if target_keep:
+                (locks_dir / ".keep").write_text("", encoding="utf-8")
             source_home = test_root / "source/home"
             source_mise_dir = source_home / "dot_config/mise"
             source_locks_dir = source_mise_dir / "exact_private_locks"
@@ -1545,6 +1558,16 @@ function mise {{
             [System.IO.File]::WriteAllText(
                 (Join-Path $newSidecar "package.json"),
                 'new-package'
+            )
+            $staleSidecar = Join-Path $testLocksDir "stale\\3"
+            New-Item -ItemType Directory -Path $staleSidecar -Force | Out-Null
+            [System.IO.File]::WriteAllText(
+                (Join-Path $staleSidecar "aube-lock.yaml"),
+                'stale-sidecar'
+            )
+            [System.IO.File]::WriteAllText(
+                (Join-Path $staleSidecar "package.json"),
+                'stale-package'
             )
         }}
         else {{
@@ -1645,6 +1668,12 @@ $result = @{{
     }} else {{
         $null
     }}
+    original_sidecar = Test-Path (
+        Join-Path $testLocksDir "original\\1\\package.json"
+    )
+    stale_sidecar = Test-Path (
+        Join-Path $testLocksDir "stale\\3\\package.json"
+    )
     target_keep = Test-Path (Join-Path $testLocksDir ".keep")
     source_lock = [System.IO.File]::ReadAllText($testSourceLockfile)
     source_sidecar = if (
@@ -1750,6 +1779,9 @@ $result = @{{
                     "new-package" if allowed else "original-package",
                 )
                 if allowed:
+                    self.assertFalse(state["original_sidecar"])
+                    self.assertFalse(state["stale_sidecar"])
+                    self.assertFalse(state["target_keep"])
                     self.assertIn("処理を継続します", result.stdout + result.stderr)
                     if "recovered-fallback" in name:
                         self.assertIn("回復済み", result.stdout + result.stderr)
@@ -1784,6 +1816,14 @@ $result = @{{
         self.assertTrue(
             any(item.endswith(" add -A") for item in state["history"])
         )
+
+    def test_powershell_mise_lock_allows_missing_keep_marker(self) -> None:
+        result, state = self._run_powershell_mise_upgrade(target_keep=False)
+
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(state["caught"])
+        self.assertEqual(state["sidecar"], "new-package")
+        self.assertFalse(state["target_keep"])
 
     def test_powershell_mise_lock_restores_on_blocking_warning(self) -> None:
         result, state = self._run_powershell_mise_upgrade(
@@ -1901,6 +1941,8 @@ $result = @{{
         self.assertFalse(state["caught"])
         self.assertIsNone(state["sidecar"])
         self.assertIsNone(state["source_sidecar"])
+        self.assertFalse(state["original_sidecar"])
+        self.assertFalse(state["stale_sidecar"])
         self.assertTrue(state["target_keep"])
         self.assertTrue(state["source_keep"])
         self.assertTrue(

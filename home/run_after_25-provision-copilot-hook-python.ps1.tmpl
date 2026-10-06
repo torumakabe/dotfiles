@@ -7,8 +7,7 @@
 $ErrorActionPreference = 'Stop'
 
 $pythonVersion = '3.14'
-$copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
-$hooksDir = Join-Path $copilotHome 'hooks'
+$hooksDir = Join-Path $HOME '.copilot\hooks'
 $runtimeFile = Join-Path $hooksDir 'python-runtime.env'
 $launcher = Join-Path $hooksDir 'run-hook.ps1'
 

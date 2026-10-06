@@ -16,6 +16,8 @@ HOOKS_DIR = REPO_ROOT / "home/private_dot_copilot/hooks"
 HOOKS_PATH = HOOKS_DIR / "hooks.json"
 POSIX_LAUNCHER = HOOKS_DIR / "executable_run-hook.sh"
 WINDOWS_LAUNCHER = HOOKS_DIR / "run-hook.ps1"
+POSIX_PROVISIONER = REPO_ROOT / "home/run_after_25-provision-copilot-hook-python.sh.tmpl"
+WINDOWS_PROVISIONER = REPO_ROOT / "home/run_after_25-provision-copilot-hook-python.ps1.tmpl"
 EXPECTED_BASH_PREFIX = '"$HOME/.copilot/hooks/run-hook.sh" '
 EXPECTED_POWERSHELL_PREFIX = '& "$HOME\\.copilot\\hooks\\run-hook.ps1" '
 
@@ -26,6 +28,15 @@ def _commands() -> list[dict[str, object]]:
 
 
 class CopilotHooksConfigTests(unittest.TestCase):
+    def test_provisioners_use_the_distributed_hook_directory(self) -> None:
+        posix = POSIX_PROVISIONER.read_text(encoding="utf-8")
+        windows = WINDOWS_PROVISIONER.read_text(encoding="utf-8")
+
+        self.assertIn('hooks_dir="${HOME}/.copilot/hooks"', posix)
+        self.assertNotIn("COPILOT_HOME", posix)
+        self.assertIn("$hooksDir = Join-Path $HOME '.copilot\\hooks'", windows)
+        self.assertNotIn("COPILOT_HOME", windows)
+
     def test_all_guards_run_before_the_argument_rewriter(self) -> None:
         hooks = json.loads(HOOKS_PATH.read_text())["hooks"]["preToolUse"]
         expected = ("copilot-guard.py", "node-global-enforcer.py", "uv-enforcer.py")

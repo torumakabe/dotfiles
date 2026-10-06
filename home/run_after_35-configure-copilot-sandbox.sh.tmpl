@@ -53,7 +53,7 @@ add_directory_grant() {
 }
 
 copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
-hooks_dir="${copilot_home}/hooks"
+hooks_dir="${HOME}/.copilot/hooks"
 hook_runtime_file="${hooks_dir}/python-runtime.env"
 
 # mise shims と install ディレクトリは agent の Bash tool が jq/rg/node/uv を

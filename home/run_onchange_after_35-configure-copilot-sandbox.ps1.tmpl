@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
 $settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
+$hooksDir = Join-Path $HOME '.copilot\hooks'
 $uvCacheEnvironmentName = 'COPILOT_DOTFILES_UV_CACHE_DIR'
 
 $desiredSettings = @'
@@ -277,7 +278,6 @@ $uvPythonDir = if ($env:UV_PYTHON_INSTALL_DIR) {
 
 # hook interpreter の root は run_after_25 が記録した値を使う。sandbox 設定の
 # ために mise や uv を起動すると、hook が実際に使う interpreter と食い違う。
-$hooksDir = Join-Path $copilotHome 'hooks'
 $hookRuntimeFile = Join-Path $hooksDir 'python-runtime.env'
 if (Test-Path -LiteralPath $hookRuntimeFile -PathType Leaf) {
   foreach ($line in [System.IO.File]::ReadAllLines($hookRuntimeFile)) {

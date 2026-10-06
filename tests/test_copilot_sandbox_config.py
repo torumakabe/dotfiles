@@ -175,6 +175,9 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             self.assertIn(expected, self.posix)
         for expected in ("$uvPythonDir", "$hooksDir", "$hookRuntimeFile", "python_root="):
             self.assertIn(expected, self.powershell)
+        self.assertIn('hooks_dir="${HOME}/.copilot/hooks"', self.posix)
+        self.assertIn("$hooksDir = Join-Path $HOME '.copilot\\hooks'", self.powershell)
+        self.assertNotIn("$hooksDir = Join-Path $copilotHome 'hooks'", self.powershell)
 
     def test_stale_policy_and_network_keys_are_removed(self) -> None:
         self.assertRegex(

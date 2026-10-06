@@ -286,4 +286,14 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 
 ## 検証結果の記録
 
-macOS の候補実装検証は成功済みである。Windows native と WSL2 は同じ候補実装の commit SHA を使って実機検証し、結果をこのセッションへ返す。Linux native は今回の実機検証対象外であり、テンプレート生成と静的テストの確認範囲に限る。
+候補 commit `54801b1e7509580c23b70c9651929111b9b33077` について、次の実機検証が成功した。
+
+| 環境 | Copilot CLI | 確認結果 |
+|---|---|---|
+| macOS arm64、Seatbelt | 1.0.92 系 | 固定 interpreter、uv cache grant、全 hook の起動に成功 |
+| Windows native、ProcessContainer | 1.0.93-0 | PowerShell pipeline、relocated cache、direct mise PATH、全 hook の起動に成功 |
+| WSL2、bubblewrap 0.6.1 | 1.0.93-0 | 隔離した HOME、uv cache、managed Python で全 hook の起動に成功 |
+
+WSL2 の `postToolUseFailure` は、shell の非ゼロ終了ではなく、存在しないファイルに対する `view` tool handler error で確認した。Copilot CLI は shell の非ゼロ終了を tool event の成功として扱い、`postToolUse` を実行するためである。
+
+Linux native は今回の実機検証対象外であり、テンプレート生成と静的テストの確認範囲に限る。
