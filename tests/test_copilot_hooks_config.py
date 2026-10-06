@@ -178,9 +178,68 @@ class CopilotHookLauncherTests(unittest.TestCase):
 
     def test_windows_launcher_forwards_all_pipeline_input_to_python(self) -> None:
         source = WINDOWS_LAUNCHER.read_text(encoding="utf-8")
-        self.assertNotIn("[Parameter(ValueFromPipeline = $true)]", source)
-        self.assertIn("$hookInput = @($input)", source)
+        self.assertIn("[Parameter(ValueFromPipeline = $true)]", source)
+        self.assertIn("[object] $HookInput", source)
+        self.assertIn("begin {", source)
+        self.assertIn("process {", source)
+        self.assertIn("end {", source)
+        self.assertIn("$hookInputs.Add($HookInput)", source)
+        self.assertNotIn("@($input)", source)
         self.assertIn(
-            "$hookInput | & $pythonPath $scriptPath @HookArguments",
+            "$hookInputs | & $pythonPath $scriptPath @HookArguments",
             source,
         )
+
+    @unittest.skipUnless(shutil.which("pwsh"), "pwsh is required")
+    def test_windows_launcher_preserves_pipeline_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            hooks_dir = pathlib.Path(temp_dir) / "hooks"
+            scripts_dir = hooks_dir / "scripts"
+            scripts_dir.mkdir(parents=True)
+            launcher = hooks_dir / "run-hook.ps1"
+            launcher.write_text(
+                WINDOWS_LAUNCHER.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            (scripts_dir / "probe.py").write_text(
+                "import json, sys\n"
+                "sys.stdout.write(json.dumps(sys.stdin.read()))\n",
+                encoding="utf-8",
+            )
+            interpreter = pathlib.Path(sys.executable).resolve()
+            self._write_runtime(
+                launcher, str(interpreter.parent), str(interpreter)
+            )
+
+            cases = {
+                "single": (
+                    f"'first' | & '{launcher}' probe.py",
+                    ("first",),
+                ),
+                "multiple": (
+                    f"@('first', 'second') | & '{launcher}' probe.py",
+                    ("first", "second"),
+                ),
+                "empty": (f"& '{launcher}' probe.py", ()),
+            }
+            for name, (command, expected) in cases.items():
+                with self.subTest(case=name):
+                    result = subprocess.run(
+                        [
+                            "pwsh",
+                            "-NoProfile",
+                            "-NonInteractive",
+                            "-Command",
+                            command,
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    forwarded = json.loads(result.stdout)
+                    if expected:
+                        positions = [forwarded.index(value) for value in expected]
+                        self.assertEqual(positions, sorted(positions))
+                    else:
+                        self.assertEqual(forwarded, "")

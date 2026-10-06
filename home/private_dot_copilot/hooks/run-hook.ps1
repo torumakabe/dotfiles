@@ -10,10 +10,17 @@ param(
   [Parameter(Mandatory = $true, Position = 0)]
   [string] $ScriptName,
 
+  # Advanced script は pipeline parameter が無いと、script 本体の実行前に
+  # pipeline 入力を拒否する。process で各 object を保持し、end で一度だけ渡す。
+  [Parameter(ValueFromPipeline = $true)]
+  [AllowNull()]
+  [object] $HookInput,
+
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]] $HookArguments
 )
 
+begin {
 $ErrorActionPreference = 'Stop'
 
 function Exit-HookLauncher {
@@ -73,12 +80,20 @@ if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
   Exit-HookLauncher "recorded interpreter is not a regular file: $pythonPath"
 }
 
-# pipeline 入力は全件を保持する。ValueFromPipeline の parameter は暗黙の end
-# ブロックで最後の1オブジェクトしか束縛せず、複数行 payload の先頭が失われる。
-$hookInput = @($input)
-if ($hookInput.Count -gt 0) {
-  $hookInput | & $pythonPath $scriptPath @HookArguments
+$hookInputs = [System.Collections.Generic.List[object]]::new()
+}
+
+process {
+  if ($PSBoundParameters.ContainsKey('HookInput')) {
+    $hookInputs.Add($HookInput)
+  }
+}
+
+end {
+if ($hookInputs.Count -gt 0) {
+  $hookInputs | & $pythonPath $scriptPath @HookArguments
 } else {
   & $pythonPath $scriptPath @HookArguments
 }
 exit $LASTEXITCODE
+}
