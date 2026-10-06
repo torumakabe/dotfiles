@@ -4,7 +4,8 @@
 # ProcessContainer 内では mise が config、lockfile、state、downloads を読み書き
 # できず、shim 解決に失敗する。そのため hook は mise も uv も起動せず、
 # chezmoi apply 時に記録した uv managed interpreter を絶対パスで直接実行する。
-# 撤去条件は docs/troubleshooting.md を参照する。
+# 撤去条件は .github/copilot-instructions.md のワークアラウンド一覧、撤去手順は
+# docs/operations.md を参照する。
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true, Position = 0)]

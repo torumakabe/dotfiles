@@ -5,7 +5,8 @@
 # sandbox では mise が config、lockfile、state、downloads を読み書きできず、
 # uv も project 検出や cache 初期化に追加の許可を必要とする。そのため hook は
 # mise も uv も起動せず、chezmoi apply 時に記録した uv managed interpreter を
-# 絶対パスで直接実行する。撤去条件は docs/troubleshooting.md を参照する。
+# 絶対パスで直接実行する。撤去条件は .github/copilot-instructions.md の
+# ワークアラウンド一覧、撤去手順は docs/operations.md を参照する。
 set -euo pipefail
 
 fail() {
