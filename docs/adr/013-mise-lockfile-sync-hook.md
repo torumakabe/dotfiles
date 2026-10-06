@@ -31,3 +31,7 @@ PATH と state file を更新せず、`chezmoi apply` を失敗させる。
 - tool の追加、削除、version 変更で不要になった管理対象 directory を除去できる。
 - lockfile 変更時は install と PATH 同期の時間が `chezmoi apply` に加わる。
 - command hook の pinned Python 方式はこの PATH に依存せず、従来どおり維持する。
+- Windows の実体 directory 同期は Copilot sandbox の shim 解決失敗に対する暫定措置であり、
+  ProcessContainer 内で shim が config、lockfile、state を解決できるようになったら撤去する。
+  判断には、非対話 PowerShell tool から `jq`、`rg`、`uv` を追加許可なしで起動できることの
+  実機確認を要する。撤去時の清掃手順は [`docs/operations.md`](../operations.md) に置く。

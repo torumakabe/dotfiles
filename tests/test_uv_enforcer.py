@@ -53,6 +53,9 @@ class CommandPolicyTests(unittest.TestCase):
                 "pip3.13.exe install requests",
                 "pip freeze",
                 "pip list",
+                r"C:\Python314\python.exe script.py",
+                r"C:\Python314\Scripts\pip.exe install requests",
+                r".\.venv\Scripts\python.exe script.py",
             ),
             blocked=True,
         )
@@ -133,6 +136,11 @@ class MainIntegrationTests(unittest.TestCase):
         )
 
     def test_powershell_sets_the_non_virtualized_cache_per_command(self) -> None:
+        """撤去単位: Windows の relocated uv cache（ADR-031）。
+
+        github/copilot-agent-runtime#18974 が解消したら、このテストと
+        WINDOWS_UV_CACHE_PREFIX、main() の rewrite 分岐をまとめて削除する。
+        """
         output = self._decision(
             {
                 "toolName": "powershell",
@@ -154,6 +162,12 @@ class MainIntegrationTests(unittest.TestCase):
         )
         self.assertNotIn(".cache\\github-copilot", output["modifiedArgs"]["command"])
         self.assertNotIn("Path]::Combine", output["modifiedArgs"]["command"])
+
+    def test_powershell_cache_prefix_does_not_fail_the_command_when_unset(self) -> None:
+        # 補助環境変数が未設定の端末では cache を既定のままにし、tool call 自体は
+        # 成功させる。設定漏れを PowerShell の例外で表面化させない。
+        self.assertNotIn("throw", uve.WINDOWS_UV_CACHE_PREFIX)
+        self.assertIn("if (-not [string]::IsNullOrWhiteSpace(", uve.WINDOWS_UV_CACHE_PREFIX)
 
     def test_powershell_cache_prefix_is_idempotent(self) -> None:
         command = uve.WINDOWS_UV_CACHE_PREFIX + "uv run script.py"

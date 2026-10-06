@@ -10,10 +10,6 @@ param(
   [Parameter(Mandatory = $true, Position = 0)]
   [string] $ScriptName,
 
-  [Parameter(ValueFromPipeline = $true)]
-  [AllowNull()]
-  [object] $HookInput,
-
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]] $HookArguments
 )
@@ -77,8 +73,11 @@ if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
   Exit-HookLauncher "recorded interpreter is not a regular file: $pythonPath"
 }
 
-if ($PSBoundParameters.ContainsKey('HookInput')) {
-  $HookInput | & $pythonPath $scriptPath @HookArguments
+# pipeline 入力は全件を保持する。ValueFromPipeline の parameter は暗黙の end
+# ブロックで最後の1オブジェクトしか束縛せず、複数行 payload の先頭が失われる。
+$hookInput = @($input)
+if ($hookInput.Count -gt 0) {
+  $hookInput | & $pythonPath $scriptPath @HookArguments
 } else {
   & $pythonPath $scriptPath @HookArguments
 }

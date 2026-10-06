@@ -84,6 +84,23 @@ POSIX では PATH 上の uv を使う。Windows では PATH 上の `uv.exe`、`m
 
 mise のデータディレクトリと実体ディレクトリへの読み取り許可は、通常の shell tool が mise 管理コマンドを起動するために維持する。Windows の非対話プロセスは `mise bin-paths` から同期した User PATH を使い、shim 実行時の config、state、downloads を sandbox へ許可しない。command hook 自体は mise と uv に依存しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
+### sandbox ワークアラウンドの撤去手順
+
+Copilot CLI 側の修正で前提が変わったときに備え、撤去単位を3つに分けている。各単位は独立して撤去でき、他の単位を残したまま適用できる。
+
+| 撤去単位 | 主な実装 | 撤去条件 |
+|---|---|---|
+| 固定 Python interpreter | `run_after_25-provision-copilot-hook-python.*`、`run-hook.sh`、`run-hook.ps1`、`hooks.json`、hook ディレクトリと managed Python root の `readonlyPaths` | Copilot CLI が command hook の launcher、payload、runtime env と managed Python 標準ライブラリを自動許可し、macOS、Windows、WSL2 の実機 probe が追加許可なしで成功する |
+| Windows の direct mise bin PATH | `run_onchange_after_15-mise-sync-tools.ps1.tmpl` の PATH 同期と state file | ProcessContainer 内で mise shim が config、lockfile、state を解決し、非対話 PowerShell tool から `jq`、`rg`、`uv` を起動できる |
+| Windows の relocated uv cache | `uv-enforcer.py` の `WINDOWS_UV_CACHE_PREFIX`、`run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl` の cache 生成、exact grant、`COPILOT_DOTFILES_UV_CACHE_DIR` | [github/copilot-agent-runtime#18974](https://github.com/github/copilot-agent-runtime/issues/18974) が解消し、ProcessContainer 内で `UV_CACHE_DIR` を設定せずに atomic rename が成功する |
+
+撤去では、利用者の端末に残る副作用を一度の適用で消し切れない。実装を削除する版と、残留物を除去する版を分ける。
+
+1. 実装と関連テストを削除し、同時に残留物の完全一致除去を設定同期へ加える。Windows の relocated cache なら `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` の `readwritePaths` entry と `COPILOT_DOTFILES_UV_CACHE_DIR`、direct PATH なら state file に記録した entry と state file 自体、固定 interpreter なら `~/.copilot/hooks` と managed Python root の `readonlyPaths` entry を対象にする。
+2. 対象端末すべてに `chezmoi apply` が行き渡ってから、次の版で完全一致除去を削除する。除去を残したまま次の変更を重ねると、撤去対象の判別が難しくなる。
+
+cache ディレクトリの実体と、利用者が追加した親子 path は削除しない。User PATH からは state file に記録した entry だけを除去し、記録外の entry は保持する。撤去後は対象環境で [Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) を実施し、追加許可なしで成功することを確認する。
+
 ## chezmoi での編集
 
 通常は `chezmoi edit`。テンプレート全体を見ながら編集したいときだけソースを直接触る。

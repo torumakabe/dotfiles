@@ -82,7 +82,8 @@ def extract_leading_command(segment: str) -> str:
 
     Skips leading environment variable assignments (FOO=bar), prefix
     commands (sudo, env), their flags (including flag arguments), and
-    strips absolute paths.
+    strips absolute paths. Windows separators are normalized so that
+    C:\\Python314\\python.exe is recognized as python.exe.
     """
     tokens = segment.split()
     skip_next = False
@@ -92,6 +93,8 @@ def extract_leading_command(segment: str) -> str:
             continue
         if "=" in token and not token.startswith("="):
             continue
+        if "\\" in token:
+            token = token.replace("\\", "/")
         if "/" in token:
             token = token.rsplit("/", 1)[-1]
         if token in _PREFIX_COMMANDS:
@@ -118,11 +121,16 @@ BLOCKED_COMMANDS: dict[str, str] = {
 
 VERSIONED_PYTHON_RE = re.compile(r"^python3(?:\.\d+)+(?:\.exe)?$")
 VERSIONED_PIP_RE = re.compile(r"^pip3(?:\.\d+)+(?:\.exe)?$")
+
+# Windows ProcessContainer は %LOCALAPPDATA% を仮想化し、リダイレクト先では
+# rename が拒否される (github/copilot-agent-runtime#18974)。補助環境変数が指す
+# 非仮想化 cache を command-local に設定して回避する。値を command 文字列へ
+# 直接書くと Copilot CLI の path 承認が発生するため、参照だけを渡す。
+# この定数と main() の分岐を削除すれば撤去できる。
 WINDOWS_UV_CACHE_ENV = "COPILOT_DOTFILES_UV_CACHE_DIR"
 WINDOWS_UV_CACHE_PREFIX = (
-    f"if ([string]::IsNullOrWhiteSpace($env:{WINDOWS_UV_CACHE_ENV})) {{ "
-    f"throw '{WINDOWS_UV_CACHE_ENV} is not configured; run chezmoi apply and restart Copilot CLI' "
-    f"}}; $env:UV_CACHE_DIR = $env:{WINDOWS_UV_CACHE_ENV}; "
+    f"if (-not [string]::IsNullOrWhiteSpace($env:{WINDOWS_UV_CACHE_ENV})) {{ "
+    f"$env:UV_CACHE_DIR = $env:{WINDOWS_UV_CACHE_ENV} }}; "
 )
 
 

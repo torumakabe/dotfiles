@@ -176,11 +176,11 @@ class CopilotHookLauncherTests(unittest.TestCase):
                 self.assertIn("python-runtime.env", source)
                 self.assertNotIn("uv run", source)
 
-    def test_windows_launcher_forwards_pipeline_input_to_python(self) -> None:
+    def test_windows_launcher_forwards_all_pipeline_input_to_python(self) -> None:
         source = WINDOWS_LAUNCHER.read_text(encoding="utf-8")
-        self.assertIn("[Parameter(ValueFromPipeline = $true)]", source)
-        self.assertIn("$PSBoundParameters.ContainsKey('HookInput')", source)
+        self.assertNotIn("[Parameter(ValueFromPipeline = $true)]", source)
+        self.assertIn("$hookInput = @($input)", source)
         self.assertIn(
-            "$HookInput | & $pythonPath $scriptPath @HookArguments",
+            "$hookInput | & $pythonPath $scriptPath @HookArguments",
             source,
         )

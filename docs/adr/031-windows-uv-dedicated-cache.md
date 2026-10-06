@@ -10,6 +10,11 @@ Copilot CLI 1.0.92-4 の Windows ProcessContainer は `%LOCALAPPDATA%` を
 `Packages\sandbox.{GUID}\AC` 配下へ仮想化する。このため、ホストの
 `%LOCALAPPDATA%\uv\cache` に対する write grant は sandbox 内の uv cache に効かない。
 
+この仮想化と、リダイレクト先で rename に必要な DELETE 権限が得られない挙動は
+[github/copilot-agent-runtime#18974](https://github.com/github/copilot-agent-runtime/issues/18974)
+として報告されている。Windows は AppContainer プロセスの初期化時に `TEMP`、`TMP`、
+`LOCALAPPDATA` を書き換えるため、Copilot CLI 側は環境ブロック設定の時点で抑止できない。
+
 以前採用した `%LOCALAPPDATA%\github-copilot\uv` も同じ仮想化の対象であり、
 専用 cache として不適切だった。実機検証では、`%USERPROFILE%` 配下の exact path への
 write grant と PowerShell tool command 内だけの `UV_CACHE_DIR` 設定により、
@@ -41,3 +46,6 @@ Python 方式も変更しない。
 - command に cache path を含めないため、非対話起動でも追加の path permission を要求しない。
 - `%LOCALAPPDATA%\github-copilot\uv` の旧 grant は移行時に完全一致で除去する。
 - ProcessContainer の仮想化仕様が変わるまで、補助環境変数、command rewrite、grant を維持する。
+  撤去は issue のクローズだけで判断せず、ProcessContainer 内で `UV_CACHE_DIR` を設定せずに
+  atomic rename が成功することを実機で確認する。撤去時の清掃手順は
+  [`docs/operations.md`](../operations.md) に置く。

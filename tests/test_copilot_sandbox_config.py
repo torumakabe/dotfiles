@@ -150,37 +150,31 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             self.powershell,
         )
 
-    def test_hook_runtime_readonly_grants_are_added_without_uv_config(self) -> None:
-        for expected in (
-            "mise_data_dir",
-            "uv_python_dir",
-            "readonly_grants",
-            "hooks_dir",
-            "python-runtime.env",
-            "s/^python_root=//p",
-        ):
+    def test_tool_runtime_readonly_grants_are_added_without_uv_config(self) -> None:
+        """恒久: mise と uv の実体への read-only grant。
+
+        製品側の修正では撤去しない。uv の設定ディレクトリは grant しない。
+        """
+        for expected in ("mise_data_dir", "readonly_grants"):
             self.assertIn(expected, self.posix)
-        for expected in (
-            "$miseDataDir",
-            "$uvPythonDir",
-            "$hooksDir",
-            "$miseExe",
-            "$uvExe",
-            "$hookRuntimeFile",
-            "python_root=",
-            "Get-ResolvedPathTarget",
-        ):
+        for expected in ("$miseDataDir", "$miseExe", "$uvExe", "Get-ResolvedPathTarget"):
             self.assertIn(expected, self.powershell)
         for script in (self.posix, self.powershell):
             self.assertNotIn(".config/uv", script)
-        self.assertIn(
-            "reduce $readonly_grants[] as $path",
-            self.posix,
-        )
-        self.assertIn(
-            "Add-ReadonlyDirectoryAndTarget",
-            self.powershell,
-        )
+        self.assertIn("reduce $readonly_grants[] as $path", self.posix)
+        self.assertIn("Add-ReadonlyDirectoryAndTarget", self.powershell)
+
+    def test_pinned_hook_interpreter_grants_come_from_the_recorded_runtime(self) -> None:
+        """撤去単位: 固定 Python interpreter。
+
+        撤去条件は `.github/copilot-instructions.md` の「Copilot command hook の
+        固定 Python interpreter」に従う。条件が整ったら、このテストと
+        hook directory / managed Python root の grant をまとめて削除する。
+        """
+        for expected in ("uv_python_dir", "hooks_dir", "python-runtime.env", "s/^python_root=//p"):
+            self.assertIn(expected, self.posix)
+        for expected in ("$uvPythonDir", "$hooksDir", "$hookRuntimeFile", "python_root="):
+            self.assertIn(expected, self.powershell)
 
     def test_stale_policy_and_network_keys_are_removed(self) -> None:
         self.assertRegex(
@@ -198,6 +192,12 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             )
 
     def test_windows_relocated_cache_replaces_only_the_legacy_grant(self) -> None:
+        """撤去単位: Windows の relocated uv cache（ADR-031）。
+
+        github/copilot-agent-runtime#18974 が解消し、ProcessContainer 内の
+        atomic rename が成功したら、このテストと cache 生成、exact grant、
+        補助環境変数の設定をまとめて削除する。
+        """
         self.assertIn("map(select(. != $legacy_cache))", self.posix)
         self.assertIn(
             "[System.StringComparison]::OrdinalIgnoreCase",

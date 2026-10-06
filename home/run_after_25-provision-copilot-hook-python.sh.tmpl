@@ -20,6 +20,7 @@ fail() {
 }
 
 [ -x "${launcher}" ] || fail "launcher is missing or not executable: ${launcher}"
+command -v jq >/dev/null 2>&1 || fail "jq is required for the launcher smoke test."
 
 if command -v uv >/dev/null 2>&1; then
   MISE_ENABLE_TOOLS=uv uv python install "${python_version}" >/dev/null ||
