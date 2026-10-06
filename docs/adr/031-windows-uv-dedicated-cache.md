@@ -1,4 +1,4 @@
-# ADR-031: Windows でも Copilot sandbox の uv 専用キャッシュを配布する
+# ADR-031: Windows Copilot sandbox の uv cache を非仮想化パスへ分離する
 
 ## Status
 
@@ -6,14 +6,46 @@ Accepted
 
 ## Context
 
-ADR-026 は、macOS と Linux（WSL を含む）だけで uv コマンド専用キャッシュを配布し、Windows には hook の書き換えと `readwritePaths` 追加を行わなかった。その後の実機検証で、Windows sandbox は `%LOCALAPPDATA%`、`%TEMP%`、`%TMP%` を隔離先へ再配置し、ホスト既定の uv キャッシュ書き込みは拒否する一方、ホストで解決した `%LOCALAPPDATA%\github-copilot\uv` を `readwritePaths` に追加すると書き込みが成功することを確認した。PowerShell の `preToolUse` hook でコマンド単位の `UV_CACHE_DIR` 前置も実 CLI で機能した。`mise activate pwsh` 済みの通常シェルでは `uv` が実体バイナリへ解決されるため、shim 起因の別問題は今回の変更対象に含めない。`%TEMP%` / `%TMP%` の全面的な切替も uv 実行の必須条件ではないため扱わない。ADR-026 の他の判断は置換しない。
+Copilot CLI 1.0.92-4 の Windows ProcessContainer は `%LOCALAPPDATA%` を
+`Packages\sandbox.{GUID}\AC` 配下へ仮想化する。このため、ホストの
+`%LOCALAPPDATA%\uv\cache` に対する write grant は sandbox 内の uv cache に効かない。
+
+この仮想化と、リダイレクト先で rename に必要な DELETE 権限が得られない挙動は
+[github/copilot-agent-runtime#18974](https://github.com/github/copilot-agent-runtime/issues/18974)
+として報告されている。Windows は AppContainer プロセスの初期化時に `TEMP`、`TMP`、
+`LOCALAPPDATA` を書き換えるため、Copilot CLI 側は環境ブロック設定の時点で抑止できない。
+
+以前採用した `%LOCALAPPDATA%\github-copilot\uv` も同じ仮想化の対象であり、
+専用 cache として不適切だった。実機検証では、`%USERPROFILE%` 配下の exact path への
+write grant と PowerShell tool command 内だけの `UV_CACHE_DIR` 設定により、
+`uv run`、managed Python、marker の永続化が成功した。
+
+PowerShell tool command 内で cache path を組み立てる方式では、`preToolUse` hook
+適用後の path permission 判定が path 文字列を検出する。非対話起動では承認できず、
+sandbox の write grant があっても tool 実行前に拒否される。補助環境変数から
+`UV_CACHE_DIR` へ値だけを渡す方式では、追加の path permission なしで成功した。
 
 ## Decision
 
-Windows でも、Copilot CLI の許可済み PowerShell tool コマンドだけに `UV_CACHE_DIR` を前置し、専用キャッシュ `%LOCALAPPDATA%\github-copilot\uv` を使わせる。設定同期は同じ絶対パスを作成し、既存の `readwritePaths`、`readonlyPaths`、`deniedPaths` と安全に整合する場合だけ `readwritePaths` へ追加する。`LOCALAPPDATA` が unsafe な形式、非ディレクトリ、ドライブルート、symlink、junction などの reparse point を含む場合や、既存の restrictive rule と衝突する場合は拒否する。POSIX の挙動、shim 起因の課題、`TEMP` / `TMP` の扱いは変更しない。
+Windows の PowerShell tool command 用 uv cache を
+`%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` に固定し、この exact path
+だけを `readwritePaths` に追加する。設定同期は user environment の
+`COPILOT_DOTFILES_UV_CACHE_DIR` に同じ path を設定する。PowerShell の最終
+`preToolUse` hook は path 文字列を command に含めず、この補助環境変数の値を
+各 tool command の `UV_CACHE_DIR` に設定する。Copilot CLI の起動環境には
+`UV_CACHE_DIR` を設定しない。
+
+POSIX は Copilot CLI の既定 uv cache grant を利用する。command hook の pinned
+Python 方式も変更しない。
 
 ## Consequences
 
-- Windows でも、通常シェルの uv 設定を変えずに sandbox 内の uv キャッシュをホストへ永続化できる。
-- hook と設定同期が同じ絶対パス検証を共有する必要があるため、両実装とテストを同時に保守する。
-- Windows の shim 問題や一時ディレクトリ全体の再配置は残るため、必要になれば別の判断として扱う。
+- Windows の uv cache は `%LOCALAPPDATA%` の仮想化から分離される。
+- grant と command の cache path が一致し、sandbox 内の処理だけが専用 cache を使う。
+- Copilot CLI を再起動すると、user environment の補助変数を PowerShell tool が継承する。
+- command に cache path を含めないため、非対話起動でも追加の path permission を要求しない。
+- `%LOCALAPPDATA%\github-copilot\uv` の旧 grant は移行時に完全一致で除去する。
+- ProcessContainer の仮想化仕様が変わるまで、補助環境変数、command rewrite、grant を維持する。
+  撤去は issue のクローズだけで判断せず、ProcessContainer 内で `UV_CACHE_DIR` を設定せずに
+  atomic rename が成功することを実機で確認する。撤去時の清掃手順は
+  [`docs/operations.md`](../operations.md) に置く。

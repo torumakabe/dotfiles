@@ -1016,6 +1016,33 @@ class MiseConfigTests(unittest.TestCase):
             self.assertNotIn("chezmoi apply --force", script)
             self.assertNotIn("次回 chezmoi apply 時に再試行", script)
 
+    def test_windows_lock_sync_persists_direct_bin_paths_without_shims(self) -> None:
+        """撤去単位: Windows の direct mise bin PATH 同期。
+
+        撤去条件は `.github/copilot-instructions.md` の「Copilot sandbox の
+        Windows mise shim 回避」に従う。条件が整ったら、このテストと
+        User PATH 同期、state file 管理をまとめて削除する。
+        """
+        powershell_script = SYNC_PS1_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("& $miseExe bin-paths", powershell_script)
+        self.assertIn("[Microsoft.Win32.Registry]::CurrentUser", powershell_script)
+        self.assertIn("$key.SetValue('Path'", powershell_script)
+        self.assertIn("mise-windows-user-paths.txt", powershell_script)
+        self.assertIn("mise\\shims", powershell_script)
+        self.assertIn("$normalizedBinPaths", powershell_script)
+        self.assertIn("DoNotExpandEnvironmentNames", powershell_script)
+        self.assertIn("RegistryValueKind", powershell_script)
+        self.assertIn("Publish-EnvironmentChange", powershell_script)
+        self.assertIn("Test-MiseManagedPath", powershell_script)
+        self.assertIn("30000 characters", powershell_script)
+        self.assertFalse(
+            (
+                REPO_ROOT
+                / "home/run_once_after_05-setup-mise-shims-path.ps1.tmpl"
+            ).exists()
+        )
+
     def test_mise_upgrade_refreshes_sidecars_as_exact_directories(self) -> None:
         zshrc = ZSHRC_PATH.read_text(encoding="utf-8")
         profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")

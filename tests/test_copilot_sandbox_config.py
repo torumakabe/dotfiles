@@ -104,7 +104,7 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         )
 
     def test_validation_precedes_writes_in_both_scripts(self) -> None:
-        posix_write = self.posix.index('mkdir -p "${uv_cache_dir}"')
+        posix_write = self.posix.index('mkdir -p "${settings_dir}"')
         self.assertLess(self.posix.index("non-boolean sandbox.enabled"), posix_write)
         self.assertLess(
             self.posix.index("non-array sandbox.userPolicy.filesystem"),
@@ -112,7 +112,7 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         )
 
         powershell_write = self.powershell.index(
-            "New-Item -ItemType Directory -Path $uvCacheDir"
+            "New-Item -ItemType Directory -Path $settingsDir"
         )
         self.assertLess(
             self.powershell.index("non-boolean sandbox.enabled"),
@@ -133,6 +133,52 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
                 rf"-Object \$existingFilesystem -Name '{path_name}'\)",
             )
 
+    def test_powershell_path_arrays_are_not_wrapped_as_nested_arrays(self) -> None:
+        self.assertNotIn("return ,@()", self.powershell)
+        self.assertNotIn("return ,@($Value)", self.powershell)
+        self.assertIn(
+            "$readwritePaths = @(",
+            self.powershell,
+        )
+        self.assertIn(
+            "$readonlyPaths = @(",
+            self.powershell,
+        )
+        self.assertIn(
+            "Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' "
+            "-Value $readonlyPaths",
+            self.powershell,
+        )
+
+    def test_tool_runtime_readonly_grants_are_added_without_uv_config(self) -> None:
+        """恒久: mise と uv の実体への read-only grant。
+
+        製品側の修正では撤去しない。uv の設定ディレクトリは grant しない。
+        """
+        for expected in ("mise_data_dir", "readonly_grants"):
+            self.assertIn(expected, self.posix)
+        for expected in ("$miseDataDir", "$miseExe", "$uvExe", "Get-ResolvedPathTarget"):
+            self.assertIn(expected, self.powershell)
+        for script in (self.posix, self.powershell):
+            self.assertNotIn(".config/uv", script)
+        self.assertIn("reduce $readonly_grants[] as $path", self.posix)
+        self.assertIn("Add-ReadonlyDirectoryAndTarget", self.powershell)
+
+    def test_pinned_hook_interpreter_grants_come_from_the_recorded_runtime(self) -> None:
+        """撤去単位: 固定 Python interpreter。
+
+        撤去条件は `.github/copilot-instructions.md` の「Copilot command hook の
+        固定 Python interpreter」に従う。条件が整ったら、このテストと
+        hook directory / managed Python root の grant をまとめて削除する。
+        """
+        for expected in ("uv_python_dir", "hooks_dir", "python-runtime.env", "s/^python_root=//p"):
+            self.assertIn(expected, self.posix)
+        for expected in ("$uvPythonDir", "$hooksDir", "$hookRuntimeFile", "python_root="):
+            self.assertIn(expected, self.powershell)
+        self.assertIn('hooks_dir="${HOME}/.copilot/hooks"', self.posix)
+        self.assertIn("$hooksDir = Join-Path $HOME '.copilot\\hooks'", self.powershell)
+        self.assertNotIn("$hooksDir = Join-Path $copilotHome 'hooks'", self.powershell)
+
     def test_stale_policy_and_network_keys_are_removed(self) -> None:
         self.assertRegex(
             self.posix,
@@ -148,27 +194,43 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
                 self.powershell,
             )
 
-    def test_unsafe_cache_configuration_is_rejected_before_creation(self) -> None:
-        posix_cache_creation = self.posix.index('mkdir -p "${uv_cache_dir}"')
-        powershell_cache_creation = self.powershell.index(
-            "New-Item -ItemType Directory -Path $uvCacheDir"
-        )
-        self.assertLess(
-            self.posix.index("unset launch-environment UV_CACHE_DIR"),
-            posix_cache_creation,
-        )
-        self.assertLess(
-            self.powershell.index("Unset launch-environment UV_CACHE_DIR"),
-            powershell_cache_creation,
-        )
-        for script in (self.posix, self.powershell):
-            self.assertIn("conflicts with", script)
-        self.assertIn("cache path must not contain symlinks", self.posix)
-        self.assertIn("refusing a settings.json symlink", self.posix)
+    def test_windows_relocated_cache_replaces_only_the_legacy_grant(self) -> None:
+        """撤去単位: Windows の relocated uv cache（ADR-031）。
+
+        github/copilot-agent-runtime#18974 が解消し、ProcessContainer 内の
+        atomic rename が成功したら、このテストと cache 生成、exact grant、
+        補助環境変数の設定をまとめて削除する。
+        """
+        self.assertIn("map(select(. != $legacy_cache))", self.posix)
         self.assertIn(
-            "must not contain symlinks or reparse points",
+            "[System.StringComparison]::OrdinalIgnoreCase",
             self.powershell,
         )
+        self.assertIn("-not [string]::Equals(", self.powershell)
+        self.assertNotIn("UV_CACHE_DIR", self.posix)
+        self.assertIn(
+            "'.cache\\github-copilot\\uv\\powershell-tool'",
+            self.powershell,
+        )
+        self.assertIn(
+            "Add-UniquePath -Paths $readwritePaths -Path $uvCacheDir",
+            self.powershell,
+        )
+        self.assertIn(
+            "New-Item -ItemType Directory -Path $uvCacheDir",
+            self.powershell,
+        )
+        self.assertIn(
+            "$uvCacheEnvironmentName = 'COPILOT_DOTFILES_UV_CACHE_DIR'",
+            self.powershell,
+        )
+        self.assertIn(
+            "[EnvironmentVariableTarget]::User",
+            self.powershell,
+        )
+        self.assertIn("Publish-EnvironmentChange", self.powershell)
+        self.assertIn("Test-PathOverlap", self.powershell)
+        self.assertNotIn('mkdir -p "${uv_cache_dir}"', self.posix)
 
 
 if __name__ == "__main__":

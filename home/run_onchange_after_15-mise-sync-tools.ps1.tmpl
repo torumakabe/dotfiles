@@ -2,14 +2,12 @@
 # mise lockfile 同期フック (Windows)
 #
 # 背景:
-#   `mise upgrade` 等で `~/.config/mise/mise.lock` が更新されても、
-#   ローカルの `mise install` / `mise reshim` は自動で走らない。結果として shim と
-#   install marker が古いまま残り、PowerShell 起動時の `_mise_hook` (`mise hook-env`)
-#   で `mise WARN missing:` が発生する。
+#   `mise upgrade` 等で `~/.config/mise/mise.lock` が更新されても、ローカルの
+#   install と非対話プロセス用 PATH は自動で更新されない。
 #
 # 対応:
-#   lockfile の hash 変化を chezmoi の run_onchange でフックし、`mise install` と
-#   `mise reshim` を流して install marker と shim を lockfile と同期させる。
+#   lockfile の hash 変化を chezmoi の run_onchange でフックし、`mise install`、
+#   `mise reshim`、実体 bin directory の User PATH 同期を一括して行う。
 #
 # 関連:
 #   - docs/adr/013-mise-lockfile-sync-hook.md (本フックの設計判断)
@@ -17,6 +15,107 @@
 # mise lockfile hash: {{ include "dot_config/mise/private_mise.lock" | sha256sum }}
 
 $ErrorActionPreference = 'Continue'
+
+function Get-PathEntryKey {
+  param([Parameter(Mandatory = $true)] [string] $Path)
+
+  $candidate = [Environment]::ExpandEnvironmentVariables($Path.Trim().Trim('"'))
+  if ([System.IO.Path]::IsPathFullyQualified($candidate)) {
+    return [System.IO.Path]::GetFullPath($candidate).TrimEnd('\').ToLowerInvariant()
+  }
+  return ($candidate -replace '/', '\').TrimEnd('\').ToLowerInvariant()
+}
+
+function Get-UserPathState {
+  $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $false)
+  if (-not $key) {
+    return [pscustomobject]@{
+      Exists = $false
+      Value = ''
+      Kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+    }
+  }
+  try {
+    $exists = @($key.GetValueNames()) -contains 'Path'
+    return [pscustomobject]@{
+      Exists = $exists
+      Value = if ($exists) {
+        [string]$key.GetValue(
+          'Path',
+          '',
+          [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+        )
+      } else {
+        ''
+      }
+      Kind = if ($exists) {
+        $key.GetValueKind('Path')
+      } else {
+        [Microsoft.Win32.RegistryValueKind]::ExpandString
+      }
+    }
+  } finally {
+    $key.Dispose()
+  }
+}
+
+function Set-UserPathState {
+  param(
+    [Parameter(Mandatory = $true)] [bool] $Exists,
+    [Parameter(Mandatory = $true)] [string] $Value,
+    [Parameter(Mandatory = $true)] [Microsoft.Win32.RegistryValueKind] $Kind
+  )
+
+  $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+  try {
+    if ($Exists) {
+      $key.SetValue('Path', $Value, $Kind)
+    } else {
+      $key.DeleteValue('Path', $false)
+    }
+  } finally {
+    $key.Dispose()
+  }
+}
+
+function Publish-EnvironmentChange {
+  if (-not ('ChezmoiDotfiles.EnvironmentBroadcast' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace ChezmoiDotfiles {
+  public static class EnvironmentBroadcast {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(
+      IntPtr hWnd, uint msg, UIntPtr wParam, string lParam,
+      uint flags, uint timeout, out UIntPtr result);
+  }
+}
+'@
+  }
+  $result = [UIntPtr]::Zero
+  [void][ChezmoiDotfiles.EnvironmentBroadcast]::SendMessageTimeout(
+    [IntPtr]0xffff,
+    0x001a,
+    [UIntPtr]::Zero,
+    'Environment',
+    0x0002,
+    5000,
+    [ref]$result
+  )
+}
+
+function Test-MiseManagedPath {
+  param(
+    [Parameter(Mandatory = $true)] [string] $PathKey,
+    [Parameter(Mandatory = $true)] [string] $InstallsRootKey,
+    [Parameter(Mandatory = $true)] [string] $DotnetRootKey
+  )
+
+  return $PathKey.StartsWith($InstallsRootKey + '\', [System.StringComparison]::Ordinal) -or
+    $PathKey -eq $DotnetRootKey -or
+    $PathKey.StartsWith($DotnetRootKey + '\', [System.StringComparison]::Ordinal)
+}
 
 # `Get-Command mise` は mise activate で定義された function を返してしまい
 # Source プロパティが取れないため、Application 種別に絞って実 exe のパスを取得する。
@@ -59,6 +158,124 @@ if ($installExit -ne 0 -or $reshimExit -ne 0) {
   $syncExit = if ($installExit -ne 0) { $installExit } else { $reshimExit }
 }
 else {
+  $binPaths = @(& $miseExe bin-paths 2>$null) |
+    ForEach-Object { ([string]$_).Trim() } |
+    Where-Object { $_ }
+  if ($LASTEXITCODE -ne 0 -or -not $binPaths) {
+    Write-Error 'mise bin-paths failed; User PATH was not changed.'
+    exit 1
+  }
+
+  $normalizedBinPaths = @()
+  $seenBinPaths = @{}
+  foreach ($path in $binPaths) {
+    if (
+      $path.IndexOfAny(@([char]13, [char]10, [char]59)) -ge 0 -or
+      -not [System.IO.Path]::IsPathFullyQualified($path)
+    ) {
+      Write-Error "mise bin-paths returned an invalid directory: $path"
+      exit 1
+    }
+    if (-not (Test-Path -LiteralPath $path -PathType Container)) {
+      Write-Warning "Skipping absent mise bin directory: $path"
+      continue
+    }
+    $fullPath = [System.IO.Path]::GetFullPath($path).TrimEnd('\')
+    $key = Get-PathEntryKey -Path $fullPath
+    if (-not $seenBinPaths.ContainsKey($key)) {
+      $seenBinPaths[$key] = $true
+      $normalizedBinPaths += $fullPath
+    }
+  }
+  if (-not $normalizedBinPaths) {
+    Write-Error 'mise bin-paths did not return any existing directories.'
+    exit 1
+  }
+
+  $stateDir = Join-Path $HOME '.local\state\chezmoi-dotfiles'
+  $statePath = Join-Path $stateDir 'mise-windows-user-paths.txt'
+  $previousPaths = if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+    @(Get-Content -LiteralPath $statePath | Where-Object { $_ })
+  } else {
+    @()
+  }
+  $miseDataDir = if ($env:MISE_DATA_DIR) {
+    $env:MISE_DATA_DIR
+  } else {
+    Join-Path $env:LOCALAPPDATA 'mise'
+  }
+  $installsRootKey = Get-PathEntryKey -Path (Join-Path $miseDataDir 'installs')
+  $dotnetRootKey = Get-PathEntryKey -Path (Join-Path $miseDataDir 'dotnet-root')
+  $removeKeys = @{}
+  foreach ($path in @($previousPaths) + @(Join-Path $env:LOCALAPPDATA 'mise\shims')) {
+    if ($path) {
+      $removeKeys[(Get-PathEntryKey -Path $path)] = $true
+    }
+  }
+
+  $userPathState = Get-UserPathState
+  $userPath = $userPathState.Value
+  $retainedPaths = @($userPath -split ';') | Where-Object {
+    if (-not $_) { return $false }
+    $key = Get-PathEntryKey -Path $_
+    return -not $removeKeys.ContainsKey($key) -and
+      -not (Test-MiseManagedPath -PathKey $key -InstallsRootKey $installsRootKey -DotnetRootKey $dotnetRootKey)
+  }
+  $updatedPaths = @()
+  $updatedKeys = @{}
+  foreach ($path in @($normalizedBinPaths) + @($retainedPaths)) {
+    $key = Get-PathEntryKey -Path $path
+    if (-not $updatedKeys.ContainsKey($key)) {
+      $updatedKeys[$key] = $true
+      $updatedPaths += $path
+    }
+  }
+  $updatedUserPath = $updatedPaths -join ';'
+  if ($updatedUserPath.Length -gt 30000) {
+    Write-Error "Updated User PATH would exceed 30000 characters; no environment value was changed."
+    exit 1
+  }
+
+  New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+  $temporaryState = Join-Path $stateDir ([System.IO.Path]::GetRandomFileName())
+  try {
+    [System.IO.File]::WriteAllLines(
+      $temporaryState,
+      $normalizedBinPaths,
+      [System.Text.UTF8Encoding]::new($false)
+    )
+    Set-UserPathState -Exists $true -Value $updatedUserPath -Kind $userPathState.Kind
+    [System.IO.File]::Move($temporaryState, $statePath, $true)
+    Publish-EnvironmentChange
+  } catch {
+    Set-UserPathState `
+      -Exists $userPathState.Exists `
+      -Value $userPathState.Value `
+      -Kind $userPathState.Kind
+    Publish-EnvironmentChange
+    throw
+  } finally {
+    Remove-Item -LiteralPath $temporaryState -Force -ErrorAction SilentlyContinue
+  }
+
+  $processPaths = @($env:Path -split ';') | Where-Object {
+    if (-not $_) { return $false }
+    $key = Get-PathEntryKey -Path $_
+    return -not $removeKeys.ContainsKey($key) -and
+      -not (Test-MiseManagedPath -PathKey $key -InstallsRootKey $installsRootKey -DotnetRootKey $dotnetRootKey)
+  }
+  $processUpdatedPaths = @()
+  $processUpdatedKeys = @{}
+  foreach ($path in @($normalizedBinPaths) + @($processPaths)) {
+    $key = Get-PathEntryKey -Path $path
+    if (-not $processUpdatedKeys.ContainsKey($key)) {
+      $processUpdatedKeys[$key] = $true
+      $processUpdatedPaths += $path
+    }
+  }
+  $env:Path = $processUpdatedPaths -join ';'
+
+  Write-Host ("Updated Windows User PATH with {0} mise bin directories." -f $normalizedBinPaths.Count)
   $syncExit = 0
 }
 

@@ -1,13 +1,15 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 7
+# Copilot sandbox policy version: 12
 
 $ErrorActionPreference = 'Stop'
 
 $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
 $settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
+$hooksDir = Join-Path $HOME '.copilot\hooks'
+$uvCacheEnvironmentName = 'COPILOT_DOTFILES_UV_CACHE_DIR'
 
 $desiredSettings = @'
 {{ include ".chezmoitemplates/copilot-user-settings.json" }}
@@ -18,6 +20,33 @@ function Fail-SandboxSettings {
 
   Write-Error "Copilot sandbox settings: $Message"
   exit 1
+}
+
+function Publish-EnvironmentChange {
+  if (-not ('ChezmoiDotfiles.EnvironmentBroadcast' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace ChezmoiDotfiles {
+  public static class EnvironmentBroadcast {
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr SendMessageTimeout(
+      IntPtr hWnd, uint msg, UIntPtr wParam, string lParam,
+      uint flags, uint timeout, out UIntPtr result);
+  }
+}
+'@
+  }
+  $result = [UIntPtr]::Zero
+  [void][ChezmoiDotfiles.EnvironmentBroadcast]::SendMessageTimeout(
+    [IntPtr]0xffff,
+    0x001a,
+    [UIntPtr]::Zero,
+    'Environment',
+    0x0002,
+    5000,
+    [ref]$result
+  )
 }
 
 if (Test-Path -LiteralPath $settingsPath) {
@@ -46,8 +75,8 @@ function Set-JsonProperty {
 
 function Get-JsonArrayOrEmpty {
   param($Value)
-  if ($null -eq $Value) { return ,@() }
-  return ,@($Value)
+  if ($null -eq $Value) { return @() }
+  return @($Value)
 }
 
 function Get-JsonProperty {
@@ -93,118 +122,196 @@ function Remove-JsonProperty {
   }
 }
 
-function Resolve-WindowsPolicyPath {
-  param(
-    [Parameter(Mandatory = $true)] [string] $PathValue,
-    [Parameter(Mandatory = $true)] [string] $PathName,
-    [string] $HomeDir,
-    [switch] $AllowTilde,
-    [switch] $RequireExistingDirectory
-  )
+function Get-NormalizedPathKey {
+  param([Parameter(Mandatory = $true)] [string] $Path)
 
-  if ($null -eq $PathValue) {
-    $PathValue = ''
-  }
-  if ($PathValue.IndexOfAny(@([char]13, [char]10)) -ge 0) {
-    Fail-SandboxSettings "$PathName must be single-line."
-  }
-
-  $candidate = $PathValue
-  if ($AllowTilde) {
-    if ($candidate -eq '~') {
-      $candidate = $HomeDir
-    } elseif ($candidate.StartsWith('~/') -or $candidate.StartsWith('~\')) {
-      $candidate = Join-Path $HomeDir (($candidate.Substring(2)) -replace '/', '\')
-    }
-  }
-
-  if (
-    [string]::IsNullOrEmpty($candidate) -or
-    $candidate.StartsWith('\\') -or
-    $candidate.StartsWith('//') -or
-    $candidate.StartsWith('\\?\') -or
-    $candidate.StartsWith('//?/') -or
-    $candidate -notmatch '^[A-Za-z]:[\\/].*'
-  ) {
-    Fail-SandboxSettings "$PathName must be a local absolute, single-line directory."
-  }
-
-  $suffix = $candidate.Substring(3)
-  if (
-    $suffix -match '[\\/]{2,}' -or
-    $suffix -match '(^|[\\/])\.(?:[\\/]|$)' -or
-    $suffix -match '(^|[\\/])\.\.(?:[\\/]|$)'
-  ) {
-    Fail-SandboxSettings "$PathName must not contain redundant separators or '.'/'..' components."
-  }
-
-  $normalized = '{0}\{1}' -f $candidate.Substring(0, 2), ($suffix -replace '/', '\')
-  $root = [System.IO.Path]::GetPathRoot($normalized)
-  $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction Stop
-  if (-not $rootItem.PSIsContainer) {
-    Fail-SandboxSettings "$PathName must not contain non-directories: $root"
-  }
-  if ($rootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-    Fail-SandboxSettings "$PathName must not contain symlinks or reparse points: $root"
-  }
-
-  $current = $rootItem.FullName
-  $hasMissingAncestor = $false
-  foreach ($component in ([regex]::Split($normalized.Substring($root.Length), '[\\/]') | Where-Object { $_ -ne '' })) {
-    $next = Join-Path $current $component
-    if (-not $hasMissingAncestor -and (Test-Path -LiteralPath $next)) {
-      $item = Get-Item -LiteralPath $next -Force -ErrorAction Stop
-      if (-not $item.PSIsContainer) {
-        Fail-SandboxSettings "$PathName must not contain non-directories: $next"
-      }
-      if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
-        Fail-SandboxSettings "$PathName must not contain symlinks or reparse points: $next"
-      }
-      $current = $item.FullName
-    } else {
-      $hasMissingAncestor = $true
-      $current = $next
-    }
-  }
-
-  if ($RequireExistingDirectory) {
-    $finalItem = Get-Item -LiteralPath $current -Force -ErrorAction Stop
-    if (-not $finalItem.PSIsContainer) {
-      Fail-SandboxSettings "$PathName must resolve to a non-root, single-line directory."
-    }
-    $current = $finalItem.FullName
-    if ($current.IndexOfAny(@([char]13, [char]10)) -ge 0) {
-      Fail-SandboxSettings "$PathName must resolve to a non-root, single-line directory."
-    }
-    $resolvedRoot = [System.IO.Path]::GetPathRoot($current)
-    if ($resolvedRoot.TrimEnd('\') -ceq $current.TrimEnd('\')) {
-      Fail-SandboxSettings "$PathName must not resolve to a drive root."
-    }
-  }
-
-  return $current
+  return (($Path -replace '/', '\').TrimEnd('\')).ToLowerInvariant()
 }
 
-function Test-PathPrefix {
+function Get-ComparableWindowsPath {
   param(
     [Parameter(Mandatory = $true)] [string] $Path,
-    [Parameter(Mandatory = $true)] [string] $Prefix
+    [Parameter(Mandatory = $true)] [string] $HomeDir
   )
 
-  $normalizedPath = (($Path -replace '/', '\').TrimEnd('\')) + '\'
-  $normalizedPrefix = (($Prefix -replace '/', '\').TrimEnd('\')) + '\'
-  return $normalizedPath.StartsWith($normalizedPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+  $candidate = [Environment]::ExpandEnvironmentVariables($Path)
+  if ($candidate -eq '~') {
+    $candidate = $HomeDir
+  } elseif ($candidate.StartsWith('~\') -or $candidate.StartsWith('~/')) {
+    $candidate = Join-Path $HomeDir $candidate.Substring(2)
+  }
+  if (
+    $candidate.IndexOfAny(@([char]13, [char]10)) -ge 0 -or
+    -not [System.IO.Path]::IsPathFullyQualified($candidate) -or
+    $candidate.StartsWith('\\') -or
+    $candidate.StartsWith('//')
+  ) {
+    return $null
+  }
+  return [System.IO.Path]::GetFullPath($candidate)
 }
 
-if ($env:UV_CACHE_DIR) {
-  Fail-SandboxSettings "Unset launch-environment UV_CACHE_DIR before applying settings and starting Copilot; command-local overrides remain supported."
+function Test-PathOverlap {
+  param(
+    [Parameter(Mandatory = $true)] [string] $First,
+    [Parameter(Mandatory = $true)] [string] $Second
+  )
+
+  $firstKey = (Get-NormalizedPathKey -Path $First) + '\'
+  $secondKey = (Get-NormalizedPathKey -Path $Second) + '\'
+  return $firstKey.StartsWith($secondKey, [System.StringComparison]::Ordinal) -or
+    $secondKey.StartsWith($firstKey, [System.StringComparison]::Ordinal)
 }
 
-$homeSource = if ($env:USERPROFILE) { $env:USERPROFILE } elseif ($HOME) { $HOME } else { '' }
-$homeDir = Resolve-WindowsPolicyPath -PathValue $homeSource -PathName 'HOME' -RequireExistingDirectory
-$localAppDataDir = Resolve-WindowsPolicyPath -PathValue $env:LOCALAPPDATA -PathName 'LOCALAPPDATA' -RequireExistingDirectory
-$uvCacheDir = Join-Path (Join-Path $localAppDataDir 'github-copilot') 'uv'
-$cacheCovered = $false
+function Get-SafeWindowsUvCache {
+  $homeSource = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
+  if (
+    [string]::IsNullOrWhiteSpace($homeSource) -or
+    $homeSource.IndexOfAny(@([char]13, [char]10)) -ge 0 -or
+    -not [System.IO.Path]::IsPathFullyQualified($homeSource) -or
+    $homeSource.StartsWith('\\') -or
+    $homeSource.StartsWith('//')
+  ) {
+    Fail-SandboxSettings 'USERPROFILE must be a local absolute, single-line path.'
+  }
+
+  $homeItem = Get-Item -LiteralPath $homeSource -Force -ErrorAction Stop
+  if (-not $homeItem.PSIsContainer) {
+    Fail-SandboxSettings "USERPROFILE must be a directory: $homeSource"
+  }
+  if ($homeItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+    Fail-SandboxSettings "USERPROFILE must not be a reparse point: $homeSource"
+  }
+
+  $cacheDir = Join-Path $homeItem.FullName '.cache\github-copilot\uv\powershell-tool'
+  $current = $homeItem.FullName
+  foreach ($component in @('.cache', 'github-copilot', 'uv', 'powershell-tool')) {
+    $current = Join-Path $current $component
+    if (-not (Test-Path -LiteralPath $current)) { continue }
+    $item = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer) {
+      Fail-SandboxSettings "uv cache path contains a non-directory: $current"
+    }
+    if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+      Fail-SandboxSettings "uv cache path contains a reparse point: $current"
+    }
+  }
+  return [pscustomobject]@{
+    HomeDir = $homeItem.FullName
+    CacheDir = $cacheDir
+  }
+}
+
+function Add-UniquePath {
+  param(
+    [object[]] $Paths,
+    [Parameter(Mandatory = $true)] [string] $Path
+  )
+
+  if ([string]::IsNullOrWhiteSpace($Path) -or $Path.IndexOfAny(@([char]13, [char]10)) -ge 0) {
+    Fail-SandboxSettings 'readonly grant must be a nonempty, single-line path.'
+  }
+  if (-not [System.IO.Path]::IsPathFullyQualified($Path)) {
+    Fail-SandboxSettings "readonly grant must be an absolute path: $Path"
+  }
+
+  $result = @($Paths)
+  $pathKey = Get-NormalizedPathKey -Path $Path
+  $present = $result | Where-Object {
+    (Get-NormalizedPathKey -Path ([string]$_)) -eq $pathKey
+  }
+  if (-not $present) {
+    $result += $Path
+  }
+  return $result
+}
+
+function Get-ResolvedPathTarget {
+  param([Parameter(Mandatory = $true)] [string] $Path)
+
+  if (-not (Test-Path -LiteralPath $Path)) { return $null }
+  $item = Get-Item -LiteralPath $Path -Force
+  if (-not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+    return $item.FullName
+  }
+
+  $target = @($item.Target) | Select-Object -First 1
+  if (-not $target) { return $item.FullName }
+  if (-not [System.IO.Path]::IsPathFullyQualified($target)) {
+    $target = Join-Path $item.DirectoryName $target
+  }
+  return [System.IO.Path]::GetFullPath($target)
+}
+
+function Add-ReadonlyDirectoryAndTarget {
+  param(
+    [object[]] $Paths,
+    [Parameter(Mandatory = $true)] [string] $Path
+  )
+
+  $result = @(Add-UniquePath -Paths $Paths -Path $Path)
+  $resolved = Get-ResolvedPathTarget -Path $Path
+  if ($resolved -and -not [string]::Equals(
+    (Get-NormalizedPathKey -Path $resolved),
+    (Get-NormalizedPathKey -Path $Path),
+    [System.StringComparison]::Ordinal
+  )) {
+    $result = @(Add-UniquePath -Paths $result -Path $resolved)
+  }
+  return $result
+}
+
+$legacyUvCacheDir = Join-Path (Join-Path $env:LOCALAPPDATA 'github-copilot') 'uv'
+$uvCache = Get-SafeWindowsUvCache
+$uvCacheHomeDir = $uvCache.HomeDir
+$uvCacheDir = $uvCache.CacheDir
+$miseDataDir = if ($env:MISE_DATA_DIR) {
+  $env:MISE_DATA_DIR
+} else {
+  Join-Path $env:LOCALAPPDATA 'mise'
+}
+$uvPythonDir = if ($env:UV_PYTHON_INSTALL_DIR) {
+  $env:UV_PYTHON_INSTALL_DIR
+} else {
+  Join-Path $env:APPDATA 'uv\python'
+}
+
+# hook interpreter の root は run_after_25 が記録した値を使う。sandbox 設定の
+# ために mise や uv を起動すると、hook が実際に使う interpreter と食い違う。
+$hookRuntimeFile = Join-Path $hooksDir 'python-runtime.env'
+if (Test-Path -LiteralPath $hookRuntimeFile -PathType Leaf) {
+  foreach ($line in [System.IO.File]::ReadAllLines($hookRuntimeFile)) {
+    if (-not $line.StartsWith('python_root=', [System.StringComparison]::Ordinal)) { continue }
+    $recordedPythonRoot = $line.Substring('python_root='.Length).Trim()
+    if (-not $recordedPythonRoot) { continue }
+    if (-not [System.IO.Path]::IsPathFullyQualified($recordedPythonRoot)) {
+      Fail-SandboxSettings "$hookRuntimeFile has a non-absolute python_root: $recordedPythonRoot"
+    }
+    $uvPythonDir = $recordedPythonRoot
+    break
+  }
+}
+
+# mise shims と install ディレクトリは agent の PowerShell tool が jq/rg/node/uv
+# を解決するために必要で、hook interpreter とは別の理由で読み取り許可が要る。
+$miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
+  Select-Object -First 1).Source
+if (-not $miseExe) {
+  $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
+  if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
+}
+
+$uvExe = $null
+if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {
+  $uvOutput = & $miseExe which uv 2>$null
+  if ($LASTEXITCODE -eq 0 -and $uvOutput) {
+    $uvExe = ([string]$uvOutput).Trim()
+  }
+}
+if (-not $uvExe) {
+  $uvExe = (Get-Command -CommandType Application -Name 'uv.exe' -ErrorAction SilentlyContinue |
+    Select-Object -First 1).Source
+}
 
 # `/sandbox disable` persists sandbox.enabled=$false in settings.json, and that
 # must survive this template update until `/sandbox enable` restores it.
@@ -246,16 +353,17 @@ foreach ($pathName in @('readwritePaths', 'readonlyPaths', 'deniedPaths')) {
     if ($rule -isnot [string] -or [string]::IsNullOrEmpty($rule) -or $rule.IndexOfAny(@([char]13, [char]10)) -ge 0) {
       Fail-SandboxSettings "$pathName must contain nonempty, single-line path strings."
     }
-    $resolvedRule = Resolve-WindowsPolicyPath -PathValue $rule -PathName 'policy path' -HomeDir $homeDir -AllowTilde
-    if (Test-PathPrefix -Path $uvCacheDir -Prefix $resolvedRule) {
-      if ($pathName -eq 'readwritePaths') {
-        $cacheCovered = $true
-      } else {
-        Fail-SandboxSettings "uv cache $uvCacheDir conflicts with $pathName rule $rule; no permission was changed."
+    if ($pathName -in @('readonlyPaths', 'deniedPaths')) {
+      if ($rule.IndexOfAny(@([char]42, [char]63)) -ge 0) {
+        Fail-SandboxSettings "$pathName rule cannot contain wildcards when validating the uv cache: $rule"
       }
-    }
-    if ($pathName -ne 'readwritePaths' -and (Test-PathPrefix -Path $resolvedRule -Prefix $uvCacheDir)) {
-      Fail-SandboxSettings "uv cache $uvCacheDir contains $pathName rule $rule; no permission was changed."
+      $resolvedRule = Get-ComparableWindowsPath -Path $rule -HomeDir $uvCacheHomeDir
+      if (-not $resolvedRule) {
+        Fail-SandboxSettings "$pathName rule cannot be compared with the uv cache: $rule"
+      }
+      if (Test-PathOverlap -First $uvCacheDir -Second $resolvedRule) {
+        Fail-SandboxSettings "uv cache $uvCacheDir conflicts with $pathName rule $rule."
+      }
     }
   }
 }
@@ -275,12 +383,41 @@ $filesystem = if ($null -ne $existingFilesystem) { $existingFilesystem } else { 
 $network = if ($null -ne $existingNetwork) { $existingNetwork } else { [pscustomobject]@{} }
 
 $readwritePaths = @(
-  (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths')) +
-  $(if ($cacheCovered) { @() } else { @($uvCacheDir) })
+  @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths')) |
+    Where-Object {
+      $normalizedRule = (($_ -replace '/', '\').TrimEnd('\'))
+      $normalizedLegacy = (($legacyUvCacheDir -replace '/', '\').TrimEnd('\'))
+      -not [string]::Equals(
+        $normalizedRule,
+        $normalizedLegacy,
+        [System.StringComparison]::OrdinalIgnoreCase
+      )
+    }
 )
+$readwritePaths = @(Add-UniquePath -Paths $readwritePaths -Path $uvCacheDir)
+$readonlyPaths = @(
+  Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths')
+)
+$readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $miseDataDir)
+$readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $hooksDir)
+$readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvPythonDir)
+
+if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {
+  $resolvedMiseExe = Get-ResolvedPathTarget -Path $miseExe
+  $miseBinDir = Split-Path -Parent $resolvedMiseExe
+  $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $miseBinDir)
+}
+if ($uvExe -and (Test-Path -LiteralPath $uvExe)) {
+  $resolvedUvExe = Get-ResolvedPathTarget -Path $uvExe
+  $uvBinDir = Split-Path -Parent $resolvedUvExe
+  $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvBinDir)
+}
+
 Set-JsonProperty -Object $filesystem -Name 'readwritePaths' -Value $readwritePaths
-Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths'))
-Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value (Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths'))
+Set-JsonProperty -Object $filesystem -Name 'readonlyPaths' -Value $readonlyPaths
+Set-JsonProperty -Object $filesystem -Name 'deniedPaths' -Value @(
+  Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'deniedPaths')
+)
 Set-JsonProperty -Object $filesystem -Name 'clearPolicyOnExit' -Value $false
 
 Set-JsonProperty -Object $network -Name 'allowOutbound' -Value $true
@@ -344,6 +481,22 @@ try {
   if ($backupPath) {
     Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
   }
+}
+
+try {
+  [Environment]::SetEnvironmentVariable(
+    $uvCacheEnvironmentName,
+    $uvCacheDir,
+    [EnvironmentVariableTarget]::User
+  )
+  [Environment]::SetEnvironmentVariable(
+    $uvCacheEnvironmentName,
+    $uvCacheDir,
+    [EnvironmentVariableTarget]::Process
+  )
+  Publish-EnvironmentChange
+} catch {
+  Fail-SandboxSettings "Failed to configure user environment variable ${uvCacheEnvironmentName}: $($_.Exception.Message)"
 }
 
 Write-Host "Configured GitHub Copilot user settings in $settingsPath"

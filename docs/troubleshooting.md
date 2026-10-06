@@ -144,7 +144,7 @@ bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true
 
 ## Copilot sandbox 内で uv がキャッシュを書き込めない
 
-macOS または WSL で発生した場合は、専用キャッシュの RW 許可と、配布済み `uv-enforcer.py` のキャッシュ切替処理を両方確認する。許可だけが残っていても、古い hook は専用キャッシュを選ばない。CLI 起動環境の `UV_CACHE_DIR` と、hook がコマンド内で設定する値は区別する。
+macOS、Linux、WSL の Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `readwritePaths` へ自動追加する。Windows は `%LOCALAPPDATA%` が ProcessContainer 内で仮想化されるため、PowerShell tool のコマンド内だけ `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を使用する。
 
 ```bash
 unset UV_CACHE_DIR
@@ -152,11 +152,17 @@ chezmoi apply
 uv --offline --directory / --project / cache dir
 ```
 
-適用は Copilot CLI を終了してから行う。上の `uv cache dir` は通常シェルの保存先であり、変更しない。CLI を再起動して Bash tool 内で確認すると、macOS では `~/Library/Caches/github-copilot/uv`、Linux系では `${XDG_CACHE_HOME:-$HOME/.cache}/github-copilot/uv` を選ぶ。
+Windows では Copilot CLI を終了し、通常 PowerShell で `Remove-Item Env:\UV_CACHE_DIR -ErrorAction SilentlyContinue; chezmoi apply` を実行する。Copilot CLI を再起動し、`[Environment]::GetEnvironmentVariable('COPILOT_DOTFILES_UV_CACHE_DIR', 'User')` と PowerShell tool 内の `uv cache dir` が `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を返すことを確認する。通常 PowerShell の uv 既定 cache は変更しない。
 
 `/sandbox policy` の表示だけでは書き込み成功を確認できない。sandbox 内の `uv cache dir` が意図した保存先を返すことと、通常の Python 自動探索による `uv run` の成功、ホストへのキャッシュ永続化を確認する。WSL の調査では、許可なしでもコマンドが成功し、ホストには何も残らない場合があった。[実 CLI の比較試験](copilot-sandbox-verification.md#実-cli-でキャッシュの永続化を比較する)は終了コードとホスト側のファイルを分けて判定する。
 
-設定同期や hook が保存先のエラーを報告した場合は、相対パス、symlink、不正な文字、既存の RO / deny との競合を確認する。権限を広げて解消しない。明示的な `--cache-dir` やコマンド内の環境変数設定を使う場合、その保存先は自動許可されない。`--no-cache` などでキャッシュを無効にした実行は、専用キャッシュの永続化の確認には使わない。
+設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、`COPILOT_DOTFILES_UV_CACHE_DIR`、既存の RO / deny との競合を確認する。Windows で `%LOCALAPPDATA%\Packages\sandbox.{GUID}\AC\uv\cache` が表示される場合は、Copilot CLI が補助環境変数を継承していることと、`uv-enforcer.py` の PowerShell command rewrite を確認する。mise の config、state、downloads や `%LOCALAPPDATA%\uv\cache` の許可を追加して回避しない。仮想化先では一時ファイルの作成が成功しても rename が `アクセスが拒否されました` になる（[github/copilot-agent-runtime#18974](https://github.com/github/copilot-agent-runtime/issues/18974)）。`COPILOT_DOTFILES_UV_CACHE_DIR` が未設定の場合、PowerShell tool は既定 cache のまま実行されるため、このエラーが再発する。
+
+Windows の PowerShell tool で `uv is not a valid shim` や mise の purgatory 警告が出る場合は、User PATH に mise shim が残っているか、`mise bin-paths` の実体同期が行われていない。Copilot CLI を終了して `chezmoi apply` を再実行し、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH の先頭を確認する。shim を許可するために mise の config、state、downloads を sandbox へ追加しない。
+
+hook launcher が `missing .../python-runtime.env`、`recorded interpreter is not a regular file`、`python must live under ...` を報告する場合は、Copilot CLI を終了して `chezmoi apply` を再実行する。適用時に uv managed Python 3.14 を provision し、runtime env と `readonlyPaths` を更新してから launcher のスモークテストを実行する。
+
+適用が `uv python install 3.14 failed` または `uv was not found` で停止した場合は、通常シェルで `uv --version`、`uv python dir`、`uv python find --managed-python 3.14` を確認する。Windows では `Get-Command uv.exe -All` と `mise which uv` も確認する。hook の sandbox 内へ mise config、state、downloads の許可を追加して回避しない。`~/.config/uv` 全体の許可や sandbox の無効化も行わない。
 
 配布済み設定を調べずに、過去のブランチが追加した RW 許可を削除しない。今回の同期処理は既存許可の所有者を推測せず、通常の uv 設定やキャッシュ内容も保持する。
 
@@ -332,7 +338,7 @@ npm config set registry '<管理者指定の registry URL>'
 
 - **Unix**: `chezmoi apply` で `~/.profile` 系が配置されているか確認。新規 login シェル（新しい Terminal タブ）で有効化
 - **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）
-- **Windows**: `run_once_after_05-setup-mise-shims-path.ps1` を再実行
+- **Windows**: `chezmoi apply` で `run_onchange_after_15-mise-sync-tools.ps1` を再実行し、`mise bin-paths` の実体ディレクトリを User PATH へ同期
 
 それでも反映されないときは state を消して再実行:
 
@@ -483,6 +489,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
 
-本リポジトリの command hook は `MISE_ENABLE_TOOLS=uv` を設定し、mise の解決対象を `uv` に限定する。`uv` の未導入版は自動導入されるが、dotnet など他ツールの missing 状態は hook 起動時に解決しない。標準エラーに他ツールのインストールログが出る場合は、`~/.copilot/hooks/hooks.json` が最新か確認し、`chezmoi apply` で配り直す。
+本リポジトリの command hook は OS 別 launcher から記録済みの uv managed Python を直接起動し、sandbox 内で mise と uv を起動しない。標準エラーに mise の config、state、downloads、shim 解決、uv cache 初期化のエラーが出る場合は、`~/.copilot/hooks/hooks.json` が古い可能性がある。Copilot CLI を終了し、`chezmoi apply` で hooks、runtime env、sandbox 設定を配り直してから新しいセッションを開始する。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

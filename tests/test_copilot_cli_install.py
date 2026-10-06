@@ -24,19 +24,20 @@ SHELL_SETUP_PATH = REPO_ROOT / "home/run_once_after_10-setup-shell.sh.tmpl"
 COPILOT_RELEASES = {
     "amd64": (
         "copilot-linux-x64.tar.gz",
-        "039933c9247686131c4406abb1d439bdbf68103edc1ff585bd70d5b0dc940f72",
+        "716d9c70b11660043911be6c95cc300561535f26206a70eae6b0ad117f94cdae",
     ),
     "arm64": (
         "copilot-linux-arm64.tar.gz",
-        "3ed85e711955e13be523bf492bc6c93b40b69925bcb7f817c9d08abf4839cf89",
+        "b61e6f9691a923b8dc0c72ac7de7fa957e4a1520b2eb076a2a57a818f6a341a2",
     ),
 }
 MACOS_COPILOT_RELEASES = {
     "arm64": (
         "copilot-darwin-arm64.tar.gz",
-        "2346bb691981c2997d65c1c5bc3cef1aeddc9edd37dcb2f970b911aa597e59f6",
+        "4beb6c5e94c5fd3243651e7c692a0ab051ebeb8ab0a3e48ce524450346f1d97c",
     ),
 }
+MINIMUM_COPILOT_VERSION = "1.0.92-4"
 AZD_RELEASES = {
     "amd64": "414bc5a111ade678f2bf81f5396019b8c42e6151154a7e332307e7ce1146180e",
     "arm64": "009dae211c4a8f9001f7e7dd3aca88e89caba9d45a7e7c80506c9d8372c95514",
@@ -183,6 +184,7 @@ class CopilotCliInstallTests(unittest.TestCase):
         self.assertIsNotNone(linux_version)
         self.assertIsNotNone(macos_version)
         self.assertEqual(linux_version.group(1), macos_version.group(1))
+        self.assertEqual(linux_version.group(1), MINIMUM_COPILOT_VERSION)
 
     def test_macos_copilot_removes_homebrew_formula_after_install(self) -> None:
         self.assertNotRegex(

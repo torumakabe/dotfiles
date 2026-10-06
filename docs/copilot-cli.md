@@ -22,12 +22,14 @@
 
 - `mcp-config.json`: 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
 - `settings.json` の実験機能、プラグイン、sandbox 設定: POSIX の `run_after_35-configure-copilot-sandbox.sh.tmpl` と Windows の `run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl` で既存設定へマージ
-- `hooks/hooks.json` / `hooks/scripts/*.py`: `preToolUse` / `postToolUse` / `postToolUseFailure` フック（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`, `audit-log.py`, `audit-failure.py`）
+- `hooks/hooks.json` / `hooks/scripts/*.py` / `hooks/run-hook.{sh,ps1}`: `preToolUse` / `postToolUse` / `postToolUseFailure` フックと OS 別 launcher（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`, `audit-log.py`, `audit-failure.py`）
 - `hooks/{allowed-files,blocked-files,ask-files}.txt`: ファイルアクセス制御リスト
 
 `installed-plugins/` と `plugin-data/` は Copilot CLI が管理し、chezmoi の対象外とする。
 
-全プラットフォームで、`uv-enforcer.py` が shell tool のコマンド内だけ専用の `UV_CACHE_DIR` を設定し、sandbox 同期がそのキャッシュの RW を追加する。通常シェルの uv 設定は変更しない。Windows は PowerShell tool、macOS と Linux（WSL を含む）は Bash tool を対象にする。適用範囲と注意点は[運用手順](operations.md#uv-専用キャッシュの書き込み許可)を参照する。
+`uv-enforcer.py` は Python と pip の直接実行を拒否する。macOS、Linux、WSL は Copilot CLI 1.0.92-4 以降の既定 cache grant を使う。Windows の PowerShell tool だけは、ProcessContainer の `%LOCALAPPDATA%` 仮想化を避けるため、user environment の `COPILOT_DOTFILES_UV_CACHE_DIR` をコマンド内の `UV_CACHE_DIR` へ渡す。sandbox 同期は `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を補助環境変数と exact write grant に設定する。
+
+command hook は sandbox 内で mise と uv を起動しない。`run_after_25-provision-copilot-hook-python` が uv managed Python 3.14 を用意し、`~/.copilot/hooks/python-runtime.env` に install root と interpreter の絶対パスを記録する。OS 別 launcher はこの記録を検証して Python を直接起動する。設定同期は `~/.copilot/hooks` と同じ install root を `readonlyPaths` へ追加する。mise のデータと実体への読み取り許可は、通常の Bash / PowerShell tool が mise 管理コマンドを起動するために維持する。実機検証の範囲と未確認の環境は[運用手順](operations.md#copilot-local-sandbox-の既定値)を参照する。
 
 ## CLI 本体の導入元
 
@@ -83,7 +85,8 @@ Copilot CLI は Hook 設定をセッション開始時に読み込む。`hooks.j
 動作確認:
 
 ```bash
-echo '{"toolName":"edit","toolArgs":{"path":".env"}}' | uv run ~/.copilot/hooks/scripts/copilot-guard.py
+echo '{"toolName":"edit","toolArgs":{"path":".env"}}' |
+  ~/.copilot/hooks/run-hook.sh copilot-guard.py
 uv run -m unittest tests.test_copilot_guard -v
 ```
 
@@ -95,7 +98,7 @@ uv run -m unittest tests.test_copilot_guard -v
 
 - `--allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。
 - local sandbox は shell command と filesystem policy を対象とする。MCP と LSP は対象外であり、Copilot CLI 組み込みファイルツールの filesystem policy は software-only safeguard である。
-- sandbox 設定同期は `~/.copilot/settings.json` の管理対象外キーと利用者指定の filesystem path rules を保持する。全プラットフォームで毎回の apply 時に uv 専用キャッシュの許可を確認する。hook と設定の適用方法は [`operations.md`](operations.md#uv-専用キャッシュの書き込み許可) を参照する。共通設定の定義元は `home/.chezmoitemplates/copilot-user-settings.json` である。
+- sandbox 設定同期は `~/.copilot/settings.json` の管理対象外キーと利用者指定の filesystem path rules を保持する。Windows の PowerShell tool 用 cache だけを write 許可し、旧 `%LOCALAPPDATA%\github-copilot\uv` entry は移行時に完全一致で除去する。command hook 用に `~/.copilot/hooks` と uv managed Python の install root を読み取り専用で追加する。mise のデータと実体への読み取り許可は通常の shell tool のコマンド解決に使う。hook と設定の適用方法は [`operations.md`](operations.md#copilot-local-sandbox-の既定値)を参照する。共通設定の定義元は `home/.chezmoitemplates/copilot-user-settings.json` である。
 - `sandbox.enabled` の初回値、設定保持、組織管理設定との優先関係は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) に記録する。
 - Linux 系の bubblewrap 診断は `sandbox.enabled` が `true` または未設定の場合に実行し、`false` の場合は probe を省略する。
 - `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。

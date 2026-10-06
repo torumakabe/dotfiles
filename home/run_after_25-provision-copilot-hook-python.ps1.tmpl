@@ -1,0 +1,99 @@
+{{- if eq .chezmoi.os "windows" -}}
+# Copilot CLI hook interpreter の確定 (Windows)
+#
+# hook は ProcessContainer 内で mise も uv も起動できないため、uv managed
+# interpreter の絶対パスをここで記録し、run-hook.ps1 から直接実行する。
+
+$ErrorActionPreference = 'Stop'
+
+$pythonVersion = '3.14'
+$hooksDir = Join-Path $HOME '.copilot\hooks'
+$runtimeFile = Join-Path $hooksDir 'python-runtime.env'
+$launcher = Join-Path $hooksDir 'run-hook.ps1'
+
+function Fail-HookInterpreter {
+  param([Parameter(Mandatory = $true)] [string] $Message)
+
+  Write-Error "Copilot hook interpreter: $Message"
+  exit 1
+}
+
+if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+  Fail-HookInterpreter "launcher is missing: $launcher"
+}
+
+$uvExe = (Get-Command -CommandType Application -Name 'uv.exe' -ErrorAction SilentlyContinue |
+  Select-Object -First 1).Source
+if (-not $uvExe) {
+  $miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
+    Select-Object -First 1).Source
+  if (-not $miseExe) {
+    $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
+    if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
+  }
+  if ($miseExe) {
+    $uvOutput = & $miseExe which uv 2>$null
+    if ($LASTEXITCODE -eq 0 -and $uvOutput) { $uvExe = ([string]$uvOutput).Trim() }
+  }
+}
+
+if ($uvExe -and (Test-Path -LiteralPath $uvExe)) {
+  $env:MISE_ENABLE_TOOLS = 'uv'
+
+  & $uvExe python install $pythonVersion | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Fail-HookInterpreter "uv python install $pythonVersion failed."
+  }
+
+  $pythonRoot = ([string](& $uvExe python dir)).Trim()
+  if ($LASTEXITCODE -ne 0 -or -not $pythonRoot) {
+    Fail-HookInterpreter 'uv python dir failed.'
+  }
+  $pythonPath = ([string](& $uvExe python find --managed-python $pythonVersion)).Trim()
+  if ($LASTEXITCODE -ne 0 -or -not $pythonPath) {
+    Fail-HookInterpreter "uv python find $pythonVersion failed."
+  }
+
+  if (-not [System.IO.Path]::IsPathFullyQualified($pythonRoot)) {
+    Fail-HookInterpreter "uv python dir returned a non-absolute path: $pythonRoot"
+  }
+  $rootKey = (($pythonRoot -replace '/', '\').TrimEnd('\')).ToLowerInvariant()
+  $pythonKey = (($pythonPath -replace '/', '\').TrimEnd('\')).ToLowerInvariant()
+  if (-not $pythonKey.StartsWith($rootKey + '\', [System.StringComparison]::Ordinal)) {
+    Fail-HookInterpreter "uv python find returned a path outside ${pythonRoot}: $pythonPath"
+  }
+  if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
+    Fail-HookInterpreter "interpreter is not a regular file: $pythonPath"
+  }
+
+  New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null
+  $temporaryPath = Join-Path $hooksDir ([System.IO.Path]::GetRandomFileName())
+  try {
+    $encoding = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText(
+      $temporaryPath,
+      "python_root=$pythonRoot`npython=$pythonPath`n",
+      $encoding
+    )
+    [System.IO.File]::Move($temporaryPath, $runtimeFile, $true)
+  } finally {
+    Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
+  }
+} elseif (-not (Test-Path -LiteralPath $runtimeFile -PathType Leaf)) {
+  Fail-HookInterpreter "uv was not found and $runtimeFile is absent."
+}
+
+# 実際の hook payload で起動を確認する。--version だけでは、stdin 経由の
+# 判定出力まで到達できることを確認できない。
+$smokeInput = '{"toolName":"bash","toolArgs":{"command":"python3 -c pass"}}'
+$smokeOutput = $smokeInput | & $launcher 'uv-enforcer.py'
+if ($LASTEXITCODE -ne 0) {
+  Fail-HookInterpreter 'launcher smoke test failed.'
+}
+$smokeDecision = ($smokeOutput | ConvertFrom-Json).permissionDecision
+if ($smokeDecision -ne 'deny') {
+  Fail-HookInterpreter "launcher smoke test returned an unexpected decision: $smokeOutput"
+}
+
+Write-Host "Configured Copilot hook interpreter in $runtimeFile"
+{{- end -}}

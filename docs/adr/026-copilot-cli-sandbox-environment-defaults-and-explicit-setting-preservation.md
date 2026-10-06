@@ -1,4 +1,4 @@
-# ADR-026: 環境別 Copilot CLI sandbox 既定値と uv コマンド専用キャッシュ
+# ADR-026: 環境別 Copilot CLI sandbox 既定値と明示設定保持
 
 ## Status
 
@@ -6,9 +6,9 @@ Accepted
 
 ## Context
 
-ADR-025 は全環境で local sandbox を初回から有効にしたが、Dev Container では bubblewrap のネスト実行を保証できない。macOS と Linux（WSL を含む）では、ホストの uv 設定と通常のキャッシュを変更せずに sandbox 内の uv を動かすため、対象コマンドだけに専用キャッシュを選択させ、限定した書き込み権限と一致させる。Windows は現在の環境で動作するという利用者報告だけを根拠として変更しない。自動的な RW 付与を根拠にはしない。ADR-025 を本 ADR で置換する。
+ADR-025 は全環境で local sandbox を初回から有効にしたが、Dev Container では bubblewrap のネスト実行を保証できない。ADR-025 を本 ADR で置換する。
 
-共有 `uv.toml` によるキャッシュ移設案は実環境へ適用する前に取り下げた。仮の `HOME` と `uv.toml` を使った結果は探索的な検証であり、今回選択した実装の受け入れ根拠にはしない。通常の `HOME`、Python の自動選択、登録した実際の hook を使い、検証専用の Python RO を追加しない実 CLI 検証では、RW なしで書き込みが拒否され、RW ありでホストへマーカーが永続化した。詳細は[検証記録](../copilot-sandbox-verification.md)で扱う。
+uv キャッシュは当初、環境別の専用パスと grant で扱った。Copilot CLI 1.0.92-4 以降、macOS、Linux、WSL では既定キャッシュへの自動 read-write grant が利用できる。一方 Windows では ProcessContainer が `%LOCALAPPDATA%` を仮想化するため、ADR-031 の専用キャッシュ判断を維持する必要がある。
 
 ## Decision
 
@@ -16,18 +16,22 @@ ADR-025 は全環境で local sandbox を初回から有効にしたが、Dev Co
 
 既存の boolean 値は `chezmoi apply` 後も維持し、非 boolean は上書きせず拒否する。コンテナでも手動で有効化できるが、bubblewrap のネスト実行は保証しない。組織の managed settings は利用者設定より優先する。
 
-MCP と LSP は対象外とし、`sandboxMcpServers=false` と `sandboxLspServers=false` を維持する。uv 対応のために sandbox を無効化せず、`allowDevToolAccess` と `allowBypass` の設定も変更しない。実 CLI の受け入れ検証では bypass を無効にする。設定値は `home/.chezmoitemplates/copilot-user-settings.json` を管理元とする。
+MCP と LSP は対象外とし、`sandboxMcpServers=false` と `sandboxLspServers=false` を維持する。`allowDevToolAccess` と `allowBypass` の設定も変更しない。設定値は `home/.chezmoitemplates/copilot-user-settings.json` を管理元とする。
 
 設定同期は管理対象外のキーと利用者所有の filesystem grant を保持する。filesystem path 配列は未設定または null の場合だけ空配列へ正規化し、配列以外は書き換え前に拒否する。旧 `version`、`allowedHosts`、`blockedHosts` は現行 policy と競合するため削除する。
 
-- POSIX の uv-enforcer は既存の拒否判定をすべて済ませた後、許可された Bash ツールの引数に限り、コマンド単位の `UV_CACHE_DIR` 指定を加える。専用キャッシュは macOS で `~/Library/Caches/github-copilot/uv`、Linux と WSL で `${XDG_CACHE_HOME:-~/.cache}/github-copilot/uv` とする。CLI 起動環境には `UV_CACHE_DIR` を設定しない。
-- POSIX の設定同期は専用キャッシュを作成し、その実体パスに限定した `readwritePaths`（RW）を確保する。既存の利用者規則の readonly、denied、順序を保持し、安全でないパスや競合は規則を緩めず拒否する。所有権の別状態ファイル、ジャーナル、旧規則の自動撤去は導入しない。
-- ホストの `uv.toml` と通常の uv キャッシュは変更せず、設定ファイルへの追加 RO も与えない。Windows 向けの専用キャッシュ対応は ADR-031 で定義する。
-- 回避策の適用範囲と撤去条件は[リポジトリの共通指示](../../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)に集約する。
+macOS、Linux、WSL の uv は Copilot CLI 1.0.92-4 以降の既定キャッシュ自動 grant を利用する。これらの環境では専用 `github-copilot/uv` キャッシュ、command-local `UV_CACHE_DIR` rewrite、対応する専用 `readwritePaths` を使用しない。
+
+Windows の uv は ADR-031 に従い、`%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` への exact read-write grant、同じ path を持つ `COPILOT_DOTFILES_UV_CACHE_DIR`、許可済み PowerShell tool コマンドだけに適用する command-local `UV_CACHE_DIR` rewrite を使用する。CLI 起動環境全体の `UV_CACHE_DIR` は変更しない。
+
+Copilot CLI 1.0.92-4 より前に macOS、Linux、WSL で使用した環境別専用キャッシュと grant は撤去済みである。Windows でも一度は既定 grant へ統一したが、ProcessContainer の仮想化による不整合が判明したため、ADR-031 の Windows 専用対策を再導入した。
+
+移行時の追加または除去は管理対象と完全一致する entry に限定し、利用者が追加した他のパスや grant は保持する。共有 `uv.toml` と設定ファイルへの追加 readonly grant は採用しない。
 
 ## Consequences
 
-- コマンド単位の指定により、通常のホスト uv の設定とキャッシュを維持し、設定ファイル全体を追加で読み取り可能にせずに済む。一方、専用キャッシュとの重複でディスク使用量が増え、同じ専用キャッシュを使う後続コマンドへのキャッシュ汚染は防げない。
-- キャッシュ選択は uv-enforcer が書き換える対象コマンドに限られ、CLI の全子プロセスには及ばない。既存規則と競合する場合の停止と、不要になった規則の手動整理を受け入れる。
-- Windows の動作機構は未検証であり、利用者報告を他の Windows 環境での書き込み保証へ一般化しない。
+- sandbox 初期値と利用者の明示設定保持は、uv の環境別処理と独立して有効である。
+- macOS、Linux、WSL の uv キャッシュ権限は Copilot CLI の現行仕様に依存する。
+- Windows は補助環境変数、専用 grant、command-local rewrite の保守が必要だが、`%LOCALAPPDATA%` 仮想化と非対話の path permission 要求を回避できる。
+- 完全一致だけを変更するため、類似する利用者所有 entry を誤って削除しない。
 - コンテナで手動有効化した場合の実行可否は dotfiles の保証外となる。
