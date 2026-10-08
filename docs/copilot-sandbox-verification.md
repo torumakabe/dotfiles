@@ -91,7 +91,7 @@ git diff --check
 
 CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。macOS、Linux、WSL は uv の既定 cache が sandbox の `filesystem.readwritePaths` に追加されることを確認する。Windows は `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` の exact grant、`COPILOT_DOTFILES_UV_CACHE_DIR`、PowerShell tool command の rewrite を確認する。rewrite 後の command に cache path が含まれず、`--allow-all-paths` なしの非対話起動で成功することも確認する。候補実装の実機検証では、Copilot 設定と hook を一時ディレクトリへ複製し、実ユーザーの設定ファイルを変更しない。
 
-実機検証の対象は macOS、Windows native、WSL2 とする。Windows native は GitHub Copilot App の Windows セッション、WSL2 は WSL 内で起動した Copilot CLI を使う。検証手順は各セッションへ直接貼り付け、計画書や一回限りの probe はリポジトリへ追加しない。
+実機検証の対象は macOS、Windows native、WSL2 とする。Windows native は GitHub Copilot App の Windows セッション、WSL2 は WSL 内で起動した Copilot CLI を使う。Linux native は対象外とし、テンプレート生成と静的テストの確認範囲に留める。検証手順は各セッションへ直接貼り付け、計画書や一回限りの probe はリポジトリへ追加しない。
 
 各環境で、次を確認する。
 
@@ -107,6 +107,8 @@ CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。macOS�
 - `python` と `pip` の直接実行拒否、および `uv run` と `uv pip` の無変更通過を維持する
 
 外部モデル、対話ログイン、ネットワークアクセス、Python の新規ダウンロードは使用しない。marker と一時ファイルは検証終了時に削除する。
+
+`postToolUseFailure` の起動を確認するときは、shell コマンドを非ゼロ終了させず、存在しないファイルに対する `view` のようなツールハンドラーエラーを使う。Copilot CLI は shell の非ゼロ終了を tool event の成功として扱い、`postToolUse` を実行するためである。
 
 ## dotfiles を適用する
 
@@ -282,18 +284,4 @@ VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONT
 | user namespace probe | 終了コード。macOS は N/A |
 | warning またはエラー | |
 
-失敗時は、実行コマンド、終了コード、標準エラー、`/sandbox` の各画面の表示を残す。認証情報や機密性のある環境変数の値は記録へ含めない。
-
-## 検証結果の記録
-
-候補 commit `54801b1e7509580c23b70c9651929111b9b33077` について、次の実機検証が成功した。
-
-| 環境 | Copilot CLI | 確認結果 |
-|---|---|---|
-| macOS arm64、Seatbelt | 1.0.92 系 | 固定 interpreter、uv cache grant、全 hook の起動に成功 |
-| Windows native、ProcessContainer | 1.0.93-0 | PowerShell pipeline、relocated cache、direct mise PATH、全 hook の起動に成功 |
-| WSL2、bubblewrap 0.6.1 | 1.0.93-0 | 隔離した HOME、uv cache、managed Python で全 hook の起動に成功 |
-
-WSL2 の `postToolUseFailure` は、shell の非ゼロ終了ではなく、存在しないファイルに対する `view` tool handler error で確認した。Copilot CLI は shell の非ゼロ終了を tool event の成功として扱い、`postToolUse` を実行するためである。
-
-Linux native は今回の実機検証対象外であり、テンプレート生成と静的テストの確認範囲に限る。
+失敗時は、実行コマンド、終了コード、標準エラー、`/sandbox` の各画面の表示を残す。認証情報や機密性のある環境変数の値は記録へ含めない。記入した表は実施したセッションに残し、リポジトリへは追加しない。
