@@ -9,6 +9,9 @@ mise activate pwsh | Out-String | Invoke-Expression
 
 # === Environment variables ===
 $env:EDITOR = 'edit'
+# microsoft/azure-skills の telemetry hook は sandbox 内で npx を間接起動し、
+# Node developer-tool grant を受けられないため、上流修正まで telemetry を止める。
+$env:AZURE_MCP_COLLECT_TELEMETRY = 'false'
 
 # === Functions ===
 
