@@ -14,6 +14,7 @@ POWERSHELL_SCRIPT_PATH = (
     SOURCE_ROOT / "run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl"
 )
 ZSHRC_PATH = SOURCE_ROOT / "dot_zshrc.tmpl"
+POSIX_PROFILE_PATH = SOURCE_ROOT / "dot_profile.tmpl"
 POWERSHELL_PROFILE_PATH = SOURCE_ROOT / "PowerShell_profile.ps1.tmpl"
 
 EXPECTED_MARKETPLACE = {
@@ -72,6 +73,18 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         self.assertIn("--allow-all", ZSHRC_PATH.read_text(encoding="utf-8"))
         self.assertIn(
             "--allow-all",
+            POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8"),
+        )
+
+    def test_azure_skills_telemetry_is_disabled_in_all_shell_environments(
+        self,
+    ) -> None:
+        self.assertIn(
+            "export AZURE_MCP_COLLECT_TELEMETRY=false",
+            POSIX_PROFILE_PATH.read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "$env:AZURE_MCP_COLLECT_TELEMETRY = 'false'",
             POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8"),
         )
 

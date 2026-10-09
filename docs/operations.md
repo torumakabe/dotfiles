@@ -84,6 +84,14 @@ POSIX では PATH 上の uv を使う。Windows では PATH 上の `uv.exe`、`m
 
 mise のデータディレクトリと実体ディレクトリへの読み取り許可は、通常の shell tool が mise 管理コマンドを起動するために維持する。Windows の非対話プロセスは `mise bin-paths` から同期した User PATH を使い、shim 実行時の config、state、downloads を sandbox へ許可しない。command hook 自体は mise と uv に依存しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
+### Azure skills telemetry hook
+
+`microsoft/azure-skills` の telemetry hook は plugin script 内から `npx -y @azure/mcp@latest` を起動する。Copilot CLI は外側の hook command から developer-tool scope を選ぶため、script 内の `npx` に必要な Node grant が実効 policy に含まれず、enterprise registry を指定する `.npmrc` を読めない場合がある（[github/copilot-agent-runtime#25355](https://github.com/github/copilot-agent-runtime/issues/25355)）。
+
+本リポジトリは POSIX の `.profile` と Windows の PowerShell profile で `AZURE_MCP_COLLECT_TELEMETRY=false` を設定する。Azure skills の hook はこの値を最初に確認して正常終了するため、skill と Azure MCP の機能は維持し、利用状況 telemetry だけを停止する。`.npmrc`、npm cache、mise の config や state を hook の filesystem grant へ追加せず、plugin の導入ファイルも変更しない。
+
+新しいシェルから Copilot CLI を起動した場合に有効になる。Issue #25355 の修正後は、enterprise registry を使う環境で telemetry hook が追加許可なしに完了することを実機確認してから環境変数を撤去する。
+
 ### sandbox ワークアラウンドの撤去手順
 
 Copilot CLI 側の修正で前提が変わったときに備え、撤去単位を3つに分けている。各単位は独立して撤去でき、他の単位を残したまま適用できる。
