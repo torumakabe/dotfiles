@@ -3,34 +3,34 @@
 lockfile_version = 3
 
 [[tools.azure-kubelogin]]
-version = "0.2.20"
+version = "0.2.21"
 backend = "aqua:Azure/kubelogin"
 specifiers = ["latest"]
 
 [tools.azure-kubelogin."platforms.linux-arm64"]
-checksum = "sha256:d02712fcf3ed290cc3921205e535673b12fef0936da1c0b762afaa4d685a33c4"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.20/kubelogin-linux-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/584303897"
+checksum = "sha256:76eee872b4dda6a0378d57e019cfb394b6ed58e6aa209ea55d941065a73d37b4"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-linux-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096625"
 
 [tools.azure-kubelogin."platforms.linux-x64"]
-checksum = "sha256:2e92450a929dd2aec4da818b40dd4fda97aaeae2d6cd9c1074cc1371210f4ab9"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.20/kubelogin-linux-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/584303887"
+checksum = "sha256:934a2a9618e018cb9fbeb14f3e4c28416fdae815df7706df91500e41d234eb66"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-linux-amd64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096610"
 
 [tools.azure-kubelogin."platforms.macos-arm64"]
-checksum = "sha256:1583a65ed6833145a9427f7920ae8cfb7b86244b1b3e8c6b4a0f016101d1634d"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.20/kubelogin-darwin-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/584303876"
+checksum = "sha256:dca26962855a3865ffec36049848b0741c00032f7b25078d6e35efc38de1c598"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-darwin-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096576"
 
 [tools.azure-kubelogin."platforms.windows-arm64"]
-checksum = "sha256:8155504e917636635d431f553cbb108bd3d7399e1ad255eacf0f4590ce222201"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.20/kubelogin-win-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/584303832"
+checksum = "sha256:6125a9359935e4d38f3343ece56117da18520081bf9705370ef9b1588bd99c50"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-win-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096519"
 
 [tools.azure-kubelogin."platforms.windows-x64"]
-checksum = "sha256:e26d5ce8a48e9b6ac53fd93cf45a1eec050f859ccca3654beb4887decd8dee33"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.20/kubelogin-win-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/584303837"
+checksum = "sha256:ef2ea460e491ffad032c8393061c2d17f53db76d999f22244d5c63e530f848f9"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-win-amd64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096524"
 
 [[tools.bat]]
 version = "0.26.1"
@@ -574,38 +574,38 @@ specifiers = ["latest"]
 trust_policy_excludes = '["typescript-language-server@5.3.0", "typescript-language-server@>=6 <7"]'
 
 [[tools.pnpm]]
-version = "12.10.1"
+version = "12.11.2"
 backend = "aqua:pnpm/pnpm"
 specifiers = ["latest"]
 
 [tools.pnpm."platforms.linux-arm64"]
-checksum = "sha256:18dbb118de1dbef0e4516c17bf847d6ee206fc4deffb2bb488ec8e1d2814e078"
-url = "https://github.com/pnpm/pnpm/releases/download/v12.10.1/pnpm-linux-arm64.tar.gz"
-url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/616153643"
+checksum = "sha256:ad444fa06d7ff344d74ba1e4933f2ed71cc6357cc2d33707a5c60958b7d83085"
+url = "https://github.com/pnpm/pnpm/releases/download/v12.11.2/pnpm-linux-arm64.tar.gz"
+url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/625613171"
 provenance = "github-attestations"
 
 [tools.pnpm."platforms.linux-x64"]
-checksum = "sha256:502a275984a4cd01e5579ac72049a241091cac5118e44becf84951130c3e079e"
-url = "https://github.com/pnpm/pnpm/releases/download/v12.10.1/pnpm-linux-x64.tar.gz"
-url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/616153639"
+checksum = "sha256:358f30541b42371360c0d48a8daddc0c0850a90c36fcbea598032a9850e2c9ab"
+url = "https://github.com/pnpm/pnpm/releases/download/v12.11.2/pnpm-linux-x64.tar.gz"
+url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/625613177"
 provenance = "github-attestations"
 
 [tools.pnpm."platforms.macos-arm64"]
-checksum = "sha256:a617ae6a55c8b3cd494c611ada88d65cb7c3cf6d7828e91b2f44b4bed1bee217"
-url = "https://github.com/pnpm/pnpm/releases/download/v12.10.1/pnpm-darwin-arm64.tar.gz"
-url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/616153633"
+checksum = "sha256:2f4701dbd4a7b81827789e94225272355fcc17c4eb9f5add08ed26f943003b67"
+url = "https://github.com/pnpm/pnpm/releases/download/v12.11.2/pnpm-darwin-arm64.tar.gz"
+url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/625613178"
 provenance = "github-attestations"
 
 [tools.pnpm."platforms.windows-arm64"]
-checksum = "sha256:67c0980c2223d2f89b46ceedb09caaa37bfab075d8319d0e651eb659d00c66e9"
-url = "https://github.com/pnpm/pnpm/releases/download/v12.10.1/pnpm-win32-arm64.zip"
-url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/616153640"
+checksum = "sha256:550c8167a14c7f25e156c6fd14196cb440c0f05210ccb618ad904dc42dc90f6c"
+url = "https://github.com/pnpm/pnpm/releases/download/v12.11.2/pnpm-win32-arm64.zip"
+url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/625613185"
 provenance = "github-attestations"
 
 [tools.pnpm."platforms.windows-x64"]
-checksum = "sha256:299009317554b82905927f8e9782ec5f0afb08eb7b5cc5eb2b15a923cb1a56ef"
-url = "https://github.com/pnpm/pnpm/releases/download/v12.10.1/pnpm-win32-x64.zip"
-url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/616153638"
+checksum = "sha256:66cac6b725bfc75fadac959fc435821048558adb50b89c82d0d2d5e57465a1dd"
+url = "https://github.com/pnpm/pnpm/releases/download/v12.11.2/pnpm-win32-x64.zip"
+url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/625613173"
 provenance = "github-attestations"
 
 [[tools.ripgrep]]
@@ -749,38 +749,38 @@ url_api = "https://api.github.com/repos/aquasecurity/trivy/releases/assets/60333
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.12.24"
+version = "0.13.0"
 backend = "aqua:astral-sh/uv"
 specifiers = ["latest"]
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:5231be65f496304623895dacdbf1de8504fec90303684bdf05805aa34414dd21"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/622872824"
+checksum = "sha256:3ccfb6af6e242433eb552f7d9676abd5412c6595c497e990d9c8cb7b5bd4d2c3"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/626003012"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:b4dfaef47d491a7296981f8374a4595f55dbf84e8937c8ecd2983574d8bb3da6"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/622873043"
+checksum = "sha256:1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/626003332"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:0c4346de7abdb49495b393b9ec809fe387aa43e586be20fecb972216c1e71732"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/622872807"
+checksum = "sha256:a9c1b29002cf3c83f07fa9cd8a887a3be0107d90e23189721221e7257db8e3d6"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/626002972"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:7c38608c8a18ee137d748a1773053b07ec8f3a30fab49aebaa6f4e4efeceb019"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/622873038"
+checksum = "sha256:088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/626003295"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:7c38608c8a18ee137d748a1773053b07ec8f3a30fab49aebaa6f4e4efeceb019"
-url = "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/622873038"
+checksum = "sha256:088962f9e7b7bd9ea740c04c650b2a21c8928c345bd99ac24350dc924dba656c"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/626003295"
 provenance = "github-attestations"
 
 [[tools.yq]]
