@@ -491,6 +491,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 
 本リポジトリの command hook は OS 別 launcher から記録済みの uv managed Python を直接起動し、sandbox 内で mise と uv を起動しない。標準エラーに mise の config、state、downloads、shim 解決、uv cache 初期化のエラーが出る場合は、`~/.copilot/hooks/hooks.json` が古い可能性がある。Copilot CLI を終了し、`chezmoi apply` で hooks、runtime env、sandbox 設定を配り直してから新しいセッションを開始する。
 
-`azure@azure-skills` の `track-telemetry` hook が timeout し、実効 policy に `.npmrc` が無い場合は、Issue #25355 の間接起動問題に該当する。新しいシェルで `AZURE_MCP_COLLECT_TELEMETRY` が `false` であることを確認し、そのシェルから Copilot CLI を再起動する。`.npmrc` や home directory 全体を `readonlyPaths` へ追加せず、sandbox も無効化しない。
+`azure@azure-skills` の `track-telemetry` hook が timeout し、間接起動された `npx` に `.npmrc` の許可が無い場合は、Issue #25355 の問題に該当する。新しいシェルで `AZURE_MCP_COLLECT_TELEMETRY` が `false` であることを確認し、そのシェルから Copilot CLI を再起動する。`.npmrc` や home directory 全体を `readonlyPaths` へ追加せず、sandbox も無効化しない。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

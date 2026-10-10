@@ -86,9 +86,9 @@ mise のデータディレクトリと実体ディレクトリへの読み取り
 
 ### Azure skills telemetry hook
 
-`microsoft/azure-skills` の telemetry hook は plugin script 内から `npx -y @azure/mcp@latest` を起動する。Copilot CLI は外側の hook command から developer-tool scope を選ぶため、script 内の `npx` に必要な Node grant が実効 policy に含まれず、enterprise registry を指定する `.npmrc` を読めない場合がある（[github/copilot-agent-runtime#25355](https://github.com/github/copilot-agent-runtime/issues/25355)）。
+`microsoft/azure-skills` の telemetry hook は plugin script 内から `npx -y @azure/mcp@latest` を起動する。Copilot の `allowDevToolAccess` は直接実行された Node/npm ツールに `.npmrc` の読み取り許可を付与するが、外側の hook command を基準に developer-tool scope が選ばれるため、script 内の間接起動された `npx` には Node grant が含まれず、enterprise registry を指定する `.npmrc` を読めない場合がある（[github/copilot-agent-runtime#25355](https://github.com/github/copilot-agent-runtime/issues/25355)）。
 
-本リポジトリは POSIX の `.profile` と Windows の PowerShell profile で `AZURE_MCP_COLLECT_TELEMETRY=false` を設定する。Azure skills の hook はこの値を最初に確認して正常終了するため、skill と Azure MCP の機能は維持し、利用状況 telemetry だけを停止する。`.npmrc`、npm cache、mise の config や state を hook の filesystem grant へ追加せず、plugin の導入ファイルも変更しない。
+本リポジトリは POSIX の `.profile` と Windows の PowerShell profile で `AZURE_MCP_COLLECT_TELEMETRY=false` を設定する。Azure skills の hook はこの値を最初に確認して正常終了するため、skill と Azure MCP の機能は維持し、利用状況 telemetry だけを停止する。`.npmrc` は `allowDevToolAccess` に任せ、npm cache、mise の config や state を hook の filesystem grant へ追加せず、plugin の導入ファイルも変更しない。
 
 新しいシェルから Copilot CLI を起動した場合に有効になる。Issue #25355 の修正後は、enterprise registry を使う環境で telemetry hook が追加許可なしに完了することを実機確認してから環境変数を撤去する。
 
