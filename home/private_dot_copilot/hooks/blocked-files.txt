@@ -48,7 +48,6 @@
 
 # パッケージレジストリ / コンテナレジストリの認証情報
 **/.netrc
-**/.npmrc
 **/.pypirc
 **/.docker/config.json
 
