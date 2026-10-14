@@ -91,7 +91,7 @@ git diff --check
 
 CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。macOS、Linux、WSL は uv の既定 cache が sandbox の `filesystem.readwritePaths` に追加されることを確認する。Windows は `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` の exact grant、`COPILOT_DOTFILES_UV_CACHE_DIR`、PowerShell tool command の rewrite を確認する。rewrite 後の command に cache path が含まれず、`--allow-all-paths` なしの非対話起動で成功することも確認する。候補実装の実機検証では、Copilot 設定と hook を一時ディレクトリへ複製し、実ユーザーの設定ファイルを変更しない。
 
-実機検証の対象は macOS、Windows native、WSL2 とする。Windows native は GitHub Copilot App の Windows セッション、WSL2 は WSL 内で起動した Copilot CLI を使う。Linux native は対象外とし、テンプレート生成と静的テストの確認範囲に留める。検証手順は各セッションへ直接貼り付け、計画書や一回限りの probe はリポジトリへ追加しない。
+実機検証の対象は macOS、Windows native、WSL2 とする。Windows native は GitHub Copilot App の Windows セッション、WSL2 は WSL 内で起動した Copilot CLI を使う。Linux native は対象外とし、テンプレート生成と静的テストの確認範囲に留める。通常の実機確認では手順を各セッションへ貼り付け、一回限りの probe はリポジトリへ追加しない。Windows uv cache の比較検証は [`Windows uv cache 回避策の比較検証`](windows-uv-cache-trial.md) を先頭から読み、同文書内の手順とプロンプトを使用する。再実行用スクリプトは `tests/manual/windows/uv-cache-trial/` で管理する。
 
 各環境で、次を確認する。
 
