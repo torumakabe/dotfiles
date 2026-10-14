@@ -230,7 +230,9 @@ if ($Action -eq 'Prepare') {
         }
         Get-ChildItem -LiteralPath "$hooksSource\scripts" -Filter '*.py' -File |
             Copy-Item -Destination "$hooksPath\scripts"
+        (Get-Item -LiteralPath "$hooksPath\hooks.json" -Force).IsReadOnly = $false
         if ($variant -eq 'candidate') {
+            (Get-Item -LiteralPath "$hooksPath\scripts\uv-enforcer.py" -Force).IsReadOnly = $false
             [IO.File]::WriteAllText("$hooksPath\scripts\uv-enforcer.py",
                 $uvSource.Replace($branch, ''), [Text.UTF8Encoding]::new($false))
         }

@@ -14,7 +14,7 @@
 
 利用者が chezmoi の既存 source directory を使う場合に限り、通常の PowerShell terminal で `Set-Location -LiteralPath (chezmoi source-path)` を実行する。この repository では source directory が checkout 内の `home/` を指す場合があるため、下のコードで Git root へ移動する。別の既存 checkout を使う場合は、`Set-Location -LiteralPath '<検証コードがある既存checkoutの実パス>'` の引数を実際のパスに置換して移動する。別 checkout の選択に `chezmoi source-path` は使わない。
 
-移動した後、利用者は最初に下のコード全体を同じ terminal へ貼り付ける。Git root、repository の識別、検証ファイルを確認し、branch は切り替えない。未コミットの変更は `git status --short` で確認し、検証対象の変更と区別する。
+移動した後、利用者は下のコード全体を同じ terminal へ貼り付ける。Git root と repository を確認し、検証 branch を fetch して switch する。既存の検証 branch は fast-forward だけで更新する。未コミットの変更や未追跡ファイルがあれば停止するため、利用者が先に既存の作業を保存する。コードは stash や変更の破棄を行わない。
 
 ```powershell
 . {
@@ -26,6 +26,29 @@
     $originUrl = (& git -C $repoRoot remote get-url origin | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $originUrl -notmatch '[:/]torumakabe/dotfiles(?:\.git)?/?$') {
         throw 'This is not the expected torumakabe/dotfiles checkout.'
+    }
+    Set-Location -LiteralPath $repoRoot -ErrorAction Stop
+    $checkoutChanges = @(& git status --porcelain)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the existing checkout.' }
+    if ($checkoutChanges.Count) {
+        git status --short
+        throw 'Save existing checkout changes before fetching and switching the validation branch.'
+    }
+    $trialBranch = 'validation/windows-uv-cache-trial'
+    & git fetch origin "refs/heads/${trialBranch}:refs/remotes/origin/${trialBranch}"
+    if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the validation branch.' }
+    $localTrialBranch = @(& git branch --list $trialBranch)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the local validation branch.' }
+    if ($localTrialBranch.Count) {
+        & git merge-base --is-ancestor $trialBranch "origin/$trialBranch"
+        if ($LASTEXITCODE -ne 0) { throw 'Local validation branch has separate commits; review it without resetting.' }
+        & git switch $trialBranch
+        if ($LASTEXITCODE -ne 0) { throw 'Could not switch to the validation branch.' }
+        & git merge --ff-only "origin/$trialBranch"
+        if ($LASTEXITCODE -ne 0) { throw 'Could not fast-forward the validation branch.' }
+    } else {
+        & git switch --track "origin/$trialBranch"
+        if ($LASTEXITCODE -ne 0) { throw 'Could not create the local validation branch.' }
     }
     foreach ($relativePath in @(
         'tests\manual\windows\uv-cache-trial\Prepare-UvCacheTrial.ps1',
@@ -82,6 +105,8 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 利用者は同じ通常 terminal で一意な trial root を作り、既存 checkout にある準備スクリプトを別の PowerShell child process で起動する。`SourceCopilotHome` は普段の CLI home と一致させる。script は interpreter を `python-runtime.env` から取得し、`Root` が checkout と `%TEMP%` の外にあり、reparse point を通らないことを確認する。repository、既存 cache、OneDrive、network drive、junction 下は試験データの保存先にしない。準備失敗後の半生成 directory は再利用せず、原因を解消して新しい GUID でやり直す。
 
 既存の設定、User/Machine environment、cache は変更しない。execution policy が script を拒否した場合も設定を変更せず停止する。明示 cache 設定が検出された場合は判定を保留する。準備は `UV_CONFIG_FILE`、`UV_NO_CACHE` 等の選択した変数だけの有無と、ancestor `uv.toml` / `pyproject.toml`、`%APPDATA%\uv\uv.toml`、`%PROGRAMDATA%\uv\uv.toml` の `cache-dir` / `no-cache` 宣言を検査する。TOML 検査は保守的な宣言検出であり、他の table の同名 key も停止対象になる。停止したら対象 Copilot が該当 table を確認する。設定を自動削除しない。
+
+コピー元のファイルが ReadOnly 属性を持つ場合に備え、準備スクリプトは試験用コピーの書換対象だけから同属性を除く。対象は両条件の `hooks.json` と candidate の `uv-enforcer.py` である。配布元ファイル、他のコピー、ACL、sandbox の許可は変更しない。準備が途中で失敗した場合は、その root を再利用せず、手順3のコード全体を再実行して新しい GUID の root を作る。
 
 ```powershell
 . {
