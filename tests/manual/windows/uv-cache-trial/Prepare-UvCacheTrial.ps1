@@ -209,7 +209,7 @@ if ($Action -eq 'Prepare') {
     New-Item -ItemType Directory -Path $Root -ErrorAction Stop | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $Root 'workspace\evidence'), (Join-Path $Root 'code') |
         Out-Null
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UvCacheSandbox.ps1') `
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UvCacheSandbox.py') `
         -Destination (Join-Path $Root 'code')
     $manifest = [ordered]@{
         schema = 1; trialId = [guid]::NewGuid().ToString(); root = $Root
@@ -254,13 +254,24 @@ if ($Action -eq 'Prepare') {
             }
         }
         $prompt = $promptTemplate.Replace('<Root>', $Root).Replace('<Mode>', $variant)
-        $prompt = $prompt.Replace('<WorkspaceLiteral>',
-            (ConvertTo-PowerShellLiteral $manifest.workspace))
         $prompt = $prompt.Replace('<ProbeLiteral>',
-            (ConvertTo-PowerShellLiteral (Join-Path $Root 'code\Test-UvCacheSandbox.ps1')))
+            (ConvertTo-PowerShellLiteral (Join-Path $Root 'code\Test-UvCacheSandbox.py')))
         $prompt = $prompt.Replace('<RootLiteral>', (ConvertTo-PowerShellLiteral $Root))
-        if ($prompt -match '<(?:Root|Mode|WorkspaceLiteral|ProbeLiteral|RootLiteral)>') {
+        $prompt = $prompt.Replace('<PythonLiteral>',
+            (ConvertTo-PowerShellLiteral $manifest.pythonPath))
+        if ($prompt -match '<(?:Root|Mode|ProbeLiteral|RootLiteral|PythonLiteral)>') {
             throw 'Generated prompt still contains a trial placeholder.'
+        }
+        $runCommands = @([regex]::Matches($prompt, '(?m)^uv run [^\r\n]+$') |
+            ForEach-Object { $_.Value })
+        if ($runCommands.Count -ne 2 -or
+            $runCommands[0] -notmatch 'python .+Test-UvCacheSandbox\.py.+--mode .+' -or
+            $runCommands[0] -notmatch '--step 1$' -or
+            $runCommands[0] -match '--offline' -or
+            $runCommands[1] -notmatch 'python .+Test-UvCacheSandbox\.py.+--mode .+' -or
+            $runCommands[1] -notmatch '--step 2$' -or
+            $runCommands[1] -notmatch '--offline') {
+            throw 'Generated probe commands must directly run both uv steps without a wrapper.'
         }
         [IO.File]::WriteAllText((Join-Path $Root "code\$variant-prompt.txt"),
             $prompt, [Text.UTF8Encoding]::new($false))
