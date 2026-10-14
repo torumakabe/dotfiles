@@ -1,7 +1,7 @@
 # Evidence adapter only: forwards the original hook result unchanged.
 [CmdletBinding()]
 param(
-    [Parameter(ValueFromPipeline)] [object] $HookInput,
+    [Parameter(ValueFromPipeline)] [AllowNull()] [object] $HookInput,
     [Parameter(Mandatory)] [string] $Launcher,
     [Parameter(Mandatory)] [string] $ScriptName,
     [Parameter(Mandatory)] [string] $EvidencePath
@@ -14,11 +14,21 @@ process {
     if ($null -ne $HookInput) { $inputs.Add([string]$HookInput) }
 }
 end {
-    $raw = $inputs -join "`n"
-    $payload = $raw | ConvertFrom-Json
-    $argsObject = $payload.toolArgs
-    if ($argsObject -is [string]) { $argsObject = $argsObject | ConvertFrom-Json }
-    $command = [string]$argsObject.command
+    $transport = if ($inputs.Count) { 'pipeline' } else { 'stdin' }
+    $raw = if ($inputs.Count) { $inputs -join "`n" } else { [Console]::In.ReadToEnd() }
+    if ([string]::IsNullOrWhiteSpace($raw)) { throw 'Hook evidence adapter received empty input.' }
+    $payload = $raw | ConvertFrom-Json -AsHashtable
+    if ($payload -isnot [Collections.IDictionary]) { throw 'Hook input must be a JSON object.' }
+    $command = ''
+    if ($payload['toolName'] -in @('bash', 'powershell')) {
+        $argsObject = $payload['toolArgs']
+        if ($argsObject -is [string]) { $argsObject = $argsObject | ConvertFrom-Json -AsHashtable }
+        if ($argsObject -isnot [Collections.IDictionary]) { throw 'Shell toolArgs must be a JSON object.' }
+        if ($null -ne $argsObject['command']) {
+            if ($argsObject['command'] -isnot [string]) { throw 'Shell command must be a string.' }
+            $command = $argsObject['command']
+        }
+    }
     $bytes = [Text.Encoding]::UTF8.GetBytes($command)
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $commandHash = [BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-', '') }
@@ -35,6 +45,7 @@ end {
     $scriptPath = Join-Path (Split-Path -Parent $Launcher) "scripts\$ScriptName"
     [ordered]@{
         time = [DateTime]::UtcNow.ToString('o'); script = $ScriptName; step = $step
+        toolName = $payload['toolName']; inputTransport = $transport
         commandSHA256 = $commandHash; scriptSHA256 = (Get-FileHash -LiteralPath $scriptPath).Hash
         permissionDecision = $(if ($null -ne $permission) { $permission.Value } else { $null })
         modifiedArgs = $modified

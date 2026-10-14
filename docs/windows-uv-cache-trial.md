@@ -96,7 +96,7 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 
 | スクリプト | 役割 |
 |---|---|
-| [`Prepare-UvCacheTrial.ps1`](../tests/manual/windows/uv-cache-trial/Prepare-UvCacheTrial.ps1) | 通常 terminal で隔離設定を作り、control または candidate の CLI を起動する |
+| [`Prepare-UvCacheTrial.ps1`](../tests/manual/windows/uv-cache-trial/Prepare-UvCacheTrial.ps1) | 通常 terminal で隔離設定と実値入りプロンプトを作り、control または candidate の CLI を起動する |
 | [`Trace-UvCacheHook.ps1`](../tests/manual/windows/uv-cache-trial/Trace-UvCacheHook.ps1) | 複製した hook の結果を変えずに返し、script の hash と rewrite 有無だけを記録する。利用者による直接実行は不要 |
 | [`Test-UvCacheSandbox.ps1`](../tests/manual/windows/uv-cache-trial/Test-UvCacheSandbox.ps1) | 手順6のプロンプトを受けた Copilot が sandbox 内で cache、rename、uv run、別 tool call からの永続性を検査する |
 
@@ -107,6 +107,8 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 既存の設定、User/Machine environment、cache は変更しない。execution policy が script を拒否した場合も設定を変更せず停止する。明示 cache 設定が検出された場合は判定を保留する。準備は `UV_CONFIG_FILE`、`UV_NO_CACHE` 等の選択した変数だけの有無と、ancestor `uv.toml` / `pyproject.toml`、`%APPDATA%\uv\uv.toml`、`%PROGRAMDATA%\uv\uv.toml` の `cache-dir` / `no-cache` 宣言を検査する。TOML 検査は保守的な宣言検出であり、他の table の同名 key も停止対象になる。停止したら対象 Copilot が該当 table を確認する。設定を自動削除しない。
 
 コピー元のファイルが ReadOnly 属性を持つ場合に備え、準備スクリプトは試験用コピーの書換対象だけから同属性を除く。対象は両条件の `hooks.json` と candidate の `uv-enforcer.py` である。配布元ファイル、他のコピー、ACL、sandbox の許可は変更しない。準備が途中で失敗した場合は、その root を再利用せず、手順3のコード全体を再実行して新しい GUID の root を作る。
+
+準備中に、記録用 adapter の PowerShell pipeline 入力と、登録コマンドに渡す redirected stdin 入力を検査する。shell、質問ツール、freeform patch の合成 payload を既存 hook へ渡し、adapter の出力が元の launcher の出力と一致しなければ停止する。これは通常 terminal での入力処理確認であり、sandbox 内での動作確認ではない。準備用の記録は `preparation-hook-events.jsonl` に分ける。
 
 ```powershell
 . {
@@ -125,12 +127,15 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 
 ## 4. control の CLI を起動する
 
-利用者は同じ通常 terminal で control を起動し、必要なら隔離 home で `/login` する。既存 token ファイル、CA private key、plugin state はコピーしない。credential masking により CA の追加承認が必要になっても、検証のために証明書を勝手に trust しない。
+利用者は同じ通常 terminal で下のコードを実行する。準備済みの Root と control を埋め込んだプロンプトを clipboard に入れてから control を起動するため、clipboard の既存内容は置き換わる。Root と Mode の手置換は不要である。必要なら隔離 home で `/login` する。既存 token ファイル、CA private key、plugin state はコピーしない。credential masking により CA の追加承認が必要になっても、検証のために証明書を勝手に trust しない。
 
 子 `pwsh.exe` は checkout root から起動し、準備スクリプトが Copilot CLI を `-C <Root>\workspace` で起動する。Copilot の powershell tool とその probe の cwd は `<Root>\workspace` であり、コードがある checkout とは別である。CLI と子 PowerShell の終了後は、cwd が `$repoRoot` の親 terminal に戻る。親 session の変数は保持される。通常環境の User/Machine environment は変更しない。
 
 ```powershell
 . {
+    $trialPrompt = @(& $pwshPath -NoProfile -File $prepareScript -Action Prompt -Root $trialRoot -Mode control)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read the prepared control prompt.' }
+    ($trialPrompt -join "`n") | Set-Clipboard -ErrorAction Stop
     & $pwshPath -NoProfile -File $prepareScript -Action Launch -Root $trialRoot -Mode control
     if ($LASTEXITCODE -ne 0) { throw 'Control CLI exited with an error.' }
 }
@@ -156,12 +161,18 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 
 ## 6. control の CLI に検証プロンプトを貼る
 
-利用者は以下の本文の `<Root>` を手順3で出力した実際の絶対パスへ、`<Mode>` を `control` へ置換し、起動中の control CLI に貼る。`$trialRoot` という文字列をそのまま貼るのではない。通常 terminal には貼らない。Copilot は Step 1 と Step 2 を別々の powershell tool 呼び出しで実行する。
+利用者は手順4で clipboard に入れたプロンプトを、そのまま起動中の control CLI に貼る。通常 terminal には貼らない。Copilot は Step 1 と Step 2 を別々の powershell tool 呼び出しで実行する。生成済み本文は `<Root>\code\control-prompt.txt` にも保存される。
 
+以下は準備スクリプトが読み取るテンプレートである。**以下の本文を直接コピーしない。** スクリプトが Root、Mode、PowerShell のパス引数を実値へ置換する。
+
+<details>
+<summary>生成用テンプレート（直接貼り付けない）</summary>
+
+<!-- uv-cache-trial-prompt:start -->
 ```text
 Windows native の uv cache 比較検証を行ってください。
-Root: <Root> （通常 terminal で表示された `$trialRoot` の値）
-Mode: <Mode> （control または candidate）
+Root: <Root>
+Mode: <Mode>
 
 これは試験用 COPILOT_HOME と空の試験 workspace で起動したセッションです。Root は利用者が通常 terminal で生成し、同じ terminal に出力した絶対パスです。Copilot sandbox 内の `$env:LOCALAPPDATA` から Root を再計算しないでください。通常設定、User/Machine environment、repository、既存 cache は変更しないでください。Node hook削除やGuardのenv checker削除、MCP/LSP等を再検証しないでください。
 
@@ -174,15 +185,15 @@ Mode: <Mode> （control または candidate）
 runtime条件が確認できたら、Copilotのpowershell toolで以下のStep 1を実行してください。導入済みPowerShell 7.3以降のpwsh.exeをsandbox toolの子processとして起動します。外部terminalへ移さないでください。準備済みPython絶対パスとidna==3.10だけを使い、Pythonをdownloadしないでください。execution policyの変更や-ExecutionPolicy Bypassは使わないでください。
 
 Step 1 の例:
-Set-Location -LiteralPath '<Root>\workspace' -ErrorAction Stop
-& (Get-Command pwsh.exe -ErrorAction Stop).Source -NoProfile -File '<Root>\code\Test-UvCacheSandbox.ps1' -Root '<Root>' -Mode '<Mode>' -Step 1
+Set-Location -LiteralPath <WorkspaceLiteral> -ErrorAction Stop
+& (Get-Command pwsh.exe -ErrorAction Stop).Source -NoProfile -File <ProbeLiteral> -Root <RootLiteral> -Mode '<Mode>' -Step 1
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Step 1がtechnical-successかつexit 0の場合だけ、別の新しいpowershell tool呼び出しでStep 2を実行してください。一つのcommandで両方を実行せず、1つのPowerShell process内の反復をcross-command試験と呼ばないでください。
 
 Step 2 の例:
-Set-Location -LiteralPath '<Root>\workspace' -ErrorAction Stop
-& (Get-Command pwsh.exe -ErrorAction Stop).Source -NoProfile -File '<Root>\code\Test-UvCacheSandbox.ps1' -Root '<Root>' -Mode '<Mode>' -Step 2
+Set-Location -LiteralPath <WorkspaceLiteral> -ErrorAction Stop
+& (Get-Command pwsh.exe -ErrorAction Stop).Source -NoProfile -File <ProbeLiteral> -Root <RootLiteral> -Mode '<Mode>' -Step 2
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 sandbox内でUV_CACHE_DIRをunsetしたり--cache-dir / --no-configを追加したりしないでください。uv cache cleanや既存cacheの削除もしないでください。script失敗はそのまま結果として保存し、別構文や別toolで迂回しないでください。native stderrにcredentialが含まれる可能性があるため、raw出力を共有せずscriptのerror分類を報告してください。
@@ -193,13 +204,19 @@ candidateのcache pathをruntime effective policyと照合してください。�
 
 結果は <Root>\workspace\evidence\<Mode>\ にあります。最後にMode、OS build、実CLI/uv/Python版、設定読み込みとruntime観測、実cache path、hook rewrite、各stepのstatus/exit/error、cross-command根拠、判定と未確認事項を簡潔に報告してください。controlとcandidate両方を測るまで比較全体を完了としないでください。利用者は各CLIを終了して元のcheckout rootにある親terminalへ戻り、同じRootで次の条件を起動します。リポジトリ編集、commit、push、chezmoi apply、現行回避策の撤去はしないでください。
 ```
+<!-- uv-cache-trial-prompt:end -->
+
+</details>
 
 ## 7. candidate を起動して同じ検証を行う
 
-利用者は control の CLI を終了し、checkout root の親 terminal に戻る。下のコードで保存済みの `$trialRoot` を指定して candidate を起動する。手順5の状態確認を candidate に対して行い、手順6の同じプロンプト本文を再利用する。`<Root>` は control と同じ実パス、`<Mode>` だけを `candidate` に置換して candidate CLI に貼る。candidate 用 observation は別ファイルに保存する。candidate の終了後も、同じ親 terminal の checkout root に戻る。
+利用者は control の CLI を終了し、checkout root の親 terminal に戻る。下のコードは control と同じ `$trialRoot` を使い、candidate の生成済みプロンプトを clipboard に入れてから CLI を起動する。手順5の状態確認を candidate に対して行い、その後 clipboard の本文をそのまま candidate CLI に貼る。テンプレートの手置換や control の本文の再利用は不要である。candidate 用 observation は別ファイルに保存する。candidate の終了後も、同じ親 terminal の checkout root に戻る。
 
 ```powershell
 . {
+    $trialPrompt = @(& $pwshPath -NoProfile -File $prepareScript -Action Prompt -Root $trialRoot -Mode candidate)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read the prepared candidate prompt.' }
+    ($trialPrompt -join "`n") | Set-Clipboard -ErrorAction Stop
     & $pwshPath -NoProfile -File $prepareScript -Action Launch -Root $trialRoot -Mode candidate
     if ($LASTEXITCODE -ne 0) { throw 'Candidate CLI exited with an error.' }
 }

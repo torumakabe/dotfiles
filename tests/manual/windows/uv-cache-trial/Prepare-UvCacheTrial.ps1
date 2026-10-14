@@ -2,7 +2,7 @@
 # Never run this script through a Copilot shell tool.
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [ValidateSet('Prepare', 'Launch')] [string] $Action,
+    [Parameter(Mandatory)] [ValidateSet('Prepare', 'Prompt', 'Launch')] [string] $Action,
     [Parameter(Mandatory)] [string] $Root,
     [ValidateSet('control', 'candidate')] [string] $Mode = 'control',
     [string] $SourceCopilotHome = (Join-Path $HOME '.copilot'),
@@ -109,6 +109,50 @@ function Invoke-HookCheck([string] $HomePath, [string] $Command) {
     if ($text.Trim()) { return ($text | ConvertFrom-Json -AsHashtable) }
     return @{}
 }
+function Assert-AdapterInput([string] $HomePath, [string] $ScriptName,
+    [string] $Registration, [string] $EvidencePath, $Payload) {
+    $raw = $Payload | ConvertTo-Json -Depth 10 -Compress
+    $launcher = Join-Path $HomePath 'hooks\run-hook.ps1'
+    $adapter = Join-Path $Root 'code\Trace-UvCacheHook.ps1'
+    $global:LASTEXITCODE = 0
+    $expected = @($raw | & $launcher $ScriptName) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'Original launcher failed during adapter validation.' }
+    $global:LASTEXITCODE = 0
+    $piped = @($raw | & $adapter -Launcher $launcher -ScriptName $ScriptName `
+        -EvidencePath $EvidencePath) -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $piped.Trim() -cne $expected.Trim()) {
+        throw 'Pipeline adapter output differs from the original hook.'
+    }
+    $process = [Diagnostics.Process]::new()
+    try {
+        $process.StartInfo.FileName = (Get-Command pwsh.exe -ErrorAction Stop).Source
+        $process.StartInfo.WorkingDirectory = (Get-Location).ProviderPath
+        $process.StartInfo.UseShellExecute = $false
+        $process.StartInfo.RedirectStandardInput = $true
+        $process.StartInfo.RedirectStandardOutput = $true
+        $process.StartInfo.RedirectStandardError = $true
+        foreach ($argument in @('-NoProfile', '-Command', $Registration)) {
+            $process.StartInfo.ArgumentList.Add($argument)
+        }
+        if (-not $process.Start()) { throw 'Could not start the registered adapter command.' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $process.StandardInput.WriteLine($raw)
+        $process.StandardInput.Close()
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        if ($process.ExitCode -ne 0 -or $stderr.Trim() -or
+            $stdout.Trim() -cne $expected.Trim()) {
+            throw "Redirected-stdin adapter validation failed for $ScriptName/$($Payload['toolName']) (exit $($process.ExitCode)); no trial CLI was launched."
+        }
+    } finally {
+        $process.Dispose()
+    }
+}
+function ConvertTo-PowerShellLiteral([string] $Value) {
+    return "'" + $Value.Replace("'", "''") + "'"
+}
 
 $manifestPath = Join-Path $Root 'manifest.json'
 if ($Action -eq 'Prepare') {
@@ -202,6 +246,13 @@ if ($Action -eq 'Prepare') {
     if ($uvSource.Split($branch, [StringSplitOptions]::None).Count -ne 2) {
         throw 'Installed enforcer differs from the reviewed branch; do not guess a replacement.'
     }
+    $guidePath = [IO.Path]::GetFullPath(
+        (Join-Path $PSScriptRoot '..\..\..\..\docs\windows-uv-cache-trial.md'))
+    $guide = [IO.File]::ReadAllText($guidePath)
+    $promptMatches = [regex]::Matches($guide,
+        '(?s)<!-- uv-cache-trial-prompt:start -->\s*```text\r?\n(.*?)\r?\n```\s*<!-- uv-cache-trial-prompt:end -->')
+    if ($promptMatches.Count -ne 1) { throw 'The guide must contain exactly one trial prompt template.' }
+    $promptTemplate = $promptMatches[0].Groups[1].Value
     New-Item -ItemType Directory -Path $Root -ErrorAction Stop | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $Root 'workspace\evidence'), (Join-Path $Root 'code') |
         Out-Null
@@ -270,6 +321,32 @@ if ($Action -eq 'Prepare') {
             }
         }
         Write-Json "$hooksPath\hooks.json" $hookCopy
+        foreach ($hook in $hookCopy['hooks']['preToolUse']) {
+            if ($hook['powershell'] -notmatch '-ScriptName "(copilot-guard\.py|uv-enforcer\.py)"') { continue }
+            $scriptName = $Matches[1]
+            $preparationEvidence = Join-Path $evidencePath 'preparation-hook-events.jsonl'
+            $registration = $hook['powershell'].Replace(
+                "$evidencePath\hook-events.jsonl", $preparationEvidence)
+            foreach ($payload in @(
+                @{ toolName = 'powershell'; toolArgs = @{ command = 'uv --version' } },
+                @{ toolName = 'powershell'; toolArgs = @{ command = 'python script.py' } },
+                @{ toolName = 'ask_user'; toolArgs = @{ question = 'Synthetic adapter check' } },
+                @{ toolName = 'apply_patch'; toolArgs = "*** Begin Patch`n*** Add File: adapter-check.txt`n+synthetic`n*** End Patch" }
+            )) {
+                Assert-AdapterInput $homePath $scriptName $registration $preparationEvidence $payload
+            }
+        }
+        $prompt = $promptTemplate.Replace('<Root>', $Root).Replace('<Mode>', $variant)
+        $prompt = $prompt.Replace('<WorkspaceLiteral>',
+            (ConvertTo-PowerShellLiteral $manifest.workspace))
+        $prompt = $prompt.Replace('<ProbeLiteral>',
+            (ConvertTo-PowerShellLiteral (Join-Path $Root 'code\Test-UvCacheSandbox.ps1')))
+        $prompt = $prompt.Replace('<RootLiteral>', (ConvertTo-PowerShellLiteral $Root))
+        if ($prompt -match '<(?:Root|Mode|WorkspaceLiteral|ProbeLiteral|RootLiteral)>') {
+            throw 'Generated prompt still contains a trial placeholder.'
+        }
+        [IO.File]::WriteAllText((Join-Path $Root "code\$variant-prompt.txt"),
+            $prompt, [Text.UTF8Encoding]::new($false))
         foreach ($command in @('python script.py', 'pip install example')) {
             if ((Invoke-HookCheck $homePath $command)['permissionDecision'] -ne 'deny') {
                 throw 'The direct Python/pip prohibition did not survive isolation.'
@@ -298,6 +375,7 @@ if ($Action -eq 'Prepare') {
         $manifest.modes[$variant] = @{
             home = $homePath; hookHashes = $hashes; supportHashes = $supportHashes
             configuredSandbox = (Select-Sandbox $copy['sandbox']); directPythonAndPipDenied = $true
+            adapterInputValidated = $true
         }
     }
     $sourceGuardHash = (Get-FileHash -LiteralPath "$hooksSource\scripts\copilot-guard.py").Hash
@@ -312,6 +390,13 @@ if ($Action -eq 'Prepare') {
 
 # Launch affects this terminal process and its child only; restore it on return.
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -AsHashtable
+if ($Action -eq 'Prompt') {
+    if ((Normalize-Path $manifest['root']) -ne (Normalize-Path $Root)) {
+        throw 'Manifest root differs from the requested trial.'
+    }
+    Write-Output ([IO.File]::ReadAllText((Join-Path $Root "code\$Mode-prompt.txt")))
+    exit 0
+}
 Assert-NoExplicitUvOverride
 $homePath = $manifest['modes'][$Mode]['home']
 $saved = @{}
