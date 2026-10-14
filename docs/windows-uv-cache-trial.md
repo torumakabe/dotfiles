@@ -52,7 +52,6 @@
     }
     foreach ($relativePath in @(
         'tests\manual\windows\uv-cache-trial\Prepare-UvCacheTrial.ps1',
-        'tests\manual\windows\uv-cache-trial\Trace-UvCacheHook.ps1',
         'tests\manual\windows\uv-cache-trial\Test-UvCacheSandbox.ps1',
         'docs\windows-uv-cache-trial.md',
         'home\.chezmoitemplates\copilot-user-settings.json'
@@ -92,12 +91,11 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 
 対象 CLI の help が `COPILOT_HOME`、`copilot config sandbox`、`-C`、`--no-auto-update`、`/sandbox` に対応していなければ停止する。`copilot sandbox status` と `copilot sandbox policy` は存在しないため使用しない。
 
-スクリプトは次の3本であり、利用者はこのガイド内のコマンドで実行する。
+スクリプトは次の2本であり、利用者はこのガイド内のコマンドで実行する。
 
 | スクリプト | 役割 |
 |---|---|
 | [`Prepare-UvCacheTrial.ps1`](../tests/manual/windows/uv-cache-trial/Prepare-UvCacheTrial.ps1) | 通常 terminal で隔離設定と実値入りプロンプトを作り、control または candidate の CLI を起動する |
-| [`Trace-UvCacheHook.ps1`](../tests/manual/windows/uv-cache-trial/Trace-UvCacheHook.ps1) | 複製した hook の結果を変えずに返し、script の hash と rewrite 有無だけを記録する。利用者による直接実行は不要 |
 | [`Test-UvCacheSandbox.ps1`](../tests/manual/windows/uv-cache-trial/Test-UvCacheSandbox.ps1) | 手順6のプロンプトを受けた Copilot が sandbox 内で cache、rename、uv run、別 tool call からの永続性を検査する |
 
 ## 3. 隔離した検証データを準備する
@@ -106,9 +104,7 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 
 既存の設定、User/Machine environment、cache は変更しない。execution policy が script を拒否した場合も設定を変更せず停止する。明示 cache 設定が検出された場合は判定を保留する。準備は `UV_CONFIG_FILE`、`UV_NO_CACHE` 等の選択した変数だけの有無と、ancestor `uv.toml` / `pyproject.toml`、`%APPDATA%\uv\uv.toml`、`%PROGRAMDATA%\uv\uv.toml` の `cache-dir` / `no-cache` 宣言を検査する。TOML 検査は保守的な宣言検出であり、他の table の同名 key も停止対象になる。停止したら対象 Copilot が該当 table を確認する。設定を自動削除しない。
 
-コピー元のファイルが ReadOnly 属性を持つ場合に備え、準備スクリプトは試験用コピーの書換対象だけから同属性を除く。対象は両条件の `hooks.json` と candidate の `uv-enforcer.py` である。配布元ファイル、他のコピー、ACL、sandbox の許可は変更しない。準備が途中で失敗した場合は、その root を再利用せず、手順3のコード全体を再実行して新しい GUID の root を作る。
-
-準備中に、記録用 adapter の PowerShell pipeline 入力と、登録コマンドに渡す redirected stdin 入力を検査する。shell、質問ツール、freeform patch の合成 payload を既存 hook へ渡し、adapter の出力が元の launcher の出力と一致しなければ停止する。これは通常 terminal での入力処理確認であり、sandbox 内での動作確認ではない。準備用の記録は `preparation-hook-events.jsonl` に分ける。
+準備スクリプトは、複製した `hooks.json` と hook launcher を変更せずに使う。書き換えが必要なのは candidate の `uv-enforcer.py` だけで、既知の cache rewrite 分岐を除く。Guard と uv enforcer の直接実行制限を各コピーで確認し、両条件の設定に同じ分離用 read-only paths を加える。元の `allowBypass` 値はそのまま保つ。配布元ファイル、ACL、他の sandbox 許可は変更しない。準備が途中で失敗した場合は、その root を再利用せず、手順3のコード全体を再実行して新しい GUID の root を作る。
 
 ```powershell
 . {
@@ -141,23 +137,11 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 }
 ```
 
-## 5. control の sandbox 状態を確認する
+## 5. control の sandbox 設定を読み込む
 
-利用者は起動した control CLI で `/sandbox` の現在の状態と policy を確認する。native Windows backend が使われ、sandbox 有効、bypass 不可、developer-tool access 有効であること、試験用 settings を読んでいることを確認する。managed policy や追加 hook の影響も記録する。設定変更はしない。runtime 表示を観測できなければ未確認として停止する。`cli-configured-sandbox.json` は設定読み込みの証拠であって、runtime policy の証拠ではない。
+準備スクリプトは CLI の `config sandbox` 出力を元設定と比較し、試験用 `settings.json` が読み込まれたことを確認する。`allowBypass` は利用者の元設定を変更せず、その値を両条件で維持する。CLI の設定表示だけでは、実行中の sandbox 状態や有効な全 policy は確認できない。
 
-手順6のプロンプトを受けた Copilot は、この実際の観測から `<Root>\workspace\evidence\control\sandbox-observation.json` を作る。candidate では同じ `<Root>` の `candidate` directory に作る。利用者しか観測できない UI は利用者に操作を依頼する。下の形の true は例であり、観測せずコピーしてはならない。
-
-```json
-{
-  "runtimeEnabledObserved": true,
-  "bypassDisabledObserved": true,
-  "devToolAccessObserved": true,
-  "isolatedHomeObserved": true,
-  "policyReviewed": true,
-  "backendObserved": "画面に表示された実際のWindows backend名",
-  "observationReference": "利用者のsandbox表示確認、時刻、または保存した診断への参照"
-}
-```
+runtime backend 名や有効 policy 全体を手入力する必要はなく、未確認でも次の手順で cache 測定を始める。ただし、sandbox 内の実行を別途確認できない結果は sandbox の合格にせず、撤去判断を保留する。
 
 ## 6. control の CLI に検証プロンプトを貼る
 
@@ -176,33 +160,33 @@ Mode: <Mode>
 
 これは試験用 COPILOT_HOME と空の試験 workspace で起動したセッションです。Root は利用者が通常 terminal で生成し、同じ terminal に出力した絶対パスです。Copilot sandbox 内の `$env:LOCALAPPDATA` から Root を再計算しないでください。通常設定、User/Machine environment、repository、既存 cache は変更しないでください。Node hook削除やGuardのenv checker削除、MCP/LSP等を再検証しないでください。
 
-目的は Python/pip 直接実行禁止とGuardを維持し、Windows UV_CACHE_DIR rewriteと専用cache/grantなしで上流sandboxがuvを動かせるかを比較することです。準備scriptが除いたcache rewrite以外にhookを変更したり、Guardを解除したりしないでください。bypassは試験設定で禁止されています。permission denyやhook askが出たら迂回せず、必要な具体的承認を利用者へ提示してください。新しいwrite grantは追加しないでください。
+目的は Python/pip 直接実行禁止と Guard を維持し、Windows の `UV_CACHE_DIR` rewrite と専用 cache write grant を candidate から外して uv の動作を比較することです。複製した hook 登録と launcher は元のまま使います。`allowBypass` を含む sandbox 設定も元の値を保ちます。権限変更や bypass を試さず、必要な write grant を追加しないでください。
 
-このCLIのproject directoryとpowershell toolのcwdは <Root>\workspace です。コードを置いたdotfiles checkoutではありません。まず <Root>\manifest.json と <Root>\workspace\evidence\<Mode>\launch.json、cli-configured-sandbox.json を読んで設定読み込みを確認してください。これをruntime sandbox有効の証拠と取り違えないでください。利用者の /sandbox 表示、runtime policy、実backend、dev-tool access、bypass不可の観測を確認し、<Root>\workspace\evidence\<Mode>\sandbox-observation.json に実際の観測を記録してください。観測できないflagをtrueで埋めないでください。利用者しか操作できない表示は利用者へ操作を依頼し、結果を待ってください。存在しない copilot sandbox status / policy サブコマンドは使わないでください。
+この CLI の project directory と powershell tool の cwd は <Root>\workspace です。コードを置いた dotfiles checkout ではありません。最初に <Root>\manifest.json、launch.json、cli-configured-sandbox.json を読み、試験条件を確認してください。これらは runtime sandbox の実行証明ではありません。runtime 状態や有効 policy が別途確認できない場合も測定を行い、結果の sandbox 帰属と撤去判断を保留にしてください。sandbox 外で動いたコマンド結果を sandbox の合格にしないでください。
 
 追加のplugin/repository hookやmanaged policyがcontrol/candidateに違いを作る場合は、勝手に解除せず判定保留としてください。target CLIのhelpが計画と異なる場合も未確認optionを発明しないでください。認証は利用者が隔離homeで行います。tokenやprivate keyを読まないでください。
 
-runtime条件が確認できたら、Copilotのpowershell toolで以下のStep 1を実行してください。導入済みPowerShell 7.3以降のpwsh.exeをsandbox toolの子processとして起動します。外部terminalへ移さないでください。準備済みPython絶対パスとidna==3.10だけを使い、Pythonをdownloadしないでください。execution policyの変更や-ExecutionPolicy Bypassは使わないでください。
+Copilot の powershell tool から以下の Step 1 を実行してください。導入済み PowerShell 7.3 以降の `pwsh.exe` を起動します。通常 terminal や別 tool に切り替えないでください。準備済み Python 絶対パスと `idna==3.10` だけを使い、Python を download しないでください。execution policy は変更しないでください。tool 呼び出しが hook に拒否された場合はその場で停止し、別の手段で実行しないでください。
 
 Step 1 の例:
 Set-Location -LiteralPath <WorkspaceLiteral> -ErrorAction Stop
 & (Get-Command pwsh.exe -ErrorAction Stop).Source -NoProfile -File <ProbeLiteral> -Root <RootLiteral> -Mode '<Mode>' -Step 1
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Step 1がtechnical-successかつexit 0の場合だけ、別の新しいpowershell tool呼び出しでStep 2を実行してください。一つのcommandで両方を実行せず、1つのPowerShell process内の反復をcross-command試験と呼ばないでください。
+Step 1 が `technical-success` かつ exit 0 の場合だけ、別の powershell tool 呼び出しで Step 2 を実行してください。一つの command や PowerShell process で両方を実行しないでください。
 
 Step 2 の例:
 Set-Location -LiteralPath <WorkspaceLiteral> -ErrorAction Stop
 & (Get-Command pwsh.exe -ErrorAction Stop).Source -NoProfile -File <ProbeLiteral> -Root <RootLiteral> -Mode '<Mode>' -Step 2
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-sandbox内でUV_CACHE_DIRをunsetしたり--cache-dir / --no-configを追加したりしないでください。uv cache cleanや既存cacheの削除もしないでください。script失敗はそのまま結果として保存し、別構文や別toolで迂回しないでください。native stderrにcredentialが含まれる可能性があるため、raw出力を共有せずscriptのerror分類を報告してください。
+sandbox 内で `UV_CACHE_DIR` を unset したり `--cache-dir` / `--no-config` を追加したりしないでください。`uv cache clean` や既存 cache の削除もしないでください。script 失敗はそのまま結果として保存し、別構文や別 tool で迂回しないでください。native stderr に credential が含まれる可能性があるため、raw 出力を共有せず script の error 分類を報告してください。
 
-二回の結果とhook-events.jsonlから、Guard/uv hookの実行hash、candidate modifiedArgs/cachePrefixなし、同じcache、marker永続性、atomic rename、オンラインpackage metadata更新/実行と後続offline実行、実際のPython prefixがcache配下であることを確認してください。packageが事前cacheにあった可能性を残し、coldと断定しないでください。
+両 step の結果から、同じ cache、marker の永続性、atomic rename、online package metadata の取得と実行、後続 offline 実行、Python prefix が cache 配下であることを報告してください。package が事前 cache にあった可能性を残し、cold と断定しないでください。
 
-candidateのcache pathをruntime effective policyと照合してください。旧exact grant以外のbroad user/managed grant、workspaceやTEMPの一般許可だけで書けているなら上流dev-tool cache修正による成功とは断定せず、判定保留としてください。technical-successだけでは撤去可と判定しないでください。
+candidate cache path が workspace、旧専用 cache、既存 user write grant、TEMP のいずれに入ったかを結果で確認してください。既存 grant で書けた可能性や runtime sandbox の有効性を特定できなければ、上流 cache 許可の効果を確認できたとは扱わず、撤去判断を保留にしてください。`technical-success` は測定コマンドが成功した意味に限り、回避策の撤去可を示しません。
 
-結果は <Root>\workspace\evidence\<Mode>\ にあります。最後にMode、OS build、実CLI/uv/Python版、設定読み込みとruntime観測、実cache path、hook rewrite、各stepのstatus/exit/error、cross-command根拠、判定と未確認事項を簡潔に報告してください。controlとcandidate両方を測るまで比較全体を完了としないでください。利用者は各CLIを終了して元のcheckout rootにある親terminalへ戻り、同じRootで次の条件を起動します。リポジトリ編集、commit、push、chezmoi apply、現行回避策の撤去はしないでください。
+結果は <Root>\workspace\evidence\<Mode>\ に保存します。最後に Mode、OS build、CLI / uv / Python 版、CLI 設定読み込み、実 cache path、各 step の status / exit / error、cross-command の根拠、sandbox 帰属、判定と未確認事項を簡潔に報告してください。control と candidate の両方を測るまで比較全体を完了としないでください。各 CLI を終了し、checkout root の親 terminal に戻って、同じ Root で次の条件を起動してください。repository、通常設定、commit、push、chezmoi apply、現行回避策は変更しないでください。
 ```
 <!-- uv-cache-trial-prompt:end -->
 
@@ -210,7 +194,7 @@ candidateのcache pathをruntime effective policyと照合してください。�
 
 ## 7. candidate を起動して同じ検証を行う
 
-利用者は control の CLI を終了し、checkout root の親 terminal に戻る。下のコードは control と同じ `$trialRoot` を使い、candidate の生成済みプロンプトを clipboard に入れてから CLI を起動する。手順5の状態確認を candidate に対して行い、その後 clipboard の本文をそのまま candidate CLI に貼る。テンプレートの手置換や control の本文の再利用は不要である。candidate 用 observation は別ファイルに保存する。candidate の終了後も、同じ親 terminal の checkout root に戻る。
+利用者は control の CLI を終了し、checkout root の親 terminal に戻る。下のコードは control と同じ `$trialRoot` を使い、candidate の生成済みプロンプトを clipboard に入れてから CLI を起動する。clipboard の本文をそのまま candidate CLI に貼る。手置換や手順の追加は不要である。candidate の終了後も、同じ親 terminal の checkout root に戻る。
 
 ```powershell
 . {
@@ -226,19 +210,19 @@ candidateのcache pathをruntime effective policyと照合してください。�
 
 Step 1 は `uv cache dir`、cache 下の新規専用 directory への作成と同 directory 内 atomic rename、`uv run --no-project --isolated --no-python-downloads --python <既存絶対パス> --with idna==3.10 --refresh-package idna python -c <検証code>` を行う。refresh はこの package の metadata に限定し、cache 全体を消去しない。package が元から cache にあった可能性は残るため、cold cache の証拠とはしない。
 
-Step 2 は前の cache path と marker を確認し、別の atomic rename を行った後、同じ package 実行を `--offline` で行う。二つの powershell tool 呼び出しが独立していることは会話の tool call と `hook-events.jsonl` も使って確認する。一つの shell process 内で連続実行した結果は無効である。
+Step 2 は前の cache path と marker を確認し、別の atomic rename を行った後、同じ package 実行を `--offline` で行う。Copilot は Step 1 と Step 2 を別々の powershell tool 呼び出しで実行し、会話の tool call 履歴で別呼び出しであることを確認する。一つの shell process 内で連続実行した結果は無効である。
 
 Python payload は実際の run 環境内から同じ uv の `cache dir`、Python prefix、idna の版を返す。prefix が対象 cache の外なら失敗する。candidate が cwd に fallback したり、旧 cache や既存 user write grant に入った場合も合格にしない。sandbox 内では `UV_CACHE_DIR` を unset せず、`--cache-dir` / `--no-config` も付けない。自動注入された `UV_CACHE_DIR` は観測対象である。
 
-`manifest.json` は `<Root>\manifest.json` に保存する。条件別の `cli-configured-sandbox.json`、`launch.json`、`sandbox-observation.json`、`hook-events.jsonl`、`step-1.json`、`step-2.json` は `<Root>\workspace\evidence\control\` と `<Root>\workspace\evidence\candidate\` に保存する。結果は checkout 内には作らない。configured snapshot には sandbox の relevant flags と filesystem paths だけを保存し、proxy credential や全環境を記録しない。native error は raw stderr の代わりに exit code と分類を保存する。各 step は成功時 0、失敗時 1 を返す。`technical-success` は測定項目の成功であり、撤去可の自動判定ではない。
+`manifest.json` は `<Root>\manifest.json` に保存する。条件別の `cli-configured-sandbox.json`、`launch.json`、`step-1.json`、`step-2.json` は `<Root>\workspace\evidence\control\` と `<Root>\workspace\evidence\candidate\` に保存する。結果は checkout 内には作らない。configured snapshot には元設定から必要な sandbox flags と filesystem paths だけを保存し、proxy credential や全環境は記録しない。native error は raw stderr の代わりに exit code と分類を保存する。各 step は成功時 0、失敗時 1 を返す。`technical-success` は測定コマンドが成功したことを示すが、sandbox 内で実行された証拠にはならない。
 
 | 結果 | 判定 |
 |---|---|
-| control / candidate とも 2 回成功。candidate rewrite なし、旧 grant なし。runtime policy の automatic dev-tool cache が実 cache に適用され、他の writable grant による成功ではない | 対象 CLI / Windows build で撤去候補。別途 dotfiles 撤去を承認する |
+| control / candidate とも 2 回成功。candidate cache は旧専用 grant 外で、既存の user write grant にも覆われていない。runtime sandbox が実行に適用された証拠がある | 対象 CLI / Windows build で撤去候補。別途 dotfiles 撤去を承認する |
 | control 成功、candidate の cache 作成 / rename / uv cache 書き込み失敗 | 現環境では回避策を維持。失敗 stage と exit / error を報告 |
 | control 失敗 | 比較基準が成立していない。network / Python / hook / policy 問題を分離 |
 | 同一 cache / marker を次の別 tool call で読めない、offline 実行失敗 | 永続性または package 再利用の条件不成立。撤去しない |
-| 明示 cache 設定、bypass、追加 grant、cwd fallback、runtime policy 未確認、candidate cache が単に TEMP grant 内 | 判定保留。書き込み成功だけでは upstream cache 機能に帰属させない |
+| 明示 cache 設定、candidate cache が旧 grant / user write grant / workspace 内、candidate cache が TEMP 内、runtime sandbox の適用が未確認 | 判定保留。書き込み成功だけでは upstream cache 機能に帰属させない |
 
 検証後は利用者が記録を保存し、各 `probeOwnedDirectory` に本試験のファイルだけがあることを確認して、その明示された directory だけを削除する。既存 cache の親 directory や内容は削除しない。trial directory には隔離 login の資格情報や CA が含まれる場合があるため、共有しない。共有するのは review 済みの最小 JSON と測定要約だけにする。
 
@@ -251,7 +235,7 @@ Python payload は実際の run 環境内から同じ uv の `cache dir`、Pytho
 | 補助環境変数 | 現行専用 cache を設定 | 親 process から除外 |
 | 専用 cache exact write grant | 保持 | 除外。別の重複 grant があれば停止 |
 | 他の filesystem / network / MCP / LSP 設定 | source を保持 | 同じ |
-| sandbox bypass | 試験設定だけ false | 同じ |
+| sandbox bypass | 元設定を保持 | 元設定を保持 |
 | 隔離 code、hook、interpreter の read grant | 両条件に同じ目的の RO grant | 同じ |
 
 準備で追加する RO grant は隔離 home、code、manifest、既存 managed Python root に限る。試験 workspace は既存 `addCurrentWorkingDirectory` で書き込める。candidate cache に新しい write grant を追加しない。既存の broad user / managed grant、workspace、TEMP の許可で cache が書ける場合は、その成功だけで upstream cache grant による成功としない。

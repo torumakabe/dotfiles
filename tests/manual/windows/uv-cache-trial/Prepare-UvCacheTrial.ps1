@@ -109,47 +109,6 @@ function Invoke-HookCheck([string] $HomePath, [string] $Command) {
     if ($text.Trim()) { return ($text | ConvertFrom-Json -AsHashtable) }
     return @{}
 }
-function Assert-AdapterInput([string] $HomePath, [string] $ScriptName,
-    [string] $Registration, [string] $EvidencePath, $Payload) {
-    $raw = $Payload | ConvertTo-Json -Depth 10 -Compress
-    $launcher = Join-Path $HomePath 'hooks\run-hook.ps1'
-    $adapter = Join-Path $Root 'code\Trace-UvCacheHook.ps1'
-    $global:LASTEXITCODE = 0
-    $expected = @($raw | & $launcher $ScriptName) -join "`n"
-    if ($LASTEXITCODE -ne 0) { throw 'Original launcher failed during adapter validation.' }
-    $global:LASTEXITCODE = 0
-    $piped = @($raw | & $adapter -Launcher $launcher -ScriptName $ScriptName `
-        -EvidencePath $EvidencePath) -join "`n"
-    if ($LASTEXITCODE -ne 0 -or $piped.Trim() -cne $expected.Trim()) {
-        throw 'Pipeline adapter output differs from the original hook.'
-    }
-    $process = [Diagnostics.Process]::new()
-    try {
-        $process.StartInfo.FileName = (Get-Command pwsh.exe -ErrorAction Stop).Source
-        $process.StartInfo.WorkingDirectory = (Get-Location).ProviderPath
-        $process.StartInfo.UseShellExecute = $false
-        $process.StartInfo.RedirectStandardInput = $true
-        $process.StartInfo.RedirectStandardOutput = $true
-        $process.StartInfo.RedirectStandardError = $true
-        foreach ($argument in @('-NoProfile', '-Command', $Registration)) {
-            $process.StartInfo.ArgumentList.Add($argument)
-        }
-        if (-not $process.Start()) { throw 'Could not start the registered adapter command.' }
-        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-        $stderrTask = $process.StandardError.ReadToEndAsync()
-        $process.StandardInput.WriteLine($raw)
-        $process.StandardInput.Close()
-        $process.WaitForExit()
-        $stdout = $stdoutTask.GetAwaiter().GetResult()
-        $stderr = $stderrTask.GetAwaiter().GetResult()
-        if ($process.ExitCode -ne 0 -or $stderr.Trim() -or
-            $stdout.Trim() -cne $expected.Trim()) {
-            throw "Redirected-stdin adapter validation failed for $ScriptName/$($Payload['toolName']) (exit $($process.ExitCode)); no trial CLI was launched."
-        }
-    } finally {
-        $process.Dispose()
-    }
-}
 function ConvertTo-PowerShellLiteral([string] $Value) {
     return "'" + $Value.Replace("'", "''") + "'"
 }
@@ -212,12 +171,6 @@ if ($Action -eq 'Prepare') {
         throw 'Source does not contain the exact dedicated-cache write grant.'
     }
     $candidateRw = @($rw | Where-Object { (Normalize-Path $_) -ne $oldKey })
-    foreach ($path in $candidateRw) {
-        $key = Normalize-Path $path
-        if ($oldKey.StartsWith($key + '\') -or $key.StartsWith($oldKey + '\')) {
-            throw 'Another user write grant overlaps the legacy cache; hold rather than remove it.'
-        }
-    }
     $configurationFiles = @(Find-UvConfiguration (Join-Path $Root 'workspace'))
     if (((Get-Item -LiteralPath $hooksSource).Attributes -band [IO.FileAttributes]::ReparsePoint) -or
         @(Get-ChildItem -LiteralPath $hooksSource -Recurse -Force |
@@ -256,9 +209,8 @@ if ($Action -eq 'Prepare') {
     New-Item -ItemType Directory -Path $Root -ErrorAction Stop | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $Root 'workspace\evidence'), (Join-Path $Root 'code') |
         Out-Null
-    foreach ($file in @('Test-UvCacheSandbox.ps1', 'Trace-UvCacheHook.ps1')) {
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $Root 'code')
-    }
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UvCacheSandbox.ps1') `
+        -Destination (Join-Path $Root 'code')
     $manifest = [ordered]@{
         schema = 1; trialId = [guid]::NewGuid().ToString(); root = $Root
         workspace = (Join-Path $Root 'workspace'); pythonPath = $PythonPath
@@ -281,14 +233,12 @@ if ($Action -eq 'Prepare') {
         }
         Get-ChildItem -LiteralPath "$hooksSource\scripts" -Filter '*.py' -File |
             Copy-Item -Destination "$hooksPath\scripts"
-        (Get-Item -LiteralPath "$hooksPath\hooks.json" -Force).IsReadOnly = $false
         if ($variant -eq 'candidate') {
             (Get-Item -LiteralPath "$hooksPath\scripts\uv-enforcer.py" -Force).IsReadOnly = $false
             [IO.File]::WriteAllText("$hooksPath\scripts\uv-enforcer.py",
                 $uvSource.Replace($branch, ''), [Text.UTF8Encoding]::new($false))
         }
         $copy = $settings | ConvertTo-Json -Depth 40 | ConvertFrom-Json -AsHashtable
-        $copy['sandbox']['allowBypass'] = $false
         if ($variant -eq 'candidate') {
             $copy['sandbox']['userPolicy']['filesystem']['readwritePaths'] = $candidateRw
         }
@@ -297,43 +247,10 @@ if ($Action -eq 'Prepare') {
             @($ro + $homePath + (Join-Path $Root 'code') + $manifestPath +
                 $runtime['python_root'] | Select-Object -Unique)
         Write-Json "$homePath\settings.json" $copy
-        $hookCopy = $hooks | ConvertTo-Json -Depth 20 | ConvertFrom-Json -AsHashtable
-        foreach ($event in $hookCopy['hooks'].Keys) {
-            foreach ($hook in $hookCopy['hooks'][$event]) {
-                if ($hook['powershell'] -notmatch 'run-hook\.ps1.*?([\w-]+\.py)\s*$') {
-                    throw 'Unsupported hook registration; manual isolation review is required.'
-                }
-                $script = $Matches[1]
-                if ($event -eq 'preToolUse' -and $script -in @('copilot-guard.py', 'uv-enforcer.py')) {
-                    $hook['powershell'] = '& "' + (Join-Path $Root 'code\Trace-UvCacheHook.ps1') +
-                        '" -Launcher "' + "$hooksPath\run-hook.ps1" + '" -ScriptName "' + $script +
-                        '" -EvidencePath "' + "$evidencePath\hook-events.jsonl" + '"'
-                } else {
-                    $hook['powershell'] = '& "' + "$hooksPath\run-hook.ps1" + '" ' + $script
-                }
-                $hook['bash'] = '"' + "$hooksPath\run-hook.sh".Replace('\', '/') + '" ' + $script
-            }
-        }
-        $names = @($hookCopy['hooks']['preToolUse'] | ForEach-Object { $_['powershell'] })
+        $names = @($hooks['hooks']['preToolUse'] | ForEach-Object { $_['powershell'] })
         foreach ($required in @('copilot-guard.py', 'uv-enforcer.py')) {
             if (@($names | Where-Object { $_.Contains($required) }).Count -ne 1) {
                 throw 'Guard and uv enforcer must each be registered exactly once.'
-            }
-        }
-        Write-Json "$hooksPath\hooks.json" $hookCopy
-        foreach ($hook in $hookCopy['hooks']['preToolUse']) {
-            if ($hook['powershell'] -notmatch '-ScriptName "(copilot-guard\.py|uv-enforcer\.py)"') { continue }
-            $scriptName = $Matches[1]
-            $preparationEvidence = Join-Path $evidencePath 'preparation-hook-events.jsonl'
-            $registration = $hook['powershell'].Replace(
-                "$evidencePath\hook-events.jsonl", $preparationEvidence)
-            foreach ($payload in @(
-                @{ toolName = 'powershell'; toolArgs = @{ command = 'uv --version' } },
-                @{ toolName = 'powershell'; toolArgs = @{ command = 'python script.py' } },
-                @{ toolName = 'ask_user'; toolArgs = @{ question = 'Synthetic adapter check' } },
-                @{ toolName = 'apply_patch'; toolArgs = "*** Begin Patch`n*** Add File: adapter-check.txt`n+synthetic`n*** End Patch" }
-            )) {
-                Assert-AdapterInput $homePath $scriptName $registration $preparationEvidence $payload
             }
         }
         $prompt = $promptTemplate.Replace('<Root>', $Root).Replace('<Mode>', $variant)
@@ -364,7 +281,7 @@ if ($Action -eq 'Prepare') {
             $hashes[$file] = (Get-FileHash -LiteralPath "$hooksPath\scripts\$file" -Algorithm SHA256).Hash
         }
         $supportHashes = @{}
-        foreach ($file in @('allowed-files.txt', 'blocked-files.txt', 'ask-files.txt',
+        foreach ($file in @('hooks.json', 'allowed-files.txt', 'blocked-files.txt', 'ask-files.txt',
             'python-runtime.env', 'run-hook.ps1')) {
             $hash = (Get-FileHash -LiteralPath (Join-Path $hooksPath $file)).Hash
             if ($hash -ne (Get-FileHash -LiteralPath (Join-Path $hooksSource $file)).Hash) {
@@ -375,7 +292,6 @@ if ($Action -eq 'Prepare') {
         $manifest.modes[$variant] = @{
             home = $homePath; hookHashes = $hashes; supportHashes = $supportHashes
             configuredSandbox = (Select-Sandbox $copy['sandbox']); directPythonAndPipDenied = $true
-            adapterInputValidated = $true
         }
     }
     $sourceGuardHash = (Get-FileHash -LiteralPath "$hooksSource\scripts\copilot-guard.py").Hash
@@ -414,8 +330,9 @@ try {
     $configured = @(& copilot --no-auto-update config sandbox) -join "`n"
     if ($LASTEXITCODE -ne 0) { throw 'CLI did not load sandbox configuration from the trial home.' }
     $loaded = $configured | ConvertFrom-Json -AsHashtable
-    if ($loaded['enabled'] -ne $true -or $loaded['allowBypass'] -ne $false -or
-        $loaded['allowDevToolAccess'] -ne $true) { throw 'Loaded sandbox settings are not the trial settings.' }
+    if ($loaded['enabled'] -ne $true -or $loaded['allowDevToolAccess'] -ne $true) {
+        throw 'Loaded sandbox settings are not the trial settings.'
+    }
     $planned = $manifest['modes'][$Mode]['configuredSandbox']
     foreach ($flag in @('enabled', 'allowBypass', 'allowDevToolAccess',
         'addCurrentWorkingDirectory', 'sandboxMcpServers', 'sandboxLspServers')) {

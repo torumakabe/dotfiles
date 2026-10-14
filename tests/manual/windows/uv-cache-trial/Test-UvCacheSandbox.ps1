@@ -21,6 +21,7 @@ $result = [ordered]@{
     schema = 1; trialId = $manifest['trialId']; mode = $Mode; step = $Step
     invocationId = [guid]::NewGuid().ToString(); processId = $PID
     status = 'failed'; probes = @(); stage = 'preconditions'
+    runtimeSandboxAttribution = 'unverified'; removalDecision = 'pending'
 }
 function Normalize-Path([string] $Value) {
     $Value = [Environment]::ExpandEnvironmentVariables($Value).Replace('/', '\')
@@ -64,16 +65,19 @@ try {
             throw 'The copied Guard policy, launcher, or interpreter record changed.'
         }
     }
-    $proof = Get-Content -LiteralPath (Join-Path $evidence 'sandbox-observation.json') -Raw |
+    foreach ($file in @('copilot-guard.py', 'uv-enforcer.py')) {
+        $path = Join-Path $modeInfo['home'] "hooks\scripts\$file"
+        if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne
+            $modeInfo['hookHashes'][$file]) {
+            throw "The copied $file differs from the prepared trial."
+        }
+    }
+    $configured = Get-Content -LiteralPath (Join-Path $evidence 'cli-configured-sandbox.json') -Raw |
         ConvertFrom-Json -AsHashtable
-    foreach ($flag in @('runtimeEnabledObserved', 'bypassDisabledObserved',
-        'devToolAccessObserved', 'isolatedHomeObserved', 'policyReviewed')) {
-        if ($proof[$flag] -ne $true) { throw "Missing runtime evidence: $flag" }
+    if ($configured['enabled'] -ne $true -or $configured['allowDevToolAccess'] -ne $true) {
+        throw 'The CLI did not load the prepared sandbox and developer-tool settings.'
     }
-    if (-not $proof['backendObserved'] -or -not $proof['observationReference']) {
-        throw 'Record the actual native Windows backend and the observation reference.'
-    }
-    $result.runtimeObservation = $proof
+    $result.cliSandboxSettingsLoaded = $true
     if ((Normalize-Path (Get-Location).Path) -ne (Normalize-Path $manifest['workspace'])) {
         throw 'Run from the empty trial workspace, not the repository.'
     }
@@ -93,27 +97,6 @@ try {
             throw "Explicit cache configuration detected: $path"
         }
     }
-    $trace = @(Get-Content -LiteralPath (Join-Path $evidence 'hook-events.jsonl') |
-        ForEach-Object { $_ | ConvertFrom-Json -AsHashtable } |
-        Where-Object { $_['step'] -eq $Step })
-    $guard = @($trace | Where-Object { $_['script'] -eq 'copilot-guard.py' })[-1]
-    $uvHook = @($trace | Where-Object { $_['script'] -eq 'uv-enforcer.py' })[-1]
-    foreach ($event in @($guard, $uvHook)) {
-        if ($event['scriptSHA256'] -ne $manifest['modes'][$Mode]['hookHashes'][$event['script']] -or
-            $event['exitCode'] -ne 0 -or $event['permissionDecision'] -eq 'deny') {
-            throw 'The expected unchanged hook did not run successfully.'
-        }
-    }
-    if ($guard['commandSHA256'] -ne $uvHook['commandSHA256']) {
-        throw 'Guard and uv evidence refer to different commands.'
-    }
-    if ($Mode -eq 'candidate' -and ($uvHook['modifiedArgs'] -or $uvHook['cachePrefixPresent'])) {
-        throw 'Candidate command was rewritten.'
-    }
-    if ($Mode -eq 'control' -and -not $uvHook['cachePrefixPresent']) {
-        throw 'Control did not inject the existing cache helper.'
-    }
-    $result.hookEvidence = @($guard, $uvHook)
     $result.stage = 'cache-discovery'
     $result.uvVersion = Run-Native 'uv-version' 'uv' @('--version')
     $cache = Run-Native 'uv-cache-dir' 'uv' @('cache', 'dir')
@@ -127,11 +110,12 @@ try {
     if ($Mode -eq 'control' -and (Normalize-Path $cache) -ne
         (Normalize-Path $manifest['oldCachePath'])) { throw 'Control is not using the dedicated cache.' }
     if ($Mode -eq 'candidate') {
-        if (Is-Under $cache $manifest['workspace']) { throw 'Candidate fell back to the working directory.' }
-        if (Is-Under $cache $manifest['oldCachePath']) { throw 'Candidate still uses the legacy dedicated cache.' }
-        foreach ($grant in $manifest['modes'][$Mode]['configuredSandbox']['userPolicy']['filesystem']['readwritePaths']) {
-            if (Is-Under $cache $grant) { throw 'Candidate cache is covered by an existing user write grant; attribution is pending.' }
-        }
+        $result.cacheUnderWorkspace = Is-Under $cache $manifest['workspace']
+        $result.cacheUnderLegacyGrant = Is-Under $cache $manifest['oldCachePath']
+        $result.cacheCoveredByConfiguredWriteGrant = @(
+            $modeInfo['configuredSandbox']['userPolicy']['filesystem']['readwritePaths'] |
+            Where-Object { Is-Under $cache $_ }
+        ).Count -gt 0
         $result.cacheUnderTemp = Is-Under $cache $env:TEMP
     }
     $owned = Join-Path $cache ('.dotfiles-uv-trial-' + $manifest['trialId'] + '-' + $Mode)
@@ -187,7 +171,8 @@ print(json.dumps({"package":"idna","version":idna.__version__,"pythonVersion":sy
     $result.package = $package
     $result.status = 'technical-success'
     $result.stage = 'complete'
-    $result.decision = 'Requires two separate tool calls and effective-policy review; not removal approval.'
+    $result.runtimeSandboxAttribution = 'unverified'
+    $result.removalDecision = 'pending-runtime-sandbox-attribution'
 } catch {
     $result.probes += @{
         name = $result.stage; status = 'failed'; exitCode = 1
