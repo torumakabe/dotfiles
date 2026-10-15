@@ -12,8 +12,6 @@ import tempfile
 import uuid
 from pathlib import Path
 
-import idna
-
 
 class ProbeFailure(Exception):
     def __init__(self, stage: str, category: str) -> None:
@@ -86,6 +84,21 @@ def read_uv_cache_dir() -> Path:
         raise ProbeFailure("cache-discovery", "invalid-cache-path") from error
 
 
+def cache_environment_evidence(
+    cache: Path, preflight_cache_environment: str | None
+) -> dict:
+    payload_cache_environment = os.environ.get("UV_CACHE_DIR")
+    return {
+        "payloadUvCacheEnvironment": payload_cache_environment,
+        "preflightUvCacheEnvironment": preflight_cache_environment,
+        "uvCacheEnvironmentMatchesReportedDir": (
+            path_key(payload_cache_environment) == path_key(cache)
+            if payload_cache_environment
+            else False
+        ),
+    }
+
+
 def verify_trial(root: Path, mode: str) -> tuple[dict, dict, dict, Path]:
     trial = load_json(root / "trial.json")
     if path_key(trial.get("workspace", "")) != path_key(root):
@@ -145,7 +158,6 @@ def run(args: argparse.Namespace) -> dict:
     result["uvVersion"] = resolution["toolVersion"]
     result["uvExecutable"] = resolution["toolPath"]
     result["osBuild"] = trial["osBuild"]
-    result["uvCacheEnvironment"] = resolution.get("uvCacheEnvironment")
     result["runtimeCachePathBasisMatchesCliVersion"] = (
         trial["runtimeCachePathBasisCliVersion"] == "1.0.98-0"
         and re.search(
@@ -165,9 +177,10 @@ def run(args: argparse.Namespace) -> dict:
     result["runtimeCacheMatchesReportedDir"] = (
         path_key(cache) == path_key(trial["runtimeUvCachePath"])
     )
-    environment_cache = resolution.get("uvCacheEnvironment")
-    result["uvCacheEnvironmentMatchesReportedDir"] = (
-        path_key(environment_cache) == path_key(cache) if environment_cache else False
+    result.update(
+        cache_environment_evidence(
+            cache, resolution.get("preflightUvCacheEnvironment")
+        )
     )
     result["controlCacheMatchesLegacyGrant"] = (
         path_key(cache) == path_key(trial["oldCachePath"])
@@ -245,6 +258,10 @@ def run(args: argparse.Namespace) -> dict:
     )
 
     result["stage"] = "uv-package-run"
+    try:
+        import idna
+    except ModuleNotFoundError as error:
+        raise ProbeFailure("uv-package-run", "idna-not-installed") from error
     package = {
         "package": "idna",
         "version": idna.__version__,

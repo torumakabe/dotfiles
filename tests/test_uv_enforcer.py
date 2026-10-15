@@ -11,8 +11,27 @@ SCRIPT_PATH = (
     REPO_ROOT
     / "home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py"
 )
+TRIAL_PROBE_PATH = (
+    REPO_ROOT
+    / "tests/manual/windows/uv-cache-trial/Test-UvCacheSandbox.py"
+)
 
 uve = load_script("uv_enforcer", SCRIPT_PATH)
+uv_trial_probe = load_script("uv_cache_trial_probe", TRIAL_PROBE_PATH)
+
+
+class UvCacheTrialProbeTests(unittest.TestCase):
+    def test_cache_attribution_uses_payload_environment_not_preflight(self) -> None:
+        payload_cache = pathlib.Path.cwd() / "payload-cache"
+        preflight_cache = pathlib.Path.cwd() / "preflight-cache"
+        with scoped_environ({"UV_CACHE_DIR": str(payload_cache)}):
+            evidence = uv_trial_probe.cache_environment_evidence(
+                payload_cache, str(preflight_cache)
+            )
+
+        self.assertEqual(evidence["preflightUvCacheEnvironment"], str(preflight_cache))
+        self.assertEqual(evidence["payloadUvCacheEnvironment"], str(payload_cache))
+        self.assertTrue(evidence["uvCacheEnvironmentMatchesReportedDir"])
 
 
 class CommandPolicyTests(unittest.TestCase):

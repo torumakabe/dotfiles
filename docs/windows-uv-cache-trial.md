@@ -134,14 +134,14 @@ control CLI を終了して通常 terminal に戻る。同じ `$trialRoot` の�
 
 | ファイル | 内容 |
 |---|---|
-| `workspace\evidence\<mode>\uv-resolution.json` | tool 内 `uv` の種別、パス、版とホスト値の比較 |
+| `workspace\evidence\<mode>\uv-resolution.json` | tool 内 `uv` の種別、パス、版とホスト値の比較、preflight時の `UV_CACHE_DIR` |
 | `workspace\evidence\<mode>\launch.json` | 隔離 CLI が読み込んだ設定と起動 mode |
 | `workspace\evidence\<mode>\step-1.json` | cache path、marker 作成、rename、online `uv run` の結果 |
 | `workspace\evidence\<mode>\step-2.json` | 別 tool call からの同一 cache / marker 確認、offline `uv run` の結果 |
 
 `uv run` が payload を起動する前に失敗した場合、step JSON は作られない。tool の終了結果を失敗証拠として扱い、別の実行方法で再試行しない。payload 起動後の失敗は安全な stage / error code だけを step JSON に記録する。stderr 全文、認証情報、環境変数一覧は共有しない。既存 cache や失敗結果を削除、上書きしない。
 
-`technical-success` は payload の測定が成功したことだけを示す。candidate の成功を上流 sandbox cache 機能へ帰属するには、対象 CLI が `1.0.98-0` で、報告 cache がその版の private `sandbox\packages\uv` と一致し、tool 実行時の `UV_CACHE_DIR` もその cache を指し、親 terminal からの同変数の既存指定がなく、cache が workspace、旧専用 grant、既存の他の user write grant、TEMP のいずれにも含まれないことが必要である。これらの記録は実行中 sandbox が有効だったこと自体の独立証明ではない。根拠がそろわない場合は判定を保留する。runtime backend 全体の手入力を測定開始条件にはしない。CLI が別版でも cache 動作は測るが、その版の runtime source を別途照合するまでは帰属しない。
+`technical-success` は payload の測定が成功したことだけを示す。各 `step-*.json` の `payloadUvCacheEnvironment` は、その測定を実行した Python process 自身の環境から読み取る。`preflightUvCacheEnvironment` は別の PowerShell tool call の値として別項目に残し、cache の帰属判定には使わない。candidate の成功を上流 sandbox cache 機能へ帰属するには、対象 CLI が `1.0.98-0` で、報告 cache がその版の private `sandbox\packages\uv` と一致し、payload の `UV_CACHE_DIR` もその cache を指し、親 terminal からの同変数の既存指定がなく、cache が workspace、旧専用 grant、既存の他の user write grant、TEMP のいずれにも含まれないことが必要である。これらの記録は実行中 sandbox が有効だったこと自体の独立証明ではない。根拠がそろわない場合は判定を保留する。runtime backend 全体の手入力を測定開始条件にはしない。CLI が別版でも cache 動作は測るが、その版の runtime source を別途照合するまでは帰属しない。
 
 | 観測結果 | 判定 |
 |---|---|
@@ -195,7 +195,7 @@ $record = [ordered]@{
     toolPath = $toolPath
     toolVersion = $toolVersion
     toolExitCode = $toolExitCode
-    uvCacheEnvironment = $env:UV_CACHE_DIR
+    preflightUvCacheEnvironment = $env:UV_CACHE_DIR
     matched = ($toolType -eq 'Application' -and $toolExitCode -eq 0 -and
         $pathMatches -and $toolVersion -ceq $hostUv.version)
 }
