@@ -24,14 +24,15 @@ control の hook は通常どおり `modifiedArgs` で cache prefix を自動付
 
 ## 1. 検証 branch を既存 checkout で取得する
 
-Windows native PowerShell 7.3 以降の通常 terminal を開く。chezmoi source directory を使う場合は、次のコードを実行する前に `Set-Location -LiteralPath (chezmoi source-path)` を実行する。別の既存 checkout を使う場合は、コード冒頭の `Set-Location` に checkout の実パスを指定する。未コミット変更や未追跡ファイルがある checkout では停止する。コードは変更の stash、破棄、commit をしない。
+Windows native PowerShell 7.3 以降の通常 terminal を開く。chezmoi source directory を使う場合は、次のコードを実行する前に `Set-Location -LiteralPath (chezmoi source-path)` を実行する。別の既存 checkout を使う場合も、先に `Set-Location` でその checkout 内へ移動する。未コミット変更や未追跡ファイルがある checkout では停止する。コードは変更の stash、破棄、commit をしない。
 
 ```powershell
 . {
+    $ErrorActionPreference = 'Stop'
     if (-not $IsWindows -or $PSVersionTable.PSVersion -lt [version]'7.3') {
         throw 'Use an ordinary native Windows PowerShell 7.3 or later terminal.'
     }
-    Set-Location -LiteralPath (chezmoi source-path) -ErrorAction Stop
+    Get-Command git -ErrorAction Stop | Out-Null
     $repoRoot = (& git rev-parse --show-toplevel | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $repoRoot) { throw 'Current directory is not inside a Git checkout.' }
     $originUrl = (& git -C $repoRoot remote get-url origin | Out-String).Trim()
@@ -39,14 +40,18 @@ Windows native PowerShell 7.3 以降の通常 terminal を開く。chezmoi sourc
         throw 'This is not the expected torumakabe/dotfiles checkout.'
     }
     Set-Location -LiteralPath $repoRoot -ErrorAction Stop
-    if (@(& git status --porcelain).Count) {
+    $checkoutChanges = @(& git status --porcelain)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the checkout.' }
+    if ($checkoutChanges.Count) {
         git status --short
         throw 'Save existing checkout changes before switching branches.'
     }
     $trialBranch = 'validation/windows-uv-cache-trial'
     & git fetch origin "refs/heads/${trialBranch}:refs/remotes/origin/${trialBranch}"
     if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the validation branch.' }
-    if (@(& git branch --list $trialBranch).Count) {
+    $localTrialBranch = @(& git branch --list $trialBranch)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not inspect the local validation branch.' }
+    if ($localTrialBranch.Count) {
         & git merge-base --is-ancestor $trialBranch "origin/$trialBranch"
         if ($LASTEXITCODE -ne 0) { throw 'Local validation branch has separate commits; review it without resetting.' }
         & git switch $trialBranch
@@ -58,6 +63,7 @@ Windows native PowerShell 7.3 以降の通常 terminal を開く。chezmoi sourc
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the local validation branch.' }
     }
     $repoRoot = (& git rev-parse --show-toplevel | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $repoRoot) { throw 'Could not resolve the checkout root.' }
     Set-Location -LiteralPath $repoRoot -ErrorAction Stop
     $prepareScript = Join-Path $repoRoot 'tests\manual\windows\uv-cache-trial\Prepare-UvCacheTrial.ps1'
     if (-not (Test-Path -LiteralPath $prepareScript -PathType Leaf)) {
@@ -66,7 +72,7 @@ Windows native PowerShell 7.3 以降の通常 terminal を開く。chezmoi sourc
 }
 ```
 
-chezmoi source path が checkout 外を指す場合は、branch を切り替えた後の checkout root に移動してから準備する。以降の操作は同じ通常 terminal で行う。CLI、mise 管理の `uv`、dotfiles の Copilot hook runtime が利用可能であることが前提となる。
+各 block は dotfiles checkout 内の通常 terminal で実行する。CLI、mise 管理の `uv`、dotfiles の Copilot hook runtime が利用可能であることが前提となる。
 
 ## 2. control と candidate を準備する
 
@@ -74,6 +80,11 @@ chezmoi source path が checkout 外を指す場合は、branch を切り替え�
 
 ```powershell
 . {
+    $ErrorActionPreference = 'Stop'
+    if (-not $IsWindows -or $PSVersionTable.PSVersion -lt [version]'7.3') {
+        throw 'Use an ordinary native Windows PowerShell 7.3 or later terminal.'
+    }
+    Get-Command git -ErrorAction Stop | Out-Null
     $repoRoot = (& git rev-parse --show-toplevel | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $repoRoot) { throw 'Start inside the existing dotfiles checkout.' }
     Set-Location -LiteralPath $repoRoot -ErrorAction Stop
@@ -86,7 +97,9 @@ chezmoi source path が checkout 外を指す場合は、branch を切り替え�
         New-Item -ItemType Directory -Path $trialParent -ErrorAction Stop | Out-Null
     }
     $trialRoot = Join-Path $trialParent ('trial-' + [guid]::NewGuid().ToString('N'))
-    $pwshPath = (Get-Command pwsh.exe -ErrorAction Stop).Source
+    $pwshPath = (Get-Command pwsh.exe -CommandType Application -ErrorAction Stop).Source
+    if (-not (Test-Path -LiteralPath $pwshPath -PathType Leaf)) { throw 'PowerShell executable is missing.' }
+    $LASTEXITCODE = $null
     & $pwshPath -NoProfile -File $prepareScript -Action Prepare `
         -Root $trialRoot -SourceCopilotHome "$HOME\.copilot"
     if ($LASTEXITCODE -ne 0) { throw 'Trial preparation failed; do not reuse its partial directory.' }
@@ -98,13 +111,40 @@ chezmoi source path が checkout 外を指す場合は、branch を切り替え�
 
 ## 3. control を実行する
 
-準備時と同じ通常 terminal で、次のコード全体を貼り付ける。生成済み control prompt を clipboard に入れてから隔離 CLI を起動する。clipboard の現在の内容は置き換わる。起動後、その prompt を control CLI に貼り付ける。
+dotfiles checkout 内の通常 terminal で、次のコード全体を貼り付ける。PowerShell と準備スクリプトのパスはこの block 内で解決する。生成済み control prompt を clipboard に入れてから隔離 CLI を起動する。clipboard の現在の内容は置き換わる。起動後、その prompt を control CLI に貼り付ける。
+
+既に準備が成功した場合、手順2を再実行する必要はない。terminal を開き直して `$trialRoot` が未設定になった場合は、通常 terminal で `$trialRoot = Read-Host '準備時に出力された既存 trial root の絶対パスを貼り付けてください'` を実行し、準備時に記録した exact path を入力する。複数の trial directory から最新のものを自動選択しない。以下の block は未設定または準備済みファイルがない root を検出すると、CLI を起動せず停止する。
 
 ```powershell
 . {
+    $ErrorActionPreference = 'Stop'
+    if (-not $IsWindows -or $PSVersionTable.PSVersion -lt [version]'7.3') {
+        throw 'Use an ordinary native Windows PowerShell 7.3 or later terminal.'
+    }
+    Get-Command git -ErrorAction Stop | Out-Null
+    $repoRoot = (& git rev-parse --show-toplevel | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $repoRoot) { throw 'Start inside the existing dotfiles checkout.' }
+    $prepareScript = Join-Path $repoRoot 'tests\manual\windows\uv-cache-trial\Prepare-UvCacheTrial.ps1'
+    if (-not (Test-Path -LiteralPath $prepareScript -PathType Leaf)) { throw 'Preparation script is missing.' }
+    $pwshPath = (Get-Command pwsh.exe -CommandType Application -ErrorAction Stop).Source
+    if (-not (Test-Path -LiteralPath $pwshPath -PathType Leaf)) { throw 'PowerShell executable is missing.' }
+    $trialRootValue = Get-Variable -Name trialRoot -ValueOnly -ErrorAction SilentlyContinue
+    if ($trialRootValue -isnot [string] -or [string]::IsNullOrWhiteSpace($trialRootValue) -or
+        -not [IO.Path]::IsPathFullyQualified($trialRootValue)) {
+        throw 'trialRoot is unset or invalid. Restore the exact prepared trial path; do not prepare again.'
+    }
+    $trialRoot = [IO.Path]::GetFullPath($trialRootValue)
+    if (-not (Test-Path -LiteralPath (Join-Path $trialRoot 'workspace\trial.json') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $trialRoot 'control-prompt.txt') -PathType Leaf)) {
+        throw 'The selected root does not contain the prepared control trial.'
+    }
+    $LASTEXITCODE = $null
     $trialPrompt = @(& $pwshPath -NoProfile -File $prepareScript -Action Prompt -Root $trialRoot -Mode control)
-    if ($LASTEXITCODE -ne 0) { throw 'Could not read the prepared control prompt.' }
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($trialPrompt -join "`n")) {
+        throw 'Could not read the prepared control prompt.'
+    }
     ($trialPrompt -join "`n") | Set-Clipboard -ErrorAction Stop
+    $LASTEXITCODE = $null
     & $pwshPath -NoProfile -File $prepareScript -Action Launch -Root $trialRoot -Mode control
     if ($LASTEXITCODE -ne 0) { throw 'Control CLI exited with an error.' }
 }
@@ -116,13 +156,38 @@ chezmoi source path が checkout 外を指す場合は、branch を切り替え�
 
 ## 4. candidate を実行する
 
-control CLI を終了して通常 terminal に戻る。同じ `$trialRoot` のまま、candidate を起動する。生成済み candidate prompt をそのまま貼り付ける。
+control CLI を終了して dotfiles checkout 内の通常 terminal に戻る。同じ `$trialRoot` のまま、candidate を起動する。この block も PowerShell と準備スクリプトのパスを解決する。別 terminal では手順3の説明に従って同じ trial root の exact path を復元する。生成済み candidate prompt をそのまま貼り付ける。
 
 ```powershell
 . {
+    $ErrorActionPreference = 'Stop'
+    if (-not $IsWindows -or $PSVersionTable.PSVersion -lt [version]'7.3') {
+        throw 'Use an ordinary native Windows PowerShell 7.3 or later terminal.'
+    }
+    Get-Command git -ErrorAction Stop | Out-Null
+    $repoRoot = (& git rev-parse --show-toplevel | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $repoRoot) { throw 'Start inside the existing dotfiles checkout.' }
+    $prepareScript = Join-Path $repoRoot 'tests\manual\windows\uv-cache-trial\Prepare-UvCacheTrial.ps1'
+    if (-not (Test-Path -LiteralPath $prepareScript -PathType Leaf)) { throw 'Preparation script is missing.' }
+    $pwshPath = (Get-Command pwsh.exe -CommandType Application -ErrorAction Stop).Source
+    if (-not (Test-Path -LiteralPath $pwshPath -PathType Leaf)) { throw 'PowerShell executable is missing.' }
+    $trialRootValue = Get-Variable -Name trialRoot -ValueOnly -ErrorAction SilentlyContinue
+    if ($trialRootValue -isnot [string] -or [string]::IsNullOrWhiteSpace($trialRootValue) -or
+        -not [IO.Path]::IsPathFullyQualified($trialRootValue)) {
+        throw 'trialRoot is unset or invalid. Restore the exact prepared trial path; do not prepare again.'
+    }
+    $trialRoot = [IO.Path]::GetFullPath($trialRootValue)
+    if (-not (Test-Path -LiteralPath (Join-Path $trialRoot 'workspace\trial.json') -PathType Leaf) -or
+        -not (Test-Path -LiteralPath (Join-Path $trialRoot 'candidate-prompt.txt') -PathType Leaf)) {
+        throw 'The selected root does not contain the prepared candidate trial.'
+    }
+    $LASTEXITCODE = $null
     $trialPrompt = @(& $pwshPath -NoProfile -File $prepareScript -Action Prompt -Root $trialRoot -Mode candidate)
-    if ($LASTEXITCODE -ne 0) { throw 'Could not read the prepared candidate prompt.' }
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($trialPrompt -join "`n")) {
+        throw 'Could not read the prepared candidate prompt.'
+    }
     ($trialPrompt -join "`n") | Set-Clipboard -ErrorAction Stop
+    $LASTEXITCODE = $null
     & $pwshPath -NoProfile -File $prepareScript -Action Launch -Root $trialRoot -Mode candidate
     if ($LASTEXITCODE -ne 0) { throw 'Candidate CLI exited with an error.' }
 }
