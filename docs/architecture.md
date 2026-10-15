@@ -120,6 +120,8 @@ Dock / Spotlight / GitHub Desktop から起動された子プロセスは launch
 
 mise は POSIX では shims と `mise activate` を併用する。Windows の対話 PowerShell は `mise activate pwsh` を使うが、非対話プロセスは User PATH に同期した実体ディレクトリからコマンドを起動する。`run_onchange_after_15` は前回同期したディレクトリを state file で追跡し、更新時に旧 entry と `%LOCALAPPDATA%\mise\shims` だけを除去する。利用者が追加した他の PATH entry は保持する。
 
+Windows の mise 設定は `activate_shims = false` とし、対話 PowerShell の activation が後続プロセスへ shim を追加しないようにする。mise は導入済みツールの実体ディレクトリを PATH に追加するため、通常の uv と Node/npm コマンドは実体から起動できる。未導入または lazy install のツールを shim 経由で初回起動する動作は使わない。
+
 Windows の非対話プロセスで選ばれる版は、同期時のグローバル mise 設定に固定される。プロジェクト固有の `mise.toml` を反映する操作は、対話 PowerShell の activation または明示的な `mise exec -- <command>` を使う。同期後の User PATH が30,000文字を超える場合は、環境変数の切り詰めを避けるため apply を失敗させる。
 
 ### TypeScript language server の依存配置

@@ -85,6 +85,8 @@ POSIX では PATH 上の uv を使う。Windows では PATH 上の `uv.exe`、`m
 
 mise のデータディレクトリと実体ディレクトリへの読み取り許可は、通常の shell tool が mise 管理コマンドを起動するために維持する。Windows の非対話プロセスは `mise bin-paths` から同期した User PATH を使い、shim 実行時の config、state、downloads を sandbox へ許可しない。command hook 自体は mise と uv に依存しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
 
+Windows では `home/dot_config/mise/config.toml.tmpl` が `activate_shims = false` を設定し、PowerShell activation が shim を PATH に追加しない。mise が PATH に追加する導入済みツールの実体ディレクトリは維持する。CLI 1.0.99-0 と mise 2026.10.9 では、一時的に `MISE_ACTIVATE_SHIMS=false` を設定した子 PowerShellから Copilot を起動し、sandbox を有効にしたまま Azure MCP が初期化され、sandbox PowerShell tool の `uv --version` が uv 0.13.0 の実体で成功した。User PATHの手動編集は行っていない。この試験は一時環境変数を使ったため、chezmoi適用後に通常の新規shellから起動する確認は別途必要である。
+
 ### Azure skills telemetry hook
 
 `microsoft/azure-skills` の telemetry hook は plugin script 内から `npx -y @azure/mcp@latest` を起動する。Copilot の `allowDevToolAccess` は直接実行された Node/npm ツールに `.npmrc` の読み取り許可を付与するが、外側の hook command を基準に developer-tool scope が選ばれるため、script 内の間接起動された `npx` には Node grant が含まれず、enterprise registry を指定する `.npmrc` を読めない場合がある（[github/copilot-agent-runtime#25355](https://github.com/github/copilot-agent-runtime/issues/25355)）。

@@ -158,7 +158,7 @@ uv --offline --directory / --project / cache dir
 
 過去の設定にある `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` grant と `COPILOT_DOTFILES_UV_CACHE_DIR` は、設定同期が既定旧 path と完全一致する場合だけ除去する。専用 cache directory の実体は削除しない。別の環境変数値や他の filesystem grants は保持する。
 
-Windows の PowerShell tool で `uv is not a valid shim` や mise の purgatory 警告が出る場合は、User PATH に mise shim が残っているか、`mise bin-paths` の実体同期が行われていない。Copilot CLI を終了して `chezmoi apply` を再実行し、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH の先頭を確認する。shim を許可するために mise の config、state、downloads を sandbox へ追加しない。
+Windows の対話 PowerShell または sandboxed Azure MCP が `uv is not a valid shim` / `npx is not a valid shim` を報告する場合は、mise shim が shell の継承 PATH に残っている可能性がある。`Get-Command uv,npx,node -All` で選択元を確認し、`home/dot_config/mise/config.toml.tmpl` から生成された mise 設定に `activate_shims = false` があることを確認する。設定を `chezmoi apply` で配布してから、新しい PowerShell と Copilot CLI を起動する。mise の activation はこの設定で既存 shim も PATH から除き、導入済みツールの実体ディレクトリを維持する。User PATH の実体同期が欠けている場合に限り、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH を確認する。mise の config、state、downloads を sandbox へ追加して shim 解決を回避しない。
 
 hook launcher が `missing .../python-runtime.env`、`recorded interpreter is not a regular file`、`python must live under ...` を報告する場合は、Copilot CLI を終了して `chezmoi apply` を再実行する。適用時に uv managed Python 3.14 を provision し、runtime env と `readonlyPaths` を更新してから launcher のスモークテストを実行する。
 
