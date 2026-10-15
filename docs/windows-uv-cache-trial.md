@@ -111,7 +111,7 @@ Windows native PowerShell 7.3 以降の通常 terminal を開く。chezmoi sourc
 
 ## 3. control を実行する
 
-dotfiles checkout 内の通常 terminal で、次のコード全体を貼り付ける。PowerShell と準備スクリプトのパスはこの block 内で解決する。生成済み control prompt を clipboard に入れてから隔離 CLI を起動する。clipboard の現在の内容は置き換わる。起動後、その prompt を control CLI に貼り付ける。
+dotfiles checkout 内の通常 terminal で、次のコード全体を貼り付ける。PowerShell と準備スクリプトのパスはこの block 内で解決する。生成済み control prompt を clipboard に入れてから隔離 CLI を起動するため、clipboard の現在の内容は置き換わる。
 
 既に準備が成功した場合、手順2を再実行する必要はない。terminal を開き直して `$trialRoot` が未設定になった場合は、通常 terminal で `$trialRoot = Read-Host '準備時に出力された既存 trial root の絶対パスを貼り付けてください'` を実行し、準備時に記録した exact path を入力する。複数の trial directory から最新のものを自動選択しない。以下の block は未設定または準備済みファイルがない root を検出すると、CLI を起動せず停止する。
 
@@ -150,13 +150,15 @@ dotfiles checkout 内の通常 terminal で、次のコード全体を貼り付�
 }
 ```
 
+CLI が起動して入力欄が表示されたら、利用者が Ctrl+V でコピー済み prompt を貼り付け、Enter で送信する。
+
 生成された prompt はまず Copilot PowerShell tool 内で `Get-Command uv` と通常の `uv --version` を実行する。ホストの記録と一致し、tool 内 `uv` が Application として解決された場合だけ測定へ進む。一致しない場合はその時点で停止し、絶対パス、別 command、PATH 変更を試さない。
 
 測定は direct `uv run` で行う。Step 1 が成功した場合に限り、prompt にある Step 2 を別の PowerShell tool call で実行する。`uv run` が失敗した場合、準備済み command を別構文に変えたり、環境変数を追加したりしない。control の cache prefix は hook が自動付加するため、tool 要求に手入力しない。
 
 ## 4. candidate を実行する
 
-control CLI を終了して dotfiles checkout 内の通常 terminal に戻る。同じ `$trialRoot` のまま、candidate を起動する。この block も PowerShell と準備スクリプトのパスを解決する。別 terminal では手順3の説明に従って同じ trial root の exact path を復元する。生成済み candidate prompt をそのまま貼り付ける。
+control CLI を終了して dotfiles checkout 内の通常 terminal に戻る。同じ `$trialRoot` のまま、candidate を起動する。この block も PowerShell と準備スクリプトのパスを解決する。別 terminal では手順3の説明に従って同じ trial root の exact path を復元する。
 
 ```powershell
 . {
@@ -192,6 +194,8 @@ control CLI を終了して dotfiles checkout 内の通常 terminal に戻る。
     if ($LASTEXITCODE -ne 0) { throw 'Candidate CLI exited with an error.' }
 }
 ```
+
+CLI が起動して入力欄が表示されたら、利用者が Ctrl+V でコピー済み prompt を貼り付け、Enter で送信する。
 
 ## 5. 結果を判定する
 
