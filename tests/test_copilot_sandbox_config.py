@@ -173,22 +173,32 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
     def test_tool_runtime_readonly_grants_are_narrow(self) -> None:
         """恒久: mise、uv 実体と必要な設定ファイルへの read-only grant。
 
-        uv の設定ディレクトリは grant せず、Windows では uv.toml だけを加える。
+        uv の設定ディレクトリは grant せず、各 OS で uv.toml だけを加える。
         """
         for expected in ("mise_data_dir", "readonly_grants"):
             self.assertIn(expected, self.posix)
         for expected in ("$miseDataDir", "$miseExe", "$uvExe", "Get-ResolvedPathTarget"):
             self.assertIn(expected, self.powershell)
-        for script in (self.posix, self.powershell):
-            self.assertNotIn(".config/uv", script)
         self.assertIn("reduce $readonly_grants[] as $path", self.posix)
         self.assertIn("Add-ReadonlyDirectoryAndTarget", self.powershell)
 
-    def test_windows_uv_config_grant_is_one_readonly_file_and_idempotent(self) -> None:
+    def test_uv_config_grants_are_one_readonly_file_and_idempotent(self) -> None:
+        self.assertIn('uv_config_home="${XDG_CONFIG_HOME:-}"', self.posix)
+        self.assertIn('if [[ "${uv_config_home}" != /* ]]; then', self.posix)
+        self.assertIn('[[ "${HOME:-}" = /* ]] ||', self.posix)
+        self.assertIn('uv_config_home="${HOME%/}/.config"', self.posix)
+        self.assertIn(
+            'uv_config_path="${uv_config_home%/}/uv/uv.toml"',
+            self.posix,
+        )
+        self.assertIn('add_readonly_grant "${uv_config_path}"', self.posix)
+        self.assertNotIn('add_directory_grant "${uv_config_path}"', self.posix)
+        self.assertNotIn('add_readonly_grant "${uv_config_home}"', self.posix)
+        self.assertNotIn('[[ -f "${uv_config_path}" ]]', self.posix)
+
         self.assertTrue(
             self.powershell.startswith('{{- if eq .chezmoi.os "windows" -}}')
         )
-        self.assertNotIn("uv.toml", self.posix)
         self.assertIn(
             "$uvConfigPath = Join-Path $env:APPDATA 'uv\\uv.toml'",
             self.powershell,

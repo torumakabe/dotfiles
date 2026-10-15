@@ -51,6 +51,7 @@
 | [036](036-windows-uv-default-sandbox-cache.md) | Windows Copilot sandbox は標準 uv cache を使う | Accepted |
 | [037](037-windows-mise-activation-without-shims.md) | Windows の mise activation は shim を追加しない | Accepted |
 | [038](038-windows-uv-config-readonly-grant.md) | Windows sandbox で uv.toml だけを読み取り専用にする | Accepted |
+| [039](039-macos-linux-uv-config-readonly-grant.md) | macOS/Linux sandbox で uv.toml だけを読み取り専用にする | Accepted |
 
 ## テンプレート
 

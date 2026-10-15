@@ -2,7 +2,7 @@
 #!/usr/bin/env bash
 # Copilot CLI local sandbox 設定 (Linux/macOS)
 #
-# Copilot sandbox policy version: 13
+# Copilot sandbox policy version: 14
 
 set -euo pipefail
 umask 077
@@ -51,6 +51,15 @@ add_directory_grant() {
     fi
   fi
 }
+
+uv_config_home="${XDG_CONFIG_HOME:-}"
+if [[ "${uv_config_home}" != /* ]]; then
+  [[ "${HOME:-}" = /* ]] ||
+    fail "HOME must be an absolute path to determine the uv config file."
+  uv_config_home="${HOME%/}/.config"
+fi
+uv_config_path="${uv_config_home%/}/uv/uv.toml"
+add_readonly_grant "${uv_config_path}"
 
 copilot_home="${COPILOT_HOME:-${HOME}/.copilot}"
 hooks_dir="${HOME}/.copilot/hooks"

@@ -14,7 +14,7 @@ ADR-015 は Copilot CLI の shell command に対するネットワーク制御�
 
 利用者は Copilot CLI 組み込みの `/sandbox disable` で `sandbox.enabled=false` を持続化できる。`home/run_onchange_after_35-configure-copilot-sandbox.{sh,ps1}.tmpl` は desired template を適用する前に既存の `sandbox.enabled` を検査し、値が boolean であれば他の repo-managed な sandbox key をマージした後にその値を復元する。既存の key が欠落していれば true を採用し、null や非 boolean であれば黙って上書きせず chezmoi apply を明示的なエラーで止める。この復元により、`/sandbox disable` の効果は `/sandbox enable` を実行するまで、将来の chezmoi apply や template 更新を跨いで残る。
 
-当時は `copilot-guardrails --allow-all` を維持し、ツール権限の個別承認を省略する方針とした。個々のコマンドが sandbox の制約に抵触する場合は、system が承認する bypass（`allowBypass=true` による sandbox 外の再実行）を優先し、`/sandbox disable` は preview 版の sandbox 自体に不具合が出た場合の緊急手段と位置付けた。
+`allowBypass=true` を設定し、sandbox bypass を有効にする。
 
 Windows のパッケージ導入は引き続き WinGet Configuration が担い、GitHub Copilot CLI も対象とする。WinGet DSC は設定ファイルの配布を行わず、パッケージ導入に限定する。組織が enterprise の managed-settings.json で sandbox を強制する場合、`/sandbox` コマンドの UI は managed もしくは locked と表示され、利用者はローカルで無効化できない。この管理は本リポジトリの対象外とする。
 
