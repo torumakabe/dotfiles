@@ -89,21 +89,21 @@ git diff --check
 
 ## 実 CLI で hook interpreter と uv cache grant を確認する
 
-CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。macOS、Linux、WSL は uv の既定 cache が sandbox の `filesystem.readwritePaths` に追加されることを確認する。Windows は `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` の exact grant、`COPILOT_DOTFILES_UV_CACHE_DIR`、PowerShell tool command の rewrite を確認する。rewrite 後の command に cache path が含まれず、`--allow-all-paths` なしの非対話起動で成功することも確認する。候補実装の実機検証では、Copilot 設定と hook を一時ディレクトリへ複製し、実ユーザーの設定ファイルを変更しない。
+CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。macOS、Linux、WSL は uv の既定 cache が sandbox の `filesystem.readwritePaths` に追加されることを確認する。Windows は PowerShell tool の uv が Copilot CLI の標準 `sandbox\packages\uv` cache を使い、同 path が実効 policy の許可に含まれることを確認する。Copilot CLI 1.0.99-0 では、複製した COPILOT_HOME から旧 rewrite、補助環境変数、専用 grant を除いた状態で、ローカル wheel の offline install と別 tool call からの import が成功した。実測の詳細と未確認条件は [ADR-036](adr/036-windows-uv-default-sandbox-cache.md) を参照する。
 
-実機検証の対象は macOS、Windows native、WSL2 とする。Windows native は GitHub Copilot App の Windows セッション、WSL2 は WSL 内で起動した Copilot CLI を使う。Linux native は対象外とし、テンプレート生成と静的テストの確認範囲に留める。通常の実機確認では手順を各セッションへ貼り付け、一回限りの probe はリポジトリへ追加しない。Windows uv cache の比較検証は [`Windows uv cache 回避策の比較検証`](windows-uv-cache-trial.md) を先頭から読み、同文書内の手順とプロンプトを使用する。再実行用スクリプトは `tests/manual/windows/uv-cache-trial/` で管理する。
+実機検証の対象は macOS、Windows native、WSL2 とする。Windows native は GitHub Copilot App の Windows セッション、WSL2 は WSL 内で起動した Copilot CLI を使う。Linux native は対象外とし、テンプレート生成と静的テストの確認範囲に留める。通常の実機確認では一回限りの probe をリポジトリへ追加しない。Windows uv cache の旧比較 kit は現在の確認手順として使わない。今回の Windows 実測は、通常の mise shim 解決や online index download を検証していない。
 
 各環境で、次を確認する。
 
 - `chezmoi apply` が `python-runtime.env` を生成し、記録した interpreter で launcher のスモークテストが成功する
-- 全5件の hook が launcher から起動し、hook プロセス内で mise と uv を起動しない
+- 登録済みの各 hook が launcher から起動し、hook プロセス内で mise と uv を起動しない
 - 記録した interpreter が uv managed Python root 配下にあり、標準ライブラリの `encodings` を読み込める
 - 通常の shell tool 内では mise 管理コマンドを従来どおり実行できる
 - uv が自動探索した Python で `--offline --no-project --no-env-file --no-python-downloads` を指定した実行が成功する
-- POSIX は通常の shell から取得した uv の既定 cache、Windows は relocated cache に marker を書き込める
+- POSIX と Windows は uv の既定 cache へ marker を書き込み、別 tool call から同じ内容を再利用できる
 - 生成 policy が使用した cache と同じ path を `readwritePaths` に含む
 - 生成 policy が `~/.copilot/hooks`、通常の shell tool に必要な mise path、runtime env の `python_root` を `readonlyPaths` に含む
-- 旧専用 `github-copilot/uv` を生成 policy に追加しない
+- 旧専用 `github-copilot/uv` cache grant を生成 policy に追加しない
 - `python` と `pip` の直接実行拒否、および `uv run` と `uv pip` の無変更通過を維持する
 
 外部モデル、対話ログイン、ネットワークアクセス、Python の新規ダウンロードは使用しない。marker と一時ファイルは検証終了時に削除する。
@@ -147,7 +147,9 @@ copilot
 - General に表示される sandbox の有効状態が環境別の期待値と一致する
 - Auth、Filesystem、Network の各画面を開ける
 - backend 名が表示される版では、その表示を記録する
-- MCP と LSP は sandbox 対象外である
+- `sandboxMcpServers` が有効、`sandboxLspServers` が無効である。sandbox 有効時はローカル MCP server が sandbox 内で実行される
+
+ローカル MCP の資格情報 masking は、隔離設定と Guard を使った合成変数の比較で確認した。CLI と条件ごとの結果、実際の資格情報を測定していない制約は [ADR-035](adr/035-copilot-cli-sandbox-mcp-servers.md) を参照する。
 
 backend 名が表示されない版では「表示なし」と記録し、成功条件にはしない。managed または locked と表示される場合は、組織管理設定が利用者設定より優先されているため、環境別の初期値との不一致を dotfiles の失敗とは扱わない。
 

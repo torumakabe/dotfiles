@@ -38,15 +38,17 @@
 | [023](023-chezmoi-ps1-interpreter-noprofile.md) | chezmoi の ps1 実行系を固定しプロファイルを読ませない | Accepted |
 | [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension は公式 CLI で導入する | Accepted |
 | [025](025-copilot-cli-sandbox-user-level-default.md) | Copilot CLI local sandbox は user-level settings で既定有効にする | Superseded by ADR-026 |
-| [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 既定値と明示設定保持 | Accepted |
+| [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 既定値と明示設定保持 | Superseded by ADR-035 |
 | [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Superseded by ADR-028 |
 | [028](028-mise-bootstrap-preserves-existing-installations.md) | mise bootstrap は既存導入を置換しない | Accepted |
 | [029](029-mise-lockfile-v2-sidecars.md) | mise lockfile revision 2 の npm sidecar を不可分に管理する | Accepted |
 | [030](030-mise-self-update-and-upgrade.md) | mise 本体の self-update と self-upgrade を使い分ける | Superseded by ADR-032 |
-| [031](031-windows-uv-dedicated-cache.md) | Windows Copilot sandbox の uv cache を非仮想化パスへ分離する | Accepted |
+| [031](031-windows-uv-dedicated-cache.md) | Windows Copilot sandbox の uv cache を非仮想化パスへ分離する | Superseded by ADR-036 |
 | [032](032-protect-self-updated-winget-packages-with-blocking-pins.md) | 独自 updater で更新する WinGet パッケージを blocking pin で保護する | Accepted |
 | [033](033-manage-azd-and-copilot-cli-via-official-os-channels.md) | azd と Copilot CLI を OS 別の公式経路で管理する | Accepted |
 | [034](034-macos-apple-silicon-only.md) | macOS のサポートは Apple Silicon (arm64) 限定とする | Accepted |
+| [035](035-copilot-cli-sandbox-mcp-servers.md) | Copilot CLI MCP servers を sandbox 対象にする | Accepted |
+| [036](036-windows-uv-default-sandbox-cache.md) | Windows Copilot sandbox は標準 uv cache を使う | Accepted |
 
 ## テンプレート
 

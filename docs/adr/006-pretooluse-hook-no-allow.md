@@ -12,7 +12,7 @@ Copilot CLI の preToolUse フックは、ツール実行前に `allow` / `deny`
 
 ## Decision
 
-このリポジトリの preToolUse フック（`copilot-guard.py`, `uv-enforcer.py`, `node-global-enforcer.py`）は、意見がない場合に何も出力せず return する。`allow` は絶対に出力しない。`deny` / `ask` のみを使う。
+このリポジトリの preToolUse フック（`copilot-guard.py`, `uv-enforcer.py`）は、意見がない場合に何も出力せず return する。`allow` は絶対に出力しない。`deny` / `ask` のみを使う。
 
 ## Consequences
 

@@ -79,8 +79,8 @@ jobs:
             | uv run home/private_dot_copilot/hooks/scripts/executable_copilot-guard.py)
           echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='ask', f'Expected ask, got {d}'"
 
-      # allow 側の smoke は tests/test_uv_enforcer.py と
-      # tests/test_node_global_enforcer.py の TestMainIntegration が同じ payload で
+      # allow 側の smoke は tests/test_uv_enforcer.py の TestMainIntegration が
+      # 同じ payload で
       # 検査するため置かない。各 hook の代表例を残すのは、tests/_helpers.py の
       # run_hook が sys.executable で起動するのに対し、本番の hooks.json は
       # uv run で起動するためである。PEP 723 メタデータの破損はこの経路でしか
@@ -90,12 +90,6 @@ jobs:
         run: |
           RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"python script.py"}}' \
             | uv run home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py)
-          echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
-
-      - name: Smoke — node-global-enforcer denies npm install -g
-        run: |
-          RESULT=$(echo '{"toolName":"bash","toolArgs":{"command":"npm install -g typescript"}}' \
-            | uv run home/private_dot_copilot/hooks/scripts/executable_node-global-enforcer.py)
           echo "$RESULT" | uv run python -c "import sys, json; d=json.load(sys.stdin); assert d['permissionDecision']=='deny', f'Expected deny, got {d}'"
 
   test-windows:
