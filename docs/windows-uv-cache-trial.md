@@ -8,7 +8,7 @@
 
 この検証キットは `validation/windows-uv-cache-trial` branch から取得する。対象 Windows では同 branch のファイルがある既存 checkout を使う。手順1は別 repository や検証キットのない branch を検出して停止する。
 
-導入済み Copilot CLI と uv、dotfiles が provision 済みの hook interpreter が必要である。本検証キットは Windows で動作検証していない。このガイドを上から順に読み、手順6のプロンプトまで同じ文書内で進める。スクリプト本文を読む必要はない。
+導入済み Copilot CLI、mise 管理の uv、dotfiles が provision 済みの hook interpreter が必要である。本検証キットは Windows で動作検証していない。このガイドを上から順に読み、手順6のプロンプトまで同じ文書内で進める。スクリプト本文を読む必要はない。
 
 ## 1. 既存 checkout に移動して開始位置を確認する
 
@@ -67,7 +67,7 @@
 }
 ```
 
-以降は、この PowerShell terminal を閉じず、cwd を `$repoRoot` のまま保つ。各コードブロックは全体を一度に貼り付ける。先頭の `. { ... }` は現在の session の scope で実行するため、`$repoRoot`、`$prepareScript`、後で設定する `$trialRoot` と `$pwshPath` が親 session に残る。子 scope を作る `& { ... }` に置換したり、新しい terminal を開いたりしない。エラーが出たら次の手順へ進まない。試験データは OS の temporary directory と既存 checkout の外にある利用者 profile 内へ、一意な名前で作る。親 terminal は生成した trial root の実パスを出力する。Copilot sandbox tool では環境変数から root を再計算せず、ここで作った値をそのまま使う。
+各コードブロックは全体を一度に貼り付ける。先頭の `. { ... }` は現在の session の scope で実行するため、`$repoRoot`、`$prepareScript`、後で設定する `$trialRoot` と `$pwshPath` が親 session に残る。子 scope を作る `& { ... }` に置換しない。手順3で準備を始めたら、control と candidate が終わるまで同じ terminal を使い、cwd を `$repoRoot` のまま保つ。準備前に terminal を開き直した場合は、checkout 内へ移動して手順3から再開できる。エラーが出たら次の手順へ進まない。試験データは OS の temporary directory と既存 checkout の外にある利用者 profile 内へ、一意な名前で作る。親 terminal は生成した trial root の実パスを出力する。Copilot sandbox tool では環境変数から root を再計算せず、ここで作った値をそのまま使う。
 
 ## 2. 前提ツールと配布済み設定を確認する
 
@@ -100,7 +100,11 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 
 ## 3. 隔離した検証データを準備する
 
-利用者は同じ通常 terminal で一意な trial root を作り、既存 checkout にある準備スクリプトを別の PowerShell child process で起動する。`SourceCopilotHome` は普段の CLI home と一致させる。script は interpreter を `python-runtime.env` から取得し、`Root` が checkout と `%TEMP%` の外にあり、reparse point を通らないことを確認する。repository、既存 cache、OneDrive、network drive、junction 下は試験データの保存先にしない。準備失敗後の半生成 directory は再利用せず、原因を解消して新しい GUID でやり直す。
+利用者は通常 terminal で一意な trial root を作り、既存 checkout にある準備スクリプトを別の PowerShell child process で起動する。前日から terminal を開き直した場合も、手順1で最新版を取得した checkout 内から下のコード全体を実行できる。コードは Git root、準備スクリプト、PowerShell のパスを初期化する。手順3から7は同じ terminal で進める。
+
+`SourceCopilotHome` は普段の CLI home と一致させる。script は interpreter を `python-runtime.env` から取得し、`Root` が checkout と `%TEMP%` の外にあり、reparse point を通らないことを確認する。repository、既存 cache、OneDrive、network drive、junction 下は試験データの保存先にしない。準備失敗後の半生成 directory は再利用せず、原因を解消して新しい GUID でやり直す。
+
+準備は通常 terminal の `mise which uv` で導入済み `uv.exe` の実体を解決し、版の照会と既存 Python の探索にもその実体を使う。測定コマンドと payload の cache 探索は、両条件とも記録した同じ絶対パスを使い、sandbox 内で mise shim を起動しない。User PATH、mise 設定、インストール状態は変更しない。対象 CLI の分類に必要なため、uv の実体パスに使える文字は ASCII 英数字、`_`、`.`、`-` とパス区切りに限定する。空白などを含む場合は準備を停止し、インストール先の変更や quoted call operator による代替は行わない。
 
 既存の設定、User/Machine environment、cache は変更しない。execution policy が script を拒否した場合も設定を変更せず停止する。明示 cache 設定が検出された場合は判定を保留する。準備は `UV_CONFIG_FILE`、`UV_NO_CACHE` 等の選択した変数だけの有無と、ancestor `uv.toml` / `pyproject.toml`、`%APPDATA%\uv\uv.toml`、`%PROGRAMDATA%\uv\uv.toml` の `cache-dir` / `no-cache` 宣言を検査する。TOML 検査は保守的な宣言検出であり、他の table の同名 key も停止対象になる。停止したら対象 Copilot が該当 table を確認する。設定を自動削除しない。
 
@@ -108,6 +112,17 @@ uv の自動 Python download は行わない。`idna==3.10` の取得先に到�
 
 ```powershell
 . {
+    $repoRoot = (& git rev-parse --show-toplevel | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $repoRoot) { throw 'Start inside the existing dotfiles checkout.' }
+    $originUrl = (& git -C $repoRoot remote get-url origin | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $originUrl -notmatch '[:/]torumakabe/dotfiles(?:\.git)?/?$') {
+        throw 'This is not the expected torumakabe/dotfiles checkout.'
+    }
+    Set-Location -LiteralPath $repoRoot -ErrorAction Stop
+    $prepareScript = Join-Path $repoRoot 'tests\manual\windows\uv-cache-trial\Prepare-UvCacheTrial.ps1'
+    if (-not (Test-Path -LiteralPath $prepareScript -PathType Leaf)) {
+        throw 'The preparation script is missing; complete step 1 first.'
+    }
     $trialParent = Join-Path $env:LOCALAPPDATA 'CopilotUvCacheTrials'
     if (-not (Test-Path -LiteralPath $trialParent -PathType Container)) {
         New-Item -ItemType Directory -Path $trialParent -ErrorAction Stop | Out-Null
@@ -162,23 +177,25 @@ Mode: <Mode>
 
 目的は Python/pip 直接実行禁止と Guard を維持し、Windows の `UV_CACHE_DIR` rewrite と専用 cache write grant を candidate から外して uv の動作を比較することです。複製した hook 登録と launcher は元のまま使います。`allowBypass` を含む sandbox 設定も元の値を保ちます。権限変更や bypass を試さず、必要な write grant を追加しないでください。
 
+control の元 uv enforcer は modifiedArgs で cache 設定の prefix を自動付加します。これは比較条件であり、手動変更ではありません。下記の command をそのまま tool に渡し、prefix を自分で追加したり、自動付加された prefix を削除したりしないでください。実行表示に prefix があることだけで手動変更や試験無効と断定しないでください。tool 要求と hook の modifiedArgs を区別できない場合は、その点を未確認として報告してください。candidate の隔離 uv enforcer はこの自動付加だけを行いません。
+
 この CLI の project directory と powershell tool の cwd は <Root>\workspace です。コードを置いた dotfiles checkout ではありません。検証プログラムが <Root>\manifest.json、launch.json、cli-configured-sandbox.json と隔離 hook の hash を必須検査します。ファイルがない、または内容が準備時と一致しない場合は測定を失敗として記録します。設定 snapshot は runtime sandbox の実行証明ではありません。sandbox 外で動いたコマンド結果を sandbox の合格にしないでください。
 
 追加のplugin/repository hookやmanaged policyがcontrol/candidateに違いを作る場合は、勝手に解除せず判定保留としてください。target CLIのhelpが計画と異なる場合も未確認optionを発明しないでください。認証は利用者が隔離homeで行います。tokenやprivate keyを読まないでください。
 
-Copilot の powershell tool で下記の command を実行してください。各 command は `uv run` を直接起動し、その後に計測コードを実行します。PowerShell wrapper、`pwsh -File`、`Set-Location`、environment variable の設定や転記で包まないでください。コマンドの先頭を `uv` のままにしてください。runtime は実行される command 名から sandbox 操作範囲を決めるため、計測対象の実際の `uv run` を powershell tool の command に含めます。Python は準備済みの絶対パスを使い、download しません。`COPILOT_DOTFILES_UV_CACHE_DIR` を `UV_CACHE_DIR` に転記せず、どちらの変数も command 内で設定、解除しません。
+Copilot の powershell tool へ下記の command をそのまま渡してください。各 command は準備時に mise が解決した uv.exe の絶対パスから直接 run を起動し、その後に計測コードを実行します。PowerShell wrapper、call operator (`&`)、`pwsh -File`、`Set-Location`、手動の environment variable 設定や転記を追加しないでください。実行名を bare な絶対パスのまま保つことで、runtime は uv.exe を Python 操作に分類します。PATH 上の `uv` や mise shim に置き換えないでください。Python は準備済みの絶対パスを使い、download しません。control hook の自動付加はそのまま受け入れ、モデル自身は `COPILOT_DOTFILES_UV_CACHE_DIR` を `UV_CACHE_DIR` に転記せず、どちらの変数も設定、解除しません。
 
 Step 1:
-uv run --no-project --isolated --no-python-downloads --python <PythonLiteral> --with idna==3.10 --refresh-package idna python <ProbeLiteral> --root <RootLiteral> --mode '<Mode>' --step 1
+<UvCommand> run --no-project --isolated --no-python-downloads --python <PythonLiteral> --with idna==3.10 --refresh-package idna python <ProbeLiteral> --root <RootLiteral> --mode '<Mode>' --step 1
 
 Step 1 が `technical-success` で終了コード 0 の場合だけ、**別の powershell tool 呼び出し**で次を実行してください。一つの command や PowerShell process にまとめないでください。
 
 Step 2:
-uv run --no-project --isolated --no-python-downloads --offline --python <PythonLiteral> --with idna==3.10 python <ProbeLiteral> --root <RootLiteral> --mode '<Mode>' --step 2
+<UvCommand> run --no-project --isolated --no-python-downloads --offline --python <PythonLiteral> --with idna==3.10 python <ProbeLiteral> --root <RootLiteral> --mode '<Mode>' --step 2
 
 command が hook に拒否された場合、`uv` 自体が失敗した場合、または検証プログラムが失敗した場合は停止してください。別の実行形式、環境変数転記、別 tool、設定変更で再試行しないでください。uv の config 検査は uv 自身の実行に任せます。config を sandbox 内で PowerShell から読み直して測定を止めないでください。
 
-sandbox 内で `UV_CACHE_DIR` を unset したり設定したり、`--cache-dir` / `--no-config` を追加したりしないでください。`uv cache clean` や既存 cache の削除もしないでください。失敗時は生成された結果 JSON または tool の終了結果をそのまま扱い、別構文や別 tool で迂回しないでください。raw stderr に credential が含まれる可能性があるため、出力全文を共有せず error 分類を報告してください。
+sandbox 内で `UV_CACHE_DIR` を手動設定、解除したり、`--cache-dir` / `--no-config` を追加したりしないでください。control hook の自動付加はこの禁止の対象外です。`uv cache clean` や既存 cache の削除もしないでください。失敗時は生成された結果 JSON または tool の終了結果をそのまま扱い、別構文や別 tool で迂回しないでください。raw stderr に credential が含まれる可能性があるため、出力全文を共有せず error 分類を報告してください。
 
 両 step の結果から、同じ cache、marker の永続性、atomic rename、online package metadata の取得と実行、後続 offline 実行、Python prefix が cache 配下であることを報告してください。package が事前 cache にあった可能性を残し、cold と断定しないでください。
 
@@ -210,7 +227,7 @@ Step 1 の直接起動した `uv run` は、Python payload 内で `uv cache dir`
 
 Step 2 は別の powershell tool 呼び出しから直接 `uv run --offline` を実行します。payload は前回の cache path と marker を確認し、同じ cache 内で別の atomic rename を行ってから、同じ package を offline で実行します。一つの tool 呼び出しや PowerShell process で両 step を連続実行した結果は無効です。
 
-payload は `uv run` が起動した Python process から `uv cache dir`、Python prefix、idna の版を返します。prefix が対象 cache の外なら測定は失敗します。candidate cache が workspace、旧 cache、既存 user write grant、TEMP に入った場合も撤去判断を保留します。sandbox 内で `UV_CACHE_DIR` を設定・解除せず、`--cache-dir` / `--no-config` も付けません。自動注入された `UV_CACHE_DIR` は比較の一部として記録します。
+payload は `uv run` が起動した Python process から、記録済みの uv 実体による `cache dir`、Python prefix、idna の版を返します。prefix が対象 cache の外なら測定は失敗します。candidate cache が workspace、旧 cache、既存 user write grant、TEMP に入った場合も撤去判断を保留します。モデルは sandbox 内で `UV_CACHE_DIR` を手動設定、解除せず、`--cache-dir` / `--no-config` も付けません。control hook が自動付加した `UV_CACHE_DIR` は比較条件であり、指示違反として扱いません。
 
 `manifest.json` は `<Root>\manifest.json` に保存する。条件別の `cli-configured-sandbox.json`、`launch.json`、`step-1.json`、`step-2.json` は `<Root>\workspace\evidence\control\` と `<Root>\workspace\evidence\candidate\` に保存する。結果は checkout 内には作らない。configured snapshot には元設定から必要な sandbox flags と filesystem paths だけを保存し、proxy credential や全環境は記録しない。payload が起動して失敗した場合は、安全な error 分類だけを結果 JSON に保存し、終了コード 1 を返す。`uv run` 自体が payload 起動前に失敗した場合、step JSON は作られず tool が失敗を返す。`technical-success` は測定コマンドが成功したことを示すが、sandbox 内で実行された証拠にはならない。
 
@@ -240,7 +257,9 @@ payload は `uv run` が起動した Python process から `uv cache dir`、Pyth
 
 ## 根拠と未確認事項
 
-Copilot CLI 1.0.98-0 の `Operation::from_str` は `uv` を Python operation に対応付け、`operations_for_command` は PowerShell command を解析して各 command の実行名から developer-tool scope を作る。`uv run ... python <probe>` を powershell tool の command として直接渡すと、測定する `uv` 自体が解析対象になる。以前の `pwsh -File <probe>` 形式では tool command の実行名が `pwsh` で、probe 内から起動する uv は解析対象に含まれなかった。runtime の `shell_attached` はこの scope を shell 起動時に使う。したがって、この試験では uv command を wrapper や environment assignment で包まない。対象版の実装は `github/copilot-agent-runtime` の `src/runtime/src/sandbox_pure/dev_tool_access.rs:242-278` と `src/runtime/src/turn_engine/shell_attached.rs:863-867` にある。
+Copilot CLI 1.0.98-0（runtime commit `8f6dbb8fcdc7c2f25291088a43d0755763269588`）の `operations_for_command` は PowerShell command を解析し、`program_basename` でパス、大小文字、`.exe` を正規化して操作を分類する。bare な絶対パスの `uv.exe run ...` は `uv` として Python operation になる。一方、`& 'C:\...\uv.exe'` は `parse_powershell_command_identifier` で実行名が式として扱われ、Python scope を得られない。このため生成 command は引用符と call operator を使わず、対応できない実体パスは準備時に停止する。元 control hook の cache prefix は変更しない。実装は `src/runtime/src/sandbox_pure/dev_tool_access.rs:242-278`、`src/runtime/src/tools_base/program_name.rs:22-30`、`src/runtime/src/tools_base/shell_safety.rs:2059-2091`、`src/runtime/src/turn_engine/shell_attached.rs:863-867` にある。
+
+同版の `src/runtime/src/sandbox_engine/src/discovery.rs` は PATH と既知の SDK 環境変数にあるディレクトリを読み取り許可の候補にするが、mise の設定を解決して uv の実体を選ぶ処理はない。`dev_tool_access.rs:1043-1047` も Windows の manager grant から mise を除いている。dotfiles は通常 PowerShell の `mise activate` と、非対話 process 向けの実体ディレクトリの User PATH 同期を持つため、通常 terminal の `uv --version` 成功だけでは sandbox 内でも同じ実体を選ぶ保証にならない。今回の Windows PATH の内容や shim 選択に至った具体的条件は未観測である。検証キットは通常 terminal で実体を解決して直接呼ぶことで、測定から shim の設定解決を除く。追加 grant や PATH 書き換えは行わない。
 
 [github/copilot-agent-runtime#18974](https://github.com/github/copilot-agent-runtime/issues/18974) は 2026-10-12 に completed で closed になった。[maintainer comment](https://github.com/github/copilot-agent-runtime/issues/18974#issuecomment-6119987639) と [v1.0.92 release note](https://github.com/github/copilot-cli/releases/tag/v1.0.92) は Windows TEMP/TMP rename 修正と、developer-tool access 有効時の uv writable cache を説明している。[github/copilot-agent-runtime#25725](https://github.com/github/copilot-agent-runtime/pull/25725) は 2026-10-09 に merge され、Windows の安定した Copilot-owned cache と明示設定、hook override の尊重を実装した。対象 CLI にこの PR が含まれるかは、版と配布経緯から別途確認する。[github/copilot-agent-runtime#24537](https://github.com/github/copilot-agent-runtime/issues/24537) は 2026-10-01 更新の open issue であり、これだけでは上記修正を未解消とは判定できない。
 

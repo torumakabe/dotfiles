@@ -78,10 +78,10 @@ def classify_uv_error(stderr: str) -> str:
     return "uv-command-failed"
 
 
-def read_uv_cache_dir() -> Path:
+def read_uv_cache_dir(uv_path: str) -> Path:
     try:
         completed = subprocess.run(
-            ["uv", "cache", "dir"],
+            [uv_path, "cache", "dir"],
             check=False,
             capture_output=True,
             text=True,
@@ -185,10 +185,11 @@ def run(args: argparse.Namespace) -> dict:
     result["trialId"] = manifest["trialId"]
     result["cliVersion"] = launch["cliVersion"]
     result["uvVersion"] = manifest["uvVersion"]
+    result["uvExecutable"] = manifest["uvPath"]
     result["osBuild"] = manifest["osBuild"]
     result["cliSandboxSettingsLoaded"] = True
     result["stage"] = "cache-discovery"
-    cache = read_uv_cache_dir()
+    cache = read_uv_cache_dir(manifest["uvPath"])
     result["cachePath"] = str(cache)
     environment_cache = os.environ.get("UV_CACHE_DIR")
     result["uvCacheEnvironmentPresent"] = bool(environment_cache)

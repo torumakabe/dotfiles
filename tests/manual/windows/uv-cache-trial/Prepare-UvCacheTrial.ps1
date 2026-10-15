@@ -117,6 +117,23 @@ $manifestPath = Join-Path $Root 'manifest.json'
 if ($Action -eq 'Prepare') {
     Assert-NoExplicitUvOverride
     if (Test-Path -LiteralPath $Root) { throw 'Root already exists; use a new trial directory.' }
+    $miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction Stop |
+        Select-Object -First 1).Source
+    $uvPaths = @(& $miseExe which uv)
+    if ($LASTEXITCODE -ne 0 -or $uvPaths.Count -ne 1) {
+        throw 'mise which uv must resolve exactly one installed executable.'
+    }
+    $uvPath = ([string]$uvPaths[0]).Trim()
+    if (-not [IO.Path]::IsPathFullyQualified($uvPath) -or
+        $uvPath.StartsWith('\\') -or $uvPath -notmatch '^[A-Za-z]:\\[A-Za-z0-9_.\\/-]+$' -or
+        [IO.Path]::GetFileName($uvPath) -ine 'uv.exe' -or
+        $uvPath.Replace('/', '\') -match '(?i)\\shims\\' -or
+        -not (Test-Path -LiteralPath $uvPath -PathType Leaf)) {
+        throw 'Resolved uv must be a non-shim uv.exe with a local path usable as a bare PowerShell command (ASCII letters, digits, _, ., -, and path separators). Quoted call-operator commands lose Python scope in CLI 1.0.98-0; do not change installation paths automatically.'
+    }
+    $uvPath = [IO.Path]::GetFullPath($uvPath)
+    $uvVersion = (@(& $uvPath --version) -join "`n")
+    if ($LASTEXITCODE -ne 0) { throw 'The resolved uv executable could not run.' }
     $hooksSource = Join-Path $SourceCopilotHome 'hooks'
     $runtime = @{}
     $runtimePath = Join-Path $hooksSource 'python-runtime.env'
@@ -139,7 +156,7 @@ if ($Action -eq 'Prepare') {
         throw 'PythonPath must match the interpreter already recorded by python-runtime.env.'
     }
     $PythonPath = (Resolve-Path -LiteralPath $PythonPath).Path
-    $found = @(& uv python find --no-project --no-python-downloads $PythonPath)
+    $found = @(& $uvPath python find --no-project --no-python-downloads $PythonPath)
     if ($LASTEXITCODE -ne 0 -or (Normalize-Path ($found -join '').Trim()) -ne
         (Normalize-Path $PythonPath)) { throw 'uv cannot find the exact installed Python.' }
     if (-not $OldCachePath) { throw 'The current dedicated cache helper is absent.' }
@@ -214,14 +231,14 @@ if ($Action -eq 'Prepare') {
     $manifest = [ordered]@{
         schema = 1; trialId = [guid]::NewGuid().ToString(); root = $Root
         workspace = (Join-Path $Root 'workspace'); pythonPath = $PythonPath
+        uvPath = $uvPath
         oldCachePath = $oldKey
         uvConfigurationFiles = $configurationFiles; modes = @{}
         osBuild = [Environment]::OSVersion.Version.ToString()
     }
     $manifest.cliVersion = (@(& copilot --no-auto-update --version) -join "`n")
     if ($LASTEXITCODE -ne 0) { throw 'CLI version query failed.' }
-    $manifest.uvVersion = (@(& uv --version) -join "`n")
-    if ($LASTEXITCODE -ne 0) { throw 'uv version query failed.' }
+    $manifest.uvVersion = $uvVersion
     foreach ($variant in @('control', 'candidate')) {
         $homePath = Join-Path $Root "$variant\.copilot"
         $hooksPath = Join-Path $homePath 'hooks'
@@ -259,10 +276,12 @@ if ($Action -eq 'Prepare') {
         $prompt = $prompt.Replace('<RootLiteral>', (ConvertTo-PowerShellLiteral $Root))
         $prompt = $prompt.Replace('<PythonLiteral>',
             (ConvertTo-PowerShellLiteral $manifest.pythonPath))
-        if ($prompt -match '<(?:Root|Mode|ProbeLiteral|RootLiteral|PythonLiteral)>') {
+        $prompt = $prompt.Replace('<UvCommand>', $uvPath)
+        if ($prompt -match '<(?:Root|Mode|ProbeLiteral|RootLiteral|PythonLiteral|UvCommand)>') {
             throw 'Generated prompt still contains a trial placeholder.'
         }
-        $runCommands = @([regex]::Matches($prompt, '(?m)^uv run [^\r\n]+$') |
+        $runCommands = @([regex]::Matches($prompt,
+            '(?m)^' + [regex]::Escape($uvPath) + ' run [^\r\n]+$') |
             ForEach-Object { $_.Value })
         if ($runCommands.Count -ne 2 -or
             $runCommands[0] -notmatch 'python .+Test-UvCacheSandbox\.py.+--mode .+' -or
@@ -286,6 +305,20 @@ if ($Action -eq 'Prepare') {
         }
         if ($variant -eq 'candidate' -and $allowed.ContainsKey('modifiedArgs')) {
             throw 'Candidate still rewrites the command.'
+        }
+        foreach ($command in $runCommands) {
+            $checked = Invoke-HookCheck $homePath $command
+            if ($checked['permissionDecision'] -eq 'deny') {
+                throw 'The original uv policy rejected a generated measurement command.'
+            }
+            if ($variant -eq 'control') {
+                if (-not $checked.ContainsKey('modifiedArgs') -or
+                    -not $checked['modifiedArgs']['command'].EndsWith($command)) {
+                    throw 'Control must retain the generated command after its automatic cache prefix.'
+                }
+            } elseif ($checked.ContainsKey('modifiedArgs')) {
+                throw 'Candidate must not rewrite a generated measurement command.'
+            }
         }
         $hashes = @{}
         foreach ($file in @('copilot-guard.py', 'uv-enforcer.py')) {
