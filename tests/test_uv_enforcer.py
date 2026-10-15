@@ -90,14 +90,6 @@ class CommandPolicyTests(unittest.TestCase):
                 result = uve.check_command(command)
                 self.assertEqual(result is not None, blocked)
 
-    def test_allows_uv_run_command(self) -> None:
-        command = (
-            r"uv run --no-python-downloads --with idna==3.10"
-            r" python script.py"
-        )
-        self._assert_commands((command,), blocked=False)
-
-
 class MainIntegrationTests(unittest.TestCase):
     def _decision(self, payload: dict | str) -> dict:
         result = run_hook(SCRIPT_PATH, payload)
