@@ -6,9 +6,8 @@ Accepted
 
 ## Context
 
-Windows の Copilot sandbox は `allowDevToolAccess` により一部の開発ツール関連パスを許可するが、uv の `%APPDATA%\uv\uv.toml` は自動許可に含まれない。uv がこの設定を読むには、Copilot user sandbox policy から読み取り許可を与える必要がある。`readonlyPaths` は uv だけでなく sandbox 内のすべてのプロセスに適用される。
-
-CLI 1.0.99-0 と2026年10月15日時点の runtime source（commit `163d5cd15b3a34e74a6bd09ca27125e1a68bd85d`）で、Windows `allowDevToolAccess` がこのファイルを許可しないことと、別の自動許可がないことを確認した（[developer-tool access grants](https://github.com/github/copilot-agent-runtime/blob/163d5cd15b3a34e74a6bd09ca27125e1a68bd85d/src/runtime/src/sandbox_pure/dev_tool_access.rs#L1094-L1097)）。公開ユーザー向け文書での確認はできていない。
+uv の設定ファイルを sandbox 内から読み取るには、対象ファイルへの読み取り許可が必要になる。
+`readonlyPaths` は uv だけでなく sandbox 内のすべてのプロセスに適用される。
 
 ## Decision
 
@@ -17,5 +16,6 @@ Windows の sandbox 設定同期はユーザーの `%APPDATA%\uv\uv.toml` の絶
 ## Consequences
 
 - sandbox 内の全 process がこのファイルを読み取れるが、書き込めない。
+- ファイルに認証情報が含まれる場合、それらも sandbox 内のすべてのプロセスから読み取り可能になる。
 - sandbox の同期は既存の読み取り許可を保持し、同じファイル path を重複して追加しない。
 - ADR-026 の「共有 `uv.toml` を追加許可しない」という判断を、Windows のこのファイルに限って置き換える。

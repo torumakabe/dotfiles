@@ -1,6 +1,5 @@
 import json
 import pathlib
-import sys
 import unittest
 
 from tests._helpers import load_script, run_hook, scoped_environ
@@ -11,27 +10,8 @@ SCRIPT_PATH = (
     REPO_ROOT
     / "home/private_dot_copilot/hooks/scripts/executable_uv-enforcer.py"
 )
-TRIAL_PROBE_PATH = (
-    REPO_ROOT
-    / "tests/manual/windows/uv-cache-trial/Test-UvCacheSandbox.py"
-)
 
 uve = load_script("uv_enforcer", SCRIPT_PATH)
-uv_trial_probe = load_script("uv_cache_trial_probe", TRIAL_PROBE_PATH)
-
-
-class UvCacheTrialProbeTests(unittest.TestCase):
-    def test_cache_attribution_uses_payload_environment_not_preflight(self) -> None:
-        payload_cache = pathlib.Path.cwd() / "payload-cache"
-        preflight_cache = pathlib.Path.cwd() / "preflight-cache"
-        with scoped_environ({"UV_CACHE_DIR": str(payload_cache)}):
-            evidence = uv_trial_probe.cache_environment_evidence(
-                payload_cache, str(preflight_cache)
-            )
-
-        self.assertEqual(evidence["preflightUvCacheEnvironment"], str(preflight_cache))
-        self.assertEqual(evidence["payloadUvCacheEnvironment"], str(payload_cache))
-        self.assertTrue(evidence["uvCacheEnvironmentMatchesReportedDir"])
 
 
 class CommandPolicyTests(unittest.TestCase):
@@ -110,10 +90,10 @@ class CommandPolicyTests(unittest.TestCase):
                 result = uve.check_command(command)
                 self.assertEqual(result is not None, blocked)
 
-    def test_allows_direct_uv_run_without_cache_rewrite(self) -> None:
+    def test_allows_uv_run_command(self) -> None:
         command = (
             r"uv run --no-python-downloads --with idna==3.10"
-            r" python .\Test-UvCacheSandbox.py --mode control --step 1"
+            r" python script.py"
         )
         self._assert_commands((command,), blocked=False)
 

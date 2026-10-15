@@ -144,7 +144,7 @@ bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true
 
 ## Copilot sandbox 内で uv がキャッシュを書き込めない
 
-Copilot CLI 1.0.92-4 以降は uv の既定 cache grant を追加する。Windows CLI 1.0.99-0 では PowerShell tool が標準 `sandbox\packages\uv` cache を使うことを確認した。dotfiles は `UV_CACHE_DIR` を設定せず、専用 cache grant を追加しない。
+Copilot CLI は uv の既定 cache に書き込み許可を追加する。dotfiles は `UV_CACHE_DIR` を設定せず、専用 cache grant を追加しない。
 
 ```bash
 unset UV_CACHE_DIR
@@ -152,9 +152,7 @@ chezmoi apply
 uv --offline --directory / --project / cache dir
 ```
 
-既定 cache への書き込みが失敗したら、Copilot CLI の版、`/sandbox policy`、PowerShell tool 内の `uv cache dir` と測定した操作の終了状態を確認する。`/sandbox policy` の表示だけでは書き込み成功を確認できない。Windows のmise shim起動失敗はcache許可とは別の問題として扱い、絶対uv pathやPATH変更、miseのdata/state許可で回避しない。
-
-`/sandbox policy` の表示だけでは書き込み成功を確認できない。sandbox 内の `uv cache dir` が意図した保存先を返すことと、通常の Python 自動探索による `uv run` の成功、ホストへのキャッシュ永続化を確認する。WSL の調査では、許可なしでもコマンドが成功し、ホストには何も残らない場合があった。[実 CLI での確認手順](copilot-sandbox-verification.md#実-cli-で-hook-interpreter-と-uv-cache-grant-を確認する)は終了コードとホスト側のファイルを分けて判定する。
+既定 cache への書き込みが失敗したら、Copilot CLI の版、`/sandbox policy`、sandbox 内の `uv cache dir` と実行結果を確認する。`/sandbox policy` の表示だけでは書き込み成功を確認できない。Windows の mise shim 起動失敗は cache 許可とは別の問題として調べる。絶対 uv path、PATH 変更、mise の data/state 許可で回避しない。
 
 過去の設定にある `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` grant と `COPILOT_DOTFILES_UV_CACHE_DIR` は、設定同期が既定旧 path と完全一致する場合だけ除去する。専用 cache directory の実体は削除しない。別の環境変数値や他の filesystem grants は保持する。
 

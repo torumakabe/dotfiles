@@ -89,9 +89,9 @@ git diff --check
 
 ## 実 CLI で hook interpreter と uv cache grant を確認する
 
-CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。macOS、Linux、WSL は uv の既定 cache が sandbox の `filesystem.readwritePaths` に追加されることを確認する。Windows は PowerShell tool の uv が Copilot CLI の標準 `sandbox\packages\uv` cache を使い、同 path が実効 policy の許可に含まれることを確認する。Copilot CLI 1.0.99-0 では、複製した COPILOT_HOME から旧 rewrite、補助環境変数、専用 grant を除いた状態で、ローカル wheel の offline install と別 tool call からの import が成功した。実測の詳細と未確認条件は [ADR-036](adr/036-windows-uv-default-sandbox-cache.md) を参照する。
+CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。各環境で uv が既定 cache を使い、その path が sandbox の `filesystem.readwritePaths` に含まれることを確認する。
 
-実機検証の対象は macOS、Windows native、WSL2 とする。Windows native は GitHub Copilot App の Windows セッション、WSL2 は WSL 内で起動した Copilot CLI を使う。Linux native は対象外とし、テンプレート生成と静的テストの確認範囲に留める。通常の実機確認では一回限りの probe をリポジトリへ追加しない。Windows uv cache の旧比較 kit は現在の確認手順として使わない。今回の Windows 実測は、通常の mise shim 解決や online index download を検証していない。
+実機検証では、対象 OS 上の通常の Copilot CLI セッションを使う。一回限りの probe はリポジトリへ追加しない。
 
 各環境で、次を確認する。
 
@@ -126,7 +126,7 @@ Linux 系では `sandbox.enabled` が `true` または未設定の場合に bubb
 
 uv の書き込み許可は、通常の `uv cache dir` と sandbox 内の出力を比較し、`uv run` 後にホスト側へファイルが残ることまで確認する。`/sandbox policy` の表示だけでは成功と扱わない。プロジェクト固有のキャッシュ設定がある場合は、ユーザー共通設定との差も記録する。
 
-`tests.test_copilot_sandbox_config` の backend テストは、単純な OS 書き込み制限下で、許可なしの uv が失敗し、生成した実体パスへの許可ありで成功することを確認する。Copilot CLI が組み立てた実効ポリシーの試験ではないため、CLI と WSL の実機確認を代替しない。
+`tests.test_copilot_sandbox_config` は設定生成と filesystem access control を検査する。Copilot CLI を使った確認は実機検証手順に従う。
 
 ### 初期状態
 
