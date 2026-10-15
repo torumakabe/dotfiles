@@ -170,10 +170,10 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             self.powershell,
         )
 
-    def test_tool_runtime_readonly_grants_are_added_without_uv_config(self) -> None:
-        """恒久: mise と uv の実体への read-only grant。
+    def test_tool_runtime_readonly_grants_are_narrow(self) -> None:
+        """恒久: mise、uv 実体と必要な設定ファイルへの read-only grant。
 
-        製品側の修正では撤去しない。uv の設定ディレクトリは grant しない。
+        uv の設定ディレクトリは grant せず、Windows では uv.toml だけを加える。
         """
         for expected in ("mise_data_dir", "readonly_grants"):
             self.assertIn(expected, self.posix)
@@ -183,6 +183,44 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             self.assertNotIn(".config/uv", script)
         self.assertIn("reduce $readonly_grants[] as $path", self.posix)
         self.assertIn("Add-ReadonlyDirectoryAndTarget", self.powershell)
+
+    def test_windows_uv_config_grant_is_one_readonly_file_and_idempotent(self) -> None:
+        self.assertTrue(
+            self.powershell.startswith('{{- if eq .chezmoi.os "windows" -}}')
+        )
+        self.assertNotIn("uv.toml", self.posix)
+        self.assertIn(
+            "$uvConfigPath = Join-Path $env:APPDATA 'uv\\uv.toml'",
+            self.powershell,
+        )
+        self.assertIn(
+            "$readonlyPaths = @(Add-UniquePath "
+            "-Paths $readonlyPaths -Path $uvConfigPath)",
+            self.powershell,
+        )
+        self.assertIn(
+            "$readonlyPaths = @(\n"
+            "  Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem "
+            "-Name 'readonlyPaths')\n"
+            ")",
+            self.powershell,
+        )
+        self.assertRegex(
+            self.powershell,
+            r"(?s)\$present = \$result \| Where-Object \{.*?"
+            r"if \(-not \$present\) \{\s*\$result \+= \$Path\s*\}",
+        )
+        self.assertIn(
+            "(Get-NormalizedPathKey -Path ([string]$_)) -eq $pathKey",
+            self.powershell,
+        )
+        self.assertNotIn(
+            "Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path "
+            "(Join-Path $env:APPDATA 'uv')",
+            self.powershell,
+        )
+        self.assertNotIn("Test-Path -LiteralPath $uvConfigPath", self.powershell)
+        self.assertNotIn("Get-Content -LiteralPath $uvConfigPath", self.powershell)
 
     def test_pinned_hook_interpreter_grants_come_from_the_recorded_runtime(self) -> None:
         """撤去単位: 固定 Python interpreter。

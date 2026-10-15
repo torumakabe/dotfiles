@@ -50,6 +50,7 @@
 | [035](035-copilot-cli-sandbox-mcp-servers.md) | Copilot CLI MCP servers を sandbox 対象にする | Accepted |
 | [036](036-windows-uv-default-sandbox-cache.md) | Windows Copilot sandbox は標準 uv cache を使う | Accepted |
 | [037](037-windows-mise-activation-without-shims.md) | Windows の mise activation は shim を追加しない | Accepted |
+| [038](038-windows-uv-config-readonly-grant.md) | Windows sandbox で uv.toml だけを読み取り専用にする | Accepted |
 
 ## テンプレート
 

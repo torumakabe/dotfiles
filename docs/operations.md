@@ -37,7 +37,7 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。通常の shell tool に必要な mise の path、`~/.copilot/hooks`、command hook の固定 interpreter を含む uv managed Python root は `readonlyPaths` へ重複なく追記する。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。通常の shell tool に必要な mise の path、`~/.copilot/hooks`、command hook の固定 interpreter を含む uv managed Python root は `readonlyPaths` へ重複なく追記する。Windows では `%APPDATA%\uv\uv.toml` も単一ファイルとして読み取り専用で追加する。この規則は uv に限らず sandbox 内のすべてのプロセスに適用され、親の `uv` ディレクトリや書き込み許可は追加しない。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 

@@ -1,7 +1,7 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 12
+# Copilot sandbox policy version: 13
 
 $ErrorActionPreference = 'Stop'
 
@@ -217,6 +217,7 @@ $uvPythonDir = if ($env:UV_PYTHON_INSTALL_DIR) {
 } else {
   Join-Path $env:APPDATA 'uv\python'
 }
+$uvConfigPath = Join-Path $env:APPDATA 'uv\uv.toml'
 
 # hook interpreter の root は run_after_25 が記録した値を使う。sandbox 設定の
 # ために mise や uv を起動すると、hook が実際に使う interpreter と食い違う。
@@ -326,6 +327,8 @@ $readonlyPaths = @(
 $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $miseDataDir)
 $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $hooksDir)
 $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvPythonDir)
+# readonlyPaths は sandbox 内のすべてのプロセスに適用するため、このファイルだけを追加する。
+$readonlyPaths = @(Add-UniquePath -Paths $readonlyPaths -Path $uvConfigPath)
 
 if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {
   $resolvedMiseExe = Get-ResolvedPathTarget -Path $miseExe
