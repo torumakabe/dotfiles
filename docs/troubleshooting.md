@@ -4,7 +4,7 @@ README に載せない復旧手順だけをまとめる。一般的な `chezmoi`
 
 ## Windows で Copilot CLI が「プロセスにパッケージ ID がありません」で起動しない
 
-症状: `copilot` または `copilot-guardrails` が `WindowsApps\copilot.exe` を呼び出し、起動前に失敗する。
+症状: `copilot` が `WindowsApps\copilot.exe` を呼び出し、起動前に失敗する。
 
 PATH で `WindowsApps` が `WinGet\Links` より前にあると、GitHub Copilot CLI 自身が登録する実行エイリアスが本体より先に選ばれる。同名のエイリアスが追加されるだけでも、PATH や profile を変更せずに起動先が変わる。
 
@@ -18,7 +18,7 @@ PATH で `WindowsApps` が `WinGet\Links` より前にあると、GitHub Copilot
 
 ```powershell
 Set-Alias -Name copilot -Value "$env:LOCALAPPDATA\Microsoft\WinGet\Links\copilot.exe"
-copilot-guardrails
+copilot --version
 ```
 
 同じ設定は管理対象の PowerShell profile に含まれる。適用済みの端末では新しい PowerShell から有効になる。`-NoProfile` で開始した子プロセスは alias を継承しないため、本体のパスを直接指定する。
@@ -144,7 +144,7 @@ bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true
 
 ## Copilot sandbox 内で uv がキャッシュを書き込めない
 
-macOS、Linux、WSL の Copilot CLI 1.0.92-4 以降は、uv の既定 cache を sandbox の `readwritePaths` へ自動追加する。Windows は `%LOCALAPPDATA%` が ProcessContainer 内で仮想化されるため、PowerShell tool のコマンド内だけ `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を使用する。
+Copilot CLI は uv の既定 cache に書き込み許可を追加する。dotfiles は `UV_CACHE_DIR` を設定せず、専用 cache grant を追加しない。
 
 ```bash
 unset UV_CACHE_DIR
@@ -152,13 +152,11 @@ chezmoi apply
 uv --offline --directory / --project / cache dir
 ```
 
-Windows では Copilot CLI を終了し、通常 PowerShell で `Remove-Item Env:\UV_CACHE_DIR -ErrorAction SilentlyContinue; chezmoi apply` を実行する。Copilot CLI を再起動し、`[Environment]::GetEnvironmentVariable('COPILOT_DOTFILES_UV_CACHE_DIR', 'User')` と PowerShell tool 内の `uv cache dir` が `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` を返すことを確認する。通常 PowerShell の uv 既定 cache は変更しない。
+既定 cache への書き込みが失敗したら、Copilot CLI の版、`/sandbox policy`、sandbox 内の `uv cache dir` と実行結果を確認する。`/sandbox policy` の表示だけでは書き込み成功を確認できない。Windows の mise shim 起動失敗は cache 許可とは別の問題として調べる。絶対 uv path、PATH 変更、mise の data/state 許可で回避しない。
 
-`/sandbox policy` の表示だけでは書き込み成功を確認できない。sandbox 内の `uv cache dir` が意図した保存先を返すことと、通常の Python 自動探索による `uv run` の成功、ホストへのキャッシュ永続化を確認する。WSL の調査では、許可なしでもコマンドが成功し、ホストには何も残らない場合があった。[実 CLI での確認手順](copilot-sandbox-verification.md#実-cli-で-hook-interpreter-と-uv-cache-grant-を確認する)は終了コードとホスト側のファイルを分けて判定する。
+過去の設定にある `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` grant と `COPILOT_DOTFILES_UV_CACHE_DIR` は、設定同期が既定旧 path と完全一致する場合だけ除去する。専用 cache directory の実体は削除しない。別の環境変数値や他の filesystem grants は保持する。
 
-設定同期や hook が保存先のエラーを報告した場合は、Copilot CLI の版、生成された `readwritePaths`、`COPILOT_DOTFILES_UV_CACHE_DIR`、既存の RO / deny との競合を確認する。Windows で `%LOCALAPPDATA%\Packages\sandbox.{GUID}\AC\uv\cache` が表示される場合は、Copilot CLI が補助環境変数を継承していることと、`uv-enforcer.py` の PowerShell command rewrite を確認する。mise の config、state、downloads や `%LOCALAPPDATA%\uv\cache` の許可を追加して回避しない。仮想化先では一時ファイルの作成が成功しても rename が `アクセスが拒否されました` になる（[github/copilot-agent-runtime#18974](https://github.com/github/copilot-agent-runtime/issues/18974)）。`COPILOT_DOTFILES_UV_CACHE_DIR` が未設定の場合、PowerShell tool は既定 cache のまま実行されるため、このエラーが再発する。
-
-Windows の PowerShell tool で `uv is not a valid shim` や mise の purgatory 警告が出る場合は、User PATH に mise shim が残っているか、`mise bin-paths` の実体同期が行われていない。Copilot CLI を終了して `chezmoi apply` を再実行し、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH の先頭を確認する。shim を許可するために mise の config、state、downloads を sandbox へ追加しない。
+Windows の対話 PowerShell または sandboxed Azure MCP が `uv is not a valid shim` / `npx is not a valid shim` を報告する場合は、mise shim が shell の継承 PATH に残っている可能性がある。`Get-Command uv,npx,node -All` で選択元を確認し、`home/dot_config/mise/config.toml.tmpl` から生成された mise 設定に `activate_shims = false` があることを確認する。設定を `chezmoi apply` で配布してから、新しい PowerShell と Copilot CLI を起動する。mise の activation はこの設定で既存 shim も PATH から除き、導入済みツールの実体ディレクトリを維持する。User PATH の実体同期が欠けている場合に限り、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH を確認する。mise の config、state、downloads を sandbox へ追加して shim 解決を回避しない。
 
 hook launcher が `missing .../python-runtime.env`、`recorded interpreter is not a regular file`、`python must live under ...` を報告する場合は、Copilot CLI を終了して `chezmoi apply` を再実行する。適用時に uv managed Python 3.14 を provision し、runtime env と `readonlyPaths` を更新してから launcher のスモークテストを実行する。
 

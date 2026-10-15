@@ -39,21 +39,18 @@ class CopilotHooksConfigTests(unittest.TestCase):
 
     def test_all_guards_run_before_the_argument_rewriter(self) -> None:
         hooks = json.loads(HOOKS_PATH.read_text())["hooks"]["preToolUse"]
-        expected = ("copilot-guard.py", "node-global-enforcer.py", "uv-enforcer.py")
+        expected = ("copilot-guard.py", "uv-enforcer.py")
         for hook, script in zip(hooks, expected, strict=True):
             for shell in ("bash", "powershell"):
                 self.assertIn(script, hook[shell])
 
     def test_guard_chain_checks_original_command_before_rewriting(self) -> None:
         scripts = REPO_ROOT / "home/private_dot_copilot/hooks/scripts"
-        for command, denying_script in (
-            ("npm install --global example", "node-global-enforcer.py"),
-            ("python script.py", "uv-enforcer.py"),
-        ):
+        for command, denying_script in (("python script.py", "uv-enforcer.py"),):
             with self.subTest(command=command):
                 args = {"command": command}
                 seen = []
-                for name in ("copilot-guard.py", "node-global-enforcer.py", "uv-enforcer.py"):
+                for name in ("copilot-guard.py", "uv-enforcer.py"):
                     seen.append(args["command"])
                     result = run_hook(scripts / f"executable_{name}", {"toolName": "bash", "toolArgs": args})
                     self.assertEqual(result.returncode, 0, result.stderr)
@@ -66,9 +63,25 @@ class CopilotHooksConfigTests(unittest.TestCase):
                     self.fail("guard chain did not deny the command")
                 self.assertTrue(all(value == command for value in seen))
 
+    def test_registered_hooks_do_not_block_global_node_install(self) -> None:
+        hooks = json.loads(HOOKS_PATH.read_text())["hooks"]["preToolUse"]
+        scripts = REPO_ROOT / "home/private_dot_copilot/hooks/scripts"
+        args = {"command": "npm install --global example"}
+
+        for hook in hooks:
+            name = hook["bash"].rsplit(" ", maxsplit=1)[-1]
+            with self.subTest(hook=name):
+                result = run_hook(
+                    scripts / f"executable_{name}",
+                    {"toolName": "bash", "toolArgs": args},
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                output = json.loads(result.stdout) if result.stdout.strip() else {}
+                self.assertNotEqual(output.get("permissionDecision"), "deny")
+
     def test_all_commands_use_the_pinned_interpreter_launcher(self) -> None:
         commands = _commands()
-        self.assertEqual(len(commands), 5)
+        self.assertEqual(len(commands), 4)
 
         for command in commands:
             with self.subTest(command=command):

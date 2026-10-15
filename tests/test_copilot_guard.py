@@ -704,101 +704,6 @@ class CopilotGuardCommandMatchingTests(GuardAssertionsMixin, unittest.TestCase):
         self.assert_hook_decision(result, "deny")
 
 
-class CopilotGuardEnvBlockingTests(GuardAssertionsMixin, unittest.TestCase):
-    """Tests for environment variable access blocking."""
-
-    def test_environment_access_cases(self) -> None:
-        denied = (
-            ("printenv", "bash", "printenv"),
-            ("printenv pipe", "bash", "printenv | grep SECRET"),
-            ("bare env", "bash", "env"),
-            ("bare set", "bash", "set"),
-            ("declare", "bash", "declare -p"),
-            ("export", "bash", "export -p"),
-            ("compgen variables", "bash", "compgen -v"),
-            ("compgen environment", "bash", "compgen -e"),
-            ("quoted set", "bash", '"s"et'),
-            ("quoted declare", "bash", 'dec"lare" -p'),
-            ("quoted export", "bash", 'expo"rt" -p'),
-            ("quoted compgen", "bash", 'comp"gen" -v'),
-            ("quoted PowerShell double", "powershell", 'Get-Ch"ildItem" Env:'),
-            ("quoted PowerShell single", "powershell", "Get-Ch'ildItem' Env:"),
-            ("POSIX empty quotes", "bash", "print''env"),
-            ("POSIX double quotes", "bash", 'print""env'),
-            ("POSIX split single quotes", "bash", "pr'int'en'v'"),
-            ("POSIX mixed quotes", "bash", """pr"in"t'e'nv"""),
-            ("GitHub token", "bash", "echo $GITHUB_TOKEN"),
-            ("braced secret", "bash", "echo ${SECRET_KEY}"),
-            ("Azure secret", "bash", 'echo "$AZURE_CLIENT_SECRET"'),
-            ("API key", "bash", "curl -H 'Authorization: $API_KEY'"),
-            ("database password", "bash", "mysql -p$DB_PASSWORD"),
-            ("connection string", "bash", "echo $DATABASE_CONNECTION_STRING"),
-            ("auth token", "bash", "echo $AUTH_TOKEN"),
-            ("camel auth token", "bash", "echo $githubToken"),
-            ("camel API key", "bash", "echo $apiKey"),
-            ("concatenated secret", "bash", "echo $mysecret"),
-            ("concatenated token", "bash", "echo $githubtoken"),
-            ("concatenated password", "bash", "echo $mypassword"),
-            ("concatenated API key", "bash", "echo $XAPIKEY"),
-            ("concatenated signing key", "bash", "echo $signingkey"),
-            ("PowerShell env", "powershell", "Write-Output $env:GITHUB_TOKEN"),
-            ("braced PowerShell env", "powershell", "Write-Output ${env:GITHUB_TOKEN}"),
-            ("Python environ", "bash", 'uv run python -c "import os; print(os.environ)"'),
-            ("Node process.env", "bash", 'node -e "console.log(process.env)"'),
-            ("quoted Node process.env", "bash", "node -e 'console.log(process.'env')'"),
-            ("Perl ENV", "bash", "perl -e 'foreach (keys %ENV) { print }'"),
-            ("Ruby ENV", "bash", 'ruby -e "puts ENV.to_h"'),
-            ("PowerShell env dump", "powershell", "Get-ChildItem Env:"),
-            ("pipe chain", "bash", "ls && printenv | grep SECRET"),
-            ("sensitive chained variable", "bash", "cd /tmp && echo $GITHUB_TOKEN"),
-        )
-        allowed = (
-            ("env isolated", "bash", "env -i PATH=/usr/bin bash"),
-            ("env unset", "bash", "env -u SECRET command"),
-            ("env assignment", "bash", "env FOO=bar command"),
-            ("env separator", "bash", "env -- command"),
-            ("set option", "bash", "set -e"),
-            ("set options", "bash", "set -euo pipefail"),
-            ("author", "bash", "echo $author"),
-            ("keyword", "bash", "echo $keyword"),
-            ("tokens", "bash", "echo $tokens"),
-            ("monkey", "bash", "echo $monkey"),
-            ("PowerShell local variable", "powershell", "Write-Output $GITHUB_TOKEN"),
-            ("PowerShell PATH", "powershell", "Write-Output $env:PATH"),
-            ("braced PowerShell PATH", "powershell", "Write-Output ${env:PATH}"),
-            ("PATH", "bash", "echo $PATH"),
-            ("HOME", "bash", "echo $HOME"),
-            ("SHELL", "bash", "echo $SHELL"),
-            ("USER", "bash", "echo $USER"),
-            ("NODE_ENV", "bash", "echo $NODE_ENV"),
-            ("EDITOR", "bash", "echo $EDITOR"),
-            ("SSH_AUTH_SOCK", "bash", "echo $SSH_AUTH_SOCK"),
-            ("XDG_CONFIG_HOME", "bash", "echo $XDG_CONFIG_HOME"),
-            ("TMPDIR", "bash", "echo $TMPDIR"),
-            ("PWD", "bash", "echo $PWD"),
-            ("empty", "bash", ""),
-            ("normal command", "bash", "ls -la /tmp"),
-            ("ordinary heredoc", "bash", "cat <<'EOF'\nit's ordinary text\nEOF"),
-            ("unbalanced quote", "bash", "printf '%s\n ordinary"),
-            ("git", "bash", "git --no-pager status"),
-        )
-        for expected, cases in ((True, denied), (False, allowed)):
-            for name, shell, command in cases:
-                with self.subTest(name=name):
-                    result = copilot_guard.check_env_access(command, shell)
-                    self.assertEqual(result is not None, expected)
-
-    def test_entrypoint_denies_quote_obfuscated_env_dump(self) -> None:
-        for command in ("print''env", """pr"in"t'e'nv"""):
-            with self.subTest(command=command):
-                result = run_hook(
-                    SCRIPT_PATH,
-                    {"toolName": "bash", "toolArgs": {"command": command}},
-                )
-                self.assert_hook_decision(result, "deny")
-
-
-
 class CopilotGuardNewBlockedPatternsTests(unittest.TestCase):
     """Coverage for Copilot hooks, SSH, and .github hook patterns."""
 
@@ -877,28 +782,6 @@ class CopilotGuardAskPatternsTests(GuardAssertionsMixin, unittest.TestCase):
                 self.assert_check_result(
                     copilot_guard.check_blocked_files(ctx), decision, reason
                 )
-
-
-class CopilotGuardCheckerReturnTypeTests(GuardAssertionsMixin, unittest.TestCase):
-    def test_check_env_return_cases(self) -> None:
-        cases = (
-            ("dump", "bash", "printenv", "deny"),
-            ("safe", "bash", "ls -la", None),
-            ("PowerShell local", "powershell", "Write-Output $GITHUB_TOKEN", None),
-            ("PowerShell env", "powershell", "Write-Output $env:GITHUB_TOKEN", "deny"),
-        )
-        for name, tool_name, command, decision in cases:
-            with self.subTest(name=name):
-                result = copilot_guard.check_env(
-                    make_ctx(
-                        tool_name=tool_name,
-                        tool_args={"command": command},
-                        command=command,
-                    )
-                )
-                self.assert_check_result(result, decision)
-                if result is not None:
-                    self.assertIsInstance(result, copilot_guard.CheckResult)
 
 
 class GitCommitCheckerTests(GuardAssertionsMixin, unittest.TestCase):
@@ -990,12 +873,12 @@ class LogDenyTests(unittest.TestCase):
         return json.loads(line)
 
     def test_logs_shell_command(self) -> None:
-        ctx = make_ctx(tool_name="powershell", command="printenv PATH")
-        copilot_guard._log_deny(ctx, "Blocked env dump command: printenv")
+        ctx = make_ctx(tool_name="powershell", command="Get-Content .env")
+        copilot_guard._log_deny(ctx, "Blocked path: **/.env")
         entry = self._read_entry()
         self.assertEqual(entry["tool"], "powershell")
-        self.assertEqual(entry["command"], "printenv PATH")
-        self.assertIn("env dump", entry["reason"])
+        self.assertEqual(entry["command"], "Get-Content .env")
+        self.assertEqual(entry["reason"], "Blocked path: **/.env")
 
     def test_logs_view_tool_path(self) -> None:
         ctx = make_ctx(

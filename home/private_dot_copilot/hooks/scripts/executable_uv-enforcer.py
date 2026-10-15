@@ -122,18 +122,6 @@ BLOCKED_COMMANDS: dict[str, str] = {
 VERSIONED_PYTHON_RE = re.compile(r"^python3(?:\.\d+)+(?:\.exe)?$")
 VERSIONED_PIP_RE = re.compile(r"^pip3(?:\.\d+)+(?:\.exe)?$")
 
-# Windows ProcessContainer は %LOCALAPPDATA% を仮想化し、リダイレクト先では
-# rename が拒否される (github/copilot-agent-runtime#18974)。補助環境変数が指す
-# 非仮想化 cache を command-local に設定して回避する。値を command 文字列へ
-# 直接書くと Copilot CLI の path 承認が発生するため、参照だけを渡す。
-# この定数と main() の分岐を削除すれば撤去できる。
-WINDOWS_UV_CACHE_ENV = "COPILOT_DOTFILES_UV_CACHE_DIR"
-WINDOWS_UV_CACHE_PREFIX = (
-    f"if (-not [string]::IsNullOrWhiteSpace($env:{WINDOWS_UV_CACHE_ENV})) {{ "
-    f"$env:UV_CACHE_DIR = $env:{WINDOWS_UV_CACHE_ENV} }}; "
-)
-
-
 def blocked_command_reason(command_name: str) -> str | None:
     """Return the deny reason for blocked Python executables."""
     normalized = command_name.lower()
@@ -197,18 +185,6 @@ def main() -> None:
     reason = check_command(command)
     if reason:
         deny(reason)
-
-    if tool_name == "powershell" and not command.startswith(WINDOWS_UV_CACHE_PREFIX):
-        print(
-            json.dumps(
-                {
-                    "modifiedArgs": {
-                        **tool_args,
-                        "command": WINDOWS_UV_CACHE_PREFIX + command,
-                    }
-                }
-            )
-        )
 
     return  # Command is fine — defer to CLI default
 

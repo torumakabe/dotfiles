@@ -54,6 +54,10 @@ lockfile = true
 # 実行中のプラットフォームは、この配列に無くても必ず対象へ加わる。
 lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", "windows-arm64"]
 fetch_remote_versions_timeout = "60s"
+{{ if eq .chezmoi.os "windows" -}}
+# sandbox 子プロセスでは mise shim が config を解決できないため、導入済み実体を使う。
+activate_shims = false
+{{ end -}}
 
 [tool_alias]
 dotnet = "core:dotnet"

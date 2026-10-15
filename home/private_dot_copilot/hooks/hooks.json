@@ -11,13 +11,6 @@
       },
       {
         "type": "command",
-        "bash": "\"$HOME/.copilot/hooks/run-hook.sh\" node-global-enforcer.py",
-        "powershell": "& \"$HOME\\.copilot\\hooks\\run-hook.ps1\" node-global-enforcer.py",
-        "cwd": ".",
-        "timeoutSec": 30
-      },
-      {
-        "type": "command",
         "bash": "\"$HOME/.copilot/hooks/run-hook.sh\" uv-enforcer.py",
         "powershell": "& \"$HOME\\.copilot\\hooks\\run-hook.ps1\" uv-enforcer.py",
         "cwd": ".",

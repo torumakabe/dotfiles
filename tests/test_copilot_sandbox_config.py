@@ -47,7 +47,7 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             self.assertIn(expected_message, script)
             self.assertNotIn(obsolete_message, script)
 
-    def test_user_policy_has_cross_platform_defaults_and_guardrail_aliases(self) -> None:
+    def test_user_policy_has_cross_platform_defaults_and_masked_credentials(self) -> None:
         policy = json.loads(USER_POLICY_PATH.read_text(encoding="utf-8"))
         self.assertTrue(policy["experimental"])
         self.assertEqual(
@@ -63,17 +63,24 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             "allowDevToolAccess",
         ):
             self.assertTrue(sandbox[name])
-        self.assertFalse(sandbox["sandboxMcpServers"])
+        self.assertTrue(sandbox["sandboxMcpServers"])
         self.assertFalse(sandbox["sandboxLspServers"])
         self.assertEqual(sandbox["auth"], {"git": True, "gh": True})
         self.assertEqual(
             sandbox["userPolicy"]["network"],
             {"allowOutbound": True, "allowLocalNetwork": True},
         )
-        self.assertIn("--allow-all", ZSHRC_PATH.read_text(encoding="utf-8"))
-        self.assertIn(
-            "--allow-all",
-            POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8"),
+        self.assertEqual(
+            sandbox["credentials"]["envVars"],
+            {
+                name: {"injectHosts": ["mask-only.invalid"]}
+                for name in (
+                    "AZURE_CLIENT_SECRET",
+                    "ARM_CLIENT_SECRET",
+                    "ARM_ACCESS_KEY",
+                    "AZURE_STORAGE_CONNECTION_STRING",
+                )
+            },
         )
 
     def test_azure_skills_telemetry_is_disabled_in_all_shell_environments(
@@ -163,19 +170,67 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             self.powershell,
         )
 
-    def test_tool_runtime_readonly_grants_are_added_without_uv_config(self) -> None:
-        """恒久: mise と uv の実体への read-only grant。
+    def test_tool_runtime_readonly_grants_are_narrow(self) -> None:
+        """恒久: mise、uv 実体と必要な設定ファイルへの read-only grant。
 
-        製品側の修正では撤去しない。uv の設定ディレクトリは grant しない。
+        uv の設定ディレクトリは grant せず、各 OS で uv.toml だけを加える。
         """
         for expected in ("mise_data_dir", "readonly_grants"):
             self.assertIn(expected, self.posix)
         for expected in ("$miseDataDir", "$miseExe", "$uvExe", "Get-ResolvedPathTarget"):
             self.assertIn(expected, self.powershell)
-        for script in (self.posix, self.powershell):
-            self.assertNotIn(".config/uv", script)
         self.assertIn("reduce $readonly_grants[] as $path", self.posix)
         self.assertIn("Add-ReadonlyDirectoryAndTarget", self.powershell)
+
+    def test_uv_config_grants_are_one_readonly_file_and_idempotent(self) -> None:
+        self.assertIn('uv_config_home="${XDG_CONFIG_HOME:-}"', self.posix)
+        self.assertIn('if [[ "${uv_config_home}" != /* ]]; then', self.posix)
+        self.assertIn('[[ "${HOME:-}" = /* ]] ||', self.posix)
+        self.assertIn('uv_config_home="${HOME%/}/.config"', self.posix)
+        self.assertIn(
+            'uv_config_path="${uv_config_home%/}/uv/uv.toml"',
+            self.posix,
+        )
+        self.assertIn('add_readonly_grant "${uv_config_path}"', self.posix)
+        self.assertNotIn('add_directory_grant "${uv_config_path}"', self.posix)
+        self.assertNotIn('add_readonly_grant "${uv_config_home}"', self.posix)
+        self.assertNotIn('[[ -f "${uv_config_path}" ]]', self.posix)
+
+        self.assertTrue(
+            self.powershell.startswith('{{- if eq .chezmoi.os "windows" -}}')
+        )
+        self.assertIn(
+            "$uvConfigPath = Join-Path $env:APPDATA 'uv\\uv.toml'",
+            self.powershell,
+        )
+        self.assertIn(
+            "$readonlyPaths = @(Add-UniquePath "
+            "-Paths $readonlyPaths -Path $uvConfigPath)",
+            self.powershell,
+        )
+        self.assertIn(
+            "$readonlyPaths = @(\n"
+            "  Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem "
+            "-Name 'readonlyPaths')\n"
+            ")",
+            self.powershell,
+        )
+        self.assertRegex(
+            self.powershell,
+            r"(?s)\$present = \$result \| Where-Object \{.*?"
+            r"if \(-not \$present\) \{\s*\$result \+= \$Path\s*\}",
+        )
+        self.assertIn(
+            "(Get-NormalizedPathKey -Path ([string]$_)) -eq $pathKey",
+            self.powershell,
+        )
+        self.assertNotIn(
+            "Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path "
+            "(Join-Path $env:APPDATA 'uv')",
+            self.powershell,
+        )
+        self.assertNotIn("Test-Path -LiteralPath $uvConfigPath", self.powershell)
+        self.assertNotIn("Get-Content -LiteralPath $uvConfigPath", self.powershell)
 
     def test_pinned_hook_interpreter_grants_come_from_the_recorded_runtime(self) -> None:
         """撤去単位: 固定 Python interpreter。
@@ -207,42 +262,47 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
                 self.powershell,
             )
 
-    def test_windows_relocated_cache_replaces_only_the_legacy_grant(self) -> None:
-        """撤去単位: Windows の relocated uv cache（ADR-031）。
-
-        github/copilot-agent-runtime#18974 が解消し、ProcessContainer 内の
-        atomic rename が成功したら、このテストと cache 生成、exact grant、
-        補助環境変数の設定をまとめて削除する。
-        """
+    def test_windows_uv_cache_migration_removes_only_exact_legacy_entries(self) -> None:
+        """古いWindows専用cache grantと補助変数だけを移行時に除去する。"""
         self.assertIn("map(select(. != $legacy_cache))", self.posix)
         self.assertIn(
-            "[System.StringComparison]::OrdinalIgnoreCase",
+            "$legacyWindowsUvCacheDir = Join-Path",
             self.powershell,
         )
-        self.assertIn("-not [string]::Equals(", self.powershell)
-        self.assertNotIn("UV_CACHE_DIR", self.posix)
         self.assertIn(
             "'.cache\\github-copilot\\uv\\powershell-tool'",
             self.powershell,
         )
+        self.assertIn("$legacyUvCachePathKeys -notcontains", self.powershell)
         self.assertIn(
-            "Add-UniquePath -Paths $readwritePaths -Path $uvCacheDir",
+            "Get-NormalizedPathKey -Path ([string]$_)",
             self.powershell,
         )
+        self.assertNotIn("UV_CACHE_DIR", self.posix)
         self.assertIn(
-            "New-Item -ItemType Directory -Path $uvCacheDir",
-            self.powershell,
-        )
-        self.assertIn(
-            "$uvCacheEnvironmentName = 'COPILOT_DOTFILES_UV_CACHE_DIR'",
+            "$legacyUvCacheEnvironmentName = 'COPILOT_DOTFILES_UV_CACHE_DIR'",
             self.powershell,
         )
         self.assertIn(
             "[EnvironmentVariableTarget]::User",
             self.powershell,
         )
+        self.assertIn("[EnvironmentVariableTarget]::Process", self.powershell)
+        self.assertIn("$null,", self.powershell)
+        self.assertNotIn("$uvCacheDir", self.powershell)
+        self.assertNotIn("Get-SafeWindowsUvCache", self.powershell)
+        self.assertNotIn("Test-PathOverlap", self.powershell)
+        self.assertNotIn("New-Item -ItemType Directory -Path $uvCacheDir", self.powershell)
+        self.assertNotIn("Add-UniquePath -Paths $readwritePaths -Path $uvCacheDir", self.powershell)
+        self.assertNotIn(
+            "Remove-Item -LiteralPath $legacyWindowsUvCacheDir",
+            self.powershell,
+        )
+        self.assertIn(
+            "(Get-NormalizedPathKey -Path $legacyUserCacheValue) -eq",
+            self.powershell,
+        )
         self.assertIn("Publish-EnvironmentChange", self.powershell)
-        self.assertIn("Test-PathOverlap", self.powershell)
         self.assertNotIn('mkdir -p "${uv_cache_dir}"', self.posix)
 
 

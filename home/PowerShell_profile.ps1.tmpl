@@ -625,16 +625,6 @@ if (Test-Path -LiteralPath $copilotCli -PathType Leaf) {
 }
 Remove-Variable copilotCli
 
-# Copilot CLI: local sandbox is enabled. preToolUse hooks still protect
-# sensitive files and shell-level secret reads.
-function Invoke-CopilotGuardrails {
-    copilot `
-      --allow-all `
-      --secret-env-vars 'AZURE_CLIENT_SECRET,ARM_CLIENT_SECRET,ARM_ACCESS_KEY,AZURE_STORAGE_CONNECTION_STRING' `
-      @args
-}
-Set-Alias -Name copilot-guardrails -Value Invoke-CopilotGuardrails
-
 # === Completers and tool setup ===
 
 # https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-windows?tabs=azure-cli#enable-tab-completion-in-powershell

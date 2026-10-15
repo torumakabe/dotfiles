@@ -16,10 +16,26 @@
   "sandbox": {
     "enabled": true,
     "allowBypass": true,
-    "sandboxMcpServers": false,
+    "sandboxMcpServers": true,
     "sandboxLspServers": false,
     "addCurrentWorkingDirectory": true,
     "allowDevToolAccess": true,
+    "credentials": {
+      "envVars": {
+        "AZURE_CLIENT_SECRET": {
+          "injectHosts": ["mask-only.invalid"]
+        },
+        "ARM_CLIENT_SECRET": {
+          "injectHosts": ["mask-only.invalid"]
+        },
+        "ARM_ACCESS_KEY": {
+          "injectHosts": ["mask-only.invalid"]
+        },
+        "AZURE_STORAGE_CONNECTION_STRING": {
+          "injectHosts": ["mask-only.invalid"]
+        }
+      }
+    },
     "auth": {
       "git": true,
       "gh": true

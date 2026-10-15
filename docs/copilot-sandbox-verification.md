@@ -89,21 +89,21 @@ git diff --check
 
 ## 実 CLI で hook interpreter と uv cache grant を確認する
 
-CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。macOS、Linux、WSL は uv の既定 cache が sandbox の `filesystem.readwritePaths` に追加されることを確認する。Windows は `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` の exact grant、`COPILOT_DOTFILES_UV_CACHE_DIR`、PowerShell tool command の rewrite を確認する。rewrite 後の command に cache path が含まれず、`--allow-all-paths` なしの非対話起動で成功することも確認する。候補実装の実機検証では、Copilot 設定と hook を一時ディレクトリへ複製し、実ユーザーの設定ファイルを変更しない。
+CLI 起動環境から `UV_CACHE_DIR` を除いた状態で検証する。各環境で uv が既定 cache を使い、その path が sandbox の `filesystem.readwritePaths` に含まれることを確認する。
 
-実機検証の対象は macOS、Windows native、WSL2 とする。Windows native は GitHub Copilot App の Windows セッション、WSL2 は WSL 内で起動した Copilot CLI を使う。Linux native は対象外とし、テンプレート生成と静的テストの確認範囲に留める。検証手順は各セッションへ直接貼り付け、計画書や一回限りの probe はリポジトリへ追加しない。
+実機検証では、対象 OS 上の通常の Copilot CLI セッションを使う。一回限りの probe はリポジトリへ追加しない。
 
 各環境で、次を確認する。
 
 - `chezmoi apply` が `python-runtime.env` を生成し、記録した interpreter で launcher のスモークテストが成功する
-- 全5件の hook が launcher から起動し、hook プロセス内で mise と uv を起動しない
+- 登録済みの各 hook が launcher から起動し、hook プロセス内で mise と uv を起動しない
 - 記録した interpreter が uv managed Python root 配下にあり、標準ライブラリの `encodings` を読み込める
 - 通常の shell tool 内では mise 管理コマンドを従来どおり実行できる
 - uv が自動探索した Python で `--offline --no-project --no-env-file --no-python-downloads` を指定した実行が成功する
-- POSIX は通常の shell から取得した uv の既定 cache、Windows は relocated cache に marker を書き込める
+- POSIX と Windows は uv の既定 cache へ marker を書き込み、別 tool call から同じ内容を再利用できる
 - 生成 policy が使用した cache と同じ path を `readwritePaths` に含む
 - 生成 policy が `~/.copilot/hooks`、通常の shell tool に必要な mise path、runtime env の `python_root` を `readonlyPaths` に含む
-- 旧専用 `github-copilot/uv` を生成 policy に追加しない
+- 旧専用 `github-copilot/uv` cache grant を生成 policy に追加しない
 - `python` と `pip` の直接実行拒否、および `uv run` と `uv pip` の無変更通過を維持する
 
 外部モデル、対話ログイン、ネットワークアクセス、Python の新規ダウンロードは使用しない。marker と一時ファイルは検証終了時に削除する。
@@ -126,7 +126,7 @@ Linux 系では `sandbox.enabled` が `true` または未設定の場合に bubb
 
 uv の書き込み許可は、通常の `uv cache dir` と sandbox 内の出力を比較し、`uv run` 後にホスト側へファイルが残ることまで確認する。`/sandbox policy` の表示だけでは成功と扱わない。プロジェクト固有のキャッシュ設定がある場合は、ユーザー共通設定との差も記録する。
 
-`tests.test_copilot_sandbox_config` の backend テストは、単純な OS 書き込み制限下で、許可なしの uv が失敗し、生成した実体パスへの許可ありで成功することを確認する。Copilot CLI が組み立てた実効ポリシーの試験ではないため、CLI と WSL の実機確認を代替しない。
+`tests.test_copilot_sandbox_config` は設定生成と filesystem access control を検査する。Copilot CLI を使った確認は実機検証手順に従う。
 
 ### 初期状態
 
@@ -147,7 +147,9 @@ copilot
 - General に表示される sandbox の有効状態が環境別の期待値と一致する
 - Auth、Filesystem、Network の各画面を開ける
 - backend 名が表示される版では、その表示を記録する
-- MCP と LSP は sandbox 対象外である
+- `sandboxMcpServers` が有効、`sandboxLspServers` が無効である。sandbox 有効時はローカル MCP server が sandbox 内で実行される
+
+ローカル MCP の資格情報 masking は、隔離設定と Guard を使った合成変数の比較で確認した。CLI と条件ごとの結果、実際の資格情報を測定していない制約は [ADR-035](adr/035-copilot-cli-sandbox-mcp-servers.md) を参照する。
 
 backend 名が表示されない版では「表示なし」と記録し、成功条件にはしない。managed または locked と表示される場合は、組織管理設定が利用者設定より優先されているため、環境別の初期値との不一致を dotfiles の失敗とは扱わない。
 

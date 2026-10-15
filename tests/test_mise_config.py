@@ -1995,6 +1995,37 @@ $result = @{{
             profile,
         )
 
+    def test_mise_shims_are_disabled_only_in_windows_config(self) -> None:
+        chezmoi = shutil.which("chezmoi")
+        if chezmoi is None:
+            self.skipTest("chezmoi is required to render the platform config")
+
+        rendered_settings: dict[str, dict] = {}
+        for os_name in ("windows", "darwin"):
+            with self.subTest(os=os_name):
+                rendered = subprocess.run(
+                    [
+                        chezmoi,
+                        "execute-template",
+                        "--override-data",
+                        json.dumps(
+                            {"chezmoi": {"os": os_name, "arch": "arm64"}}
+                        ),
+                        "--file",
+                        str(CONFIG_PATH),
+                    ],
+                    check=False,
+                    capture_output=True,
+                    encoding="utf-8",
+                )
+                self.assertEqual(rendered.returncode, 0, rendered.stderr)
+                rendered_settings[os_name] = tomllib.loads(rendered.stdout).get(
+                    "settings", {}
+                )
+
+        self.assertIs(rendered_settings["windows"].get("activate_shims"), False)
+        self.assertNotIn("activate_shims", rendered_settings["darwin"])
+
     def test_cargo_make_linux_arm64_constraint_stays_aligned(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")
 

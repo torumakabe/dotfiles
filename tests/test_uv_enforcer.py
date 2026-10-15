@@ -1,6 +1,5 @@
 import json
 import pathlib
-import sys
 import unittest
 
 from tests._helpers import load_script, run_hook, scoped_environ
@@ -91,7 +90,6 @@ class CommandPolicyTests(unittest.TestCase):
                 result = uve.check_command(command)
                 self.assertEqual(result is not None, blocked)
 
-
 class MainIntegrationTests(unittest.TestCase):
     def _decision(self, payload: dict | str) -> dict:
         result = run_hook(SCRIPT_PATH, payload)
@@ -135,46 +133,14 @@ class MainIntegrationTests(unittest.TestCase):
             }
         )
 
-    def test_powershell_sets_the_non_virtualized_cache_per_command(self) -> None:
-        """撤去単位: Windows の relocated uv cache（ADR-031）。
-
-        github/copilot-agent-runtime#18974 が解消したら、このテストと
-        WINDOWS_UV_CACHE_PREFIX、main() の rewrite 分岐をまとめて削除する。
-        """
-        output = self._decision(
+    def test_powershell_uv_command_is_not_rewritten(self) -> None:
+        self._assert_unchanged(
             {
                 "toolName": "powershell",
                 "toolArgs": {
                     "command": "uv run script.py",
                     "description": "Run script",
                 },
-            }
-        )
-
-        self.assertEqual(
-            output["modifiedArgs"]["command"],
-            uve.WINDOWS_UV_CACHE_PREFIX + "uv run script.py",
-        )
-        self.assertEqual(output["modifiedArgs"]["description"], "Run script")
-        self.assertIn(
-            "$env:COPILOT_DOTFILES_UV_CACHE_DIR",
-            output["modifiedArgs"]["command"],
-        )
-        self.assertNotIn(".cache\\github-copilot", output["modifiedArgs"]["command"])
-        self.assertNotIn("Path]::Combine", output["modifiedArgs"]["command"])
-
-    def test_powershell_cache_prefix_does_not_fail_the_command_when_unset(self) -> None:
-        # 補助環境変数が未設定の端末では cache を既定のままにし、tool call 自体は
-        # 成功させる。設定漏れを PowerShell の例外で表面化させない。
-        self.assertNotIn("throw", uve.WINDOWS_UV_CACHE_PREFIX)
-        self.assertIn("if (-not [string]::IsNullOrWhiteSpace(", uve.WINDOWS_UV_CACHE_PREFIX)
-
-    def test_powershell_cache_prefix_is_idempotent(self) -> None:
-        command = uve.WINDOWS_UV_CACHE_PREFIX + "uv run script.py"
-        self._assert_unchanged(
-            {
-                "toolName": "powershell",
-                "toolArgs": {"command": command},
             }
         )
 

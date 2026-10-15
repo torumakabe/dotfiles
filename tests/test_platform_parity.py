@@ -99,7 +99,6 @@ PLATFORM_CONTRACT = {
     "shell:uv-tools-upgrade": _implemented_everywhere(),
     "shell:kubectl-shortcut": _implemented_everywhere(),
     "shell:ll": _implemented_everywhere(),
-    "shell:copilot-guardrails": _implemented_everywhere(),
     "shell:copilot-winget-launcher": _windows_only(
         "exception: docs/troubleshooting.md WindowsApps execution alias workaround"
     ),
@@ -153,7 +152,6 @@ ZSH_PUBLIC_SYMBOLS = {
     ("function", "uv-tools-upgrade"): "shell:uv-tools-upgrade",
     ("alias", "k"): "shell:kubectl-shortcut",
     ("alias", "ll"): "shell:ll",
-    ("alias", "copilot-guardrails"): "shell:copilot-guardrails",
     ("alias", "z"): "shell:zoxide",
     ("alias", "zi"): "shell:zoxide",
 }
@@ -166,7 +164,6 @@ POWERSHELL_PUBLIC_SYMBOLS = {
     ("function", "Invoke-MiseUpgrade"): "shell:mise-upgrade",
     ("function", "Invoke-UvToolsUpgrade"): "shell:uv-tools-upgrade",
     ("function", "Invoke-GitHooksAudit"): "shell:git-hooks-audit",
-    ("function", "Invoke-CopilotGuardrails"): "shell:copilot-guardrails",
     ("alias", "e"): "shell:edit-shortcut",
     ("alias", "k"): "shell:kubectl-shortcut",
     ("alias", "mise-self-update"): "shell:mise-self-update",
@@ -174,7 +171,6 @@ POWERSHELL_PUBLIC_SYMBOLS = {
     ("alias", "uv-tools-upgrade"): "shell:uv-tools-upgrade",
     ("alias", "git-hooks-audit"): "shell:git-hooks-audit",
     ("alias", "copilot"): "shell:copilot-winget-launcher",
-    ("alias", "copilot-guardrails"): "shell:copilot-guardrails",
     ("alias", "z"): "shell:zoxide",
 }
 
@@ -202,10 +198,6 @@ SHELL_ANCHORS = {
         "powershell": "Set-Alias -Name k -Value kubectl",
     },
     "shell:ll": {"zsh": "alias ll=", "powershell": "function ll {"},
-    "shell:copilot-guardrails": {
-        "zsh": "alias copilot-guardrails=",
-        "powershell": "Set-Alias -Name copilot-guardrails",
-    },
     "shell:copilot-winget-launcher": {
         "powershell": "Set-Alias -Name copilot -Value $copilotCli",
     },
@@ -344,6 +336,11 @@ class PlatformParityTests(unittest.TestCase):
                         status == "implemented" or status.startswith("exception: docs/"),
                         status,
                     )
+
+    def test_copilot_guardrails_wrappers_are_removed(self) -> None:
+        self.assertNotIn("copilot-guardrails", self.zshrc)
+        self.assertNotIn("copilot-guardrails", self.powershell)
+        self.assertNotIn("Invoke-CopilotGuardrails", self.powershell)
 
     def test_ci_enforces_the_cross_platform_contract(self) -> None:
         workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")

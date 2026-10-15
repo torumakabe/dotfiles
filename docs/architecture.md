@@ -26,9 +26,8 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 - 設定配布 `chezmoi` / ツール版管理 `mise` / Python 実行 `uv`
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
-- `copilot-guard.py` / `uv-enforcer.py` / `node-global-enforcer.py` でネットワーク以外の危険操作を抑止、`postToolUse` で監査ログ
+- `copilot-guard.py` で保護対象ファイルの操作と `git commit` を判定し、`uv-enforcer.py` で Python / pip の直接実行を抑止。`postToolUse` で監査ログ
 - Copilot CLI local sandbox は環境別の初期値を user-level settings へ設定し、OS 別 backend で shell と filesystem policy を適用
-- `copilot-guardrails` で利便性と秘匿環境変数の扱いを固定
 - `gitleaks` 付き pre-commit を `init.templateDir`（ADR-018）と設定ベースフック（ADR-020）の 2 レイヤで配布
 
 ## Copilot Guard の設計
@@ -38,15 +37,14 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 1. ファイル操作と読み取り専用検索のプロジェクト配下パス例外 (`allowed-files.txt`)
 2. 秘匿ファイル拒否 (`blocked-files.txt`)
 3. 確認付きアクセス (`ask-files.txt`)
-4. 機微な環境変数の読み取り拒否 (`printenv`, `$TOKEN`, `os.environ` 等)。通常使う変数は許可リストで除外
-5. `git commit` の明示承認
+4. `git commit` の明示承認
 
 パス比較前に `\` を `/` へ正規化する。`allowed-files.txt` は、ワイルドカードのない単一のプロジェクト相対パスを `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。読み取り専用の `rg` と `glob` にも例外を適用するが、検索フィルターはワイルドカードのない許可パスに限定し、明示された検索ルートがすべてプロジェクト内にあることを確認する。シンボリックリンク、ジャンクション、file URI、`..` を含むパス、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
 各 command hook は `~/.copilot/hooks/run-hook.sh` または `run-hook.ps1` から、記録済みの uv managed Python を絶対パスで直接起動する。`chezmoi apply` は先に Python 3.14 を provision し、interpreter と install root を `~/.copilot/hooks/python-runtime.env` へ記録する。launcher は script 名と interpreter の所在を検証してから実行し、sandbox 内では mise と uv を起動しない。hook scripts は標準ライブラリだけを使い、Python の要件は PEP 723 の `requires-python` にも残す（[ADR-007](adr/007-python-with-uv-and-pep723.md)）。
 
-Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
+Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。初回値と明示設定保持は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、ローカル MCP sandbox は [ADR-035](adr/035-copilot-cli-sandbox-mcp-servers.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
 
-`copilot-guardrails --allow-all` はツール権限の承認を省略するが、local sandbox の有効状態は変更しない。MCP と LSP は sandbox 対象外である。backend は macOS の Seatbelt、Linux、WSL、Codespaces、Dev Container の bubblewrap、Windows の ProcessContainer である。Linux 系の診断は `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap を確認し、`false` の場合は probe を省略する。診断は利用可否を報告するものであり、sandbox 外での再実行方法が提示されることを保証しない。
+Copilot CLI local sandbox は user-level settings で有効化する。`credentials.envVars` は指定した環境変数を sandbox 子プロセスへ偽の値で渡し、承認した HTTPS host への request header に限って proxy が実値を注入する。`sandbox.enabled=true` の session では、ローカル MCP server も sandbox 内で実行し、LSP は対象外とする。backend は macOS の Seatbelt、Linux、WSL、Codespaces、Dev Container の bubblewrap、Windows の ProcessContainer である。Linux 系の診断は `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap を確認し、`false` の場合は probe を省略する。診断は利用可否を報告するものであり、sandbox 外での再実行方法が提示されることを保証しない。
 
 コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトを正本とする。
 
@@ -121,6 +119,8 @@ Dock / Spotlight / GitHub Desktop から起動された子プロセスは launch
 ### mise shims の制約
 
 mise は POSIX では shims と `mise activate` を併用する。Windows の対話 PowerShell は `mise activate pwsh` を使うが、非対話プロセスは User PATH に同期した実体ディレクトリからコマンドを起動する。`run_onchange_after_15` は前回同期したディレクトリを state file で追跡し、更新時に旧 entry と `%LOCALAPPDATA%\mise\shims` だけを除去する。利用者が追加した他の PATH entry は保持する。
+
+Windows の mise 設定は `activate_shims = false` とし、対話 PowerShell の activation が後続プロセスへ shim を追加しないようにする。mise は導入済みツールの実体ディレクトリを PATH に追加するため、通常の uv と Node/npm コマンドは実体から起動できる。未導入または lazy install のツールを shim 経由で初回起動する動作は使わない。
 
 Windows の非対話プロセスで選ばれる版は、同期時のグローバル mise 設定に固定される。プロジェクト固有の `mise.toml` を反映する操作は、対話 PowerShell の activation または明示的な `mise exec -- <command>` を使う。同期後の User PATH が30,000文字を超える場合は、環境変数の切り詰めを避けるため apply を失敗させる。
 

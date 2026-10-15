@@ -40,12 +40,6 @@ command -v mise >/dev/null && source <(mise activate zsh)
 alias k=kubectl
 alias ll='ls -ahl'
 
-# Copilot CLI: local sandbox is enabled. preToolUse hooks still protect
-# sensitive files and shell-level secret reads.
-alias copilot-guardrails='copilot \
-  --allow-all \
-  --secret-env-vars "AZURE_CLIENT_SECRET,ARM_CLIENT_SECRET,ARM_ACCESS_KEY,AZURE_STORAGE_CONNECTION_STRING"'
-
 # FPATH for completions (must be before compinit)
 [ -f "$HOME/.zfunc/_rustup" ] && FPATH=$HOME/.zfunc:$FPATH
 
