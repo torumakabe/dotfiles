@@ -91,13 +91,10 @@ class CommandPolicyTests(unittest.TestCase):
                 result = uve.check_command(command)
                 self.assertEqual(result is not None, blocked)
 
-    def test_allows_absolute_uv_probe_with_control_cache_prefix(self) -> None:
+    def test_allows_direct_uv_run_probe_with_control_cache_prefix(self) -> None:
         command = (
-            r"C:\Users\trial\AppData\Local\mise\installs\uv\current\uv.exe"
-            r" run --no-project --isolated --no-python-downloads"
-            r" --python 'C:\Python\python.exe' --with idna==3.10"
-            r" python 'C:\trial\code\Test-UvCacheSandbox.py'"
-            r" --root 'C:\trial' --mode 'control' --step 1"
+            r"uv run --no-python-downloads --with idna==3.10"
+            r" python .\Test-UvCacheSandbox.py --mode control --step 1"
         )
         self._assert_commands(
             (command, uve.WINDOWS_UV_CACHE_PREFIX + command), blocked=False

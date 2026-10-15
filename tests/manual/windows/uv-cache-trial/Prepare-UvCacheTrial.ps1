@@ -6,7 +6,6 @@ param(
     [Parameter(Mandatory)] [string] $Root,
     [ValidateSet('control', 'candidate')] [string] $Mode = 'control',
     [string] $SourceCopilotHome = (Join-Path $HOME '.copilot'),
-    [string] $PythonPath,
     [string] $OldCachePath = $env:COPILOT_DOTFILES_UV_CACHE_DIR
 )
 Set-StrictMode -Version Latest
@@ -65,40 +64,6 @@ function Select-Sandbox($Value) {
         } }
     }
 }
-function Assert-NoExplicitUvOverride {
-    foreach ($name in @('UV_CONFIG_FILE', 'UV_NO_CACHE', 'UV_NO_CONFIG',
-        'UV_WORKING_DIR', 'UV_PROJECT', 'UV_ENV_FILE', 'UV_PROJECT_ENVIRONMENT')) {
-        foreach ($scope in @('Process', 'User', 'Machine')) {
-            if ([Environment]::GetEnvironmentVariable($name, $scope)) {
-                throw "Explicit override detected: $name ($scope); classification is pending."
-            }
-        }
-    }
-    foreach ($scope in @('User', 'Machine')) {
-        if ([Environment]::GetEnvironmentVariable('UV_CACHE_DIR', $scope)) {
-            throw "Persistent UV_CACHE_DIR detected ($scope); do not change it automatically."
-        }
-    }
-}
-function Find-UvConfiguration([string] $Directory) {
-    $paths = [Collections.Generic.List[string]]::new()
-    $cursor = [IO.DirectoryInfo]::new($Directory)
-    while ($null -ne $cursor) {
-        $paths.Add((Join-Path $cursor.FullName 'uv.toml'))
-        $paths.Add((Join-Path $cursor.FullName 'pyproject.toml'))
-        $cursor = $cursor.Parent
-    }
-    $paths.Add((Join-Path $env:APPDATA 'uv\uv.toml'))
-    $paths.Add((Join-Path $env:PROGRAMDATA 'uv\uv.toml'))
-    foreach ($path in $paths | Select-Object -Unique) {
-        $exists = Test-Path -LiteralPath $path -PathType Leaf
-        if ($exists -and (Get-Content -LiteralPath $path -Raw) -match
-            '(?m)^\s*(cache-dir|no-cache)\s*=') {
-            throw "Cache configuration detected in $path; review TOML and hold the trial."
-        }
-        [ordered]@{ path = $path; exists = $exists }
-    }
-}
 function Invoke-HookCheck([string] $HomePath, [string] $Command) {
     $payload = @{ toolName = 'powershell'; toolArgs = @{ command = $Command } } |
         ConvertTo-Json -Compress
@@ -109,31 +74,25 @@ function Invoke-HookCheck([string] $HomePath, [string] $Command) {
     if ($text.Trim()) { return ($text | ConvertFrom-Json -AsHashtable) }
     return @{}
 }
-function ConvertTo-PowerShellLiteral([string] $Value) {
-    return "'" + $Value.Replace("'", "''") + "'"
-}
-
-$manifestPath = Join-Path $Root 'manifest.json'
+$manifestPath = Join-Path $Root 'workspace\trial.json'
 if ($Action -eq 'Prepare') {
-    Assert-NoExplicitUvOverride
     if (Test-Path -LiteralPath $Root) { throw 'Root already exists; use a new trial directory.' }
-    $miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction Stop |
-        Select-Object -First 1).Source
-    $uvPaths = @(& $miseExe which uv)
-    if ($LASTEXITCODE -ne 0 -or $uvPaths.Count -ne 1) {
-        throw 'mise which uv must resolve exactly one installed executable.'
+    $hostUvCommand = Get-Command uv -ErrorAction Stop
+    if ($hostUvCommand.CommandType -ne [Management.Automation.CommandTypes]::Application) {
+        throw 'The usual terminal resolves uv through a PowerShell alias/function, not an application; preserve it and stop for review.'
     }
-    $uvPath = ([string]$uvPaths[0]).Trim()
-    if (-not [IO.Path]::IsPathFullyQualified($uvPath) -or
-        $uvPath.StartsWith('\\') -or $uvPath -notmatch '^[A-Za-z]:\\[A-Za-z0-9_.\\/-]+$' -or
-        [IO.Path]::GetFileName($uvPath) -ine 'uv.exe' -or
-        $uvPath.Replace('/', '\') -match '(?i)\\shims\\' -or
-        -not (Test-Path -LiteralPath $uvPath -PathType Leaf)) {
-        throw 'Resolved uv must be a non-shim uv.exe with a local path usable as a bare PowerShell command (ASCII letters, digits, _, ., -, and path separators). Quoted call-operator commands lose Python scope in CLI 1.0.98-0; do not change installation paths automatically.'
-    }
-    $uvPath = [IO.Path]::GetFullPath($uvPath)
-    $uvVersion = (@(& $uvPath --version) -join "`n")
+    $hostUvPath = [IO.Path]::GetFullPath($hostUvCommand.Source)
+    $hostUvVersion = (@(uv --version) -join "`n")
     if ($LASTEXITCODE -ne 0) { throw 'The resolved uv executable could not run.' }
+    $cacheHome = if ($env:COPILOT_CACHE_HOME) {
+        if (-not [IO.Path]::IsPathFullyQualified($env:COPILOT_CACHE_HOME)) {
+            throw 'COPILOT_CACHE_HOME is relative; runtime cache attribution cannot be derived safely.'
+        }
+        [IO.Path]::GetFullPath($env:COPILOT_CACHE_HOME)
+    } else {
+        [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'copilot'))
+    }
+    $runtimeUvCachePath = Join-Path $cacheHome 'sandbox\packages\uv'
     $hooksSource = Join-Path $SourceCopilotHome 'hooks'
     $runtime = @{}
     $runtimePath = Join-Path $hooksSource 'python-runtime.env'
@@ -151,14 +110,6 @@ if ($Action -eq 'Prepare') {
         -not (Test-Path -LiteralPath $runtime['python'] -PathType Leaf)) {
         throw 'The existing managed Python recorded by python-runtime.env is unavailable.'
     }
-    if (-not $PythonPath) { $PythonPath = $runtime['python'] }
-    if ((Normalize-Path $PythonPath) -ne (Normalize-Path $runtime['python'])) {
-        throw 'PythonPath must match the interpreter already recorded by python-runtime.env.'
-    }
-    $PythonPath = (Resolve-Path -LiteralPath $PythonPath).Path
-    $found = @(& $uvPath python find --no-project --no-python-downloads $PythonPath)
-    if ($LASTEXITCODE -ne 0 -or (Normalize-Path ($found -join '').Trim()) -ne
-        (Normalize-Path $PythonPath)) { throw 'uv cannot find the exact installed Python.' }
     if (-not $OldCachePath) { throw 'The current dedicated cache helper is absent.' }
     $oldKey = Normalize-Path $OldCachePath
     $rootKey = Normalize-Path $Root
@@ -188,7 +139,6 @@ if ($Action -eq 'Prepare') {
         throw 'Source does not contain the exact dedicated-cache write grant.'
     }
     $candidateRw = @($rw | Where-Object { (Normalize-Path $_) -ne $oldKey })
-    $configurationFiles = @(Find-UvConfiguration (Join-Path $Root 'workspace'))
     if (((Get-Item -LiteralPath $hooksSource).Attributes -band [IO.FileAttributes]::ReparsePoint) -or
         @(Get-ChildItem -LiteralPath $hooksSource -Recurse -Force |
         Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) {
@@ -224,21 +174,20 @@ if ($Action -eq 'Prepare') {
     if ($promptMatches.Count -ne 1) { throw 'The guide must contain exactly one trial prompt template.' }
     $promptTemplate = $promptMatches[0].Groups[1].Value
     New-Item -ItemType Directory -Path $Root -ErrorAction Stop | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $Root 'workspace\evidence'), (Join-Path $Root 'code') |
-        Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $Root 'workspace\evidence') | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Test-UvCacheSandbox.py') `
-        -Destination (Join-Path $Root 'code')
+        -Destination (Join-Path $Root 'workspace')
     $manifest = [ordered]@{
-        schema = 1; trialId = [guid]::NewGuid().ToString(); root = $Root
-        workspace = (Join-Path $Root 'workspace'); pythonPath = $PythonPath
-        uvPath = $uvPath
-        oldCachePath = $oldKey
-        uvConfigurationFiles = $configurationFiles; modes = @{}
+        schema = 2; trialId = [guid]::NewGuid().ToString()
+        workspace = (Join-Path $Root 'workspace')
+        hostUv = @{ path = $hostUvPath; version = $hostUvVersion }
+        runtimeUvCachePath = $runtimeUvCachePath
+        runtimeCachePathBasisCliVersion = '1.0.98-0'
+        oldCachePath = $oldKey; modes = @{}
         osBuild = [Environment]::OSVersion.Version.ToString()
     }
     $manifest.cliVersion = (@(& copilot --no-auto-update --version) -join "`n")
     if ($LASTEXITCODE -ne 0) { throw 'CLI version query failed.' }
-    $manifest.uvVersion = $uvVersion
     foreach ($variant in @('control', 'candidate')) {
         $homePath = Join-Path $Root "$variant\.copilot"
         $hooksPath = Join-Path $homePath 'hooks'
@@ -261,8 +210,7 @@ if ($Action -eq 'Prepare') {
         }
         $ro = @(Get-PolicyPaths $copy['sandbox']['userPolicy']['filesystem'] 'readonlyPaths')
         $copy['sandbox']['userPolicy']['filesystem']['readonlyPaths'] =
-            @($ro + $homePath + (Join-Path $Root 'code') + $manifestPath +
-                $runtime['python_root'] | Select-Object -Unique)
+            @($ro + $homePath + $runtime['python_root'] | Select-Object -Unique)
         Write-Json "$homePath\settings.json" $copy
         $names = @($hooks['hooks']['preToolUse'] | ForEach-Object { $_['powershell'] })
         foreach ($required in @('copilot-guard.py', 'uv-enforcer.py')) {
@@ -271,28 +219,21 @@ if ($Action -eq 'Prepare') {
             }
         }
         $prompt = $promptTemplate.Replace('<Root>', $Root).Replace('<Mode>', $variant)
-        $prompt = $prompt.Replace('<ProbeLiteral>',
-            (ConvertTo-PowerShellLiteral (Join-Path $Root 'code\Test-UvCacheSandbox.py')))
-        $prompt = $prompt.Replace('<RootLiteral>', (ConvertTo-PowerShellLiteral $Root))
-        $prompt = $prompt.Replace('<PythonLiteral>',
-            (ConvertTo-PowerShellLiteral $manifest.pythonPath))
-        $prompt = $prompt.Replace('<UvCommand>', $uvPath)
-        if ($prompt -match '<(?:Root|Mode|ProbeLiteral|RootLiteral|PythonLiteral|UvCommand)>') {
+        if ($prompt -match '<(?:Root|Mode)>') {
             throw 'Generated prompt still contains a trial placeholder.'
         }
-        $runCommands = @([regex]::Matches($prompt,
-            '(?m)^' + [regex]::Escape($uvPath) + ' run [^\r\n]+$') |
+        $runCommands = @([regex]::Matches($prompt, '(?m)^uv run [^\r\n]+$') |
             ForEach-Object { $_.Value })
         if ($runCommands.Count -ne 2 -or
-            $runCommands[0] -notmatch 'python .+Test-UvCacheSandbox\.py.+--mode .+' -or
+            $runCommands[0] -notmatch 'python \.\\Test-UvCacheSandbox\.py --mode ' -or
             $runCommands[0] -notmatch '--step 1$' -or
             $runCommands[0] -match '--offline' -or
-            $runCommands[1] -notmatch 'python .+Test-UvCacheSandbox\.py.+--mode .+' -or
+            $runCommands[1] -notmatch 'python \.\\Test-UvCacheSandbox\.py --mode ' -or
             $runCommands[1] -notmatch '--step 2$' -or
             $runCommands[1] -notmatch '--offline') {
-            throw 'Generated probe commands must directly run both uv steps without a wrapper.'
+            throw 'Generated measurements must call bare uv directly for both separate steps.'
         }
-        [IO.File]::WriteAllText((Join-Path $Root "code\$variant-prompt.txt"),
+        [IO.File]::WriteAllText((Join-Path $Root "$variant-prompt.txt"),
             $prompt, [Text.UTF8Encoding]::new($false))
         foreach ($command in @('python script.py', 'pip install example')) {
             if ((Invoke-HookCheck $homePath $command)['permissionDecision'] -ne 'deny') {
@@ -320,28 +261,11 @@ if ($Action -eq 'Prepare') {
                 throw 'Candidate must not rewrite a generated measurement command.'
             }
         }
-        $hashes = @{}
-        foreach ($file in @('copilot-guard.py', 'uv-enforcer.py')) {
-            $hashes[$file] = (Get-FileHash -LiteralPath "$hooksPath\scripts\$file" -Algorithm SHA256).Hash
-        }
-        $supportHashes = @{}
-        foreach ($file in @('hooks.json', 'allowed-files.txt', 'blocked-files.txt', 'ask-files.txt',
-            'python-runtime.env', 'run-hook.ps1')) {
-            $hash = (Get-FileHash -LiteralPath (Join-Path $hooksPath $file)).Hash
-            if ($hash -ne (Get-FileHash -LiteralPath (Join-Path $hooksSource $file)).Hash) {
-                throw 'A copied policy/launcher/runtime file changed.'
-            }
-            $supportHashes[$file] = $hash
-        }
         $manifest.modes[$variant] = @{
-            home = $homePath; hookHashes = $hashes; supportHashes = $supportHashes
-            configuredSandbox = (Select-Sandbox $copy['sandbox']); directPythonAndPipDenied = $true
+            home = $homePath
+            readwritePaths = @(Get-PolicyPaths $copy['sandbox']['userPolicy']['filesystem'] 'readwritePaths')
+            configuredSandbox = (Select-Sandbox $copy['sandbox'])
         }
-    }
-    $sourceGuardHash = (Get-FileHash -LiteralPath "$hooksSource\scripts\copilot-guard.py").Hash
-    if ($manifest.modes.control.hookHashes['copilot-guard.py'] -ne $sourceGuardHash -or
-        $manifest.modes.candidate.hookHashes['copilot-guard.py'] -ne $sourceGuardHash) {
-        throw 'Guard source changed while copying.'
     }
     Write-Json $manifestPath $manifest
     Write-Output "Prepared: $manifestPath"
@@ -351,22 +275,20 @@ if ($Action -eq 'Prepare') {
 # Launch affects this terminal process and its child only; restore it on return.
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -AsHashtable
 if ($Action -eq 'Prompt') {
-    if ((Normalize-Path $manifest['root']) -ne (Normalize-Path $Root)) {
-        throw 'Manifest root differs from the requested trial.'
+    if ((Normalize-Path $manifest['workspace']) -ne (Normalize-Path (Join-Path $Root 'workspace'))) {
+        throw 'Trial workspace differs from the prepared record.'
     }
-    Write-Output ([IO.File]::ReadAllText((Join-Path $Root "code\$Mode-prompt.txt")))
+    Write-Output ([IO.File]::ReadAllText((Join-Path $Root "$Mode-prompt.txt")))
     exit 0
 }
-Assert-NoExplicitUvOverride
 $homePath = $manifest['modes'][$Mode]['home']
 $saved = @{}
-foreach ($name in @('COPILOT_HOME', 'UV_CACHE_DIR', 'COPILOT_DOTFILES_UV_CACHE_DIR',
+foreach ($name in @('COPILOT_HOME', 'COPILOT_DOTFILES_UV_CACHE_DIR',
     'COPILOT_AUDIT_DIR', 'COPILOT_ALLOW_ALL')) {
     $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 try {
     $env:COPILOT_HOME = $homePath
-    [Environment]::SetEnvironmentVariable('UV_CACHE_DIR', $null, 'Process')
     [Environment]::SetEnvironmentVariable('COPILOT_ALLOW_ALL', $null, 'Process')
     if ($Mode -eq 'control') { $env:COPILOT_DOTFILES_UV_CACHE_DIR = $manifest['oldCachePath'] }
     else { [Environment]::SetEnvironmentVariable('COPILOT_DOTFILES_UV_CACHE_DIR', $null, 'Process') }
@@ -389,10 +311,17 @@ try {
             ConvertTo-Json -Compress
         if ($actual -cne $expected) { throw "Loaded filesystem setting differs: $name" }
     }
-    Write-Json (Join-Path $Root "workspace\evidence\$Mode\cli-configured-sandbox.json") (Select-Sandbox $loaded)
-    Write-Json (Join-Path $Root "workspace\evidence\$Mode\launch.json") @{
-        parentCacheOverridePresent = $false; mode = $Mode; home = $homePath
-        parentHelperPresent = -not [string]::IsNullOrEmpty($env:COPILOT_DOTFILES_UV_CACHE_DIR)
+    $evidencePath = Join-Path $Root "workspace\evidence\$Mode"
+    foreach ($name in @('launch.json', 'uv-resolution.json', 'step-1.json', 'step-2.json')) {
+        if (Test-Path -LiteralPath (Join-Path $evidencePath $name)) {
+            throw 'This mode already has evidence; do not overwrite it. Prepare a new trial root.'
+        }
+    }
+    Write-Json (Join-Path $evidencePath 'launch.json') @{
+        mode = $Mode; sandboxSettingsLoaded = $true; home = $homePath
+        parentUvCacheOverridePresent = -not [string]::IsNullOrEmpty(
+            [Environment]::GetEnvironmentVariable('UV_CACHE_DIR', 'Process'))
+        helperEnabled = $Mode -eq 'control'
         cliVersion = (@(& copilot --no-auto-update --version) -join "`n")
     }
     & copilot -C $manifest['workspace'] --no-auto-update
