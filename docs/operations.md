@@ -185,7 +185,7 @@ zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、lockfile �
 1. `gh auth token` で一時トークンを取得
 2. 既存の `mise.lock` と `~/.config/mise/locks/` を退避
 3. `mise upgrade`
-4. `minimum_release_age` の正規形警告と、`mise-versions ... fallback=true` の回復済み警告以外の `mise WARN` が出力された場合は、退避した生成物を復元して停止
+4. リリース待機期間による保留、回復済みのメタデータ取得フォールバック、未対応プラットフォームのスキップ以外の `mise WARN` が出力された場合は、退避した生成物を復元して停止。手順 5 の `mise lock` にも同じ警告判定を適用する
 5. 既存の lockfile と sidecar を削除し、`mise lock --global --platform ... --bump` で config の selector から版を再解決して再生成
 6. lockfile の形式番号と、参照する sidecar path および各ディレクトリの `aube-lock.yaml` / `package.json` を検証。未対応の形式番号なら target を復元して停止
 7. chezmoi source の lockfile と exact sidecar tree を退避し、lockfile を `chezmoi re-add` した後、既存 sidecar を `chezmoi forget --force` で管理対象から外して `chezmoi add --exact` で追加
@@ -220,12 +220,16 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 - `mise upgrade` 後は lockfile と `~/.config/mise/locks/` を一度削除してから再生成する。既存 lockfile のエントリと、参照されなくなった sidecar を残さないためである
 - `aube.path` を持つ lockfile だけを `chezmoi re-add` しない。既存の `~/.config/mise/locks/` を `chezmoi forget --force` した後、同じディレクトリを `chezmoi add --exact` で同じ変更へ含める
 - sidecar が 0 件の場合は `~/.config/mise/locks/.keep` を生成して exact directory を Git の管理対象に残す。他端末で適用したときに旧 sidecar を削除するためであり、sidecar が再び生成される更新では `.keep` も削除する
-- 両シェルとも、`minimum_release_age` の正規形に一致するリリース保留警告と、`mise-versions` が `fallback=true` を明示した回復済み警告だけを許可し、警告内容と継続理由を表示する
+- 両シェルとも、`minimum_release_age` の正規形に一致するリリース保留警告と、`mise-versions` が `fallback=true` を明示した回復済み警告を許可し、警告内容と継続理由を表示する
+- `<tool>@<version> is not available for <platform>[, <platform>...]; it will not install there` の正規形に一致する未対応プラットフォームのスキップ警告も許可し、警告内容と継続理由を表示する。ツール名やプラットフォーム名ごとの例外は持たない。たとえば cargo-make の linux/arm64 未対応が該当する
+- mise 2026.10.12 は、以前は debug ログに記録していた未対応環境のスキップを、明示した対象環境では警告として表示するようになった（[jdx/mise#14500](https://github.com/jdx/mise/pull/14500)）。終了コードは変わらないため、この警告だけでは更新を失敗扱いにしない。これは対象環境すべてへの導入を保証するものではなく、配布物がない環境は従来どおりスキップする
 - `mise-versions ... fallback=true` は、GitHub Releases などの取得失敗後に代替経路で処理を継続できたことを示す。一時的な `502 Bad Gateway` でも発生するため、この警告だけから `GITHUB_TOKEN` の期限切れとは判断しない
 - 両シェルとも、許可対象以外の `mise WARN` が出力された場合は、終了コードが `0` でも lockfile を復元し、commit と push を行わない。`fallback=false`、`fallback` 欠落、形式不明の警告は停止対象とする
 - 両シェルとも、`mise upgrade`、`mise lock`、sidecar 検証、chezmoi source 更新の失敗時は、更新処理を始める前の lockfile と sidecar を復元する
 - 処理を停止した関数は、原因となった警告、lockfile の復元結果、実行ログの保存先を標準エラー出力へ表示する。運用者は表示されたログを確認して原因を特定する
 - PowerShell では `gh auth token` の値を処理中だけ `GITHUB_TOKEN` に設定し、終了時に実行前の値へ戻す。`--platform` の値はクォートする
+
+警告判定を変更したときは、`tests/test_platform_parity.py` で両シェルの判定形式を確認する。警告表示と停止または継続の動作は、zsh を利用する対象環境と Windows/PowerShell で確認する。macOS 上の共通テストだけで Windows の動作確認済みとは扱わない。
 
 ### 典型コマンド
 
