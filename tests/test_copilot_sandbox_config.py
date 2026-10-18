@@ -1,8 +1,13 @@
 """Guard static Copilot sandbox configuration contracts."""
 
 import json
+import os
 import pathlib
 import re
+import shutil
+import subprocess
+import sys
+import tempfile
 import unittest
 
 
@@ -304,6 +309,111 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         )
         self.assertIn("Publish-EnvironmentChange", self.powershell)
         self.assertNotIn('mkdir -p "${uv_cache_dir}"', self.posix)
+
+
+@unittest.skipUnless(
+    sys.platform == "darwin" and shutil.which("chezmoi"),
+    "macOS and chezmoi are required for profile environment tests",
+)
+class MacOSDotnetBundleEnvironmentTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.profile_path = pathlib.Path(cls.temp_dir.name) / "profile"
+        template_path = SOURCE_ROOT / "dot_profile.tmpl"
+        cls.profile_path.write_text(
+            cls._render_profile(template_path, "darwin"),
+            encoding="utf-8",
+        )
+        cls.linux_profile = cls._render_profile(template_path, "linux")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.temp_dir.cleanup()
+
+    @staticmethod
+    def _render_profile(template_path: pathlib.Path, os_name: str) -> str:
+        result = subprocess.run(
+            [
+                "chezmoi",
+                "execute-template",
+                "--override-data",
+                json.dumps({"chezmoi": {"os": os_name}}),
+                "--file",
+                str(template_path),
+            ],
+            check=False,
+            capture_output=True,
+            encoding="utf-8",
+        )
+        if result.returncode != 0:
+            raise AssertionError(result.stderr)
+        return result.stdout
+
+    def _run_profile(
+        self,
+        *,
+        tmpdir: str | None = None,
+        dotnet_base: str | None = None,
+        set_dotnet_base: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        env.pop("__DOTFILES_PROFILE_LOADED", None)
+        env.pop("DOTNET_BUNDLE_EXTRACT_BASE_DIR", None)
+        if tmpdir is None:
+            env.pop("TMPDIR", None)
+        else:
+            env["TMPDIR"] = tmpdir
+        if set_dotnet_base:
+            env["DOTNET_BUNDLE_EXTRACT_BASE_DIR"] = dotnet_base or ""
+
+        return subprocess.run(
+            [
+                "/bin/sh",
+                "-c",
+                '. "$1"; . "$1"; '
+                'if [ "${DOTNET_BUNDLE_EXTRACT_BASE_DIR+x}" = x ]; then '
+                'printf "SET:%s\\n" "$DOTNET_BUNDLE_EXTRACT_BASE_DIR"; '
+                'else printf "UNSET\\n"; fi',
+                "profile-test",
+                str(self.profile_path),
+            ],
+            check=False,
+            capture_output=True,
+            encoding="utf-8",
+            env=env,
+        )
+
+    def test_profile_sets_default_only_for_private_macos_tmpdir(self) -> None:
+        private_tmpdir = os.environ["TMPDIR"]
+        result = self._run_profile(tmpdir=private_tmpdir)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.strip(),
+            f"SET:{pathlib.Path(private_tmpdir).resolve()}",
+        )
+        self.assertEqual(result.stderr, "")
+        self.assertNotIn("DOTNET_BUNDLE_EXTRACT_BASE_DIR", self.linux_profile)
+
+    def test_existing_nonempty_and_empty_values_are_preserved(self) -> None:
+        for value in ("/existing/dotnet-cache", ""):
+            with self.subTest(value=value):
+                result = self._run_profile(
+                    tmpdir="/tmp",
+                    dotnet_base=value,
+                    set_dotnet_base=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), f"SET:{value}")
+
+    def test_shared_or_missing_tmpdir_does_not_set_a_default(self) -> None:
+        for tmpdir in ("/tmp", None):
+            with self.subTest(tmpdir=tmpdir):
+                result = self._run_profile(tmpdir=tmpdir)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), "UNSET")
+                self.assertIn("not a private user temporary directory", result.stderr)
 
 
 if __name__ == "__main__":

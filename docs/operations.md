@@ -91,6 +91,12 @@ Windows では `home/dot_config/mise/config.toml.tmpl` が `activate_shims = fal
 `AZURE_MCP_COLLECT_TELEMETRY=false` を設定し、Azure skills の利用状況 telemetry を停止する。
 この設定は新しいシェルから Copilot CLI を起動したときに有効になる。
 
+### macOS Azure MCP の.NET bundle展開先
+
+macOS の `.profile` は `DOTNET_BUNDLE_EXTRACT_BASE_DIR` が未設定の場合、所有者が現在の利用者で mode が `0700` のユーザー専用 `TMPDIR` に既定値を設定する。.NET runtime は必要な展開用サブディレクトリを作成する。共有一時ディレクトリや検証できない `TMPDIR` は使用しない。既存の環境変数値は空文字を含めて保持する。
+
+この設定は `.profile` を読み込むシェルから起動するすべての .NET single-file app に影響する。`.profile` を読み込まない GUI 起動元へ環境変数が継承されることは保証しない。上流修正を確認した後の撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)に記録する。
+
 ### sandbox ワークアラウンドの撤去手順
 
 Copilot CLI 側の修正で前提が変わったときに備え、撤去単位を3つに分けている。各単位は独立して撤去でき、他の単位を残したまま適用できる。

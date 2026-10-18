@@ -33,6 +33,30 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
   if [ -x /opt/homebrew/bin/brew ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
   fi
+  if [ "${DOTNET_BUNDLE_EXTRACT_BASE_DIR+x}" != x ]; then
+    dotnet_tmpdir=""
+    case "${TMPDIR:-}" in
+      /*)
+        dotnet_tmpdir="$(CDPATH= cd -P "${TMPDIR}" 2>/dev/null && pwd -P)" || dotnet_tmpdir=""
+        ;;
+    esac
+    case "${dotnet_tmpdir}" in
+      /private/var/folders/*/T)
+        dotnet_tmpdir_metadata="$(stat -f '%u %Lp' "${dotnet_tmpdir}" 2>/dev/null || true)"
+        dotnet_tmpdir_owner="${dotnet_tmpdir_metadata%% *}"
+        dotnet_tmpdir_mode="${dotnet_tmpdir_metadata#* }"
+        if [ "${dotnet_tmpdir_owner}" = "$(id -u)" ] &&
+          [ "${dotnet_tmpdir_owner}" != 0 ] &&
+          [ "${dotnet_tmpdir_mode}" = 700 ]; then
+          export DOTNET_BUNDLE_EXTRACT_BASE_DIR="${dotnet_tmpdir}"
+        fi
+        ;;
+    esac
+    if [ "${DOTNET_BUNDLE_EXTRACT_BASE_DIR+x}" != x ]; then
+      printf '%s\n' 'Warning: macOS TMPDIR is not a private user temporary directory; .NET bundle extraction will use its default path.' >&2
+    fi
+    unset dotnet_tmpdir dotnet_tmpdir_metadata dotnet_tmpdir_owner dotnet_tmpdir_mode
+  fi
 {{ end }}
   export GOPATH="${HOME}/go"
   # microsoft/azure-skills の telemetry hook は sandbox 内で npx を間接起動し、
