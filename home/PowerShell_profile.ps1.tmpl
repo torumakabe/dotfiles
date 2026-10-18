@@ -266,11 +266,13 @@ function Invoke-MiseUpgrade {
                 ForEach-Object { "$_" -replace "`e\[[0-9;]*[A-Za-z]", "" }
             $minimumReleaseAgePattern = '^mise WARN\s+newer \S+ release \S+(?:\s+\(released [^)]+\))?\s+ignored by minimum_release_age \([^)]+\); latest eligible release is \S+\s*$'
             $recoveredFallbackPattern = '^mise WARN\s+mise-versions\s+endpoint=\S+\s+repo=\S+\s+tag=\S+\s+outcome=\S+\s+status=\S+\s+fallback=true(?:\s+error=.*)?$'
+            $unsupportedPlatformPattern = '^mise WARN\s+\S+@\S+ is not available for [a-z0-9]+(-[a-z0-9]+)+(, [a-z0-9]+(-[a-z0-9]+)+)*; it will not install there$'
             $blockingWarnings = $normalizedOutput |
                 Where-Object {
                     $_ -match 'mise WARN' -and
                     $_ -notmatch $minimumReleaseAgePattern -and
-                    $_ -notmatch $recoveredFallbackPattern
+                    $_ -notmatch $recoveredFallbackPattern -and
+                    $_ -cnotmatch $unsupportedPlatformPattern
                 }
             if ($blockingWarnings) {
                 throw "${Phase}: 処理を中止する警告を検出したため、commit と push を中止します"
@@ -284,6 +286,11 @@ function Invoke-MiseUpgrade {
                 Where-Object { $_ -match $recoveredFallbackPattern }
             foreach ($warning in $recoveredFallbackWarnings) {
                 Write-Warning "${Phase}: 回復済みのメタデータ取得フォールバックを検出しました。処理を継続します: $warning"
+            }
+            $unsupportedPlatformWarnings = $normalizedOutput |
+                Where-Object { $_ -cmatch $unsupportedPlatformPattern }
+            foreach ($warning in $unsupportedPlatformWarnings) {
+                Write-Warning "${Phase}: 未対応プラットフォームのスキップを検出しました。処理を継続します: $warning"
             }
         }
 

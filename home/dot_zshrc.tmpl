@@ -271,6 +271,7 @@ _mise_is_allowed_warning() {
   local warning="$1"
   local minimum_release_age_pattern='^mise WARN[[:space:]]+newer [^[:space:]]+ release [^[:space:]]+([[:space:]]+\(released [^)]+\))?[[:space:]]+ignored by minimum_release_age \([^)]+\); latest eligible release is [^[:space:]]+$'
   local recovered_fallback_pattern='^mise WARN[[:space:]]+mise-versions[[:space:]]+endpoint=[^[:space:]]+[[:space:]]+repo=[^[:space:]]+[[:space:]]+tag=[^[:space:]]+[[:space:]]+outcome=[^[:space:]]+[[:space:]]+status=[^[:space:]]+[[:space:]]+fallback=true([[:space:]]+error=.*)?$'
+  local unsupported_platform_pattern='^mise WARN[[:space:]]+[^[:space:]]+@[^[:space:]]+ is not available for [a-z0-9]+(-[a-z0-9]+)+(, [a-z0-9]+(-[a-z0-9]+)+)*; it will not install there$'
 
   if [[ "$warning" =~ $minimum_release_age_pattern ]]; then
     print -r -- "minimum_release_age"
@@ -278,6 +279,10 @@ _mise_is_allowed_warning() {
   fi
   if [[ "$warning" =~ $recovered_fallback_pattern ]]; then
     print -r -- "recovered_fallback"
+    return 0
+  fi
+  if [[ "$warning" =~ $unsupported_platform_pattern ]]; then
+    print -r -- "unsupported_platform"
     return 0
   fi
   return 1
@@ -298,6 +303,8 @@ _mise_check_warnings() {
     if warning_type=$(_mise_is_allowed_warning "$warning"); then
       if [[ "$warning_type" == "minimum_release_age" ]]; then
         echo "⚠️ ${phase}: リリース待機期間による保留を検出しました。処理を継続します:" >&2
+      elif [[ "$warning_type" == "unsupported_platform" ]]; then
+        echo "⚠️ ${phase}: 未対応プラットフォームのスキップを検出しました。処理を継続します:" >&2
       else
         echo "⚠️ ${phase}: 回復済みのメタデータ取得フォールバックを検出しました。処理を継続します:" >&2
       fi
