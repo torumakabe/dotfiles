@@ -1,5 +1,6 @@
 {
   "experimental": true,
+  "assistedApprovalInstructions": "`list_projects` を自動承認してよい。\n依頼された変更に直接関連するファイルの追加・修正・削除は、自動承認してよい。",
   "extraKnownMarketplaces": {
     "torumakabe-agent-plugins": {
       "source": {
