@@ -129,38 +129,38 @@ url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo
 url_api = "https://api.github.com/repos/sagiegurari/cargo-make/releases/assets/221410756"
 
 [[tools.cosign]]
-version = "3.1.3"
+version = "3.1.4"
 backend = "aqua:sigstore/cosign"
 specifiers = ["latest"]
 
 [tools.cosign."platforms.linux-arm64"]
-checksum = "sha256:c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a"
-url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-arm64"
-url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/503286299"
+checksum = "sha256:ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-arm64"
+url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/660068106"
 provenance = "cosign"
 
 [tools.cosign."platforms.linux-x64"]
-checksum = "sha256:4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"
-url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-linux-amd64"
-url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/503286005"
+checksum = "sha256:424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64"
+url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/660069428"
 provenance = "cosign"
 
 [tools.cosign."platforms.macos-arm64"]
-checksum = "sha256:5cf948c2f4dfe59687bdd0b8523709067383e03982cc543475c8a7dc70e92a76"
-url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-darwin-arm64"
-url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/503286205"
+checksum = "sha256:9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-darwin-arm64"
+url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/660069257"
 provenance = "cosign"
 
 [tools.cosign."platforms.windows-arm64"]
-checksum = "sha256:9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be"
-url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe"
-url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/503286236"
+checksum = "sha256:cbe953787074611f1334cbf37dc1cf953995bb8c45398eb4fc7bb781d29c1f2a"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-windows-amd64.exe"
+url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/660070803"
 provenance = "cosign"
 
 [tools.cosign."platforms.windows-x64"]
-checksum = "sha256:9fe59be0eca1271873ce019061335eb1ac419b7059202e797828467ddabe33be"
-url = "https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign-windows-amd64.exe"
-url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/503286236"
+checksum = "sha256:cbe953787074611f1334cbf37dc1cf953995bb8c45398eb4fc7bb781d29c1f2a"
+url = "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-windows-amd64.exe"
+url_api = "https://api.github.com/repos/sigstore/cosign/releases/assets/660070803"
 provenance = "cosign"
 
 [[tools.cue]]
@@ -259,38 +259,38 @@ url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_windows_am
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741479"
 
 [[tools.github-cli]]
-version = "2.102.0"
+version = "2.102.1"
 backend = "aqua:cli/cli"
 specifiers = ["latest"]
 
 [tools.github-cli."platforms.linux-arm64"]
-checksum = "sha256:7862c86c72f43df3a2d93ddde6f473285b4e2af61b494849846827e513ef6484"
-url = "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/599854680"
+checksum = "sha256:5019b3cc6e8a03bb4d88600f8dbda2add8e6407705c159b0c63151036e77a1af"
+url = "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/660284837"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.linux-x64"]
-checksum = "sha256:bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386"
-url = "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/599854672"
+checksum = "sha256:77b9e297e94c50336823d0f84de7ef1be60cba704601fa0d98f129f47a94987b"
+url = "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/660284822"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.macos-arm64"]
-checksum = "sha256:da922c20d1792e5b2cbf375593d7a658acf034c12c84e007e71c76ef959c337e"
-url = "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_macOS_arm64.zip"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/599854720"
+checksum = "sha256:08bfef98b50c553df122bb34ee8dcf415cae7d3b108891488964a0df07aa2aeb"
+url = "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_macOS_arm64.zip"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/660284918"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.windows-arm64"]
-checksum = "sha256:5dcf12aa8525eabd0c46ec414f323ab6cf65229fc2cd46543cc705001bbaf223"
-url = "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_windows_arm64.zip"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/599854779"
+checksum = "sha256:1fe7462f72424f9309f5444b4c24e2246f5c40130afa0b1c61a3fdc6fc54cc04"
+url = "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_windows_arm64.zip"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/660285030"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.windows-x64"]
-checksum = "sha256:ae64e556ecc240b200f7eba60d550e4bb60d78e860e69dd88c449405b86067f4"
-url = "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_windows_amd64.zip"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/599854760"
+checksum = "sha256:843c0dc119f014d9458aeaff96c44c16fc4b8e556c1c4c5df9bab5ba002356e9"
+url = "https://github.com/cli/cli/releases/download/v2.102.1/gh_2.102.1_windows_amd64.zip"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/660284981"
 provenance = "github-attestations"
 
 [[tools.gitleaks]]
@@ -324,29 +324,29 @@ url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378333178"
 
 [[tools.go]]
-version = "1.27.2"
+version = "1.27.3"
 backend = "core:go"
 specifiers = ["latest"]
 
 [tools.go."platforms.linux-arm64"]
-checksum = "sha256:94f3e30b8e374bc285e7dadc11e0865726b9bc6e85b841ccceaabc0214c6b7c8"
-url = "https://dl.google.com/go/go1.27.2.linux-arm64.tar.gz"
+checksum = "sha256:a06e99309dbcbdca1a8ccd2282c3ee146e55930886e26b4f1193269587165f49"
+url = "https://dl.google.com/go/go1.27.3.linux-arm64.tar.gz"
 
 [tools.go."platforms.linux-x64"]
-checksum = "sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5"
-url = "https://dl.google.com/go/go1.27.2.linux-amd64.tar.gz"
+checksum = "sha256:65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"
+url = "https://dl.google.com/go/go1.27.3.linux-amd64.tar.gz"
 
 [tools.go."platforms.macos-arm64"]
-checksum = "sha256:76812b213b1b2302c978d28fa52fa92d541704b9e7d9d5db8002c50e4018c4c5"
-url = "https://dl.google.com/go/go1.27.2.darwin-arm64.tar.gz"
+checksum = "sha256:dd3908cf20959d798c1e06ebe5b72213f0505ce01373b40ce3110975a6cd99c2"
+url = "https://dl.google.com/go/go1.27.3.darwin-arm64.tar.gz"
 
 [tools.go."platforms.windows-arm64"]
-checksum = "sha256:5c4b294f23b558619ae8a4aa94d023e3bca03f52c8398bb41b9026002b0013de"
-url = "https://dl.google.com/go/go1.27.2.windows-arm64.zip"
+checksum = "sha256:c507872ff21f8a7cd3c1c217b059c6f7271a4a9d8e692810ef9dd3e1f601197c"
+url = "https://dl.google.com/go/go1.27.3.windows-arm64.zip"
 
 [tools.go."platforms.windows-x64"]
-checksum = "sha256:1314008898bd40df77af4b014f777f08873dbdfbcd3d92308728ee03304fe04f"
-url = "https://dl.google.com/go/go1.27.2.windows-amd64.zip"
+checksum = "sha256:f26081f438319757f8a1b46d7d0b2c5ec7583d4038e485e0aa725cfde7885fff"
+url = "https://dl.google.com/go/go1.27.3.windows-amd64.zip"
 
 [[tools.golangci-lint]]
 version = "2.15.0"
@@ -534,29 +534,29 @@ url_api = "https://api.github.com/repos/evilmartians/lefthook/releases/assets/63
 provenance = "github-attestations"
 
 [[tools.node]]
-version = "24.22.0"
+version = "24.22.1"
 backend = "core:node"
 specifiers = ["lts"]
 
 [tools.node."platforms.linux-arm64"]
-checksum = "sha256:b7e7991d5407815adfa74a2a9cd4db683552c8ce32ff4a295c22e972849c3f5d"
-url = "https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-arm64.tar.gz"
+checksum = "sha256:33c37be234ba8bee041961047b19160f4d7d0f164e8e246f78bdd10feff148b3"
+url = "https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-arm64.tar.gz"
 
 [tools.node."platforms.linux-x64"]
-checksum = "sha256:28ea0a438de9a13bd7891fd758eee6c7819ee8af5442dfd8d45bd65e56d4228c"
-url = "https://nodejs.org/dist/v24.22.0/node-v24.22.0-linux-x64.tar.gz"
+checksum = "sha256:eb6728e77c576a35162c122c45ccadf224d89ff00abc8dae46cc2897c6002d7c"
+url = "https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.gz"
 
 [tools.node."platforms.macos-arm64"]
-checksum = "sha256:6a9724d9b50a5f22b4816cded441b5a8d9ddae546191a5e5b7efa5a5e2ee26d5"
-url = "https://nodejs.org/dist/v24.22.0/node-v24.22.0-darwin-arm64.tar.gz"
+checksum = "sha256:89c682593d76cd44233fa53b1563264e7de9cbb189cad169135c5b4fadfbc0a7"
+url = "https://nodejs.org/dist/v24.22.1/node-v24.22.1-darwin-arm64.tar.gz"
 
 [tools.node."platforms.windows-arm64"]
-checksum = "sha256:3a5c209a5bc59e65b3bc0fa13ed5e166a26bd3d55332847f498b76b037408d61"
-url = "https://nodejs.org/dist/v24.22.0/node-v24.22.0-win-arm64.zip"
+checksum = "sha256:a0c807319fede24c4a0d8f84564c82a619bd313b16b10c007c383c2609e99171"
+url = "https://nodejs.org/dist/v24.22.1/node-v24.22.1-win-arm64.zip"
 
 [tools.node."platforms.windows-x64"]
-checksum = "sha256:f9683a19877e12a9b167305c8db71040d812876359de21f0d2e97c3f321f80c3"
-url = "https://nodejs.org/dist/v24.22.0/node-v24.22.0-win-x64.zip"
+checksum = "sha256:d2046d28c2c3dcd211ac5145c0bf30e2047ef9dfb306693c8c6e2eccd8b95fa5"
+url = "https://nodejs.org/dist/v24.22.1/node-v24.22.1-win-x64.zip"
 
 [[tools."npm:typescript"]]
 version = "7.0.2"
@@ -749,38 +749,38 @@ url_api = "https://api.github.com/repos/aquasecurity/trivy/releases/assets/64021
 provenance = "cosign"
 
 [[tools.uv]]
-version = "0.13.2"
+version = "0.13.4"
 backend = "aqua:astral-sh/uv"
 specifiers = ["latest"]
 
 [tools.uv."platforms.linux-arm64"]
-checksum = "sha256:3143e25fccac6f81b3b400792caa2ec431a5e8824d855cde9550a25f0fac8ea0"
-url = "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-aarch64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/657430060"
+checksum = "sha256:1ae72b4718729e2ccc4f1ae2c6d1e531ca8467800e0546e9130b3886023a60ab"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.4/uv-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/659693320"
 provenance = "github-attestations"
 
 [tools.uv."platforms.linux-x64"]
-checksum = "sha256:e14d48c117ec33601d6f860dda47aa5ea490d77a5a9ef770529c448fa6747d9f"
-url = "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-x86_64-unknown-linux-gnu.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/657430342"
+checksum = "sha256:2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.4/uv-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/659693663"
 provenance = "github-attestations"
 
 [tools.uv."platforms.macos-arm64"]
-checksum = "sha256:4a5d878cd0db3a57d79eec638c275e71c394e10533ae54c77b33d940866f53b7"
-url = "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/657430030"
+checksum = "sha256:e0b1d4743ce64c55d9f0f4a444afa6b81125680070ee04e853fcd0f6c1ebf8f1"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.4/uv-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/659693291"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-arm64"]
-checksum = "sha256:9cfb447a4027550f134753253fdffbcd35b79a66dd888260bf6776891916069e"
-url = "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/657430310"
+checksum = "sha256:ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/659693635"
 provenance = "github-attestations"
 
 [tools.uv."platforms.windows-x64"]
-checksum = "sha256:9cfb447a4027550f134753253fdffbcd35b79a66dd888260bf6776891916069e"
-url = "https://github.com/astral-sh/uv/releases/download/0.13.2/uv-x86_64-pc-windows-msvc.zip"
-url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/657430310"
+checksum = "sha256:ccec7508a07d9933d7cb1261880633efcf1f30d6e6eddab21823f1dae6f23225"
+url = "https://github.com/astral-sh/uv/releases/download/0.13.4/uv-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/astral-sh/uv/releases/assets/659693635"
 provenance = "github-attestations"
 
 [[tools.yq]]
