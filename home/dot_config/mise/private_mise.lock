@@ -3,34 +3,39 @@
 lockfile_version = 3
 
 [[tools.azure-kubelogin]]
-version = "0.2.21"
+version = "0.2.22"
 backend = "aqua:Azure/kubelogin"
 specifiers = ["latest"]
 
 [tools.azure-kubelogin."platforms.linux-arm64"]
-checksum = "sha256:76eee872b4dda6a0378d57e019cfb394b6ed58e6aa209ea55d941065a73d37b4"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-linux-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096625"
+checksum = "sha256:306a31d80af443d06fb71e04d2feaf65a6c9cf2e7e806e87b895b77fe2093ea6"
+checksum_source = "mise-versions"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.22/kubelogin-linux-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/673072175"
 
 [tools.azure-kubelogin."platforms.linux-x64"]
-checksum = "sha256:934a2a9618e018cb9fbeb14f3e4c28416fdae815df7706df91500e41d234eb66"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-linux-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096610"
+checksum = "sha256:716cbcb1880bca8f0e976b8917d06fcfe04de2c1e737eaaabbb26e2782330119"
+checksum_source = "mise-versions"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.22/kubelogin-linux-amd64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/673072154"
 
 [tools.azure-kubelogin."platforms.macos-arm64"]
-checksum = "sha256:dca26962855a3865ffec36049848b0741c00032f7b25078d6e35efc38de1c598"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-darwin-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096576"
+checksum = "sha256:b586d6409d578f2048053a6117ace47f0154f36c5beb6792c674679987a7efc8"
+checksum_source = "mise-versions"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.22/kubelogin-darwin-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/673072140"
 
 [tools.azure-kubelogin."platforms.windows-arm64"]
-checksum = "sha256:6125a9359935e4d38f3343ece56117da18520081bf9705370ef9b1588bd99c50"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-win-arm64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096519"
+checksum = "sha256:c978ec3db0f040bcc30fe7f89b995c7b4a27f677e0f893ba6e92d84c5313ec11"
+checksum_source = "mise-versions"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.22/kubelogin-win-arm64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/673072064"
 
 [tools.azure-kubelogin."platforms.windows-x64"]
-checksum = "sha256:ef2ea460e491ffad032c8393061c2d17f53db76d999f22244d5c63e530f848f9"
-url = "https://github.com/Azure/kubelogin/releases/download/v0.2.21/kubelogin-win-amd64.zip"
-url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/623096524"
+checksum = "sha256:62839abfdaddc35dc460bfe1d40f2c569c168b7aa090e2c831776e84f95402b9"
+checksum_source = "mise-versions"
+url = "https://github.com/Azure/kubelogin/releases/download/v0.2.22/kubelogin-win-amd64.zip"
+url_api = "https://api.github.com/repos/Azure/kubelogin/releases/assets/673072062"
 
 [[tools.bat]]
 version = "0.26.1"
@@ -39,26 +44,31 @@ specifiers = ["latest"]
 
 [tools.bat."platforms.linux-arm64"]
 checksum = "sha256:422eb73e11c854fddd99f5ca8461c2f1d6e6dce0a2a8c3d5daade5ffcb6564aa"
+checksum_source = "mise-versions"
 url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-aarch64-unknown-linux-gnu.tar.gz"
 url_api = "https://api.github.com/repos/sharkdp/bat/releases/assets/323548647"
 
 [tools.bat."platforms.linux-x64"]
 checksum = "sha256:726f04c8f576a7fd18b7634f1bbf2f915c43494c1c0f013baa3287edb0d5a2a3"
+checksum_source = "mise-versions"
 url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-unknown-linux-gnu.tar.gz"
 url_api = "https://api.github.com/repos/sharkdp/bat/releases/assets/323549181"
 
 [tools.bat."platforms.macos-arm64"]
 checksum = "sha256:e30beff26779c9bf60bb541e1d79046250cb74378f2757f8eb250afddb19e114"
+checksum_source = "mise-versions"
 url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-aarch64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/sharkdp/bat/releases/assets/323548442"
 
 [tools.bat."platforms.windows-arm64"]
 checksum = "sha256:0f729b4b6f5f28d395c641eacc2e9ff68d0096b85aa0eec344aa62425144b69b"
+checksum_source = "mise-versions"
 url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/sharkdp/bat/releases/assets/323549116"
 
 [tools.bat."platforms.windows-x64"]
 checksum = "sha256:0f729b4b6f5f28d395c641eacc2e9ff68d0096b85aa0eec344aa62425144b69b"
+checksum_source = "mise-versions"
 url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/sharkdp/bat/releases/assets/323549116"
 
@@ -113,18 +123,22 @@ backend = "aqua:sagiegurari/cargo-make"
 specifiers = ["latest"]
 
 [tools.cargo-make."platforms.linux-x64"]
+checksum = "sha256:92a663fe3eeae741c17788202937f2e2f3f7effa2669f733f4d6a1659954288b"
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-unknown-linux-gnu.zip"
 url_api = "https://api.github.com/repos/sagiegurari/cargo-make/releases/assets/221410425"
 
 [tools.cargo-make."platforms.macos-arm64"]
+checksum = "sha256:823fe51d2baa5679a5dfd33c703d0176374f8f023a2ee950f2e03dc4f31ee523"
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-aarch64-apple-darwin.zip"
 url_api = "https://api.github.com/repos/sagiegurari/cargo-make/releases/assets/221410210"
 
 [tools.cargo-make."platforms.windows-arm64"]
+checksum = "sha256:f7c757c7e147023ac86d80b134e5a59e0ed8ff032e39be3464cc4aad1e5e0f33"
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/sagiegurari/cargo-make/releases/assets/221410756"
 
 [tools.cargo-make."platforms.windows-x64"]
+checksum = "sha256:f7c757c7e147023ac86d80b134e5a59e0ed8ff032e39be3464cc4aad1e5e0f33"
 url = "https://github.com/sagiegurari/cargo-make/releases/download/0.37.24/cargo-make-v0.37.24-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/sagiegurari/cargo-make/releases/assets/221410756"
 
@@ -170,26 +184,31 @@ specifiers = ["latest"]
 
 [tools.cue."platforms.linux-arm64"]
 checksum = "sha256:0d729be30d52c952ca38fc9dcb692caa09d8463fa0b64df5781312779183fbcd"
+checksum_source = "mise-versions"
 url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_arm64.tar.gz"
 url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014345"
 
 [tools.cue."platforms.linux-x64"]
 checksum = "sha256:a39b0c97695069d95d276d99be0f5dbabb081d801bfdc9ba49b76efaf94e2369"
+checksum_source = "mise-versions"
 url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_linux_amd64.tar.gz"
 url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014346"
 
 [tools.cue."platforms.macos-arm64"]
 checksum = "sha256:64921403f012a97f89494c03605db2fbf7d9daa77dc2631819ac4406cb2e8074"
+checksum_source = "mise-versions"
 url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_darwin_arm64.tar.gz"
 url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014347"
 
 [tools.cue."platforms.windows-arm64"]
 checksum = "sha256:db88b2c302be1829e653e20ea87e3f1adc10ae2052d58fe87d21d0ed97102e51"
+checksum_source = "mise-versions"
 url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_windows_arm64.zip"
 url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014343"
 
 [tools.cue."platforms.windows-x64"]
 checksum = "sha256:9f15378dc52b9a1bb6fa1755adc0410c9f17f330a621b784a5b31fdbc91c6d7a"
+checksum_source = "mise-versions"
 url = "https://github.com/cue-lang/cue/releases/download/v0.17.1/cue_v0.17.1_windows_amd64.zip"
 url_api = "https://api.github.com/repos/cue-lang/cue/releases/assets/479014351"
 
@@ -205,26 +224,31 @@ specifiers = ["latest"]
 
 [tools.fzf."platforms.linux-arm64"]
 checksum = "sha256:cf058001da21724a469b714a29cf4aab9cbe860d218a0d6c1b5b661efad7784c"
+checksum_source = "mise-versions"
 url = "https://github.com/junegunn/fzf/releases/download/v0.74.5/fzf-0.74.5-linux_arm64.tar.gz"
 url_api = "https://api.github.com/repos/junegunn/fzf/releases/assets/629581759"
 
 [tools.fzf."platforms.linux-x64"]
 checksum = "sha256:d47d7f882972c7d674dbbba998ffa4116e68379616ffac7695d0671e9a722c5f"
+checksum_source = "mise-versions"
 url = "https://github.com/junegunn/fzf/releases/download/v0.74.5/fzf-0.74.5-linux_amd64.tar.gz"
 url_api = "https://api.github.com/repos/junegunn/fzf/releases/assets/629581740"
 
 [tools.fzf."platforms.macos-arm64"]
 checksum = "sha256:ada808c7401b9949ce8842274ac16a6b6193fd32dcada396884a6a9a89e5985a"
+checksum_source = "mise-versions"
 url = "https://github.com/junegunn/fzf/releases/download/v0.74.5/fzf-0.74.5-darwin_arm64.tar.gz"
 url_api = "https://api.github.com/repos/junegunn/fzf/releases/assets/629581702"
 
 [tools.fzf."platforms.windows-arm64"]
 checksum = "sha256:45d8f69b7660ac0c59118c9ccaccdea305d56fdd74a3599aa357cbb374ebd61e"
+checksum_source = "mise-versions"
 url = "https://github.com/junegunn/fzf/releases/download/v0.74.5/fzf-0.74.5-windows_arm64.zip"
 url_api = "https://api.github.com/repos/junegunn/fzf/releases/assets/629581790"
 
 [tools.fzf."platforms.windows-x64"]
 checksum = "sha256:01f854ec8b9b47c99a7d78023638f7d2056cfb0af56b72dabd112032eed3993e"
+checksum_source = "mise-versions"
 url = "https://github.com/junegunn/fzf/releases/download/v0.74.5/fzf-0.74.5-windows_amd64.zip"
 url_api = "https://api.github.com/repos/junegunn/fzf/releases/assets/629581724"
 
@@ -235,62 +259,67 @@ specifiers = ["latest"]
 
 [tools.ghq."platforms.linux-arm64"]
 checksum = "sha256:0a083c5d5b214dd0f4f693cf8839b15f6b5cc4e2d91b0cb4abb8748dcdb353c9"
+checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_linux_arm64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741476"
 
 [tools.ghq."platforms.linux-x64"]
 checksum = "sha256:efa5c1de4e763565b71649229449d8123ceb7131a8d0ed25755aaee73969cdf1"
+checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_linux_amd64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741424"
 
 [tools.ghq."platforms.macos-arm64"]
 checksum = "sha256:8317f8ea5671bccb31e7747eb0a892a77a472dbc7c988f9d47cdfc969a59e242"
+checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_darwin_arm64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741463"
 
 [tools.ghq."platforms.windows-arm64"]
 checksum = "sha256:9d0bef6da668fd9f1a2db3261eb2f7086f779aa3b0040fea39e1ea028bc25a35"
+checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_windows_arm64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741425"
 
 [tools.ghq."platforms.windows-x64"]
 checksum = "sha256:7ab0e759ac9f117f0b5eeea0985c58e693ecb8d2e29b7bcfbce657caac31bce8"
+checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.11.2/ghq_windows_amd64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/598741479"
 
 [[tools.github-cli]]
-version = "2.103.0"
+version = "2.103.2"
 backend = "aqua:cli/cli"
 specifiers = ["latest"]
 
 [tools.github-cli."platforms.linux-arm64"]
-checksum = "sha256:7f322df34e624d14f5ec0c4acb121fd6dfa14392fdbbd1066aa8e0a05ac3721e"
-url = "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_linux_arm64.tar.gz"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/662956401"
+checksum = "sha256:4c3e99a50bd8b181a3fe9d69b25dd978bac768148d88f01507c6b4d1ef61a443"
+url = "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/670305069"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.linux-x64"]
-checksum = "sha256:fdd768eb70f6409f80fcfa9f3a1c0adf0fc98d827ab3ce0bed2ac22762c5d786"
-url = "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_linux_amd64.tar.gz"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/662956379"
+checksum = "sha256:62ccf747115ddc61237efffdde66a3c8f70ba249433dc64f70801089b59c59c8"
+url = "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/670305062"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.macos-arm64"]
-checksum = "sha256:54be566e9f614bea5de8021e95b9ad33dfee3b9d2ea120c9c294c00defaa5014"
-url = "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_macOS_arm64.zip"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/662956481"
+checksum = "sha256:5416000f5d17580a187339e0c4068a01ca5c87f7d4fe6ca64933696f967bc418"
+url = "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_macOS_arm64.zip"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/670305145"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.windows-arm64"]
-checksum = "sha256:bc8c27c396c683a7a823446fd0c16b923e60ec3fac5d26a875c646865d513a48"
-url = "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_windows_arm64.zip"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/662956561"
+checksum = "sha256:cefaaa3efcd110ef7bf71071a2242b85fd3d2ac26d7d62e1082de6a1e60a81d6"
+url = "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_windows_arm64.zip"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/670305239"
 provenance = "github-attestations"
 
 [tools.github-cli."platforms.windows-x64"]
-checksum = "sha256:80c846a5b8432672ca6373b34ce9de998c9686aaa1885c845f2e1ee81f713726"
-url = "https://github.com/cli/cli/releases/download/v2.103.0/gh_2.103.0_windows_amd64.zip"
-url_api = "https://api.github.com/repos/cli/cli/releases/assets/662956535"
+checksum = "sha256:fef9fcdd8fdabd0501ab8b3d99eac976f504ab55d01bef9e8ef428a5d900ddda"
+url = "https://github.com/cli/cli/releases/download/v2.103.2/gh_2.103.2_windows_amd64.zip"
+url_api = "https://api.github.com/repos/cli/cli/releases/assets/670305204"
 provenance = "github-attestations"
 
 [[tools.gitleaks]]
@@ -300,26 +329,31 @@ specifiers = ["latest"]
 
 [tools.gitleaks."platforms.linux-arm64"]
 checksum = "sha256:e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080"
+checksum_source = "mise-versions"
 url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_arm64.tar.gz"
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378332057"
 
 [tools.gitleaks."platforms.linux-x64"]
 checksum = "sha256:551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+checksum_source = "mise-versions"
 url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378332058"
 
 [tools.gitleaks."platforms.macos-arm64"]
 checksum = "sha256:b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5"
+checksum_source = "mise-versions"
 url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz"
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378332059"
 
 [tools.gitleaks."platforms.windows-arm64"]
 checksum = "sha256:d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+checksum_source = "mise-versions"
 url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip"
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378333178"
 
 [tools.gitleaks."platforms.windows-x64"]
 checksum = "sha256:d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e"
+checksum_source = "mise-versions"
 url = "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip"
 url_api = "https://api.github.com/repos/gitleaks/gitleaks/releases/assets/378333178"
 
@@ -475,26 +509,31 @@ specifiers = ["latest"]
 
 [tools.kustomize."platforms.linux-arm64"]
 checksum = "sha256:9867b76482cfc6d25b546abc1d2b5a32bd137505aba640649b4b378f64f6d68f"
+checksum_source = "mise-versions"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_linux_arm64.tar.gz"
 url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/621661325"
 
 [tools.kustomize."platforms.linux-x64"]
 checksum = "sha256:cb9e31198d3f63b44848bd0afc4c8efc56e6cfef9c93a4a39a211940e6decd61"
+checksum_source = "mise-versions"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_linux_amd64.tar.gz"
 url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/621661332"
 
 [tools.kustomize."platforms.macos-arm64"]
 checksum = "sha256:4cbb08e209d8fff47cd60bfb6407daaf5ee699f9b9295849a1065024fac2d1ef"
+checksum_source = "mise-versions"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_darwin_arm64.tar.gz"
 url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/621661327"
 
 [tools.kustomize."platforms.windows-arm64"]
 checksum = "sha256:b86236917e649e2f9531899c519f333e554cd1fc0c87132b86b885bf315735dc"
+checksum_source = "mise-versions"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_windows_arm64.zip"
 url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/621661361"
 
 [tools.kustomize."platforms.windows-x64"]
 checksum = "sha256:763c4040ff01435bfce39661072452ebdf1cf2808bb91f5708ab4420834fbd42"
+checksum_source = "mise-versions"
 url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.3/kustomize_v5.8.3_windows_amd64.zip"
 url_api = "https://api.github.com/repos/kubernetes-sigs/kustomize/releases/assets/621661357"
 
@@ -615,26 +654,31 @@ specifiers = ["latest"]
 
 [tools.ripgrep."platforms.linux-arm64"]
 checksum = "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d"
+checksum_source = "mise-versions"
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz"
 url_api = "https://api.github.com/repos/BurntSushi/ripgrep/releases/assets/478119579"
 
 [tools.ripgrep."platforms.linux-x64"]
 checksum = "sha256:33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
+checksum_source = "mise-versions"
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz"
 url_api = "https://api.github.com/repos/BurntSushi/ripgrep/releases/assets/478120097"
 
 [tools.ripgrep."platforms.macos-arm64"]
 checksum = "sha256:3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4"
+checksum_source = "mise-versions"
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/BurntSushi/ripgrep/releases/assets/478118851"
 
 [tools.ripgrep."platforms.windows-arm64"]
 checksum = "sha256:71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
+checksum_source = "mise-versions"
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/BurntSushi/ripgrep/releases/assets/478119643"
 
 [tools.ripgrep."platforms.windows-x64"]
 checksum = "sha256:71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
+checksum_source = "mise-versions"
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/BurntSushi/ripgrep/releases/assets/478119643"
 
@@ -645,26 +689,31 @@ specifiers = ["latest"]
 
 [tools.shellcheck."platforms.linux-arm64"]
 checksum = "sha256:12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588"
+checksum_source = "mise-versions"
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.xz"
 url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056934"
 
 [tools.shellcheck."platforms.linux-x64"]
 checksum = "sha256:8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+checksum_source = "mise-versions"
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz"
 url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056942"
 
 [tools.shellcheck."platforms.macos-arm64"]
 checksum = "sha256:56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79"
+checksum_source = "mise-versions"
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz"
 url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056932"
 
 [tools.shellcheck."platforms.windows-arm64"]
 checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
+checksum_source = "mise-versions"
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
 url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056944"
 
 [tools.shellcheck."platforms.windows-x64"]
 checksum = "sha256:8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e"
+checksum_source = "mise-versions"
 url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip"
 url_api = "https://api.github.com/repos/koalaman/shellcheck/releases/assets/279056944"
 
@@ -674,18 +723,23 @@ backend = "aqua:sqlc-dev/sqlc"
 specifiers = ["latest"]
 
 [tools.sqlc."platforms.linux-arm64"]
+checksum = "sha256:b7cae247740d0c51a1e657479e5b2d21e6fef428f596682a01bc55bf4ab8a23d"
 url = "https://downloads.sqlc.dev/sqlc_1.31.1_linux_arm64.tar.gz"
 
 [tools.sqlc."platforms.linux-x64"]
+checksum = "sha256:497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354"
 url = "https://downloads.sqlc.dev/sqlc_1.31.1_linux_amd64.tar.gz"
 
 [tools.sqlc."platforms.macos-arm64"]
+checksum = "sha256:21602158c99eb1f2bae197a66abfb1941d1e9e50b23125bb193349c6b1acc71e"
 url = "https://downloads.sqlc.dev/sqlc_1.31.1_darwin_arm64.tar.gz"
 
 [tools.sqlc."platforms.windows-arm64"]
+checksum = "sha256:40d138ec18b1cc80d2be7305917fd4deceda4e0c32d78ba5d8faa4bfa3bc0fc0"
 url = "https://downloads.sqlc.dev/sqlc_1.31.1_windows_amd64.tar.gz"
 
 [tools.sqlc."platforms.windows-x64"]
+checksum = "sha256:40d138ec18b1cc80d2be7305917fd4deceda4e0c32d78ba5d8faa4bfa3bc0fc0"
 url = "https://downloads.sqlc.dev/sqlc_1.31.1_windows_amd64.tar.gz"
 
 [[tools.terraform]]
@@ -825,25 +879,30 @@ specifiers = ["latest"]
 
 [tools.zoxide."platforms.linux-arm64"]
 checksum = "sha256:f1f16c5d6298d63dee467eedea1cdcd8490e43e493bea43acd416dc9033ef641"
+checksum_source = "mise-versions"
 url = "https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-aarch64-unknown-linux-musl.tar.gz"
 url_api = "https://api.github.com/repos/ajeetdsouza/zoxide/releases/assets/466316402"
 
 [tools.zoxide."platforms.linux-x64"]
 checksum = "sha256:2d93385b99f3e82cf2701609a1bffcad863fbeb75aa3fe7eb6be4d29be68b1ae"
+checksum_source = "mise-versions"
 url = "https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-x86_64-unknown-linux-musl.tar.gz"
 url_api = "https://api.github.com/repos/ajeetdsouza/zoxide/releases/assets/466316293"
 
 [tools.zoxide."platforms.macos-arm64"]
 checksum = "sha256:b55ae6f2f5f23d0a6ccb3bd4eeb2af9c7e0a6556e5255c82100e40305129bbb0"
+checksum_source = "mise-versions"
 url = "https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-aarch64-apple-darwin.tar.gz"
 url_api = "https://api.github.com/repos/ajeetdsouza/zoxide/releases/assets/466316174"
 
 [tools.zoxide."platforms.windows-arm64"]
 checksum = "sha256:b0e6eb62b11ebf168d5c65c5d23c635e81848cc4a88ae6b9caee64cf1e35d12b"
+checksum_source = "mise-versions"
 url = "https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-aarch64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/ajeetdsouza/zoxide/releases/assets/466316738"
 
 [tools.zoxide."platforms.windows-x64"]
 checksum = "sha256:f465ae548f8754c8e7edbc60b45fbf58c92bfe123db83d790252d6810fa5daf1"
+checksum_source = "mise-versions"
 url = "https://github.com/ajeetdsouza/zoxide/releases/download/v0.10.0/zoxide-0.10.0-x86_64-pc-windows-msvc.zip"
 url_api = "https://api.github.com/repos/ajeetdsouza/zoxide/releases/assets/466316769"
