@@ -319,13 +319,13 @@ brew update --quiet
 # PATH で Apple Git より優先させる処理は ~/.zprofile 側にある（後述の理由により
 # /etc/zprofile の path_helper より後で prepend する必要がある）。
 brew install \
-  azure-cli \
   azure/azd/azd \
   gh \
   git \
   poppler \
   watch \
   zsh-completions
+brew install --cask azure-cli
 
 {{ end -}}
 
