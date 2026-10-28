@@ -21,13 +21,13 @@
 `~/.copilot/` 配下のうち、次の設定も chezmoi で管理する。
 
 - `mcp-config.json`: 手動 MCP サーバー設定（`/mcp add` 後は `chezmoi re-add`）
-- `settings.json` の実験機能、プラグイン、sandbox 設定、`assistedApprovalInstructions`: POSIX の `run_after_35-configure-copilot-sandbox.sh.tmpl` と Windows の `run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl` で既存設定へマージ
+- `settings.json` の実験機能、プラグイン、sandbox 設定、`defaultPermissionMode`、`assistedApprovalInstructions`: POSIX の `run_after_35-configure-copilot-sandbox.sh.tmpl` と Windows の `run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl` で既存設定へマージ
 - `hooks/hooks.json` / `hooks/scripts/*.py` / `hooks/run-hook.{sh,ps1}`: `preToolUse` / `postToolUse` / `postToolUseFailure` フックと OS 別 launcher（`copilot-guard.py`, `uv-enforcer.py`, `audit-log.py`, `audit-failure.py`）
 - `hooks/{allowed-files,blocked-files,ask-files}.txt`: ファイルアクセス制御リスト
 
 `installed-plugins/` と `plugin-data/` は Copilot CLI が管理し、chezmoi の対象外とする。
 
-`assistedApprovalInstructions` は、Assisted Permissions の承認審査に追加の判断指針を与える。繰り返し発生する不要な確認を減らすために使う。Copilot CLI v1.0.101-0 以降で Assisted Permissions が別途有効な場合に使われ、この設定だけでは Assisted Permissions は有効にならない。
+共通設定で `defaultPermissionMode` を `assisted` に指定し、`assistedApprovalInstructions` に承認判断への追加指示を定義する。
 
 `uv-enforcer.py` は Python と pip の直接実行を拒否し、PowerShell command は書き換えずに通す。Copilot CLI が管理する uv の既定 cache を使い、dotfiles は専用 cache grant や `UV_CACHE_DIR` rewrite を追加しない。sandbox 設定同期は旧 Windows 専用 grant と `COPILOT_DOTFILES_UV_CACHE_DIR` が既定旧 path と完全一致する場合だけ移行時に除去する。別の値や既存 cache data は保持する。
 
