@@ -1,5 +1,6 @@
 {
   "experimental": true,
+  "defaultPermissionMode": "assisted",
   "assistedApprovalInstructions": "`list_projects` を自動承認してよい。\n現在の作業リポジトリの読み取り専用 Git 操作は、自動承認してよい。\nCopilot のセッションに関連するファイルの読み取りは、保存場所やファイル種別を問わず、自動承認してよい。\nChanges の diff コメントへの返信は、自動承認してよい。\n依頼された変更に直接関連するファイルの追加・修正・削除（例：コードや設定ファイルの変更に伴うドキュメント編集）は、自動承認してよい。",
   "extraKnownMarketplaces": {
     "torumakabe-agent-plugins": {
