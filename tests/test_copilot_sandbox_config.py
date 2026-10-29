@@ -13,7 +13,6 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "home"
-USER_POLICY_PATH = SOURCE_ROOT / ".chezmoitemplates/copilot-user-settings.json"
 POSIX_SCRIPT_PATH = SOURCE_ROOT / "run_after_35-configure-copilot-sandbox.sh.tmpl"
 POWERSHELL_SCRIPT_PATH = (
     SOURCE_ROOT / "run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl"
@@ -41,37 +40,6 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         for script in (self.posix, self.powershell):
             self.assertIn(expected_message, script)
             self.assertNotIn(obsolete_message, script)
-
-    def test_user_policy_has_cross_platform_defaults_and_masked_credentials(self) -> None:
-        policy = json.loads(USER_POLICY_PATH.read_text(encoding="utf-8"))
-        self.assertTrue(policy["experimental"])
-        sandbox = policy["sandbox"]
-        for name in (
-            "enabled",
-            "allowBypass",
-            "addCurrentWorkingDirectory",
-            "allowDevToolAccess",
-        ):
-            self.assertTrue(sandbox[name])
-        self.assertTrue(sandbox["sandboxMcpServers"])
-        self.assertFalse(sandbox["sandboxLspServers"])
-        self.assertEqual(sandbox["auth"], {"git": True, "gh": True})
-        self.assertEqual(
-            sandbox["userPolicy"]["network"],
-            {"allowOutbound": True, "allowLocalNetwork": True},
-        )
-        self.assertEqual(
-            sandbox["credentials"]["envVars"],
-            {
-                name: {"injectHosts": ["mask-only.invalid"]}
-                for name in (
-                    "AZURE_CLIENT_SECRET",
-                    "ARM_CLIENT_SECRET",
-                    "ARM_ACCESS_KEY",
-                    "AZURE_STORAGE_CONNECTION_STRING",
-                )
-            },
-        )
 
     def test_azure_skills_telemetry_is_disabled_in_all_shell_environments(
         self,

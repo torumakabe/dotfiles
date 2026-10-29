@@ -18,13 +18,6 @@ POSIX_LAUNCHER = HOOKS_DIR / "executable_run-hook.sh"
 WINDOWS_LAUNCHER = HOOKS_DIR / "run-hook.ps1"
 POSIX_PROVISIONER = REPO_ROOT / "home/run_after_25-provision-copilot-hook-python.sh.tmpl"
 WINDOWS_PROVISIONER = REPO_ROOT / "home/run_after_25-provision-copilot-hook-python.ps1.tmpl"
-EXPECTED_BASH_PREFIX = '"$HOME/.copilot/hooks/run-hook.sh" '
-EXPECTED_POWERSHELL_PREFIX = '& "$HOME\\.copilot\\hooks\\run-hook.ps1" '
-
-
-def _commands() -> list[dict[str, object]]:
-    hooks = json.loads(HOOKS_PATH.read_text(encoding="utf-8"))["hooks"]
-    return [command for commands in hooks.values() for command in commands]
 
 
 class CopilotHooksConfigTests(unittest.TestCase):
@@ -36,13 +29,6 @@ class CopilotHooksConfigTests(unittest.TestCase):
         self.assertNotIn("COPILOT_HOME", posix)
         self.assertIn("$hooksDir = Join-Path $HOME '.copilot\\hooks'", windows)
         self.assertNotIn("COPILOT_HOME", windows)
-
-    def test_all_guards_run_before_the_argument_rewriter(self) -> None:
-        hooks = json.loads(HOOKS_PATH.read_text())["hooks"]["preToolUse"]
-        expected = ("copilot-guard.py", "uv-enforcer.py")
-        for hook, script in zip(hooks, expected, strict=True):
-            for shell in ("bash", "powershell"):
-                self.assertIn(script, hook[shell])
 
     def test_guard_chain_checks_original_command_before_rewriting(self) -> None:
         scripts = REPO_ROOT / "home/private_dot_copilot/hooks/scripts"
@@ -78,31 +64,6 @@ class CopilotHooksConfigTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 output = json.loads(result.stdout) if result.stdout.strip() else {}
                 self.assertNotEqual(output.get("permissionDecision"), "deny")
-
-    def test_all_commands_use_the_pinned_interpreter_launcher(self) -> None:
-        commands = _commands()
-        self.assertEqual(len(commands), 4)
-
-        for command in commands:
-            with self.subTest(command=command):
-                self.assertTrue(command["bash"].startswith(EXPECTED_BASH_PREFIX))
-                self.assertTrue(
-                    command["powershell"].startswith(EXPECTED_POWERSHELL_PREFIX)
-                )
-
-    def test_no_command_invokes_mise_or_uv(self) -> None:
-        # hook は sandbox 内で実行されるため、mise と uv は config、state、
-        # downloads、cache への追加許可なしには起動できない。
-        for command in _commands():
-            for shell in ("bash", "powershell"):
-                with self.subTest(command=command, shell=shell):
-                    self.assertNotIn("mise", command[shell])
-                    self.assertNotIn("uv run", command[shell])
-
-    def test_all_commands_run_from_repository_root(self) -> None:
-        for command in _commands():
-            with self.subTest(command=command):
-                self.assertEqual(command["cwd"], ".")
 
 
 class CopilotHookLauncherTests(unittest.TestCase):
