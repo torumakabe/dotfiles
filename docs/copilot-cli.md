@@ -29,6 +29,8 @@
 
 共通設定で `defaultPermissionMode` を `assisted` に指定し、`assistedApprovalInstructions` に承認判断への追加指示を定義する。
 
+設定ファイルの値と構造の検証は Copilot CLI に任せ、設定値を期待値として固定するテストは追加しない。リポジトリのテストでは、設定同期スクリプトの既存値の保持や移行処理、フックと launcher の動作を確認する。
+
 `uv-enforcer.py` は Python と pip の直接実行を拒否し、PowerShell command は書き換えずに通す。Copilot CLI が管理する uv の既定 cache を使い、dotfiles は専用 cache grant や `UV_CACHE_DIR` rewrite を追加しない。sandbox 設定同期は旧 Windows 専用 grant と `COPILOT_DOTFILES_UV_CACHE_DIR` が既定旧 path と完全一致する場合だけ移行時に除去する。別の値や既存 cache data は保持する。
 
 command hook は sandbox 内で mise と uv を起動しない。`run_after_25-provision-copilot-hook-python` が uv managed Python 3.14 を用意し、`~/.copilot/hooks/python-runtime.env` に install root と interpreter の絶対パスを記録する。OS 別 launcher はこの記録を検証して Python を直接起動する。設定同期は `~/.copilot/hooks` と同じ install root を `readonlyPaths` へ追加する。mise のデータと実体への読み取り許可は、通常の Bash / PowerShell tool が mise 管理コマンドを起動するために維持する。実機検証の対象環境と確認項目は[実機検証手順](copilot-sandbox-verification.md#実-cli-で-hook-interpreter-と-uv-cache-grant-を確認する)を参照する。
