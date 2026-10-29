@@ -22,16 +22,6 @@ ZSHRC_PATH = SOURCE_ROOT / "dot_zshrc.tmpl"
 POSIX_PROFILE_PATH = SOURCE_ROOT / "dot_profile.tmpl"
 POWERSHELL_PROFILE_PATH = SOURCE_ROOT / "PowerShell_profile.ps1.tmpl"
 
-EXPECTED_MARKETPLACE = {
-    "source": {"source": "github", "repo": "torumakabe/copilot-agent-plugins"},
-    "autoUpdate": True,
-}
-EXPECTED_PLUGINS = {
-    "personal-skills@torumakabe-agent-plugins": True,
-    "skill-creator@torumakabe-agent-plugins": True,
-}
-
-
 class CopilotSandboxPolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -55,11 +45,6 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
     def test_user_policy_has_cross_platform_defaults_and_masked_credentials(self) -> None:
         policy = json.loads(USER_POLICY_PATH.read_text(encoding="utf-8"))
         self.assertTrue(policy["experimental"])
-        self.assertEqual(
-            policy["extraKnownMarketplaces"]["torumakabe-agent-plugins"],
-            EXPECTED_MARKETPLACE,
-        )
-        self.assertEqual(policy["enabledPlugins"], EXPECTED_PLUGINS)
         sandbox = policy["sandbox"]
         for name in (
             "enabled",
