@@ -7,12 +7,7 @@ $typescriptPackageRoot = Join-Path $installRoot 'node_modules\typescript'
 $packagePath = Join-Path $installRoot 'node_modules\typescript\package.json'
 $tsserverPath = Join-Path $installRoot 'node_modules\typescript\lib\tsserver.js'
 
-$miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
-  Select-Object -First 1).Source
-if (-not $miseExe) {
-  $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
-  if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
-}
+{{ include ".chezmoitemplates/mise-executable.ps1" }}
 if (-not $miseExe -or -not (Test-Path -LiteralPath $miseExe)) {
   Write-Warning 'mise.exe was not found; skipping TypeScript LSP dependency installation.'
   exit 0

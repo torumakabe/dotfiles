@@ -99,9 +99,6 @@ PLATFORM_CONTRACT = {
     "shell:uv-tools-upgrade": _implemented_everywhere(),
     "shell:kubectl-shortcut": _implemented_everywhere(),
     "shell:ll": _implemented_everywhere(),
-    "shell:copilot-winget-launcher": _windows_only(
-        "exception: docs/troubleshooting.md WindowsApps execution alias workaround"
-    ),
     "shell:zoxide": _implemented_everywhere(),
     "feature:copilot-local-sandbox": _implemented_everywhere(),
     "feature:copilot-hook-interpreter": _implemented_everywhere(),
@@ -170,7 +167,6 @@ POWERSHELL_PUBLIC_SYMBOLS = {
     ("alias", "mise-upgrade"): "shell:mise-upgrade",
     ("alias", "uv-tools-upgrade"): "shell:uv-tools-upgrade",
     ("alias", "git-hooks-audit"): "shell:git-hooks-audit",
-    ("alias", "copilot"): "shell:copilot-winget-launcher",
     ("alias", "z"): "shell:zoxide",
 }
 
@@ -198,9 +194,6 @@ SHELL_ANCHORS = {
         "powershell": "Set-Alias -Name k -Value kubectl",
     },
     "shell:ll": {"zsh": "alias ll=", "powershell": "function ll {"},
-    "shell:copilot-winget-launcher": {
-        "powershell": "Set-Alias -Name copilot -Value $copilotCli",
-    },
     "shell:zoxide": {
         "zsh": "_cached_source zoxide",
         "powershell": "zoxide init powershell --cmd cd",
@@ -252,7 +245,6 @@ SOURCE_INITIALIZERS = {
 
 EXCEPTION_DOCUMENT_IDENTIFIERS = {
     "shell:edit-shortcut": ("Microsoft Edit",),
-    "shell:copilot-winget-launcher": ("WindowsApps", "WinGet", "macOS/Linux/WSL"),
     "completion:terraform": ("Terraform", "PowerShell completion"),
     "completion:rad": ("Radicle", "Windows"),
     "tool:bubblewrap": ("bubblewrap", "Seatbelt", "ProcessContainer"),
@@ -341,6 +333,60 @@ class PlatformParityTests(unittest.TestCase):
         self.assertNotIn("copilot-guardrails", self.zshrc)
         self.assertNotIn("copilot-guardrails", self.powershell)
         self.assertNotIn("Invoke-CopilotGuardrails", self.powershell)
+
+    def test_mise_self_update_uses_builtin_updater_on_all_platforms(self) -> None:
+        zsh_start = self.zshrc.index("mise-self-update() {")
+        zsh = self.zshrc[zsh_start : self.zshrc.index("\nuv-tools-upgrade()", zsh_start)]
+        self.assertEqual(zsh.count("mise self-update --yes --no-plugins"), 2)
+        self.assertLess(zsh.index("mise self-update --yes"), zsh.index("mise reshim"))
+
+        ps_start = self.powershell.index("function Invoke-MiseSelfUpdate {")
+        powershell = self.powershell[
+            ps_start : self.powershell.index("\nfunction Invoke-UvToolsUpgrade", ps_start)
+        ]
+        update = "mise self-update --yes --no-plugins"
+        self.assertIn(update + "\n", powershell)
+        self.assertLess(powershell.index(update), powershell.index("mise reshim"))
+        self.assertNotIn("winget", powershell)
+        self.assertRegex(
+            powershell,
+            r'(?s)if \(\$selfUpdateExitCode -ne 0\) \{ throw "[^"]+" \}'
+            r'.*?mise reshim\s+if \(\$LASTEXITCODE -ne 0\) \{ throw "[^"]+" \}',
+        )
+        self.assertIn("$PSNativeCommandUseErrorActionPreference = $false", powershell)
+        self.assertRegex(
+            powershell,
+            r"(?s)finally \{.*?"
+            r"\$PSNativeCommandUseErrorActionPreference = \$previousNativeErrorPreference\n"
+            r"        \$ErrorActionPreference = \$prevErrorAction",
+        )
+        for source in (zsh, powershell):
+            self.assertNotIn("MISE_SELF_UPDATE_AVAILABLE", source)
+            self.assertNotIn("--force", source)
+            self.assertIn("gh auth token", source)
+        self.assertIn("Remove-Item Env:\\MISE_GITHUB_TOKEN", powershell)
+
+    def test_windows_mise_bootstrap_and_consumers_use_standalone_install(self) -> None:
+        bootstrap = (
+            REPO_ROOT / "home/run_once_before_20-install-mise.ps1.tmpl"
+        ).read_text(encoding="utf-8")
+        resolver = (
+            REPO_ROOT / "home/.chezmoitemplates/mise-executable.ps1"
+        ).read_text(encoding="utf-8")
+        direct_path = "Join-Path $HOME '.local\\bin\\mise.exe'"
+        self.assertIn(direct_path, bootstrap)
+        self.assertLess(resolver.index(direct_path), resolver.index("Get-Command"))
+        for path in (
+            POWERSHELL_PROFILE_PATH,
+            REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.ps1.tmpl",
+            REPO_ROOT / "home/run_after_22-install-typescript-lsp.ps1.tmpl",
+            REPO_ROOT / "home/run_after_25-provision-copilot-hook-python.ps1.tmpl",
+            REPO_ROOT / "home/run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl",
+        ):
+            self.assertIn(
+                '{{ include ".chezmoitemplates/mise-executable.ps1" }}',
+                path.read_text(encoding="utf-8"),
+            )
 
     def test_mise_unsupported_platform_warnings_match_in_both_shells(self) -> None:
         warning = (
@@ -646,50 +692,6 @@ $result = @{{
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(set(state["sourced"]), powershell_initializers)
             self.assertEqual(set(state["registered"]), {"kubectl", "k"})
-
-    @unittest.skipUnless(os.name == "nt", "Windows only")
-    def test_copilot_winget_alias_resolution(self) -> None:
-        pwsh = shutil.which("pwsh")
-        if pwsh is None:
-            self.skipTest("pwsh is required for Copilot alias tests")
-        match = re.search(
-            r"(?ms)^\$copilotCli = .*?^Remove-Variable copilotCli$",
-            self.powershell,
-        )
-        self.assertIsNotNone(match)
-        setup = match.group(0)
-        for target_kind in ("file", "missing", "directory"):
-            with self.subTest(target_kind=target_kind):
-                with tempfile.TemporaryDirectory(prefix="copilot alias ") as temp_dir:
-                    cli = pathlib.Path(temp_dir) / "Microsoft/WinGet/Links/copilot.exe"
-                    if target_kind == "file":
-                        cli.parent.mkdir(parents=True)
-                        cli.touch()
-                    elif target_kind == "directory":
-                        cli.mkdir(parents=True)
-                    env = os.environ.copy()
-                    env["LOCALAPPDATA"] = temp_dir
-                    script = (
-                        "$ErrorActionPreference = 'Stop'\n"
-                        "$originalPath = $env:PATH\n"
-                        "Set-Alias -Name copilot -Value Write-Output\n"
-                        + setup + "\n" + setup + "\n"
-                        "@{ target = (Get-Alias copilot).Definition; "
-                        "pathUnchanged = ($env:PATH -ceq $originalPath) } "
-                        "| ConvertTo-Json -Compress\n"
-                    )
-                    result = subprocess.run(
-                        [pwsh, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
-                        env=env,
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                    )
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    state = json.loads(result.stdout)
-                    expected = str(cli) if target_kind == "file" else "Write-Output"
-                    self.assertEqual(state["target"], expected)
-                    self.assertTrue(state["pathUnchanged"])
 
 class WrapperGateParityTests(unittest.TestCase):
     """ADR-012 の wrapper は参照側と配布側で同じ条件を使う必要がある。

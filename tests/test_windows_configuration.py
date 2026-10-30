@@ -26,7 +26,6 @@ class WindowsConfigurationTests(unittest.TestCase):
         resource_ids = (
             "GitHubCopilotCli",
             "GitHubCopilotApp",
-            "Mise",
             "Rustup",
         )
         pin_id = "id: SelfUpdatedPackageBlockingPins"
@@ -54,7 +53,6 @@ class WindowsConfigurationTests(unittest.TestCase):
         expected_ids = {
             "GitHub.CopilotApp",
             "GitHub.Copilot",
-            "jdx.mise",
             "Rustlang.Rustup",
         }
         configured_ids = re.findall(
@@ -64,6 +62,9 @@ class WindowsConfigurationTests(unittest.TestCase):
         self.assertEqual(set(configured_ids), expected_ids)
         self.assertEqual(len(configured_ids), len(expected_ids) * 3)
         self.assertNotIn("Microsoft.Azd", pin_block)
+        self.assertNotIn("id: Mise", self.config)
+        self.assertNotRegex(self.config, r"(?m)^\s+id: jdx\.mise$")
+        self.assertIn("id: Microsoft.VCRedist.2015+.x64", self.config)
         self.assertIn(
             "winget pin list --source winget",
             pin_block,
@@ -95,7 +96,6 @@ class WindowsConfigurationTests(unittest.TestCase):
         expected_ids = {
             "GitHub.CopilotApp",
             "GitHub.Copilot",
-            "jdx.mise",
             "Rustlang.Rustup",
         }
         documented_ids = set(

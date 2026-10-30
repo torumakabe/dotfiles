@@ -117,14 +117,7 @@ function Test-MiseManagedPath {
     $PathKey.StartsWith($DotnetRootKey + '\', [System.StringComparison]::Ordinal)
 }
 
-# `Get-Command mise` は mise activate で定義された function を返してしまい
-# Source プロパティが取れないため、Application 種別に絞って実 exe のパスを取得する。
-$miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
-  Select-Object -First 1).Source
-if (-not $miseExe) {
-  $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
-  if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
-}
+{{ include ".chezmoitemplates/mise-executable.ps1" }}
 if (-not $miseExe -or -not (Test-Path -LiteralPath $miseExe)) {
   Write-Host 'mise.exe not found on PATH; skipping mise lockfile sync.'
   exit 0

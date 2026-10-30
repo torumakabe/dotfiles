@@ -5,7 +5,11 @@
 #   if (Test-Path "$env:USERPROFILE\PowerShell_profile.ps1") { . "$env:USERPROFILE\PowerShell_profile.ps1" }
 
 # === mise activation (requires PowerShell 7+) ===
-mise activate pwsh | Out-String | Invoke-Expression
+{{ include ".chezmoitemplates/mise-executable.ps1" }}
+if (-not $miseExe) { throw 'mise.exe が見つかりません' }
+$miseBinDir = Split-Path -Parent $miseExe
+$env:Path = (@($miseBinDir) + @($env:Path -split ';' | Where-Object { $_ -ne $miseBinDir })) -join ';'
+& $miseExe activate pwsh | Out-String | Invoke-Expression
 
 # === Environment variables ===
 $env:EDITOR = 'edit'
@@ -624,13 +628,6 @@ Set-Alias -Name mise-self-update -Value Invoke-MiseSelfUpdate
 Set-Alias -Name mise-upgrade -Value Invoke-MiseUpgrade
 Set-Alias -Name uv-tools-upgrade -Value Invoke-UvToolsUpgrade
 Set-Alias -Name git-hooks-audit -Value Invoke-GitHooksAudit
-
-# Bypass the broken WindowsApps execution alias; see docs/troubleshooting.md.
-$copilotCli = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\copilot.exe'
-if (Test-Path -LiteralPath $copilotCli -PathType Leaf) {
-    Set-Alias -Name copilot -Value $copilotCli
-}
-Remove-Variable copilotCli
 
 # === Completers and tool setup ===
 
