@@ -2,34 +2,9 @@
 
 README に載せない復旧手順だけをまとめる。一般的な `chezmoi` / `mise` の仕様説明は各公式ドキュメントを参照。
 
-## Windows で Copilot CLI が「プロセスにパッケージ ID がありません」で起動しない
-
-症状: `copilot` が `WindowsApps\copilot.exe` を呼び出し、起動前に失敗する。
-
-PATH で `WindowsApps` が `WinGet\Links` より前にあると、GitHub Copilot CLI 自身が登録する実行エイリアスが本体より先に選ばれる。同名のエイリアスが追加されるだけでも、PATH や profile を変更せずに起動先が変わる。
-
-実行エイリアスでこのエラーが発生していても、WinGet 管理下の本体は起動できる場合がある。利用者は本体を直接指定して切り分ける。本体の直接起動が成功しても、エイリアス側でパッケージ ID が成立しない内部原因までは特定できない。
-
-```powershell
-& "$env:LOCALAPPDATA\Microsoft\WinGet\Links\copilot.exe" --version
-```
-
-本体が起動する場合、利用者は次の設定で現在の PowerShell を復旧できる。
-
-```powershell
-Set-Alias -Name copilot -Value "$env:LOCALAPPDATA\Microsoft\WinGet\Links\copilot.exe"
-copilot --version
-```
-
-同じ設定は管理対象の PowerShell profile に含まれる。適用済みの端末では新しい PowerShell から有効になる。`-NoProfile` で開始した子プロセスは alias を継承しないため、本体のパスを直接指定する。
-
-端末の profile や別の worktree だけを修正した場合、通常の適用元に修正がなければ、次の `chezmoi apply` で回避策が失われる可能性がある。利用者は `chezmoi source-path` で適用元を確認し、そのソースにも同じ修正を取り込んでから通常の適用を再開する。
-
-この回避策は CLI の起動先だけを変更し、Windows のパッケージ登録は修復しない。macOS/Linux/WSL は対象外である。対象範囲と撤去条件は [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) を参照する。
-
 ## WinGet blocking pin を確認・修復する
 
-`winget upgrade --all` で Copilot App、Copilot CLI、mise、rustup が更新されないこと自体は正常である。これらは独自 updater を更新主体とし、DSC が blocking pin を設定する（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。
+`winget upgrade --all` で Copilot App、Copilot CLI、rustup が更新されないこと自体は正常である。これらは独自 updater を更新主体とし、DSC が blocking pin を設定する（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。mise は直接導入のため pin 対象ではない（[ADR-040](adr/040-windows-mise-standalone-install.md)）。
 
 現在の pin は次で確認する。
 
@@ -37,14 +12,13 @@ copilot --version
 winget pin list --source winget
 ```
 
-WinGet 1.29.380 では、`pin list --id <ID> --exact` を指定しても一覧がIDで絞られない。表示された表のID列で、次の4件が `Blocking` になっていることを確認する。
+WinGet 1.29.380 では、`pin list --id <ID> --exact` を指定しても一覧がIDで絞られない。表示された表のID列で、次の3件が `Blocking` になっていることを確認する。
 
 - `GitHub.CopilotApp`
 - `GitHub.Copilot`
-- `jdx.mise`
 - `Rustlang.Rustup`
 
-独自 updater は blocking pin を解除せずに実行する。Copilot CLI は `copilot update`、mise は `mise-self-update`、rustup 自体は `rustup self update` を使う。
+独自 updater は blocking pin を解除せずに実行する。Copilot CLI は `copilot update`、rustup 自体は `rustup self update` を使う。
 
 WinGet に更新候補があり、WinGet の管理記録と実体を同期する場合は、`--force` で blocking pin を上書きする。
 
@@ -59,8 +33,6 @@ winget install --id <ID> --exact --source winget --disable-interactivity --force
 ```
 
 独自 updater が自己更新した実体は WinGet の管理記録の外にあるため、`winget uninstall` を実行しても実体と PATH 上の起動先が残ることがある。アンインストール後は、対象コマンドが解決されないことを `Get-Command <name> -All` で確認し、残っていれば実体を手動で削除する。
-
-mise の日常更新には `mise-self-update` を使う。WinGetによる再導入または登録修復が必要な場合は、mise shimを利用するCopilot CLIなどのプロセスを終了してから上記のWinGetコマンドを実行し、成功後に `mise reshim` を実行する。更新候補がない場合、実体の版を巻き戻してまで登録版へ合わせない。
 
 pin が欠落または別の種類になっている場合は、通常の対話型 PowerShell で DSC を再適用する。
 
@@ -109,26 +81,6 @@ mise-upgrade
 mise install
 ```
 
-### Windows で `core:dotnet` の検証に失敗する
-
-症状は、インストールスクリプトが SDK を配置した後、`dotnet --list-sdks` が system 側の SDK だけを返し、次のエラーで終了することである。
-
-```text
-dotnet SDK <version> was not found in `dotnet --list-sdks` output
-```
-
-Windows 用の mise 設定は、インストール時だけ mise の共有 dotnet root を `DOTNET_ROOT` と PATH の先頭へ設定する。設定を配り直し、同じ backend とバージョンを強制的に再インストールする。
-
-```powershell
-chezmoi apply "$HOME\.config\mise\config.toml"
-mise install --force dotnet
-mise ls dotnet
-mise which dotnet
-& (mise which dotnet) --version
-```
-
-`mise ls dotnet` に `(missing)` がなく、`mise which dotnet` が `%LOCALAPPDATA%\mise\dotnet-root\dotnet.exe` を返し、最後のコマンドが設定済み SDK のバージョンを表示すれば復旧している。
-
 ## Copilot sandbox が Linux で起動しない
 
 `sandbox.enabled` が `true` または未設定で、shell command の実行に失敗する場合は、bubblewrap と user namespace を確認する。`false` の場合、`chezmoi apply` の診断はこの probe を省略する。
@@ -153,8 +105,6 @@ uv --offline --directory / --project / cache dir
 ```
 
 既定 cache への書き込みが失敗したら、Copilot CLI の版、`/sandbox policy`、sandbox 内の `uv cache dir` と実行結果を確認する。`/sandbox policy` の表示だけでは書き込み成功を確認できない。Windows の mise shim 起動失敗は cache 許可とは別の問題として調べる。絶対 uv path、PATH 変更、mise の data/state 許可で回避しない。
-
-過去の設定にある `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` grant と `COPILOT_DOTFILES_UV_CACHE_DIR` は、設定同期が既定旧 path と完全一致する場合だけ除去する。専用 cache directory の実体は削除しない。別の環境変数値や他の filesystem grants は保持する。
 
 Windows の対話 PowerShell または sandboxed Azure MCP が `uv is not a valid shim` / `npx is not a valid shim` を報告する場合は、mise shim が shell の継承 PATH に残っている可能性がある。`Get-Command uv,npx,node -All` で選択元を確認し、`home/dot_config/mise/config.toml.tmpl` から生成された mise 設定に `activate_shims = false` があることを確認する。設定を `chezmoi apply` で配布してから、新しい PowerShell と Copilot CLI を起動する。mise の activation はこの設定で既存 shim も PATH から除き、導入済みツールの実体ディレクトリを維持する。User PATH の実体同期が欠けている場合に限り、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH を確認する。mise の config、state、downloads を sandbox へ追加して shim 解決を回避しない。
 
@@ -192,7 +142,7 @@ mise --version
 
 `lockfile_platforms` は mise `2026.4.8` 以降が必要である。これより古い場合、設定は警告なく無視される。`run_once_before_20-install-mise.sh` は既存バイナリを版にかかわらず保持するため、自分で更新する。
 
-全環境で `mise-self-update` を実行する。WindowsでもWinGetの登録版と実ファイルの一時的な不一致を許容し、日常更新にWinGetは使わない。
+全環境で `mise-self-update` を実行し、mise の組み込み updater で更新する。
 
 mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。
 

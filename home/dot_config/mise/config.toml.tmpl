@@ -39,11 +39,6 @@ cargo-make = "latest"
 
 [tools.dotnet]
 version = "latest"
-{{ if eq .chezmoi.os "windows" -}}
-# core:dotnet の install-time verification が system dotnet を拾わないよう、
-# mise の共有 root を検証コマンドの PATH 先頭へ置く。
-install_env = { DOTNET_ROOT = '{{ env "LOCALAPPDATA" }}\mise\dotnet-root', PATH = '{{ env "LOCALAPPDATA" }}\mise\dotnet-root;$PATH' }
-{{ end -}}
 
 [settings]
 experimental = true

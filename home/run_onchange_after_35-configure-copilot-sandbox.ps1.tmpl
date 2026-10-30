@@ -9,7 +9,6 @@ $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HO
 $settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
 $hooksDir = Join-Path $HOME '.copilot\hooks'
-$legacyUvCacheEnvironmentName = 'COPILOT_DOTFILES_UV_CACHE_DIR'
 
 $desiredSettings = @'
 {{ include ".chezmoitemplates/copilot-user-settings.json" }}
@@ -20,33 +19,6 @@ function Fail-SandboxSettings {
 
   Write-Error "Copilot sandbox settings: $Message"
   exit 1
-}
-
-function Publish-EnvironmentChange {
-  if (-not ('ChezmoiDotfiles.EnvironmentBroadcast' -as [type])) {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-namespace ChezmoiDotfiles {
-  public static class EnvironmentBroadcast {
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern IntPtr SendMessageTimeout(
-      IntPtr hWnd, uint msg, UIntPtr wParam, string lParam,
-      uint flags, uint timeout, out UIntPtr result);
-  }
-}
-'@
-  }
-  $result = [UIntPtr]::Zero
-  [void][ChezmoiDotfiles.EnvironmentBroadcast]::SendMessageTimeout(
-    [IntPtr]0xffff,
-    0x001a,
-    [UIntPtr]::Zero,
-    'Environment',
-    0x0002,
-    5000,
-    [ref]$result
-  )
 }
 
 if (Test-Path -LiteralPath $settingsPath) {
@@ -187,26 +159,6 @@ function Add-ReadonlyDirectoryAndTarget {
   return $result
 }
 
-$legacyUvCacheDir = Join-Path (Join-Path $env:LOCALAPPDATA 'github-copilot') 'uv'
-$legacyUvCacheHome = if ($env:USERPROFILE) { $env:USERPROFILE } else { $HOME }
-$legacyWindowsUvCacheDir = $null
-if (
-  -not [string]::IsNullOrWhiteSpace($legacyUvCacheHome) -and
-  [System.IO.Path]::IsPathFullyQualified($legacyUvCacheHome) -and
-  -not $legacyUvCacheHome.StartsWith('\\') -and
-  -not $legacyUvCacheHome.StartsWith('//')
-) {
-  $legacyWindowsUvCacheDir = Join-Path (
-    [System.IO.Path]::GetFullPath($legacyUvCacheHome)
-  ) '.cache\github-copilot\uv\powershell-tool'
-}
-$legacyUvCachePathKeys = @()
-if ($legacyUvCacheDir) {
-  $legacyUvCachePathKeys += Get-NormalizedPathKey -Path $legacyUvCacheDir
-}
-if ($legacyWindowsUvCacheDir) {
-  $legacyUvCachePathKeys += Get-NormalizedPathKey -Path $legacyWindowsUvCacheDir
-}
 $miseDataDir = if ($env:MISE_DATA_DIR) {
   $env:MISE_DATA_DIR
 } else {
@@ -237,12 +189,7 @@ if (Test-Path -LiteralPath $hookRuntimeFile -PathType Leaf) {
 
 # mise shims と install ディレクトリは agent の PowerShell tool が jq/rg/node/uv
 # を解決するために必要で、hook interpreter とは別の理由で読み取り許可が要る。
-$miseExe = (Get-Command -CommandType Application -Name 'mise.exe' -ErrorAction SilentlyContinue |
-  Select-Object -First 1).Source
-if (-not $miseExe) {
-  $candidate = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\mise.exe'
-  if (Test-Path -LiteralPath $candidate) { $miseExe = $candidate }
-}
+{{ include ".chezmoitemplates/mise-executable.ps1" }}
 
 $uvExe = $null
 if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {
@@ -314,12 +261,7 @@ $filesystem = if ($null -ne $existingFilesystem) { $existingFilesystem } else { 
 $network = if ($null -ne $existingNetwork) { $existingNetwork } else { [pscustomobject]@{} }
 
 $readwritePaths = @(
-  @(Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths')) |
-    Where-Object {
-      $legacyUvCachePathKeys -notcontains (
-        Get-NormalizedPathKey -Path ([string]$_)
-      )
-    }
+  Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readwritePaths')
 )
 $readonlyPaths = @(
   Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths')
@@ -408,44 +350,6 @@ try {
   if ($backupPath) {
     Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
   }
-}
-
-try {
-  $legacyUserCacheValue = [Environment]::GetEnvironmentVariable(
-    $legacyUvCacheEnvironmentName,
-    [EnvironmentVariableTarget]::User
-  )
-  $legacyProcessCacheValue = [Environment]::GetEnvironmentVariable(
-    $legacyUvCacheEnvironmentName,
-    [EnvironmentVariableTarget]::Process
-  )
-  $userEnvironmentChanged = $false
-  if (
-    $legacyWindowsUvCacheDir -and $legacyUserCacheValue -and
-    (Get-NormalizedPathKey -Path $legacyUserCacheValue) -eq
-      (Get-NormalizedPathKey -Path $legacyWindowsUvCacheDir)
-  ) {
-    [Environment]::SetEnvironmentVariable(
-      $legacyUvCacheEnvironmentName,
-      $null,
-      [EnvironmentVariableTarget]::User
-    )
-    $userEnvironmentChanged = $true
-  }
-  if (
-    $legacyWindowsUvCacheDir -and $legacyProcessCacheValue -and
-    (Get-NormalizedPathKey -Path $legacyProcessCacheValue) -eq
-      (Get-NormalizedPathKey -Path $legacyWindowsUvCacheDir)
-  ) {
-    [Environment]::SetEnvironmentVariable(
-      $legacyUvCacheEnvironmentName,
-      $null,
-      [EnvironmentVariableTarget]::Process
-    )
-  }
-  if ($userEnvironmentChanged) { Publish-EnvironmentChange }
-} catch {
-  Fail-SandboxSettings "Failed to remove legacy environment variable ${legacyUvCacheEnvironmentName}: $($_.Exception.Message)"
 }
 
 Write-Host "Configured GitHub Copilot user settings in $settingsPath"

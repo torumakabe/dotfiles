@@ -5,8 +5,8 @@
 # Visual Studio ワークロードが不足している場合は UAC の承認が必要。
 #
 # Note: Most CLI tool versions are managed by mise (~/.config/mise/config.toml).
-# DSC contains only: OS settings, GUI/CLI apps not managed by mise, and
-# bootstrap tooling (mise itself).
+# DSC contains only OS settings and GUI/CLI apps not managed by mise.
+# chezmoi installs mise from its official standalone installer.
 properties:
   resources:
     - resource: Microsoft.Windows.Developer/DeveloperMode
@@ -75,12 +75,12 @@ properties:
         id: Microsoft.Azd
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
-      id: Mise
       directives:
-        description: "Install mise"
+        # mise.exe と mise-shim.exe が依存する runtime。x64 package は ARM64 も含む。
+        description: "Install Visual C++ runtime for standalone mise"
         allowPrerelease: false
       settings:
-        id: jdx.mise
+        id: Microsoft.VCRedist.2015+.x64
         source: winget
     - resource: Microsoft.WinGet.DSC/WinGetPackage
       id: Rustup
@@ -98,7 +98,6 @@ properties:
       dependsOn:
         - GitHubCopilotCli
         - GitHubCopilotApp
-        - Mise
         - Rustup
       directives:
         description: "Protect self-updated WinGet packages with blocking pins"
@@ -107,7 +106,6 @@ properties:
           $managedPins = @(
             @{ Id = 'GitHub.CopilotApp'; Pinned = $true }
             @{ Id = 'GitHub.Copilot'; Pinned = $true }
-            @{ Id = 'jdx.mise'; Pinned = $true }
             @{ Id = 'Rustlang.Rustup'; Pinned = $true }
           )
           $output = winget pin list --source winget --accept-source-agreements --disable-interactivity | Out-String
@@ -121,7 +119,6 @@ properties:
           $managedPins = @(
             @{ Id = 'GitHub.CopilotApp'; Pinned = $true }
             @{ Id = 'GitHub.Copilot'; Pinned = $true }
-            @{ Id = 'jdx.mise'; Pinned = $true }
             @{ Id = 'Rustlang.Rustup'; Pinned = $true }
           )
           function Get-WinGetPinType {
@@ -154,7 +151,6 @@ properties:
           $managedPins = @(
             @{ Id = 'GitHub.CopilotApp'; Pinned = $true }
             @{ Id = 'GitHub.Copilot'; Pinned = $true }
-            @{ Id = 'jdx.mise'; Pinned = $true }
             @{ Id = 'Rustlang.Rustup'; Pinned = $true }
           )
           function Get-WinGetPinType {

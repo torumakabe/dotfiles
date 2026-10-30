@@ -20,6 +20,7 @@ SYNC_SH_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.sh.tmpl"
 SYNC_PS1_PATH = REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_20-mise-install.sh.tmpl"
 BOOTSTRAP_SH_PATH = REPO_ROOT / "home/run_once_before_20-install-mise.sh.tmpl"
+BOOTSTRAP_PS1_PATH = REPO_ROOT / "home/run_once_before_20-install-mise.ps1.tmpl"
 ZSHRC_PATH = REPO_ROOT / "home/dot_zshrc.tmpl"
 POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 
@@ -155,13 +156,6 @@ def _mise_upgrade_function() -> str:
     start = zshrc.index("mise-upgrade() {")
     end = zshrc.index("\n}\n\n{{ end -}}", start) + 2
     return zshrc[start:end]
-
-
-def _powershell_mise_self_functions() -> str:
-    profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")
-    start = profile.index("function Invoke-MiseSelfUpdate {")
-    end = profile.index("\n# mise 管理ツールの一括更新", start)
-    return profile[start:end]
 
 
 def _powershell_mise_upgrade_function() -> str:
@@ -397,227 +391,36 @@ expected=$'mise self-update --yes --no-plugins\nmise reshim'
 
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    def _run_powershell_mise_self_update(
-        self,
-        *,
-        self_update_exit: int = 0,
-        reshim_exit: int = 0,
-        token_env: dict[str, str] | None = None,
-        gh_token: str | None = None,
-    ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
-        if os.name != "nt":
-            self.skipTest("Windows only")
-        pwsh = shutil.which("pwsh")
-        if pwsh is None:
-            self.skipTest("pwsh is required for PowerShell mise-self-update tests")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            history_file = pathlib.Path(temp_dir) / "history.txt"
-            script_file = pathlib.Path(temp_dir) / "test-mise-self-update.ps1"
-            script_file.write_text(
-                f"""
-$PSStyle.OutputRendering = 'PlainText'
-$historyPath = $env:TEST_HISTORY
-$PSNativeCommandUseErrorActionPreference = $true
-$script:ghCalls = 0
-$script:selfUpdateTokens = $null
-$script:reshimMiseToken = $null
-
-function gh {{
-    $script:ghCalls++
-    if ($env:TEST_GH_TOKEN) {{
-        $global:LASTEXITCODE = 0
-        $env:TEST_GH_TOKEN
-        return
-    }}
-    $global:LASTEXITCODE = 1
-}}
-
-function mise {{
-    Add-Content -Path $historyPath -Value "mise $($args -join ' ')" -Encoding utf8
-    if ($args[0] -eq 'self-update') {{
-        $script:selfUpdateTokens = @{{
-            mise = if (Test-Path Env:\\MISE_GITHUB_TOKEN) {{ $env:MISE_GITHUB_TOKEN }} else {{ $null }}
-            api = if (Test-Path Env:\\GITHUB_API_TOKEN) {{ $env:GITHUB_API_TOKEN }} else {{ $null }}
-            github = if (Test-Path Env:\\GITHUB_TOKEN) {{ $env:GITHUB_TOKEN }} else {{ $null }}
-            gh = if (Test-Path Env:\\GH_TOKEN) {{ $env:GH_TOKEN }} else {{ $null }}
-        }}
-        $global:LASTEXITCODE = [int]$env:TEST_SELF_UPDATE_EXIT
-        return
-    }}
-    if ($args[0] -eq 'reshim') {{
-        $script:reshimMiseToken = if (Test-Path Env:\\MISE_GITHUB_TOKEN) {{ $env:MISE_GITHUB_TOKEN }} else {{ $null }}
-        $global:LASTEXITCODE = [int]$env:TEST_RESHIM_EXIT
-        return
-    }}
-    $global:LASTEXITCODE = 99
-}}
-
-{_powershell_mise_self_functions()}
-
-Invoke-MiseSelfUpdate
-$history = if (Test-Path $historyPath) {{ Get-Content -Path $historyPath }} else {{ @() }}
-$result = @{{
-    lastExitCode = $global:LASTEXITCODE
-    history = @($history)
-    selfUpdateTokens = $script:selfUpdateTokens
-    reshimMiseToken = $script:reshimMiseToken
-    ghCalls = $script:ghCalls
-    miseTokenAfterPresent = Test-Path Env:\\MISE_GITHUB_TOKEN
-    miseTokenAfter = if (Test-Path Env:\\MISE_GITHUB_TOKEN) {{ $env:MISE_GITHUB_TOKEN }} else {{ $null }}
-}}
-"RESULT_JSON=$($result | ConvertTo-Json -Compress)"
-""",
-                encoding="utf-8",
-            )
-            env = _mise_token_test_env(token_env)
-            env.update(
-                {
-                    "TEST_HISTORY": str(history_file),
-                    "TEST_SELF_UPDATE_EXIT": str(self_update_exit),
-                    "TEST_RESHIM_EXIT": str(reshim_exit),
-                }
-            )
-            if gh_token is not None:
-                env["TEST_GH_TOKEN"] = gh_token
-            result = subprocess.run(
-                [pwsh, "-NoProfile", "-NonInteractive", "-File", str(script_file)],
-                check=False,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                env=env,
-            )
-            match = re.search(r"(?m)^RESULT_JSON=(.+)$", result.stdout)
-            self.assertIsNotNone(
-                match,
-                f"PowerShell result marker missing\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}",
-            )
-            return result, json.loads(match.group(1))
-
-    def test_powershell_mise_self_update_updates_binary_then_reshims(self) -> None:
-        result, state = self._run_powershell_mise_self_update()
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(state["lastExitCode"], 0)
-        self.assertEqual(
-            state["history"],
-            ["mise self-update --yes --no-plugins", "mise reshim"],
-        )
-
-    def test_powershell_mise_self_update_resolves_token_without_persisting_it(
-        self,
-    ) -> None:
-        cases = (
-            (
-                "mise-token",
-                {"MISE_GITHUB_TOKEN": "mise-token"},
-                None,
-                {"mise": "mise-token", "api": None, "github": None, "gh": None},
-                "mise-token",
-                True,
-                "mise-token",
-                0,
-            ),
-            (
-                "api-token",
-                {"GITHUB_API_TOKEN": "api-token"},
-                None,
-                {"mise": None, "api": "api-token", "github": None, "gh": None},
-                None,
-                False,
-                None,
-                0,
-            ),
-            (
-                "github-token",
-                {"GITHUB_TOKEN": "github-token"},
-                None,
-                {"mise": None, "api": None, "github": "github-token", "gh": None},
-                None,
-                False,
-                None,
-                0,
-            ),
-            (
-                "gh-environment",
-                {"GH_TOKEN": "gh-token"},
-                None,
-                {"mise": "gh-token", "api": None, "github": None, "gh": "gh-token"},
-                None,
-                False,
-                None,
-                0,
-            ),
-            (
-                "gh-cli",
-                {},
-                "cli-token",
-                {"mise": "cli-token", "api": None, "github": None, "gh": None},
-                None,
-                False,
-                None,
-                1,
-            ),
-            (
-                "unauthenticated",
-                {},
-                None,
-                {"mise": None, "api": None, "github": None, "gh": None},
-                None,
-                False,
-                None,
-                1,
-            ),
-        )
-        for (
-            name,
-            token_env,
-            gh_token,
-            expected_during,
-            expected_reshim_token,
-            expected_after_present,
-            expected_after,
-            gh_calls,
-        ) in cases:
-            with self.subTest(name=name):
-                result, state = self._run_powershell_mise_self_update(
-                    token_env=token_env,
-                    gh_token=gh_token,
-                )
-
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(state["lastExitCode"], 0)
-                self.assertEqual(state["selfUpdateTokens"], expected_during)
-                self.assertEqual(state["reshimMiseToken"], expected_reshim_token)
-                self.assertEqual(state["miseTokenAfterPresent"], expected_after_present)
-                self.assertEqual(state["miseTokenAfter"], expected_after)
-                self.assertEqual(state["ghCalls"], gh_calls)
-
-    def test_powershell_mise_self_update_does_not_reshim_after_update_failure(
-        self,
-    ) -> None:
-        result, state = self._run_powershell_mise_self_update(
-            self_update_exit=9,
-            token_env={"GH_TOKEN": "gh-token"},
-        )
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(state["lastExitCode"], 1)
-        self.assertEqual(state["history"], ["mise self-update --yes --no-plugins"])
-        self.assertFalse(state["miseTokenAfterPresent"])
-
-    def test_powershell_mise_self_update_fails_when_reshim_fails(self) -> None:
-        result, state = self._run_powershell_mise_self_update(reshim_exit=9)
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(state["lastExitCode"], 1)
-        self.assertEqual(
-            state["history"],
-            ["mise self-update --yes --no-plugins", "mise reshim"],
-        )
-
 class MiseConfigTests(unittest.TestCase):
+    def test_windows_bootstrap_verifies_pinned_official_installer(self) -> None:
+        bootstrap = BOOTSTRAP_PS1_PATH.read_text(encoding="utf-8")
+        self.assertIn(
+            "https://github.com/jdx/mise/releases/download/v$version/install.ps1",
+            bootstrap,
+        )
+        self.assertRegex(bootstrap, r"\$version = '\d+\.\d+\.\d+'")
+        self.assertRegex(bootstrap, r"\$installerSha256 = '[0-9a-f]{64}'")
+        verify = bootstrap.index("Get-FileHash -LiteralPath $installer -Algorithm SHA256")
+        self.assertLess(verify, bootstrap.index("& $installer"))
+        self.assertIn("throw 'mise installer checksum mismatch.'", bootstrap)
+        self.assertIn("$env:MISE_INSTALL_SHIMS_PATH = '0'", bootstrap)
+        self.assertIn("$env:MISE_INSTALL_ARCH = $null", bootstrap)
+        self.assertIn(
+            "[Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name], 'Process')",
+            bootstrap,
+        )
+
+    def test_windows_bootstrap_keeps_existing_version_without_reinstalling(self) -> None:
+        bootstrap = BOOTSTRAP_PS1_PATH.read_text(encoding="utf-8")
+        existing, install = bootstrap.split("\nelse {\n", 1)
+        self.assertIn("if (Test-Path -LiteralPath $miseExe)", existing)
+        self.assertIn("Test-Path -LiteralPath $shimExe -PathType Leaf", existing)
+        self.assertIn("$existingVersion = & $miseExe --version", existing)
+        self.assertIn('throw "Existing mise failed verification: $miseExe"', existing)
+        self.assertNotIn("Invoke-WebRequest", existing)
+        self.assertNotIn("$existingVersion -eq", existing)
+        self.assertIn("& $installer", install)
+
     def test_mise_bootstrap_excludes_known_vulnerable_release(self) -> None:
         bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
         version_match = re.search(
@@ -903,14 +706,6 @@ class MiseConfigTests(unittest.TestCase):
                     / "dot_config/mise/exact_locks/empty_dot_keep"
                 ).is_file()
             )
-
-    def test_windows_dotnet_verification_uses_mise_root(self) -> None:
-        config = CONFIG_PATH.read_text(encoding="utf-8")
-
-        self.assertIn('[tools.dotnet]\nversion = "latest"', config)
-        self.assertIn('{{ if eq .chezmoi.os "windows" -}}', config)
-        self.assertIn("install_env = { DOTNET_ROOT =", config)
-        self.assertIn(r"\mise\dotnet-root;$PATH", config)
 
     def test_typescript_language_server_uses_stable_typescript_path(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")

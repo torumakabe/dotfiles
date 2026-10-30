@@ -11,7 +11,7 @@ Windows も Copilot CLI が管理する uv の既定 cache を使う。
 
 ## Decision
 
-Windows も Copilot CLI が管理する uv 既定 cache を使う。uv-enforcer は Python と pip の直接実行拒否だけを担当し、cache path や PowerShell command を変更しない。設定同期は旧専用 `readwritePaths` entry と `COPILOT_DOTFILES_UV_CACHE_DIR` が `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` と完全一致する場合だけ除去する。既存 cache data、別の環境変数値、ほかの filesystem grant は保持する。
+Windows も Copilot CLI が管理する uv 既定 cache を使う。uv-enforcer は Python と pip の直接実行拒否だけを担当し、cache path や PowerShell command を変更しない。旧専用 cache からの移行は完了し、設定同期に移行用の削除処理を残さない。既存 cache data、環境変数、filesystem grant は保持する。
 
 ## Consequences
 

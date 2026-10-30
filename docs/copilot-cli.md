@@ -31,7 +31,7 @@
 
 設定ファイルの値と構造の検証は Copilot CLI に任せ、設定値を期待値として固定するテストは追加しない。リポジトリのテストでは、設定同期スクリプトの既存値の保持や移行処理、フックと launcher の動作を確認する。
 
-`uv-enforcer.py` は Python と pip の直接実行を拒否し、PowerShell command は書き換えずに通す。Copilot CLI が管理する uv の既定 cache を使い、dotfiles は専用 cache grant や `UV_CACHE_DIR` rewrite を追加しない。sandbox 設定同期は旧 Windows 専用 grant と `COPILOT_DOTFILES_UV_CACHE_DIR` が既定旧 path と完全一致する場合だけ移行時に除去する。別の値や既存 cache data は保持する。
+`uv-enforcer.py` は Python と pip の直接実行を拒否し、PowerShell command は書き換えずに通す。Copilot CLI が管理する uv の既定 cache を使い、dotfiles は専用 cache grant や `UV_CACHE_DIR` rewrite を追加しない。
 
 command hook は sandbox 内で mise と uv を起動しない。`run_after_25-provision-copilot-hook-python` が uv managed Python 3.14 を用意し、`~/.copilot/hooks/python-runtime.env` に install root と interpreter の絶対パスを記録する。OS 別 launcher はこの記録を検証して Python を直接起動する。設定同期は `~/.copilot/hooks` と同じ install root を `readonlyPaths` へ追加する。mise のデータと実体への読み取り許可は、通常の Bash / PowerShell tool が mise 管理コマンドを起動するために維持する。実機検証の対象環境と確認項目は[実機検証手順](copilot-sandbox-verification.md#実-cli-で-hook-interpreter-と-uv-cache-grant-を確認する)を参照する。
 
@@ -101,7 +101,7 @@ uv run -m unittest tests.test_copilot_guard -v
 
 - `sandbox.credentials.envVars` は `AZURE_CLIENT_SECRET`、`ARM_CLIENT_SECRET`、`ARM_ACCESS_KEY`、`AZURE_STORAGE_CONNECTION_STRING` を sandbox 子プロセスへ偽の値で渡し、承認した HTTPS host への request header に限って proxy が実値を注入する。設定する host は予約済みの `mask-only.invalid` であり、実際の宛先ではない。
 - `sandbox.enabled=true` の session では local sandbox が shell command、ローカル MCP server、filesystem policy を対象とする。`sandboxMcpServers=true`、`sandboxLspServers=false` とし、Copilot CLI 組み込みファイルツールの filesystem policy は software-only safeguard とする。MCP sandbox の判断は [ADR-035](adr/035-copilot-cli-sandbox-mcp-servers.md) を参照する。
-- sandbox 設定同期は `~/.copilot/settings.json` の管理対象外キーと利用者指定の filesystem path rules を保持する。Windows の PowerShell tool 用 cache だけを write 許可し、旧 `%LOCALAPPDATA%\github-copilot\uv` entry は移行時に完全一致で除去する。command hook 用に `~/.copilot/hooks` と uv managed Python の install root、各 OS の uv user config file を読み取り専用で追加する。uv 設定ファイルは POSIX では有効な絶対 `XDG_CONFIG_HOME`（未設定、空、相対パスなら `$HOME/.config`）、Windows では `%APPDATA%` から求め、ファイル単体を許可する。この読み取り許可は sandbox 内のすべてのプロセスに適用される。mise のデータと実体への読み取り許可は通常の shell tool のコマンド解決に使う。hook と設定の適用方法は [`operations.md`](operations.md#copilot-local-sandbox-の既定値)を参照する。共通設定の定義元は `home/.chezmoitemplates/copilot-user-settings.json` である。
+- sandbox 設定同期は `~/.copilot/settings.json` の管理対象外キーと利用者指定の filesystem path rules を保持する。command hook 用に `~/.copilot/hooks` と uv managed Python の install root、各 OS の uv user config file を読み取り専用で追加する。uv 設定ファイルは POSIX では有効な絶対 `XDG_CONFIG_HOME`（未設定、空、相対パスなら `$HOME/.config`）、Windows では `%APPDATA%` から求め、ファイル単体を許可する。この読み取り許可は sandbox 内のすべてのプロセスに適用される。mise のデータと実体への読み取り許可は通常の shell tool のコマンド解決に使う。hook と設定の適用方法は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。共通設定の定義元は `home/.chezmoitemplates/copilot-user-settings.json` である。
 - `sandbox.enabled` の初回値、設定保持、組織管理設定との優先関係は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。初回値と設定保持は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、ローカル MCP sandbox は [ADR-035](adr/035-copilot-cli-sandbox-mcp-servers.md) に記録する。
 - Linux 系の bubblewrap 診断は `sandbox.enabled` が `true` または未設定の場合に実行し、`false` の場合は probe を省略する。
 - `--deny-tool 'memory'` はビルトインに該当ツールが存在しないため no-op（v1.0.49 時点の検証）。

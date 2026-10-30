@@ -78,7 +78,7 @@ chezmoi init torumakabe
 winget configure -f "$(chezmoi source-path)\..\reference\windows\configuration.dsc.yaml"
 ```
 
-DSC は Copilot CLI を含む Windows パッケージを導入する。完了後は PowerShell を開き直し、`gh` と `mise` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は mise lockfile に従って残りのツールを導入する。
+DSC は Copilot CLI と VC++ ランタイムを含む Windows パッケージを導入する。完了後は PowerShell を開き直し、`gh` を現在の PATH へ反映する。その後に dotfiles を初回適用する。`chezmoi apply` は公式 installer で mise を `~\.local\bin` へ直接導入し、mise lockfile に従って残りのツールを導入する。
 
 ```powershell
 gh auth login

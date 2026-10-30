@@ -220,49 +220,6 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
                 self.powershell,
             )
 
-    def test_windows_uv_cache_migration_removes_only_exact_legacy_entries(self) -> None:
-        """古いWindows専用cache grantと補助変数だけを移行時に除去する。"""
-        self.assertIn("map(select(. != $legacy_cache))", self.posix)
-        self.assertIn(
-            "$legacyWindowsUvCacheDir = Join-Path",
-            self.powershell,
-        )
-        self.assertIn(
-            "'.cache\\github-copilot\\uv\\powershell-tool'",
-            self.powershell,
-        )
-        self.assertIn("$legacyUvCachePathKeys -notcontains", self.powershell)
-        self.assertIn(
-            "Get-NormalizedPathKey -Path ([string]$_)",
-            self.powershell,
-        )
-        self.assertNotIn("UV_CACHE_DIR", self.posix)
-        self.assertIn(
-            "$legacyUvCacheEnvironmentName = 'COPILOT_DOTFILES_UV_CACHE_DIR'",
-            self.powershell,
-        )
-        self.assertIn(
-            "[EnvironmentVariableTarget]::User",
-            self.powershell,
-        )
-        self.assertIn("[EnvironmentVariableTarget]::Process", self.powershell)
-        self.assertIn("$null,", self.powershell)
-        self.assertNotIn("$uvCacheDir", self.powershell)
-        self.assertNotIn("Get-SafeWindowsUvCache", self.powershell)
-        self.assertNotIn("Test-PathOverlap", self.powershell)
-        self.assertNotIn("New-Item -ItemType Directory -Path $uvCacheDir", self.powershell)
-        self.assertNotIn("Add-UniquePath -Paths $readwritePaths -Path $uvCacheDir", self.powershell)
-        self.assertNotIn(
-            "Remove-Item -LiteralPath $legacyWindowsUvCacheDir",
-            self.powershell,
-        )
-        self.assertIn(
-            "(Get-NormalizedPathKey -Path $legacyUserCacheValue) -eq",
-            self.powershell,
-        )
-        self.assertIn("Publish-EnvironmentChange", self.powershell)
-        self.assertNotIn('mkdir -p "${uv_cache_dir}"', self.posix)
-
 
 @unittest.skipUnless(
     sys.platform == "darwin" and shutil.which("chezmoi"),

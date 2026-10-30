@@ -4,6 +4,8 @@
 
 Accepted
 
+Windows の WinGet 導入を維持する判断だけは [ADR-040](040-windows-mise-standalone-install.md) が置換する。macOS と Linux の bootstrap 方針は引き続き有効とする。
+
 ## Context
 
 ADR-027 は、macOS の Homebrew formula 版 mise を公式成果物へ移行する分岐を定めた。この分岐を通常の bootstrap に残すと、導入元ごとの検出、既存シェルの activation、削除後の復旧を継続して保守する必要がある。
@@ -16,7 +18,7 @@ bootstrap の責務を未導入環境への初期配置に限定し、既存 mis
 - PATH で確認できなくても `~/.local/bin/mise` が存在し、実行できる場合は保持する。
 - mise が未導入の場合だけ、固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ原子的に配置する。
 - Homebrew formula の検出、自動移行、削除、削除案内は bootstrap の責務に含めない。
-- Windows は winget/DSC の `jdx.mise` による導入を維持する。
+- Windows は winget/DSC の `jdx.mise` による導入を維持する（この判断は ADR-040 が置換）。
 - リポジトリが新規導入する mise には公式成果物を使用する。既存 mise の配布元と版はこの契約の対象外とする。
 
 ## Consequences

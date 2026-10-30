@@ -55,16 +55,7 @@ WSL2、macOS、Codespaces、Dev Container でリモートブランチを検証�
 
 macOS、Linux、WSL は Copilot CLI 1.0.92-4 以降が追加する uv 既定 cache の `readwritePaths` を利用する。CLI 起動環境へ `UV_CACHE_DIR` は設定しない。Windows も PowerShell tool 内の uv 既定 cache を使い、dotfiles は cache 専用 grant や `UV_CACHE_DIR` rewrite を追加しない。
 
-Windows 設定同期は過去の `readwritePaths` entry と `COPILOT_DOTFILES_UV_CACHE_DIR` を移行時に確認し、旧専用 path と完全一致する entry / 値だけを除去する。ほかの grant、異なる環境変数値、cache データは変更しない。以前の `powershell-tool` cache directory が残っても削除しない。
-
-| 環境 | 移行時に除去する旧 path |
-|---|---|
-| macOS | `~/Library/Caches/github-copilot/uv` |
-| Linux、WSL | `${XDG_CACHE_HOME:-$HOME/.cache}/github-copilot/uv` |
-| Windows | `%LOCALAPPDATA%\github-copilot\uv` |
-| Windows | `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` |
-
-Windows 移行では、`COPILOT_DOTFILES_UV_CACHE_DIR` が旧専用 path と完全一致する場合だけ User と現在の Process 環境から削除する。異なる値は保持する。Copilot CLI 起動時に `UV_CACHE_DIR` を設定せず、通常の uv cache 動作と標準 sandbox grant を対象環境で確認する。
+設定同期は既存の filesystem grant を保持し、uv 用の環境変数と cache データを変更しない。
 
 ### command hook の固定 Python interpreter
 
@@ -75,7 +66,7 @@ python_root=<uv managed Python の install root>
 python=<Python 3.14 interpreter の絶対パス>
 ```
 
-POSIX では PATH 上の uv を使う。Windows では PATH 上の `uv.exe`、`mise which uv`、WinGet Links の `mise.exe` の順に uv 実体を探す。uv を利用できない場合でも既存の runtime env があれば、その interpreter でスモークテストを実行する。runtime env も無い場合は適用を失敗させる。
+POSIX では PATH 上の uv を使う。Windows では PATH 上の `uv.exe` を探し、見つからなければ共通テンプレートで解決した mise の `which uv` から実体を取得する。uv を利用できない場合でも既存の runtime env があれば、その interpreter でスモークテストを実行する。runtime env も無い場合は適用を失敗させる。
 
 各 command hook は `run-hook.sh` または `run-hook.ps1` を起動する。launcher は script 名が単一のファイル名であること、interpreter が記録済み root 配下の通常ファイルであることを検査し、その interpreter から hook script を直接実行する。hook 実行時に mise と uv は起動しない。hook scripts は標準ライブラリだけを使い、Python の要件は PEP 723 にも残す。
 
@@ -99,17 +90,16 @@ macOS の `.profile` は `DOTNET_BUNDLE_EXTRACT_BASE_DIR` が未設定の場合�
 
 ### sandbox ワークアラウンドの撤去手順
 
-Copilot CLI 側の修正で前提が変わったときに備え、撤去単位を3つに分けている。各単位は独立して撤去でき、他の単位を残したまま適用できる。
+Copilot CLI 側の修正で前提が変わったときに備え、撤去単位を2つに分けている。各単位は独立して撤去でき、他の単位を残したまま適用できる。
 
 | 撤去単位 | 主な実装 | 撤去条件 |
 |---|---|---|
 | 固定 Python interpreter | `run_after_25-provision-copilot-hook-python.*`、`run-hook.sh`、`run-hook.ps1`、`hooks.json`、hook ディレクトリと managed Python root の `readonlyPaths` | Copilot CLI が command hook の実行に必要なファイルを自動許可する |
 | Windows の direct mise bin PATH | `run_onchange_after_15-mise-sync-tools.ps1.tmpl` の PATH 同期と state file | Windows sandbox 内で mise shim が設定を解決できるようになる |
-| Windows の relocated uv cache（廃止） | `uv-enforcer.py` の PowerShell rewrite を削除し、設定同期に旧 exact grant と旧補助環境変数の移行除去だけを残す | Copilot CLI の標準 uv cache を利用できる |
 
 撤去では、利用者の端末に残る副作用を一度の適用で消し切れない。実装を削除する版と、残留物を除去する版を分ける。
 
-1. 実装と関連テストを削除し、同時に残留物の完全一致除去を設定同期へ加える。Windows の relocated cache なら `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` の `readwritePaths` entry と同じ値の `COPILOT_DOTFILES_UV_CACHE_DIR` を対象にする。cache データは削除しない。direct PATH なら state file に記録した entry と state file 自体、固定 interpreter なら `~/.copilot/hooks` と managed Python root の `readonlyPaths` entry を対象にする。
+1. 実装と関連テストを削除し、同時に残留物の完全一致除去を設定同期へ加える。direct PATH なら state file に記録した entry と state file 自体、固定 interpreter なら `~/.copilot/hooks` と managed Python root の `readonlyPaths` entry を対象にする。
 2. 対象端末すべてに `chezmoi apply` が行き渡ってから、次の版で完全一致除去を削除する。除去を残したまま次の変更を重ねると、撤去対象の判別が難しくなる。
 
 cache ディレクトリの実体と、利用者が追加した親子 path は削除しない。User PATH からは state file に記録した entry だけを除去し、記録外の entry は保持する。撤去後は対象環境で [Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) を実施し、追加許可なしで成功することを確認する。
@@ -127,33 +117,34 @@ chezmoi diff && chezmoi apply
 
 ### 本体の導入元
 
-macOS と Linux は、mise が未導入の場合に `home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。既存の mise は導入元と版を問わず置き換えない。Windows は DSC の `jdx.mise` を使い、winget が公式 GitHub Releases ZIP を配置する。導入方法は OS ごとに異なるが、リポジトリが新規導入する mise には公式成果物を使う（[ADR-028](adr/028-mise-bootstrap-preserves-existing-installations.md)）。
+macOS と Linux は、mise が未導入の場合に `home/run_once_before_20-install-mise.sh.tmpl` が固定版の公式 GitHub Releases アーカイブを取得し、SHA-256 検証後に `~/.local/bin/mise` へ配置する。既存の mise は導入元と版を問わず置き換えない（[ADR-028](adr/028-mise-bootstrap-preserves-existing-installations.md)）。
+
+Windows は `home/run_once_before_20-install-mise.ps1.tmpl` がタグと SHA-256 を固定した公式 `install.ps1` を実行し、`~\.local\bin` に `mise.exe` と `mise-shim.exe` を配置する。ZIP の SHA-256 検証は公式 installer が行う。有効な既存の直接導入版は版を問わず保持し、実体が起動しない場合や shim が欠けている場合は失敗させる。DSC は mise を導入せず、必要な VC++ ランタイムだけを導入する（[ADR-040](adr/040-windows-mise-standalone-install.md)）。
+
+Windows の User PATH 更新は既に動いている親プロセスへ伝わらないため、後続の適用スクリプトと PowerShell profile は共通テンプレートで直接導入先を優先して探す。
 
 ### `mise-self-update`
 
-mise 本体の更新は、全プラットフォームで `mise-self-update` に統一する（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。
+mise 本体の更新操作は、全プラットフォームで `mise-self-update` に統一し、mise の組み込み updater を使う（[ADR-040](adr/040-windows-mise-standalone-install.md)）。
 
 ```bash
 mise-self-update
 ```
 
-`mise self-update` は既定でプラグインも更新するため、`mise-self-update` は `--no-plugins` を付けて本体だけを対象にする。追加引数は受け付けない。
+追加引数は受け付けず、本体の更新後に `mise reshim` を実行する。プラグインと管理対象ツールは更新しない。
 
-mise 用の GitHub token が未設定の場合、`mise-self-update` は `GH_TOKEN`、続いて認証済みの `gh auth token` を探し、見つかった token を self-update のプロセスだけへ渡す。シェル環境やユーザー環境には保存しない。token を取得できない場合は未認証で実行し、GitHub API のレート制限を含むmiseのエラーをそのまま報告する。
+`mise self-update --yes --no-plugins` を実行する。mise 用の GitHub token が未設定の場合、`GH_TOKEN`、続いて認証済みの `gh auth token` を探し、見つかった token を self-update の間だけ渡す。Windows は一時的に設定したプロセス環境変数を必ず除去し、POSIX はコマンド単位で渡す。ユーザー環境には保存しない。token を取得できない場合は未認証で実行し、GitHub API のレート制限を含む mise のエラーをそのまま報告する。更新版は mise の minimum release age 設定に従い、自己更新保護を解除する `--force` や環境変数は使わない。
 
-Windows でも mise 自身を更新主体とし、WinGet/DSC の登録版と実ファイルの版が一時的に異なることを許容する。WinGetによる再導入や登録修復は日常更新から分離し、必要な場合だけ [`troubleshooting.md`](troubleshooting.md#winget-blocking-pin-を確認修復する) の手順を使う。
-
-macOS でリポジトリが新規導入する mise は Homebrew 管理外である。既存の Homebrew formula 版 mise は bootstrap で置換しないため、`mise-self-update` の実行前に `command -v mise` と `mise --version` で利用中の実体を確認する。
+macOS でリポジトリが新規導入する mise は Homebrew 管理外である。既存の Homebrew formula 版 mise は bootstrap で置換しないため、`mise-self-update` の実行前に `command -v mise` と `mise --version` で利用中の実体を確認する。パッケージ管理下の自己更新制限は解除しない。
 
 ## Windows の更新主体と WinGet blocking pin
 
-Windows では DSC がパッケージの導入と存在保証を担当し、日常更新にはリポジトリが定めた updater を使う（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。同じ実体を独自 updater が更新する次のパッケージには blocking pin を設定し、`winget upgrade --all` による置換を防ぐ。
+Windows では DSC が WinGet パッケージの導入と存在保証を担当し、日常更新にはリポジトリが定めた updater を使う（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。同じ実体を独自 updater が更新するパッケージには blocking pin を設定し、`winget upgrade --all` による置換を防ぐ。mise は直接導入のため WinGet 管理外とする。
 
 | WinGet ID | 日常更新 | blocking pin |
 | --- | --- | --- |
 | `GitHub.CopilotApp` | アプリ内 updater | あり |
 | `GitHub.Copilot` | `copilot update` | あり |
-| `jdx.mise` | `mise-self-update` | あり |
 | `Rustlang.Rustup` | `rustup self update` | あり |
 | `Microsoft.Azd` | `azd update`（WindowsではWinGetへ委譲） | なし |
 
