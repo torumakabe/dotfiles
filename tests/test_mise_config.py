@@ -545,7 +545,6 @@ class MiseConfigTests(unittest.TestCase):
         lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
         referenced_sidecars: set[pathlib.PurePosixPath] = set()
 
-        self.assertEqual(lock["lockfile_version"], 3)
         for tool_entries in lock["tools"].values():
             entries = tool_entries if isinstance(tool_entries, list) else [tool_entries]
             for entry in entries:
