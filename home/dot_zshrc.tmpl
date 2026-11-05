@@ -410,7 +410,7 @@ _mise_validate_lockfile_version() {
   local version_count
   version_count=$(command grep -Ec '^[[:space:]]*lockfile_version[[:space:]]*=' "$lockfile") || version_count=0
   if (( version_count != 1 )) ||
-      ! command grep -Eq '^[[:space:]]*lockfile_version[[:space:]]*=[[:space:]]*3[[:space:]]*$' "$lockfile"; then
+      ! command grep -Eq '^[[:space:]]*lockfile_version[[:space:]]*=[[:space:]]*[34][[:space:]]*$' "$lockfile"; then
     echo "❌ 未対応の mise lockfile version です。生成物を復元して更新を中止します" >&2
     return 1
   fi

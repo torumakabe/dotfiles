@@ -424,6 +424,36 @@ class PlatformParityTests(unittest.TestCase):
                 with self.subTest(shell=shell, warning=text):
                     self.assertEqual(bool(re.fullmatch(pattern, text)), allowed)
 
+    def test_mise_lockfile_versions_match_in_both_shells(self) -> None:
+        cases = (
+            ("lockfile_version = 3\n", True),
+            ("lockfile_version = 4\n", True),
+            (" \tlockfile_version\t= 4 \r\n", True),
+            ("lockfile_version = 2\n", False),
+            ("lockfile_version = 5\n", False),
+            ("lockfile_version = 34\n", False),
+            ('lockfile_version = "4"\n', False),
+            ("lockfile_version = 4garbage\n", False),
+        )
+        for shell, source, declaration in (
+            (
+                "zsh",
+                self.zshrc,
+                r"grep -Eq '([^']*lockfile_version[^']*)'",
+            ),
+            (
+                "powershell",
+                self.powershell,
+                r"\$lockfileVersions = \[regex\]::Matches\(\s*\$lockText,\s*'([^']+)'",
+            ),
+        ):
+            match = re.search(declaration, source)
+            self.assertIsNotNone(match, shell)
+            pattern = match.group(1).replace("[[:space:]]", r"\s")
+            for text, allowed in cases:
+                with self.subTest(shell=shell, declaration=text):
+                    self.assertEqual(bool(re.search(pattern, text)), allowed)
+
     def test_ci_enforces_the_cross_platform_contract(self) -> None:
         workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
 

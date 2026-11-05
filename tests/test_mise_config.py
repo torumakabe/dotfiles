@@ -885,6 +885,41 @@ class MiseConfigTests(unittest.TestCase):
             profile,
         )
 
+    def test_zsh_mise_lockfile_version_validation(self) -> None:
+        if shutil.which("zsh") is None:
+            self.skipTest("zsh is required for mise lockfile version tests")
+
+        cases = (
+            ("lockfile_version = 3\n", True),
+            ("lockfile_version = 4\n", True),
+            (" \tlockfile_version\t= 4 \r\n", True),
+            ("lockfile_version = 2\n", False),
+            ("lockfile_version = 5\n", False),
+            ("", False),
+            ("lockfile_version = 4\nlockfile_version = 3\n", False),
+            ("lockfile_version = 4\nlockfile_version = invalid\n", False),
+        )
+        script = (
+            _mise_warning_helpers()
+            + '\n_mise_validate_lockfile_version "$1"\n'
+        )
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8") as lockfile:
+            for text, allowed in cases:
+                with self.subTest(lockfile=text):
+                    lockfile.seek(0)
+                    lockfile.truncate()
+                    lockfile.write(text)
+                    lockfile.flush()
+                    result = subprocess.run(
+                        ["zsh", "-c", script, "mise-version-test", lockfile.name],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(result.returncode == 0, allowed, result.stderr)
+                    if not allowed:
+                        self.assertIn("未対応の mise lockfile version", result.stderr)
+
     def _check_mise_warnings(self, log: str) -> subprocess.CompletedProcess[str]:
         if shutil.which("zsh") is None:
             self.skipTest("zsh is required for mise warning tests")
