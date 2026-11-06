@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-`~/.zshrc` 等で `GITHUB_TOKEN` をエクスポートしておくと、gh CLI や各種スクリプトが自動認証できて便利である一方、同じシェルから起動する AI エージェント（Copilot CLI、Claude Code 等）にもトークンが露出する。エージェントが意図せずトークンを他プロセスに渡したり、ログに記録する事故リスクがある。
+`~/.zshrc` 等で `GITHUB_TOKEN` をエクスポートしておくと、gh CLI や各種スクリプトが自動認証できて便利である一方、同じシェルから起動する AI エージェント（GitHub Copilot CLI、Claude Code 等）にもトークンが露出する。エージェントが意図せずトークンを他プロセスに渡したり、ログに記録する事故リスクがある。
 
 ## Decision
 

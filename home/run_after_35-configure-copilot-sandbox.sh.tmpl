@@ -1,6 +1,6 @@
 {{- if ne .chezmoi.os "windows" -}}
 #!/usr/bin/env bash
-# Copilot CLI local sandbox 設定 (Linux/macOS)
+# GitHub Copilot CLI local sandbox 設定 (Linux/macOS)
 #
 # Copilot sandbox policy version: 15
 
@@ -10,7 +10,7 @@ umask 077
 sandbox_default_enabled={{ if or .codespaces .devcontainer }}false{{ else }}true{{ end }}
 
 fail() {
-  echo "Error: Copilot sandbox settings: $*" >&2
+  echo "Error: GitHub Copilot sandbox settings: $*" >&2
   exit 1
 }
 

@@ -1,6 +1,6 @@
 {{- if eq .chezmoi.os "linux" -}}
 #!/usr/bin/env bash
-# Diagnose the Linux prerequisites for the Copilot CLI bubblewrap backend.
+# Diagnose the Linux prerequisites for the GitHub Copilot CLI bubblewrap backend.
 
 set -uo pipefail
 
@@ -15,7 +15,7 @@ if [ -f "${settings_path}" ] &&
 fi
 
 if ! command -v bwrap >/dev/null 2>&1; then
-  warn "bubblewrap is not on PATH; shell commands may not run while the Copilot sandbox is enabled. Check with '/sandbox status' or disable with '/sandbox disable'."
+  warn "bubblewrap is not on PATH; shell commands may not run while the GitHub Copilot sandbox is enabled. Check with '/sandbox status' or disable with '/sandbox disable'."
   exit 0
 fi
 
@@ -38,6 +38,6 @@ if [ -r /proc/sys/user/max_user_namespaces ] &&
 fi
 
 if ! bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true >/dev/null 2>&1; then
-  warn "bubblewrap could not start an unprivileged sandbox; shell commands may not run while the Copilot sandbox is enabled. Check with '/sandbox status' or disable with '/sandbox disable'."
+  warn "bubblewrap could not start an unprivileged sandbox; shell commands may not run while the GitHub Copilot sandbox is enabled. Check with '/sandbox status' or disable with '/sandbox disable'."
 fi
 {{- end -}}

@@ -8,7 +8,7 @@ Accepted
 
 uv の設定ファイルを sandbox 内から読み取るには、対象ファイルへの読み取り許可が必要になる。
 `readonlyPaths` は uv だけでなく sandbox 内のすべてのプロセスに適用される。
-uv 管理 Python root の読み取り許可は [ADR-041](041-copilot-cli-hooks-retirement-and-uv-sandbox.md) で別に扱う。
+uv 管理 Python root の読み取り許可は [ADR-042](042-uv-managed-python-readonly-grant.md) で別に扱う。
 
 ## Decision
 

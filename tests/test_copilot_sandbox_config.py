@@ -1,4 +1,4 @@
-"""Guard static Copilot sandbox configuration contracts."""
+"""Guard static GitHub Copilot sandbox configuration contracts."""
 
 import json
 import os

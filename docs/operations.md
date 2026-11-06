@@ -12,17 +12,17 @@
 | Windows | `winget` (DSC) + `mise` | GUI/CLI アプリ、Azure CLI、開発ツール |
 | 全環境共通 | `rustup` | Rust toolchain |
 | 全環境共通 | `uv` | Python スクリプト実行、`ty` と `specify-cli` の導入と更新 |
-| 全環境共通 | `gh extension` + `gh skill` | `gh-stack` extension と Copilot skill |
+| 全環境共通 | `gh extension` + `gh skill` | `gh-stack` extension と GitHub Copilot skill |
 
 ## 定期チェック対象の制約
 
-制約の対象と撤去条件は [リポジトリ指示](../.github/copilot-instructions.md#プラットフォーム制約定期チェック対象) と [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) で管理する。`azd` と Copilot CLI を mise 外で管理する判断は [ADR-033](adr/033-manage-azd-and-copilot-cli-via-official-os-channels.md)、Microsoft Edit を Windows のみで管理する判断は [ADR-011](adr/011-edit-windows-via-winget-dsc.md) を参照する。
+制約の対象と撤去条件は [リポジトリ指示](../.github/copilot-instructions.md#プラットフォーム制約定期チェック対象) と [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) で管理する。`azd` と GitHub Copilot CLI を mise 外で管理する判断は [ADR-033](adr/033-manage-azd-and-copilot-cli-via-official-os-channels.md)、Microsoft Edit を Windows のみで管理する判断は [ADR-011](adr/011-edit-windows-via-winget-dsc.md) を参照する。
 
 TypeScript language server の除外を撤去するときは、`home/dot_config/mise/config.toml.tmpl` の版限定エントリを削除し、`mise install --force npm:typescript-language-server` で既存導入済み版も再検証する。成功後に `uv run -m unittest tests.test_mise_config -v` を実行する。失敗時の確認は [`troubleshooting.md`](troubleshooting.md#mise-install-が-aube-install-failed-failed-to-resolve-dependencies-で止まる) を参照する。
 
 ## gh-stack の更新
 
-セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
+セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 GitHub Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
 
 更新前には、skill と extension の候補を確認する。
 
@@ -33,35 +33,33 @@ gh extension upgrade gh-stack --dry-run
 
 更新する場合は、公式 skill の内容と extension のリリースノートを確認してから、`gh skill update gh-stack` と `gh extension upgrade gh-stack` を明示的に実行する。更新後は `gh skill list --agent github-copilot --scope user`、`gh extension list`、`gh stack --version` で導入版を確認する。日常の apply へ更新処理を含めない理由は [ADR-024](adr/024-gh-stack-distribution-and-updates.md) を参照する。
 
-## Copilot local sandbox の既定値
+## GitHub Copilot local sandbox の既定値
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
 同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。通常の shell tool に必要な mise のパスと `uv python dir` が返す uv managed Python の保存先は `readonlyPaths` へ重複なく追記する。uv 設定ファイルも、POSIX では有効な絶対 `XDG_CONFIG_HOME`（未設定、空、相対パスなら `$HOME/.config`）、Windows では `%APPDATA%` から求めた `uv/uv.toml` だけを読み取り専用で追加する。この規則は uv に限らず sandbox 内のすべてのプロセスに適用される。設定ファイルに認証情報が含まれる場合、それらも読み取り可能になる。
 
-現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
+現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。POSIX の同期処理は JSONC コメントを解析できないため、設定はコメントなしの JSON で保存する。両 OS の同期処理は JSON 全体を再シリアライズし、インデントとキー順は変わる場合がある。
 
-利用者は `/sandbox enable` と `/sandbox disable` で値を変更でき、変更後の boolean 値も次回の適用で維持される。コンテナでの手動有効化は互換性調査の対象であり、このリポジトリは動作を保証しない。Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。WinGet Configuration は Copilot CLI パッケージの導入だけを担い、設定ファイルは配布しない。環境別の初期値を採用した判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) を参照する。
+利用者は `/sandbox enable` と `/sandbox disable` で値を変更でき、変更後の boolean 値も次回の適用で維持される。コンテナでの手動有効化は互換性調査の対象であり、このリポジトリは動作を保証しない。GitHub Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。WinGet Configuration は GitHub Copilot CLI パッケージの導入だけを担い、設定ファイルは配布しない。環境別の初期値を採用した判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) を参照する。
 
 組織が enterprise の managed-settings.json（Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json`）で sandbox を強制している場合、`/sandbox` の UI は managed もしくは locked と表示され、利用者はローカルで無効化できない。これは組織のポリシーによるものであり、本リポジトリの chezmoi 設定は関与しない。
 
-本リポジトリの以前のブランチ（file-based managed settings 方式）が残した設定の確認と復旧は、[`troubleshooting.md`](troubleshooting.md#copilot-sandboxenabled-が意図した値にならない) を参照する。
+更新後は GitHub Copilot CLI を再起動し、`/sandbox` の General、Auth、Filesystem、Network の各タブを確認する。Linux 系では `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap 診断が実行され、`false` の場合は probe が省略される。
 
-更新後は Copilot CLI を再起動し、`/sandbox` の General、Auth、Filesystem、Network の各タブを確認する。Linux 系では `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap 診断が実行され、`false` の場合は probe が省略される。
-
-Linux、WSL2、macOS、Windows、Codespaces、Dev Container でリモートブランチを検証するときは、[Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) に従う。ホストからの非対話起動だけでスラッシュコマンドや backend を確認済みと扱わない。
+Linux、WSL2、macOS、Windows、Codespaces、Dev Container でリモートブランチを検証するときは、[GitHub Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) に従う。ホストからの非対話起動だけでスラッシュコマンドや backend を確認済みと扱わない。
 
 ### uv cache の sandbox grant
 
-macOS、Linux、WSL は Copilot CLI 1.0.92-4 以降が追加する uv 既定 cache の `readwritePaths` を利用する。CLI 起動環境へ `UV_CACHE_DIR` は設定しない。Windows も PowerShell tool 内の uv 既定 cache を使い、dotfiles は cache 専用 grant や `UV_CACHE_DIR` rewrite を追加しない。
+macOS、Linux、WSL は GitHub Copilot CLI 1.0.92-4 以降が追加する uv 既定 cache の `readwritePaths` を利用する。CLI 起動環境へ `UV_CACHE_DIR` は設定しない。Windows も PowerShell tool 内の uv 既定 cache を使い、dotfiles は cache 専用 grant や `UV_CACHE_DIR` rewrite を追加しない。
 
 設定同期は既存の filesystem grant を保持し、uv 用の環境変数と cache データを変更しない。
 
 ### sandbox 内の uv managed Python
 
-local sandbox で `uv run` が managed Python を使えるよう、設定同期は uv が利用可能なとき `uv python dir` で保存先を取得し、シンボリックリンクまたは reparse point の実体も読み取り専用で許可する。Copilot CLI の `allowDevToolAccess` はこの保存先を自動許可しない。保存先への書き込みは許可しないため、必要な Python は sandbox 外で事前に導入する。Windows の ProcessContainer では、保存先への書き込みを許可しても uv の junction 作成が拒否される。
+local sandbox で `uv run` が managed Python を使えるよう、設定同期は uv が利用可能なとき `uv python dir` で保存先を取得し、シンボリックリンクまたは reparse point の実体も読み取り専用で許可する。GitHub Copilot CLI の `allowDevToolAccess` はこの保存先を自動許可しない。保存先への書き込みは許可しないため、必要な Python は sandbox 外で事前に導入する。Windows の ProcessContainer では、保存先への書き込みを許可しても uv の junction 作成が拒否される。
 
-例えば Python 3.14 が必要な場合、通常のシェルで準備してから Copilot CLI を再起動する。
+例えば Python 3.14 が必要な場合、通常のシェルで準備してから GitHub Copilot CLI を再起動する。
 
 ```bash
 uv python install 3.14
@@ -74,13 +72,13 @@ chezmoi apply
 
 `UV_PYTHON_INSTALL_DIR` を変更した場合は、その値を設定した環境で `chezmoi apply` を再実行する。以前の保存先の許可は、利用者の設定と区別できないため保持する。uv が見つからない場合は警告を表示して他の設定を同期する。uv を導入した後、`chezmoi apply` を再実行して保存先を許可する。`uv python dir` が失敗するか絶対パスを返さない場合は適用を停止する。
 
-Copilot Cloud sandbox は local sandbox の設定を共有しない。Cloud では必要な Python を `uv run` が自動導入できる。local と Cloud の選択理由は [ADR-041](adr/041-copilot-cli-hooks-retirement-and-uv-sandbox.md) を参照する。
+GitHub Copilot Cloud sandbox は local sandbox の設定を共有しない。Cloud では必要な Python を `uv run` が自動導入できる。local と Cloud の選択理由は [ADR-042](adr/042-uv-managed-python-readonly-grant.md) を参照する。
 
 mise のデータディレクトリと実体ディレクトリへの読み取り許可は、通常の shell tool が mise 管理コマンドを起動するために維持する。Windows の非対話プロセスは `mise bin-paths` から同期した User PATH を使い、shim 実行時の config、state、downloads を sandbox へ許可しない。
 
 Windows では `home/dot_config/mise/config.toml.tmpl` が `activate_shims = false` を設定し、PowerShell activation が shim を PATH に追加しない。mise 管理ツールの実体ディレクトリは PATH に維持する。shim のみで利用するツールは `mise install` または `mise exec` で起動する。
 
-### Copilot フック廃止時の移行
+### GitHub Copilot フック廃止時の移行
 
 `home/.chezmoiremove` は以前配布した `~/.copilot/hooks` 内の11ファイルを個別に削除する。ほかのファイルや既存の `~/.copilot/audit*.jsonl` は残るが、このリポジトリから監査ログは更新しない。削除指定が残る間は、対象11パスに作成したファイルも次回の適用で削除される。
 
@@ -92,7 +90,7 @@ Windows では `home/dot_config/mise/config.toml.tmpl` が `activate_shims = fal
 
 本リポジトリは POSIX の `.profile` と Windows の PowerShell profile で
 `AZURE_MCP_COLLECT_TELEMETRY=false` を設定し、Azure skills の利用状況 telemetry を停止する。
-この設定は新しいシェルから Copilot CLI を起動したときに有効になる。
+この設定は新しいシェルから GitHub Copilot CLI を起動したときに有効になる。
 
 ### macOS Azure MCP の.NET bundle展開先
 
@@ -102,7 +100,7 @@ macOS の `.profile` は `DOTNET_BUNDLE_EXTRACT_BASE_DIR` が未設定の場合�
 
 ### Windows mise PATH のワークアラウンド撤去
 
-撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。条件を満たしたら `run_onchange_after_15-mise-sync-tools.ps1.tmpl` の PATH 同期を撤去し、state file に記録した entry と state file を削除する移行処理を追加する。記録外の User PATH entry は保持する。全対象端末へ適用後に移行処理を撤去し、対象環境で [Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) を行う。
+撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。条件を満たしたら `run_onchange_after_15-mise-sync-tools.ps1.tmpl` の PATH 同期を撤去し、state file に記録した entry と state file を削除する移行処理を追加する。記録外の User PATH entry は保持する。全対象端末へ適用後に移行処理を撤去し、対象環境で [GitHub Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) を行う。
 
 ## chezmoi での編集
 
@@ -160,7 +158,7 @@ macOS では、独自 updater を使う実体を Homebrew の管理対象と重�
 
 | 対象 | 導入元 | 日常更新 |
 | --- | --- | --- |
-| Copilot CLI | 固定した公式リリースアーカイブ | `copilot update` |
+| GitHub Copilot CLI | 固定した公式リリースアーカイブ | `copilot update` |
 | mise | 固定した公式リリースアーカイブ（新規環境） | `mise-self-update` |
 | rustup | 固定した公式 `rustup-init` | `rustup self update` |
 | azd | Homebrew | `azd update`（Homebrew へ委譲） |
@@ -169,7 +167,7 @@ macOS では、独自 updater を使う実体を Homebrew の管理対象と重�
 
 Linux と WSL は、現行構成では公式 installer と各 updater が同じ実体を管理するため追加対策を設けない。apt/dpkg と独自 updater の二重管理や複数ディレクトリへの重複配置を導入する場合は再評価する。
 
-### `mise-upgrade`
+## `mise-upgrade`
 
 zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、lockfile と npm dependency sidecar を含めて次を一括実行する。
 
@@ -177,8 +175,8 @@ zsh の `mise-upgrade` と PowerShell の `Invoke-MiseUpgrade` は、lockfile �
 2. 既存の `mise.lock` と `~/.config/mise/locks/` を退避
 3. `mise upgrade`
 4. リリース待機期間による保留、回復済みのメタデータ取得フォールバック、未対応プラットフォームのスキップ以外の `mise WARN` が出力された場合は、退避した生成物を復元して停止。手順 5 の `mise lock` にも同じ警告判定を適用する
-5. 既存の lockfile と sidecar を削除し、`mise lock --global --platform ... --bump` で config の selector から版を再解決して再生成
-6. lockfile の形式番号と、参照する sidecar path および各ディレクトリの `aube-lock.yaml` / `package.json` を検証。未対応の形式番号なら target を復元して停止
+5. 既存の lockfile だけを削除し、`mise lock --global --platform ... --bump` で config の selector から版を再解決して再生成
+6. lockfile の形式番号と、参照する sidecar path および各ディレクトリの `aube-lock.yaml` / `package.json` を検証。未対応の形式番号なら target を復元して停止し、成功したら未参照 sidecar を整理
 7. chezmoi source の lockfile と exact sidecar tree を退避し、lockfile を `chezmoi re-add` した後、既存 sidecar を `chezmoi forget --force` で管理対象から外して `chezmoi add --exact` で追加
 8. 生成または chezmoi source 更新に失敗した場合は、target と source の生成物を更新前へ復元
 9. git commit + push
@@ -189,7 +187,7 @@ mise-upgrade
 
 ### 対象プラットフォームの定義元
 
-対象プラットフォームは `~/.config/mise/config.toml` の `[settings] lockfile_platforms` が正本である。この設定は、auto-lock（`mise install` が実インストール後に走らせる書き戻し）と `--platform` を省略した `mise lock` が使う基準集合を決める。
+対象プラットフォームは `~/.config/mise/config.toml` の `[settings] lockfile_platforms` で定義する。この設定は、auto-lock（`mise install` が実インストール後に走らせる書き戻し）と `--platform` を省略した `mise lock` が使う基準集合を決める。
 
 ```toml
 [settings]
@@ -208,12 +206,11 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 - `mise lock` は **`--global` が必須**（省略するとプロジェクト設定のみ対象になる）
 - lockfile 再生成時は **`--platform` を常に指定**する。`lockfile_platforms` があっても省略しない。lockfile を削除してから再生成する破壊的操作であり、設定が読まれない状況（古い mise、設定ファイルの欠落）でも意図した集合になることを保証するため
 - lockfile を削除して全ツールを再生成するときは **`--bump` を指定**する。指定しない場合、npm backend のインストール先に使われる `<version>~aube~<hash>` という内部名を公開版として解決し、aube が失敗することがある。`--bump` は `latest` や `lts` を config から再解決し、固定版は同じ版を維持する
-- `mise upgrade` 後は lockfile と `~/.config/mise/locks/` を一度削除してから再生成する。既存 lockfile のエントリと、参照されなくなった sidecar を残さないためである
+- `mise upgrade` 後は lockfile だけを削除して再生成し、検証後に未参照 sidecar を整理する。`~/.config/mise/locks/` は事前に削除しない
 - `aube.path` を持つ lockfile だけを `chezmoi re-add` しない。既存の `~/.config/mise/locks/` を `chezmoi forget --force` した後、同じディレクトリを `chezmoi add --exact` で同じ変更へ含める
 - sidecar が 0 件の場合は `~/.config/mise/locks/.keep` を生成して exact directory を Git の管理対象に残す。他端末で適用したときに旧 sidecar を削除するためであり、sidecar が再び生成される更新では `.keep` も削除する
 - 両シェルとも、`minimum_release_age` の正規形に一致するリリース保留警告と、`mise-versions` が `fallback=true` を明示した回復済み警告を許可し、警告内容と継続理由を表示する
 - `<tool>@<version> is not available for <platform>[, <platform>...]; it will not install there` の正規形に一致する未対応プラットフォームのスキップ警告も許可し、警告内容と継続理由を表示する。ツール名やプラットフォーム名ごとの例外は持たない。たとえば cargo-make の linux/arm64 未対応が該当する
-- mise 2026.10.12 は、以前は debug ログに記録していた未対応環境のスキップを、明示した対象環境では警告として表示するようになった（[jdx/mise#14500](https://github.com/jdx/mise/pull/14500)）。終了コードは変わらないため、この警告だけでは更新を失敗扱いにしない。これは対象環境すべてへの導入を保証するものではなく、配布物がない環境は従来どおりスキップする
 - `mise-versions ... fallback=true` は、GitHub Releases などの取得失敗後に代替経路で処理を継続できたことを示す。一時的な `502 Bad Gateway` でも発生するため、この警告だけから `GITHUB_TOKEN` の期限切れとは判断しない
 - 両シェルとも、許可対象以外の `mise WARN` が出力された場合は、終了コードが `0` でも lockfile を復元し、commit と push を行わない。`fallback=false`、`fallback` 欠落、形式不明の警告は停止対象とする
 - 両シェルとも、`mise upgrade`、`mise lock`、sidecar 検証、chezmoi source 更新の失敗時は、更新処理を始める前の lockfile と sidecar を復元する
@@ -223,11 +220,6 @@ lockfile_platforms = ["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", 
 警告判定を変更したときは、`tests/test_platform_parity.py` で両シェルの判定形式を確認する。警告表示と停止または継続の動作は、zsh を利用する対象環境と Windows/PowerShell で確認する。macOS 上の共通テストだけで Windows の動作確認済みとは扱わない。
 
 ### 典型コマンド
-
-```text
-# mise 管理の全ツール、lockfile、sidecar の一括更新
-mise-upgrade
-```
 
 `mise-upgrade` は追加・変更したツールだけでなく、mise が管理する全ツールに `mise upgrade` を実行する。定期的な一括更新、ツール削除、対象プラットフォームの変更、lockfile または sidecar の破損からの復旧に使う。
 
@@ -247,8 +239,6 @@ chezmoi add --exact ~/.config/mise/locks
 
 `chezmoi source-path ~/.config/mise/locks` が未管理として失敗した場合は、初回追加なので `chezmoi forget` を省略して `chezmoi add --exact` を実行する。`mise lock <tool>` は指定したツールだけを処理し、`--bump` を指定しないため、既存の一致する lockfile バージョンを更新しない。
 
-lockfile と sidecar を削除して再生成したいケースは、新プラットフォーム追加、不要プラットフォーム除去、生成物の破損である。通常は `mise-upgrade` を使い、手動で lockfile だけを書き戻さない。
-
 ## uv tool 管理ツールの更新
 
 Astral の `ty` と GitHub Spec Kit の `specify-cli` は、全 OS で `uv tool` を使って管理する。新規環境では `run_once_after_30-install-tools` が、その時点の最新安定版を公式の Python パッケージインデックスから導入する。
@@ -259,7 +249,7 @@ Astral の `ty` と GitHub Spec Kit の `specify-cli` は、全 OS で `uv tool`
 uv-tools-upgrade
 ```
 
-このコマンドは `uv tool upgrade ty` と `uv tool install --force specify-cli` を順に実行する。一方の更新に失敗した場合も、もう一方の更新を試み、いずれかが失敗した場合は終了コード 1 を返す。`specify-cli` は従来の固定 Git tag から PyPI 版へ取得元を変更するため、`--force` で再インストールする。リポジトリが管理していない個人用の `uv tool` を変更しないため、`uv tool upgrade --all` は実行しない。
+このコマンドは `uv tool upgrade ty` と `uv tool install --force specify-cli` を順に実行する。一方の更新に失敗した場合も、もう一方の更新を試み、いずれかが失敗した場合は終了コード 1 を返す。`specify-cli` は PyPI 版を再インストールする。リポジトリが管理していない個人用の `uv tool` を変更しないため、`uv tool upgrade --all` は実行しない。
 
 `uv-tools-upgrade` は CLI 本体だけを更新する。既存プロジェクトへ配置した Spec Kit の integration や extension は更新しない。必要な場合は、対象プロジェクトで `specify integration upgrade <key>` と `specify extension update` を実行する。
 
@@ -319,9 +309,9 @@ GITHUB_TOKEN=$(gh auth token) mise install
 
 ダウンロード開始前または通信中の失敗は、警告を表示して対象ツールを省略し、後続の chezmoi スクリプトを継続する。ダウンロードが完了した後の checksum または署名鍵 fingerprint の不一致は、取得物を信頼できないため、そのスクリプトを異常終了させる。リポジトリ鍵や apt metadata の取得失敗も警告を表示して、そのリポジトリに依存するツールだけを省略する。
 
-macOS の Copilot CLI 移行は例外とする。公式バイナリを配置できない状態で処理を成功させると `run_once` が完了扱いになり、Homebrew formula からの移行を再試行できない。このためダウンロード失敗も異常終了させ、次回の `chezmoi apply` で再実行する。
+macOS の GitHub Copilot CLI 移行は例外とする。公式バイナリを配置できない状態で処理を成功させると `run_once` が完了扱いになり、Homebrew formula からの移行を再試行できない。このためダウンロード失敗も異常終了させ、次回の `chezmoi apply` で再実行する。
 
-`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update` を実行する。Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Microsoft apt リポジトリの鍵や suite を更新した場合は、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。
+`run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update` を実行する。GitHub Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Microsoft apt リポジトリの鍵や suite を更新した場合は、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。
 
 最低限の確認:
 
@@ -364,7 +354,7 @@ chezmoi apply
 
 イメージ内の Git を維持する理由は [ADR-020](adr/020-git-hooks-via-config.md)、PowerShell を含むクロスプラットフォーム検査の保証範囲は [ADR-019](adr/019-cross-platform-parity-contract.md) を参照する。
 
-Windows ホストでは、`tests/test_git_shadow_resolution.py` のうち POSIX 版のチェックスクリプトを実行するテストが skip される。`bash` が WSL の interop 版に解決され、テストが用意した偽の git を参照できないためである。このテストはコンテナ、WSL、または Ubuntu CI で実行する。
+`tests/test_git_shadow_resolution.py` の POSIX 版チェックスクリプトのテストは、コンテナ、WSL、または Ubuntu CI で実行する。Windows ホストでは対象外として skip される。
 
 構成を更新した後は、コンテナ内で全テストを実行する。
 

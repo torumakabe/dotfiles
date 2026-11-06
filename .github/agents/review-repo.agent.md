@@ -19,7 +19,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 - `.github/copilot-instructions.md` と `.github/agents/` はこのリポジトリ用、`home/private_dot_copilot/copilot-instructions.md` は配布用として、スコープ、重複、競合を確認する
 - 指示、エージェント、コードコメント、文書を[記述の置き場所](../../home/private_dot_copilot/copilot-instructions.md#記述の置き場所)と[リポジトリの割り当て](../copilot-instructions.md#記述の置き場所)に照合する。モデルの一般知識や重複は削除を優先し、必要な情報は正本を参照する。単に別ファイルへ移すだけにしない
 - `.github/agents/*.agent.md` の `name` がファイル名から `.agent.md` を除いた名前と一致し、`description` で依頼に合うエージェントを選べるか確認する
-- 配布用 agent と skill の有無は git 管理中のファイルと [Copilot CLI の管理境界](../../docs/copilot-cli.md) に照合する。プラグインや `gh skill` で管理する外部 skill にローカルの `SKILL.md` を要求しない
+- 配布用 agent と skill の有無は git 管理中のファイルと [GitHub Copilot の管理対象](../../docs/copilot.md#管理対象) に照合する。プラグインや `gh skill` で管理する外部 skill にローカルの `SKILL.md` を要求しない
 - `home/.chezmoitemplates/copilot-user-settings.json` と適用処理のマージ範囲を確認する。`enabledPlugins` の管理項目を排他的な許可リストとみなさず、管理外の既存項目が保持されることと区別する
 
 ## README、docs、install.sh
@@ -50,11 +50,11 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 ## mise とプラットフォーム契約
 
-- `home/dot_config/mise/config.toml.tmpl`、`home/run_once_before_10-install-packages.sh.tmpl`、`home/run_once_before_15-install-copilot-cli.sh.tmpl` の重複と欠落、ADR-033 の `azd` と Copilot CLI の管理範囲を確認する
+- `home/dot_config/mise/config.toml.tmpl`、`home/run_once_before_10-install-packages.sh.tmpl`、`home/run_once_before_15-install-copilot-cli.sh.tmpl` の重複と欠落、ADR-033 の `azd` と GitHub Copilot CLI の管理範囲を確認する
 - lockfile 操作と backend 移行は[リポジトリの mise 操作規則](../copilot-instructions.md#mise-操作のトラップ)に照合する。任意の実機検査では `mise ls` の Source が空の孤児ツールと余剰版も確認する
 - 公開関数、alias、補完、ツール導入を[プラットフォーム機能契約](../copilot-instructions.md#プラットフォーム機能契約)、`tests/test_platform_parity.py`、`.github/workflows/test-dotfiles.yml` と照合する。未分類の機能、理由と範囲のない例外、片方の shell だけの検査を見落とさない
 
-## hooks と CI
+## テストと CI
 
 - 配布 Python スクリプトの PEP 723 メタデータ、`tests/` の `uv run -m unittest` 経由の実行を確認する
 - `home/private_dot_copilot/` の `lsp-config.json.tmpl` と `mcp-config.json` のコマンドが、mise 管理下または導入手順に存在するか確認する

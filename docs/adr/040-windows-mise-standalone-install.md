@@ -17,7 +17,7 @@ Accepted
 - 日常更新は全 OS で `mise-self-update` から `mise self-update --yes --no-plugins` を実行し、成功後に `mise reshim` を行う。WinGet 管理下の自己更新保護は解除しない。
 - Windows DSC は mise の導入と pin を管理しない。旧 WinGet 版からの移行は完了し、pin 解除、旧版警告、WinGet 実体の探索 fallback は残さない。
 - mise は直接導入に一本化する。config、lockfile、installs は維持し、bootstrap で自動 force uninstall や自動削除は行わない。
-- CopilotApp、Copilot、Rustup など他のパッケージの pin 方針と、macOS、Linux、WSL の bootstrap 方針は変更しない。
+- CopilotApp、GitHub Copilot、Rustup など他のパッケージの pin 方針と、macOS、Linux、WSL の bootstrap 方針は変更しない。
 
 ## Consequences
 

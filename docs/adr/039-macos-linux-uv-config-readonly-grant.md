@@ -6,10 +6,8 @@ Accepted
 
 ## Context
 
-“ですよね。windowsと同じ効果を得られるようにしてください。”
-
-ADR-026 は共有 `uv.toml` の readonly grant を採用しないとした。ADR-038 は Windows でユーザーの uv 設定ファイルだけを許可した。
-uv 管理 Python root の読み取り許可は [ADR-041](041-copilot-cli-hooks-retirement-and-uv-sandbox.md) で別に扱う。
+ADR-026 は共有 `uv.toml` の readonly grant を採用しないとした。ADR-038 は Windows でユーザーの uv 設定ファイルだけを許可した。macOS/Linux でも同じ範囲の読み取りを可能にする。
+uv 管理 Python root の読み取り許可は [ADR-042](042-uv-managed-python-readonly-grant.md) で別に扱う。
 
 ## Decision
 

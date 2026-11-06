@@ -18,16 +18,16 @@
 | [003](003-mise-shim-exclude-pattern.md) | mise shim symlink は除外パターン方式にする | Accepted |
 | [004](004-azd-and-copilot-cli-outside-mise.md) | azd と copilot-cli を mise 外で管理する | Superseded by ADR-033 |
 | [005](005-no-github-token-in-shell-env.md) | GITHUB_TOKEN を環境変数に常駐させない | Accepted |
-| [006](006-pretooluse-hook-no-allow.md) | Copilot CLI preToolUse フックは allow を出力しない | Deprecated |
+| [006](006-pretooluse-hook-no-allow.md) | GitHub Copilot CLI preToolUse フックは allow を出力しない | Deprecated |
 | [007](007-python-with-uv-and-pep723.md) | Python スクリプトは uv run + PEP 723 を原則とする（command hook の固定 interpreter とフックによる強制は ADR-041 が廃止） | Accepted |
 | [008](008-zshenv-sources-profile.md) | ~/.zshenv は ~/.profile を source する | Accepted |
 | [009](009-mise-rust-windows-isolate-home.md) | Windows では mise の rust home を外部 rustup から分離する | Superseded by ADR-016 |
-| [010](010-url-allowlist-via-pretooluse-hook.md) | Copilot CLI の URL 包括制御は preToolUse Hook で行う | Superseded by ADR-015 |
+| [010](010-url-allowlist-via-pretooluse-hook.md) | GitHub Copilot CLI の URL 包括制御は preToolUse Hook で行う | Superseded by ADR-015 |
 | [011](011-edit-windows-via-winget-dsc.md) | Microsoft Edit は Windows のみ winget/DSC で管理する | Accepted |
 | [012](012-wsl-op-ssh-sign-crlf-wrapper.md) | WSL では op-ssh-sign-wsl.exe を CR 除去ラッパー経由で呼ぶ | Accepted |
 | [013](013-mise-lockfile-sync-hook.md) | mise lockfile 変更時に install と実行パスを同期する | Accepted |
 | [014](014-github-multi-account-https-auth-per-owner.md) | GitHub 多アカウント HTTPS 認証は credential の URL パス方式 + gh auth token --user で解決する | Accepted |
-| [015](015-copilot-cli-shell-network-via-local-sandbox.md) | Copilot CLI shell のネットワーク制御は local sandbox で行う | Superseded by ADR-025 |
+| [015](015-copilot-cli-shell-network-via-local-sandbox.md) | GitHub Copilot CLI shell のネットワーク制御は local sandbox で行う | Superseded by ADR-025 |
 | [016](016-rust-external-rustup.md) | Rust は全 OS で外部 rustup 管理とする (mise 管理から除外) | Accepted |
 | [017](017-msvc-linker-env-var-override-windows.md) | Windows の MSVC リンカーは CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER で明示指定する | Accepted |
 | [018](018-git-hooks-via-init-templatedir.md) | 機械全体への Git hook 配布は init.templateDir で行う | Accepted |
@@ -37,23 +37,24 @@
 | [022](022-pnpm-via-mise-not-corepack.md) | pnpm は corepack ではなく mise で直接管理する | Accepted |
 | [023](023-chezmoi-ps1-interpreter-noprofile.md) | chezmoi の ps1 実行系を固定しプロファイルを読ませない | Accepted |
 | [024](024-gh-stack-distribution-and-updates.md) | gh-stack skill と extension は公式 CLI で導入する | Accepted |
-| [025](025-copilot-cli-sandbox-user-level-default.md) | Copilot CLI local sandbox は user-level settings で既定有効にする | Superseded by ADR-026 |
-| [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 Copilot CLI sandbox 既定値と明示設定保持 | Superseded by ADR-035 |
+| [025](025-copilot-cli-sandbox-user-level-default.md) | GitHub Copilot CLI local sandbox は user-level settings で既定有効にする | Superseded by ADR-026 |
+| [026](026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) | 環境別 GitHub Copilot CLI sandbox 既定値と明示設定保持 | Superseded by ADR-035 |
 | [027](027-mise-install-from-official-artifacts-per-os.md) | mise は OS ごとの公式成果物から導入する | Superseded by ADR-028 |
 | [028](028-mise-bootstrap-preserves-existing-installations.md) | mise bootstrap は既存導入を置換しない（Windows の WinGet 維持方針だけは ADR-040 が置換） | Accepted |
 | [029](029-mise-lockfile-v2-sidecars.md) | mise lockfile revision 2 の npm sidecar を不可分に管理する | Accepted |
 | [030](030-mise-self-update-and-upgrade.md) | mise 本体の self-update と self-upgrade を使い分ける | Superseded by ADR-032 |
-| [031](031-windows-uv-dedicated-cache.md) | Windows Copilot sandbox の uv cache を非仮想化パスへ分離する | Superseded by ADR-036 |
+| [031](031-windows-uv-dedicated-cache.md) | Windows GitHub Copilot sandbox の uv cache を非仮想化パスへ分離する | Superseded by ADR-036 |
 | [032](032-protect-self-updated-winget-packages-with-blocking-pins.md) | 独自 updater で更新する WinGet パッケージを blocking pin で保護する（Windows の mise 部分は ADR-040 が置換） | Accepted |
-| [033](033-manage-azd-and-copilot-cli-via-official-os-channels.md) | azd と Copilot CLI を OS 別の公式経路で管理する | Accepted |
+| [033](033-manage-azd-and-copilot-cli-via-official-os-channels.md) | azd と GitHub Copilot CLI を OS 別の公式経路で管理する | Accepted |
 | [034](034-macos-apple-silicon-only.md) | macOS のサポートは Apple Silicon (arm64) 限定とする | Accepted |
-| [035](035-copilot-cli-sandbox-mcp-servers.md) | Copilot CLI MCP servers を sandbox 対象にする | Accepted |
-| [036](036-windows-uv-default-sandbox-cache.md) | Windows Copilot sandbox は標準 uv cache を使う | Accepted |
+| [035](035-copilot-cli-sandbox-mcp-servers.md) | GitHub Copilot CLI MCP servers を sandbox 対象にする | Accepted |
+| [036](036-windows-uv-default-sandbox-cache.md) | Windows GitHub Copilot sandbox は標準 uv cache を使う | Accepted |
 | [037](037-windows-mise-activation-without-shims.md) | Windows の mise activation は shim を追加しない | Accepted |
 | [038](038-windows-uv-config-readonly-grant.md) | Windows sandbox の uv 設定ファイルは uv.toml だけを読み取り専用にする | Accepted |
 | [039](039-macos-linux-uv-config-readonly-grant.md) | macOS/Linux sandbox の uv 設定ファイルは uv.toml だけを読み取り専用にする | Accepted |
 | [040](040-windows-mise-standalone-install.md) | Windows の mise は公式 standalone installer で直接導入する | Accepted |
-| [041](041-copilot-cli-hooks-retirement-and-uv-sandbox.md) | Copilot CLI フックを廃止し uv の通常実行を維持する | Accepted |
+| [041](041-copilot-hooks-retirement.md) | GitHub Copilot フックを廃止する | Accepted |
+| [042](042-uv-managed-python-readonly-grant.md) | GitHub Copilot CLI の sandbox で uv 管理 Python root を読み取り専用にする | Accepted |
 
 ## テンプレート
 

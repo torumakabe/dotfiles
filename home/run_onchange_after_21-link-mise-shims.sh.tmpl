@@ -1,6 +1,6 @@
 {{ if eq .chezmoi.os "darwin" -}}
 #!/usr/bin/env bash
-# GitHub Desktop の Copilot SDK は mise shims を含まない固定 PATH で子 shell を
+# GitHub Desktop の GitHub Copilot SDK は mise shims を含まない固定 PATH で子 shell を
 # 起動するが、~/.local/bin は含めるため、安全な shim だけをここへリンクする。
 # 本スクリプトが作成したリンクだけを state ファイルで管理する。
 # 関連: docs/architecture.md「PATH 管理（非対話シェル対応）」

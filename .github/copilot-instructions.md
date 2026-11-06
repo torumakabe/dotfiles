@@ -1,13 +1,13 @@
-# Copilot Instructions（リポジトリレベル）
+# GitHub Copilot Instructions（リポジトリレベル）
 
 このリポジトリは **chezmoi** と **mise** でクロスプラットフォームの dotfiles を管理している。
 
-このファイルと `.github/agents/` はリポジトリ自身用、`home/` 配下は開発環境への配布用である。管理境界は `docs/copilot-cli.md` を参照する。
+このファイルと `.github/agents/` はリポジトリ自身用、`home/` 配下は開発環境への配布用である。配布する GitHub Copilot 設定の対象と適用範囲は `docs/copilot.md` を参照する。
 
 ## 知識ソース
 
 - **設計判断**: `docs/adr/INDEX.md`（形式と一覧）
-- **運用ノート**: `docs/architecture.md` / `docs/operations.md` / `docs/troubleshooting.md` / `docs/copilot-cli.md`
+- **運用ノート**: `docs/architecture.md` / `docs/operations.md` / `docs/troubleshooting.md` / `docs/copilot.md`
 - **エージェント**: `.github/agents/` の `manage-adr`（ADR ライフサイクル）、`review-repo`（リポジトリ整頓）
 
 ## 記述の置き場所
@@ -25,7 +25,7 @@
 
 ## テスト対象と実行環境
 
-- このリポジトリは開発環境の構築と管理を目的とする。Copilot CLI など、このリポジトリが管理するツールや隔離環境の内部から、環境構築、更新、適用処理を実行することは想定しない。テストとレビューでは、管理対象内から管理処理を実行できることを要件にしない
+- このリポジトリは開発環境の構築と管理を目的とする。GitHub Copilot CLI、GitHub Copilot app など、このリポジトリが管理するツールや隔離環境の内部から、環境構築、更新、適用処理を実行することは想定しない。テストとレビューでは、管理対象内から管理処理を実行できることを要件にしない
 - 通常の単体テストは、実行環境に依存しない純粋ロジック、静的な契約、小さく完全に隔離した入出力を対象とする
 - 環境変数、OS、filesystem、process、package manager、導入済みコマンド、sandbox backend、コンテナ、ユーザープロファイルに依存する動作は、通常の単体テストではなく対象環境で確認する
 - 既存の環境依存テストは fixture、fake、shim を増やして維持せず、削除または静的検査・純粋ロジックへ置き換える。subprocess のテストは利用者向け契約に必要な最小限に絞る
@@ -63,7 +63,7 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 ## ワークアラウンド（定期チェック対象）
 
-- **Copilot sandbox の Windows mise shim 回避**: Windows ProcessContainer 内では mise shim が config、lockfile、state を読めず `uv is not a valid shim` になるため、`mise bin-paths` が返す実体ディレクトリを User PATH の先頭へ同期し、state file `~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` で前回分を管理する（ADR-013）。ProcessContainer 内で shim が config、lockfile、state を解決し、非対話 PowerShell tool から `jq`、`rg`、`uv` を起動できるようになったら、PATH 同期、state file、関連テストを撤去し、PATH から同期済みエントリを削除する
+- **GitHub Copilot sandbox の Windows mise shim 回避**: Windows ProcessContainer 内では mise shim が config、lockfile、state を読めず `uv is not a valid shim` になるため、`mise bin-paths` が返す実体ディレクトリを User PATH の先頭へ同期し、state file `~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` で前回分を管理する（ADR-013）。ProcessContainer 内で shim が config、lockfile、state を解決し、非対話 PowerShell tool から `jq`、`rg`、`uv` を起動できるようになったら、PATH 同期、state file、関連テストを撤去し、PATH から同期済みエントリを削除する
 - **macOS Azure MCP の.NET bundle展開先**: `dot_profile.tmpl` は `DOTNET_BUNDLE_EXTRACT_BASE_DIR` が未設定の場合だけ、所有者とmode `0700` を確認したmacOS標準のユーザー専用 `TMPDIR` を設定する。上流 [microsoft/mcp#3976](https://github.com/microsoft/mcp/issues/3976) の修正が利用版に入り、macOS sandboxで環境変数の上書きなしにAzure MCPが起動すると確認できたら、設定と関連テストを撤去する
 - **Azure skills telemetry hook の無効化**: POSIX の `.profile` と Windows の PowerShell profile で `AZURE_MCP_COLLECT_TELEMETRY=false` を設定し、Azure skills の telemetry を停止する
 - **Visual Studio Build Tools の WinGet Configuration v2 昇格**: Build Tools 本体は通常権限の `WinGetPackage`、C++ ワークロードは `vswhere.exe` で MSVC の `link.exe` を検査して必要時だけ対話型セッションから Visual Studio Installer を UAC 昇格する `PSDscResources/Script` で管理する。通常権限から `securityContext: elevated` のユニットを実行しても `0x800706BA` が発生せず、管理者 PowerShellでも `WinGetPackage` のカタログ接続が成功するようになったら、公式の `Microsoft.VisualStudio.DSC/VSComponents` 構成へ戻す

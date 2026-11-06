@@ -1,5 +1,5 @@
 {{- if eq .chezmoi.os "windows" -}}
-# Copilot CLI local sandbox 設定 (Windows)
+# GitHub Copilot CLI local sandbox 設定 (Windows)
 #
 # Copilot sandbox policy version: 15
 
@@ -19,7 +19,7 @@ $desiredSettings = @'
 function Fail-SandboxSettings {
   param([Parameter(Mandatory = $true)] [string] $Message)
 
-  Write-Error "Copilot sandbox settings: $Message"
+  Write-Error "GitHub Copilot sandbox settings: $Message"
   exit 1
 }
 
@@ -27,7 +27,7 @@ if (Test-Path -LiteralPath $settingsPath) {
   try {
     $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
   } catch {
-    Fail-SandboxSettings "Failed to parse $settingsPath as JSON. Configure Copilot sandbox manually or remove JSONC comments before chezmoi apply."
+    Fail-SandboxSettings "Failed to parse $settingsPath as JSON. Configure GitHub Copilot sandbox manually or remove JSONC comments before chezmoi apply."
   }
 } else {
   $settings = [pscustomobject]@{}

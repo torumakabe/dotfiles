@@ -1,4 +1,4 @@
-# ADR-035: Copilot CLI MCP servers を sandbox 対象にする
+# ADR-035: GitHub Copilot CLI MCP servers を sandbox 対象にする
 
 ## Status
 

@@ -137,7 +137,7 @@ git_unshadow() {
 git_unshadow /usr/local/bin /usr/bin
 
 {{ end -}}
-# Copilot CLI — mise の github: バックエンドでは更新が遅れるため、
+# GitHub Copilot CLI — mise の github: バックエンドでは更新が遅れるため、
 # 公式リリースを checksum 検証して導入し、更新は copilot update で行う
 # 判定に command -v を使わない: Codespaces / Dev Container のベースイメージには
 # /usr/local/bin/copilot が同梱されていることがあり、これを検出すると自前の導入が
@@ -155,7 +155,7 @@ if [ ! -x "${HOME}/.local/bin/copilot" ]; then
       expected_sha256="b61e6f9691a923b8dc0c72ac7de7fa957e4a1520b2eb076a2a57a818f6a341a2"
       ;;
     *)
-      echo "error: unsupported architecture for Copilot CLI: $(dpkg --print-architecture)" >&2
+      echo "error: unsupported architecture for GitHub Copilot CLI: $(dpkg --print-architecture)" >&2
       exit 1
       ;;
   esac

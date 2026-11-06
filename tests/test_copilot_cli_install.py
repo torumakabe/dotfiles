@@ -1,4 +1,4 @@
-"""Guard the Copilot CLI installation contracts on Unix platforms.
+"""Guard the GitHub Copilot CLI installation contracts on Unix platforms.
 
 Codespaces / Dev Container base images ship /usr/local/bin/copilot, which is
 never refreshed by `copilot update`. Gating the official installer on
@@ -165,7 +165,7 @@ class CopilotCliInstallTests(unittest.TestCase):
             r"failed to download GitHub Copilot CLI.*?exit 1",
         )
         self.assertIn(
-            'echo "error: unsupported architecture for Copilot CLI: '
+            'echo "error: unsupported architecture for GitHub Copilot CLI: '
             '$(uname -m)" >&2',
             self.macos_copilot,
         )

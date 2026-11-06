@@ -2,7 +2,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Copilot CLI is updated by `copilot update`, so keep it outside Homebrew's
+# GitHub Copilot CLI is updated by `copilot update`, so keep it outside Homebrew's
 # package database and place the upstream binary in the user-local PATH.
 COPILOT_VERSION="1.0.92-4"
 COPILOT_BIN_DIR="${HOME}/.local/bin"
@@ -21,7 +21,7 @@ case "$(uname -m)" in
     expected_sha256="4beb6c5e94c5fd3243651e7c692a0ab051ebeb8ab0a3e48ce524450346f1d97c"
     ;;
   *)
-    echo "error: unsupported architecture for Copilot CLI: $(uname -m)" >&2
+    echo "error: unsupported architecture for GitHub Copilot CLI: $(uname -m)" >&2
     exit 1
     ;;
 esac
@@ -64,13 +64,13 @@ if ! is_user_local_copilot; then
 fi
 
 if ! is_user_local_copilot; then
-  echo "error: the user-local Copilot CLI failed verification" >&2
+  echo "error: the user-local GitHub Copilot CLI failed verification" >&2
   exit 1
 fi
 
 if command -v brew >/dev/null 2>&1; then
   if brew list --formula copilot-cli >/dev/null 2>&1; then
-    echo "Removing the Homebrew-managed Copilot CLI..."
+    echo "Removing the Homebrew-managed GitHub Copilot CLI..."
     brew uninstall --formula copilot-cli
   fi
 else

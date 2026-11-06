@@ -1,10 +1,10 @@
-# Copilot CLI local sandbox 実機検証
+# GitHub Copilot CLI local sandbox 実機検証
 
 ## 目的
 
-この文書は、検証対象のリモートブランチを Linux、WSL2、macOS、Windows、Codespaces、Dev Container へ取得し、Copilot CLI local sandbox の設定と backend を各環境内で確認する手順を定める。
+この文書は、検証対象のリモートブランチを Linux、WSL2、macOS、Windows、Codespaces、Dev Container へ取得し、GitHub Copilot CLI local sandbox の設定と backend を各環境内で確認する手順を定める。
 
-Windows ホストから `wsl.exe` やコンテナ操作でコマンドを起動した結果は、PATH、TTY、ログインシェル、対話入力が実際の利用時と異なる場合がある。Copilot CLI のスラッシュコマンドと sandbox 内のコマンド実行は、対象環境の対話ターミナルで確認する。
+Windows ホストから `wsl.exe` やコンテナ操作でコマンドを起動した結果は、PATH、TTY、ログインシェル、対話入力が実際の利用時と異なる場合がある。GitHub Copilot CLI のスラッシュコマンドと sandbox 内のコマンド実行は、対象環境の対話ターミナルで確認する。
 
 ## 検証対象
 
@@ -112,7 +112,7 @@ uv python dir
 uv python find --managed-python
 ```
 
-`UV_PYTHON_INSTALL_DIR` を使う場合は、その値を設定して `chezmoi apply` した環境から Copilot CLI を起動する。新しい Copilot CLI セッションの sandbox 内で、次を実行する。
+`UV_PYTHON_INSTALL_DIR` を使う場合は、その値を設定して `chezmoi apply` した環境から GitHub Copilot CLI を起動する。新しい GitHub Copilot CLI セッションの sandbox 内で、次を実行する。
 
 ```bash
 uv run --no-project --managed-python python -c "import sys; print(sys.version); print(sys.executable)"
@@ -128,15 +128,13 @@ uv run --no-project --managed-python python -c "import sys; print(sys.version); 
 
 一回限りの probe はリポジトリへ追加しない。検証用の marker と一時ファイルは終了時に削除する。Cloud sandbox の Python 自動導入は local sandbox とは別に確認する。
 
-## Copilot CLI の対話動作を確認する
+## GitHub Copilot CLI の対話動作を確認する
 
 uv の書き込み許可は、通常の `uv cache dir` と sandbox 内の出力を比較し、`uv run` 後にホスト側へファイルが残ることまで確認する。`/sandbox policy` の表示だけでは成功と扱わない。プロジェクト固有のキャッシュ設定がある場合は、ユーザー共通設定との差も記録する。
 
-`tests.test_copilot_sandbox_config` は設定生成と filesystem access control を検査する。Copilot CLI を使った確認は実機検証手順に従う。
-
 ### 初期状態
 
-対象環境の対話ターミナルで Copilot CLI を起動する。
+対象環境の対話ターミナルで GitHub Copilot CLI を起動する。
 
 ```bash
 copilot
@@ -155,31 +153,29 @@ copilot
 - backend 名が表示される版では、その表示を記録する
 - `sandboxMcpServers` が有効、`sandboxLspServers` が無効である。sandbox 有効時はローカル MCP server が sandbox 内で実行される
 
-ローカル MCP の資格情報 masking は、合成変数を用いた比較で確認した。CLI と条件ごとの結果、実際の資格情報を測定していない制約は [ADR-035](adr/035-copilot-cli-sandbox-mcp-servers.md) を参照する。
-
 backend 名が表示されない版では「表示なし」と記録し、成功条件にはしない。managed または locked と表示される場合は、組織管理設定が利用者設定より優先されているため、環境別の初期値との不一致を dotfiles の失敗とは扱わない。
 
 ### boolean 値の維持
 
 通常の macOS、Linux、WSL では、手動無効化後の `false` が維持されることを確認する。Windows native は Windows 側の検証で同じ契約を確認する。
 
-Copilot CLI で次を実行する。
+GitHub Copilot CLI で次を実行する。
 
 ```text
 /sandbox disable
 ```
 
-Copilot CLI を終了し、利用者設定を確認する。
+GitHub Copilot CLI を終了し、利用者設定を確認する。
 
 ```bash
 jq -e '.sandbox.enabled == false' ~/.copilot/settings.json
 ```
 
-Copilot CLI を再起動して `/sandbox` を実行し、無効状態が持続していることを確認する。
+GitHub Copilot CLI を再起動して `/sandbox` を実行し、無効状態が持続していることを確認する。
 
 ### chezmoi 適用後の持続
 
-Copilot CLI を終了し、次を実行する。
+GitHub Copilot CLI を終了し、次を実行する。
 
 ```bash
 repo_root="$(git rev-parse --show-toplevel)"
@@ -187,19 +183,19 @@ chezmoi --source "${repo_root}/home" apply
 jq -e '.sandbox.enabled == false' ~/.copilot/settings.json
 ```
 
-Copilot CLI を再起動し、`/sandbox` が無効を示すことを確認する。これにより、dotfiles 適用が利用者の選択を上書きしないことを確認できる。
+GitHub Copilot CLI を再起動し、`/sandbox` が無効を示すことを確認する。これにより、dotfiles 適用が利用者の選択を上書きしないことを確認できる。
 
-Codespaces と Dev Container では初期値 `false` を確認した後、`/sandbox enable` を実行する。Copilot CLI を終了して同じ `chezmoi --source "${repo_root}/home" apply` を実行し、`sandbox.enabled=true` が維持されることを確認する。この確認は boolean 値を維持する dotfiles 契約を対象とし、有効化した sandbox の互換性確認とは分けて記録する。
+Codespaces と Dev Container では初期値 `false` を確認した後、`/sandbox enable` を実行する。GitHub Copilot CLI を終了して同じ `chezmoi --source "${repo_root}/home" apply` を実行し、`sandbox.enabled=true` が維持されることを確認する。この確認は boolean 値を維持する dotfiles 契約を対象とし、有効化した sandbox の互換性確認とは分けて記録する。
 
 ### 手動有効化の互換性調査
 
-Copilot CLI で次を実行する。
+GitHub Copilot CLI で次を実行する。
 
 ```text
 /sandbox enable
 ```
 
-Copilot CLI を終了し、設定を確認する。
+GitHub Copilot CLI を終了し、設定を確認する。
 
 ```bash
 jq -e '.sandbox.enabled == true' ~/.copilot/settings.json
@@ -218,7 +214,7 @@ cat /proc/sys/user/max_user_namespaces 2>/dev/null || true
 bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true
 ```
 
-バージョン、sysctl の値、最小起動の終了コードを記録する。probe は bubblewrap の利用可否を把握するためのものであり、成功を dotfiles 契約の合格条件にはしない。Copilot CLI で shell command を実行した場合は、その結果を記録する。sandbox 外での再実行方法が提示されることは前提にしない。
+バージョン、sysctl の値、最小起動の終了コードを記録する。probe は bubblewrap の利用可否を把握するためのものであり、成功を dotfiles 契約の合格条件にはしない。GitHub Copilot CLI で shell command を実行した場合は、その結果を記録する。sandbox 外での再実行方法が提示されることは前提にしない。
 
 ## 環境別の補足
 
@@ -230,7 +226,7 @@ Windows 側で WSL2 であることを確認する。
 wsl.exe -l -v
 ```
 
-残りの検証は Windows から `wsl.exe -d ... -- <command>` で代行せず、対象ディストリビューションの対話ターミナル内で実行する。特に Copilot CLI のスラッシュコマンド、ログインシェルの PATH、TTY を使う sudo、bubblewrap 内のコマンド実行はホストからの非対話起動だけでは確認済みと扱わない。
+残りの検証は Windows から `wsl.exe -d ... -- <command>` で代行せず、対象ディストリビューションの対話ターミナル内で実行する。特に GitHub Copilot CLI のスラッシュコマンド、ログインシェルの PATH、TTY を使う sudo、bubblewrap 内のコマンド実行はホストからの非対話起動だけでは確認済みと扱わない。
 
 ### macOS
 
@@ -266,7 +262,7 @@ chezmoi data | jq '{codespaces, devcontainer}'
 
 VS Code の Dev Containers 拡張は Dotfiles セットアップへ `REMOTE_CONTAINERS=true` を渡し、chezmoi は初期化時の判定結果を設定へ保存する。統合ターミナルでは `REMOTE_CONTAINERS` が空の場合があるため、`chezmoi data` の `.devcontainer` も確認する。必要に応じて「Dev Containers: Show Container Log」を開き、Dotfiles セットアップコマンドに `--remote-env REMOTE_CONTAINERS=true` が含まれることを確認する。ログ全体にはパスなどの環境固有情報が含まれるため、記録には判定に必要な引数だけを残す。
 
-初期値は `false` だが、組織管理設定が値を強制している場合は、その表示と値を記録する。container runtime、security option、実行ユーザーによって user namespace の可否が変わる。ホスト側での `docker exec` の成功だけでは Copilot CLI の対話利用を確認済みと扱わない。
+初期値は `false` だが、組織管理設定が値を強制している場合は、その表示と値を記録する。container runtime、security option、実行ユーザーによって user namespace の可否が変わる。ホスト側での `docker exec` の成功だけでは GitHub Copilot CLI の対話利用を確認済みと扱わない。
 
 ## Windows native で移行処理を確認する
 
@@ -321,11 +317,11 @@ chezmoi --source (Join-Path $repoRoot 'home') diff
 chezmoi --source (Join-Path $repoRoot 'home') apply
 ```
 
-適用後、Copilot CLI の `readonlyPaths` に `uv python dir` の保存先があり、保存先が reparse point の場合はリンク先も含まれることを確認する。初回移行で旧フック専用の読み取り許可が削除され、その他の利用者設定と監査ログが保持されていることも確認する。
+適用後、GitHub Copilot CLI の `readonlyPaths` に `uv python dir` の保存先があり、保存先が reparse point の場合はリンク先も含まれることを確認する。初回移行で旧フック専用の読み取り許可が削除され、その他の利用者設定と監査ログが保持されていることも確認する。
 
-Copilot CLI の `/sandbox` で各タブを確認し、初期状態を記録する。無効な場合は、組織による強制がなければ、次の確認の間だけ `/sandbox enable` を実行する。
+GitHub Copilot CLI の `/sandbox` で各タブを確認し、初期状態を記録する。無効な場合は、組織による強制がなければ、次の確認の間だけ `/sandbox enable` を実行する。
 
-新しい Copilot CLI セッションの sandbox 内で次を実行し、表示された interpreter が `uv python dir` の保存先またはその実体に属することを確認する。
+新しい GitHub Copilot CLI セッションの sandbox 内で次を実行し、表示された interpreter が `uv python dir` の保存先またはその実体に属することを確認する。
 
 ```powershell
 uv run --no-project --managed-python python -c "import sys; print(sys.version); print(sys.executable)"
@@ -343,7 +339,7 @@ uv run --no-project --managed-python python -c "import sys; print(sys.version); 
 | 環境 | Linux / WSL2 / macOS / Windows / Codespaces / Dev Container |
 | OS または image、architecture | |
 | commit SHA | |
-| Copilot CLI version | |
+| GitHub Copilot CLI version | |
 | chezmoi version | |
 | mise version、同期状態 | |
 | lockfile との差 | なし / 差の内容 |

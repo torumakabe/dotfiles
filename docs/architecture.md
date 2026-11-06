@@ -1,6 +1,6 @@
 # Architecture Guide
 
-README から分離した、構成と設計判断の詳細である。運用手順は [`docs/operations.md`](operations.md) を参照。
+現在の構成を説明する。設計判断は [ADR 一覧](adr/INDEX.md)、運用手順は [`operations.md`](operations.md) を参照。
 
 ## ディレクトリ構造
 
@@ -26,18 +26,14 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 - 設定配布 `chezmoi` / ツール版管理 `mise` / Python 実行 `uv`
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
-- Copilot CLI local sandbox は環境別の初期値を user-level settings へ設定し、OS 別 backend で shell と filesystem policy を適用
+- GitHub Copilot CLI local sandbox は環境別の初期値を user-level settings へ設定し、OS 別 backend で shell と filesystem policy を適用
 - `gitleaks` 付き pre-commit を `init.templateDir`（ADR-018）と設定ベースフック（ADR-020）の 2 レイヤで配布
 
-## Copilot CLI local sandbox
+## GitHub Copilot CLI local sandbox
 
-このリポジトリは Copilot CLI の command hook を配布しない。以前の独自パス拒否、`git commit` の確認、監査ログの自動記録は引き継がない。sandbox と uv managed Python の設定は [ADR-041](adr/041-copilot-cli-hooks-retirement-and-uv-sandbox.md) を参照する。
+GitHub Copilot CLI の user-level `settings.json` へ、共通テンプレートと OS 別の設定同期スクリプトで policy をマージする。sandbox は shell command、ローカル MCP server、filesystem policy を対象とし、LSP は対象外とする。
 
-Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。初回値と明示設定保持は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、ローカル MCP sandbox は [ADR-035](adr/035-copilot-cli-sandbox-mcp-servers.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
-
-Copilot CLI local sandbox は user-level settings で有効化する。`credentials.envVars` は指定した環境変数を sandbox 子プロセスへ偽の値で渡し、承認した HTTPS host への request header に限って proxy が実値を注入する。`sandbox.enabled=true` の session では、ローカル MCP server も sandbox 内で実行し、LSP は対象外とする。backend は macOS の Seatbelt、Linux、WSL、Codespaces、Dev Container の bubblewrap、Windows の ProcessContainer である。Linux 系の診断は `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap を確認し、`false` の場合は probe を省略する。診断は利用可否を報告するものであり、sandbox 外での再実行方法が提示されることを保証しない。
-
-コンテナ内でも利用者は `/sandbox enable` を実行できるが、このリポジトリの機能契約は有効化後の動作を保証しない。組織が enterprise の managed settings で sandbox を強制している場合は、組織管理設定が利用者設定より優先される。設定値は `home/.chezmoitemplates/copilot-user-settings.json`、環境別の初期値は設定同期スクリプトを正本とする。
+backend は macOS の Seatbelt、Linux、WSL、Codespaces、Dev Container の bubblewrap、Windows の ProcessContainer である。管理する設定と制約は [`copilot.md`](copilot.md#github-copilot-cli-local-sandbox)、初回値と設定保持の手順は [`operations.md`](operations.md#github-copilot-local-sandbox-の既定値) を参照する。
 
 ## git pre-commit フック
 
@@ -53,7 +49,7 @@ gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテ�
 | `.isLinux` / `.isMac` / `.isWindows` | 上から導出 |
 | `.isWSL` | Linux かつ `kernel.osrelease` に `microsoft` を含む。Docker Desktop の WSL2 バックエンドで動くコンテナはホストの WSL カーネルを共有するため、この変数だけでは実 WSL と区別できない。区別が要る箇所では `/proc/sys/fs/binfmt_misc/WSLInterop` の存在を併せて確認する（ADR-012） |
 | `.codespaces` / `.devcontainer` | Codespaces は `CODESPACES` で判定する。Dev Container は、VS Code の Dev Containers 拡張が Dotfiles セットアップへ渡す `REMOTE_CONTAINERS` で判定する。判定結果は chezmoi の初期化時に設定へ保存されるため、後続の統合ターミナルに同じ環境変数がなくても維持される |
-| `.windowsUser` / `.corpUser` | 初回セットアップで入力する。入力を求めるのは stdin が TTY のときだけなので、非対話の `chezmoi init` では既存の設定値をそのまま引き継ぐ（引き継がないと空文字で上書きされ、`gitconfig-corp` の includeIf と ADR-012 の署名パスが壊れる） |
+| `.windowsUser` / `.corpUser` | 非対話の `chezmoi init` では既存値を保持する。`.corpUser` は TTY がある場合、`.windowsUser` は TTY と WSL interop がある場合に入力を求める。Windows の `.windowsUser` は `USERNAME` から取得する |
 
 ## プラットフォーム機能契約
 
@@ -68,7 +64,7 @@ gitleaks の pre-commit は、リポジトリ作成時に既定値を配るテ�
 - RadicleはWindows向け公式配布を確認できないため、`rad` の補完はzshだけで提供する
 - bubblewrap は Linux と WSL の sandbox backend に必要である。macOS は Seatbelt、Windows は ProcessContainer を使うため導入しない
 
-helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両方で提供する。`fieldalignment` と `fast` は、Unix系とWindowsの両 install scriptで導入する。`gh-stack` は、公式 Copilot skill と GitHub CLI extension が未導入の場合だけ、OS別のセットアップスクリプトで全環境へ導入する。
+helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両方で提供する。`fieldalignment` と `fast` は、Unix系とWindowsの両 install scriptで導入する。`gh-stack` は、公式 GitHub Copilot skill と GitHub CLI extension が未導入の場合だけ、OS別のセットアップスクリプトで全環境へ導入する。
 
 `ghcd` の fzf preview は、zshでは `ls -la`、Windowsでは `cmd.exe` の `dir /a` を使う。コマンドは異なるが、選択候補のリポジトリにある隠し項目を含む一覧を表示する目的は等価である。
 
@@ -82,7 +78,7 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 ## PATH 管理（非対話シェル対応）
 
-非対話シェル（Copilot CLI エージェント、IDE、スクリプト）では `.zshrc` / `$PROFILE` が読まれず、mise / brew 管理ツールが PATH から欠落する。対策として **POSIX 互換の `~/.profile` に共通 env を集約**し、各シェル起動ファイルから source する。
+非対話シェル（GitHub Copilot のエージェント、IDE、スクリプト）では `.zshrc` / `$PROFILE` が読まれず、mise / brew 管理ツールが PATH から欠落する。対策として **POSIX 互換の `~/.profile` に共通 env を集約**し、各シェル起動ファイルから source する。
 
 | OS | 仕込み先 | 内容 |
 |----|---------|------|
@@ -101,7 +97,7 @@ helm、gh、azd、trivy、kubectl、Azure CLIの補完はzshとPowerShellの両�
 
 ### macOS GUI アプリ経由の PATH 注入
 
-Dock / Spotlight / GitHub Desktop から起動された子プロセスは launchd 既定 PATH しか継承しない。特に **GitHub Desktop の Copilot SDK は `bash --norc --noprofile` で bash を spawn し、親が独自の hardcoded PATH を組む**ため、`.bashrc` / `BASH_ENV` / `launchctl setenv` では PATH 注入不可。唯一 **`~/.local/bin` だけは確実に含まれる**ため、`run_onchange_after_21-link-mise-shims.sh` が mise shims をそこへ symlink する。
+Dock / Spotlight / GitHub Desktop から起動された子プロセスは launchd 既定 PATH しか継承しない。特に **GitHub Desktop の GitHub Copilot SDK は `bash --norc --noprofile` で bash を spawn し、親が独自の hardcoded PATH を組む**ため、`.bashrc` / `BASH_ENV` / `launchctl setenv` では PATH 注入不可。唯一 **`~/.local/bin` だけは確実に含まれる**ため、`run_onchange_after_21-link-mise-shims.sh` が mise shims をそこへ symlink する。
 
 - 言語ランタイム本体と実行可能な補助ファイルは除外する。対象はスクリプト内の `EXCLUDE_EXACT` / `EXCLUDE_PATTERN` を正本とする。Rust は mise の管理外であり、`cargo` / `rust` の shim は除外対象に含めない（ADR-016）
 - 作成 symlink は state file (`${XDG_STATE_HOME}/chezmoi-dotfiles/mise-shim-links`) に記録され、管理対象だった symlink のみ自動掃除。手動で作ったものには触れない
@@ -119,7 +115,7 @@ Windows の非対話プロセスで選ばれる版は、同期時のグローバ
 
 mise の npm backend はパッケージごとにインストール先を分ける。`npm:typescript` の TypeScript 7.x は `tsc` の実行に使い、`npm:typescript-language-server` からは参照しない。language server が利用する `lib/tsserver.js` は、`run_after_22-install-typescript-lsp` が固定版の TypeScript 6.x を `~/.local/share/chezmoi-dotfiles/typescript-lsp` へ導入して提供する。スクリプトは mise 管理 Node と同じディレクトリの npm を使い、package version と `tsserver.js` が正しければ何もしない。不足または版違いの場合だけ再導入するため、初回適用で Node 導入を保留する Dev Container でも、`mise install` 後の次回適用で回復する。
 
-Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、この安定 prefix 配下の `node_modules/typescript/lib/tsserver.js` を指定する。mise の language server インストール先とバージョンをパスに含めないため、language server の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` を正本とする。
+GitHub Copilot CLI の `~/.copilot/lsp-config.json` は `initializationOptions.tsserver.path` で、この安定 prefix 配下の `node_modules/typescript/lib/tsserver.js` を指定する。mise の language server インストール先とバージョンをパスに含めないため、language server の更新後も設定は変わらない。LSP 用 TypeScript の版は `home/.chezmoidata.toml` を正本とする。
 
 ### mise lockfile の npm sidecar
 
@@ -134,7 +130,7 @@ mise は npm ツールの推移依存関係を `~/.config/mise/locks/` の `aube
 Windows で cargo が `windows-msvc` ターゲットをビルドするには MSVC の `link.exe` が必要（[ADR-017](adr/017-msvc-linker-env-var-override-windows.md)）。winget で導入する Coreutils for Windows の `link.exe`（ハードリンク作成コマンド）と名前が衝突し、Machine PATH 側が優先されるため PATH の並び替えでは解決できない。
 
 - `reference/windows/configuration.dsc.yaml` で Visual Studio 2022 Build Tools + C++ ワークロード (`Microsoft.VisualStudio.Workload.VCTools`) を導入
-- `run_onchange_after_20-resolve-msvc-linker.ps1` が `vswhere.exe` で現在の `link.exe` を解決し、ユーザー環境変数 `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER` に設定する。PATH に依存しないため $PROFILE を読まないシェル（Copilot CLI 等）でも有効
+- `run_onchange_after_20-resolve-msvc-linker.ps1` が `vswhere.exe` で現在の `link.exe` を解決し、ユーザー環境変数 `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER` に設定する。PATH に依存しないため $PROFILE を読まないシェル（GitHub Copilot のエージェント等）でも有効
 - `{{ now }}` を script hash に埋め込み `chezmoi apply` の度に再評価するため、VS Build Tools の更新でツールセットのバージョンフォルダが変わっても追従する
 
 ## セットアップスクリプトの実行順

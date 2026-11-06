@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-README.md の対応環境表は以前から「macOS は Apple Silicon のみ」と記載しており、ADR-021 も `macos-x64` を lockfile の対象から外す理由としてこの前提を挙げていた。しかし前提そのものを記録した ADR が無く、実装には Intel Mac (x86_64) 向けの分岐が残っていた。新しく追加した Copilot CLI の導入スクリプトを arm64 のみ対応にした際、この不整合が表面化した。
+README.md の対応環境表は以前から「macOS は Apple Silicon のみ」と記載しており、ADR-021 も `macos-x64` を lockfile の対象から外す理由としてこの前提を挙げていた。しかし前提そのものを記録した ADR が無く、実装には Intel Mac (x86_64) 向けの分岐が残っていた。新しく追加した GitHub Copilot CLI の導入スクリプトを arm64 のみ対応にした際、この不整合が表面化した。
 
 Intel 向け分岐を維持すると、macOS 用の成果物と SHA-256 pin、Homebrew prefix を常に 2 系統ぶん調べ続けることになる。実機での検証は行っておらず、動作を保証できない分岐を抱えた状態だった。
 

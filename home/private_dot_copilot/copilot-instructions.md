@@ -1,4 +1,4 @@
-# Copilot Instructions (User-Level)
+# GitHub Copilot Instructions (User-Level)
 
 ## ツール操作の制約
 

@@ -1,4 +1,4 @@
-# ADR-031: Windows Copilot sandbox の uv cache を非仮想化パスへ分離する
+# ADR-031: Windows GitHub Copilot sandbox の uv cache を非仮想化パスへ分離する
 
 ## Status
 
@@ -15,10 +15,10 @@ PowerShell command 内の設定を使っていた。
 Windows の PowerShell tool 用 cache を
 `%USERPROFILE%\.cache\github-copilot\uv\powershell-tool` に固定し、この path だけを
 `readwritePaths` に追加する。設定同期は `COPILOT_DOTFILES_UV_CACHE_DIR` を設定し、
-PowerShell tool command の `UV_CACHE_DIR` にその値を渡す。Copilot CLI の起動環境には
+PowerShell tool command の `UV_CACHE_DIR` にその値を渡す。GitHub Copilot CLI の起動環境には
 `UV_CACHE_DIR` を設定しない。
 
-POSIX は Copilot CLI の既定 uv cache grant を利用する。command hook の pinned
+POSIX は GitHub Copilot CLI の既定 uv cache grant を利用する。command hook の pinned
 Python 方式も変更しない。
 
 ## Consequences

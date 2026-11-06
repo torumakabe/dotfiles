@@ -46,7 +46,7 @@ if (Get-Command uv -ErrorAction SilentlyContinue) {
     }
 
     # uv tool の bin ディレクトリ (~/.local/bin) を User PATH に登録。
-    # PowerShell プロファイルを読まない子プロセス (Copilot CLI 等) からも uv tool が見えるようにする。
+    # PowerShell プロファイルを読まない子プロセス (GitHub Copilot のエージェント等) からも uv tool が見えるようにする。
     try {
         uv tool update-shell | Out-Null
     } catch {

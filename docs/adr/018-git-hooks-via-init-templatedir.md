@@ -6,23 +6,20 @@ Accepted
 
 ## Context
 
-従来は `core.hooksPath = ~/.config/git/hooks` を GLOBAL に設定し、chezmoi で配布した `pre-commit`（gitleaks でステージ差分をスキャンし、repo-local な `.git/hooks/pre-commit` があれば `exec` で委譲）を全リポジトリに適用していた。狙いは gitleaks 未設定のリポジトリも含めた機械全体での保護。
-
-この設計は事故を起こした。同一機械上の無関係なプロジェクトで素の `lefthook install` を実行したところ、lefthook は現在の `core.hooksPath` を尊重するため、生成した hook スタブ（`prepare-commit-msg` 等）が GLOBAL 設定のせいで共有ディレクトリ `~/.config/git/hooks/` に書き込まれた。これは dotfiles リポジトリ自身を含む全リポジトリを汚染し、無関係な commit で `Can't find lefthook in PATH` が出る原因になった。根本問題は、GLOBAL かつ共有かつ書き込み可能な `core.hooksPath` が、lefthook/husky/pre-commit のような「自リポジトリの hooks ディレクトリを専有する」前提の hook 管理ツールと構造的に相容れない点にある。
-
-Python の `pre-commit` フレームワークには `pre-commit init-templatedir` という、まさに「機械全体へ hook を配布する」ための機能があり、`core.hooksPath` ではなく Git 純正の `init.templateDir` を使う。husky・lefthook も `core.hooksPath` の GLOBAL 設定を明示的に非推奨とし、自身の `install` は LOCAL に設定する。Git 自体の `.git/hooks/*.sample` もこのテンプレート機構で配布されており、奇策ではない。
+global の `core.hooksPath` で共有ディレクトリを指定すると、lefthook 等の hook マネージャがそこへ書き込み、無関係なリポジトリにも影響する。gitleaks の配布と各プロジェクトの hook 管理を両立するため、配布後のファイルはリポジトリごとに分離する必要がある。
 
 ## Decision
 
-`core.hooksPath`（GLOBAL）を廃止し、`[init] templateDir = ~/.config/git/templates`（`home/dot_gitconfig.tmpl`）に切り替える。hook 本体は `home/dot_config/git/templates/hooks/executable_pre-commit` に移し（`~/.config/git/templates/hooks/pre-commit` へ配置）、repo-local hook への delegate/exec ロジックは削除する（テンプレート配布後は各リポジトリの通常の local hook になるため、委譲対象と自分自身が同一になり不要かつ自己ループの原因になる）。加えて、全 `ghq` リポジトリを走査して local `core.hooksPath` 上書き、hook 欠落、非 gitleaks hook、正常の状態を報告する読み取り専用の `git-hooks-audit`（zsh 関数 / PowerShell 関数）を追加する。
+global の `core.hooksPath` を廃止し、`init.templateDir = ~/.config/git/templates` で pre-commit を配布する。コピー後は通常の repo-local hook とし、別の local hook への委譲は行わない。
+
+既存リポジトリの状態は、`ghq` 配下を読み取り専用で走査する `git-hooks-audit` で報告する。他ツールが作った hook は自動削除しない。
 
 ## Consequences
 
-- `init.templateDir` は `git init`/`git clone` の瞬間に一度だけコピーされ、既存ファイルがあれば上書きしない（Git 本体の `copy_templates()` の挙動）。コピー後は完全に repo-local な通常ファイルになるため、他 hook マネージャの「バックアップ/上書き」判断も正しく働き、他リポジトリへの汚染は構造的に不可能になる。
-- 保証が「常時・全リポジトリで強制」から「新規 init/clone 時にのみ自動配布」へ弱まる。既存リポジトリは `git -C <repo> init`（安全・冪等・既存ファイル非破壊）による一括バックフィルが必要。これは意図的に許容したトレードオフであり、機械全体での継続的強制と、他ツールから透過的な per-repo hook 管理は無調整では両立しないという Git の hook モデル上の制約による（設計時に内部レビュー2回で確認済み）。
+- `init.templateDir` は `git init` / `git clone` 時にコピーされ、既存ファイルを上書きしない。配布後の hook の変更は、そのリポジトリ内に限られる。
+- 既存リポジトリへの配布には backfill が必要になる。操作は [`troubleshooting.md`](../troubleshooting.md#新規リポジトリに-gitleaks-pre-commit-hook-が入らない) に記載する。
 - 他プロジェクトの hook マネージャが特定リポジトリの `.git/hooks/pre-commit` を上書きしても、影響はそのリポジトリ内に閉じる。
 - テンプレートディレクトリは `hooks/pre-commit` のみを持ち、Git 既定の `*.sample` 等は引き継がない（この用途では無害・許容）。
-- 「chezmoi apply のたびに旧共有ディレクトリの不明ファイルを自動削除する」案は、他プロジェクトの正規 hook を無警告で無効化しうる（hook ファイル欠落は git が黙って無視する）ため設計段階で明示的に却下した。可視性を保ちつつ自動破壊的操作を避けるため、読み取り専用の `git-hooks-audit` を採用した。
 - Windows: hook 本体の POSIX `sh` 互換要件（Git for Windows が `/usr/bin/env bash` を WSL の bash.exe に解決し `C:/...` パスを開けない問題への対応）は変わらず適用される。
 - Git 2.54 以降では、ADR-020 の設定ベースフックが別レイヤとして加算的に走る。本 ADR の `init.templateDir` は撤去せず、Git 2.54 より前のバージョンでの唯一の配布経路として残す。
-- 上記のバックフィルは実際には実行されず、既存リポジトリで gitleaks が約 3 週間にわたり一度も走らない状態が続いた。本 ADR は、この状態を検知する仕組みを持たない。経緯と対処は ADR-020 に記す。
+- リポジトリの作成時期に依存しない適用と無効状態の検出は ADR-020 で補う。

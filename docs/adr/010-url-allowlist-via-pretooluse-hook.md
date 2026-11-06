@@ -1,4 +1,4 @@
-# ADR-010: Copilot CLI の URL 包括制御は preToolUse Hook で行う
+# ADR-010: GitHub Copilot CLI の URL 包括制御は preToolUse Hook で行う
 
 ## Status
 
@@ -8,7 +8,7 @@ ADR-015 により、本 ADR の URL allowlist Hook とネットワーク系 `--d
 
 ## Context
 
-Copilot CLI v1.0.35-4 / v1.0.49 時点の実機検証で、CLI 単体では「listed 以外 deny」型の URL ホワイトリスト制御が実現できないことを確認した。`--deny-url='*'` や `--deny-url='https://*'` の wildcard 単独指定はヒットせず、機能するのは個別 domain（例 `example.com`）または prefix（`https://example.com/*`）のみ。さらに `--allow-all`（`--allow-all-urls` を含む）下では `--deny-url` / `--allow-url` 自体が無効化される。`~/.copilot/config.json` の `deniedUrls` も同様で、加えて単独ワイルドカード `"*"` は設定ファイル側で非対応、リポジトリレベル設定（`.github/copilot/settings.json`）では `deniedUrls` / `allowedUrls` キー自体がサポートされない。当時は Hook で包括的ホワイトリスト方式を実装したが、ADR-015 でこの方式を撤去した。
+GitHub Copilot CLI v1.0.35-4 / v1.0.49 時点の実機検証で、CLI 単体では「listed 以外 deny」型の URL ホワイトリスト制御が実現できないことを確認した。`--deny-url='*'` や `--deny-url='https://*'` の wildcard 単独指定はヒットせず、機能するのは個別 domain（例 `example.com`）または prefix（`https://example.com/*`）のみ。さらに `--allow-all`（`--allow-all-urls` を含む）下では `--deny-url` / `--allow-url` 自体が無効化される。`~/.copilot/config.json` の `deniedUrls` も同様で、加えて単独ワイルドカード `"*"` は設定ファイル側で非対応、リポジトリレベル設定（`.github/copilot/settings.json`）では `deniedUrls` / `allowedUrls` キー自体がサポートされない。当時は Hook で包括的ホワイトリスト方式を実装したが、ADR-015 でこの方式を撤去した。
 
 ## Decision
 

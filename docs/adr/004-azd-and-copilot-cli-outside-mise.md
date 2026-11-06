@@ -13,7 +13,7 @@ Superseded by ADR-033
 
 いずれも公式配布チャネルは完備されている。
 
-その後、macOS の Copilot CLI を Homebrew 管理から公式アーカイブ管理へ変更したため、ADR-033 が本 ADR を置換する。
+その後、macOS の GitHub Copilot CLI を Homebrew 管理から公式アーカイブ管理へ変更したため、ADR-033 が本 ADR を置換する。
 
 ## Decision
 
