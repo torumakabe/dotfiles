@@ -18,7 +18,7 @@ INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 INSTALL_PS1_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.ps1.tmpl"
 MISE_CONFIG_PATH = REPO_ROOT / "home/dot_config/mise/config.toml.tmpl"
 CHEZMOI_DATA_PATH = REPO_ROOT / "home/.chezmoidata.toml"
-CI_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-copilot-hooks.yml"
+CI_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-dotfiles.yml"
 POSIX_RC_TEMPLATE_PATHS = tuple(
     REPO_ROOT / "home" / name
     for name in (
@@ -101,7 +101,7 @@ PLATFORM_CONTRACT = {
     "shell:ll": _implemented_everywhere(),
     "shell:zoxide": _implemented_everywhere(),
     "feature:copilot-local-sandbox": _implemented_everywhere(),
-    "feature:copilot-hook-interpreter": _implemented_everywhere(),
+    "feature:copilot-uv-managed-python": _implemented_everywhere(),
     "skill:gh-stack": _implemented_everywhere(),
     "completion:azure-cli": _implemented_everywhere(),
     "completion:kubectl": _implemented_everywhere(),
@@ -380,8 +380,7 @@ class PlatformParityTests(unittest.TestCase):
             POWERSHELL_PROFILE_PATH,
             REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.ps1.tmpl",
             REPO_ROOT / "home/run_after_22-install-typescript-lsp.ps1.tmpl",
-            REPO_ROOT / "home/run_after_25-provision-copilot-hook-python.ps1.tmpl",
-            REPO_ROOT / "home/run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl",
+            REPO_ROOT / "home/run_after_35-configure-copilot-sandbox.ps1.tmpl",
         ):
             self.assertIn(
                 '{{ include ".chezmoitemplates/mise-executable.ps1" }}',

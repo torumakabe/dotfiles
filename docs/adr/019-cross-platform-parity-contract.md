@@ -14,7 +14,7 @@ Ubuntu runner では PowerShell を起動できるが、Windows 固有のパス�
 
 公開関数・alias・補完・ツール導入について、4 環境の対応状況を `PLATFORM_CONTRACT` として `tests/test_platform_parity.py` に記録する。変更時は全プラットフォームの実装を更新するか、理由と適用範囲を `exception: docs/...` 形式で契約と `docs/architecture.md` に記録する。
 
-CI は `home/**` 変更で起動し（PR・main push 共通）、Ubuntu と Windows のジョブを並列実行する。Ubuntu ジョブは zsh を導入し、全単体テストと POSIX shell を使う hook smoke test を実行する。Windows ジョブは固定版の chezmoi と runner 標準の PowerShell を使い、全単体テストを実行する。git pre-commit フックや専用エージェント単独には依存せず、CI の機械検査、`.github/copilot-instructions.md` の規約、`review-repo` の意味判断を組み合わせる。
+CI は `home/**` 変更で起動し（PR・main push 共通）、Ubuntu と Windows のジョブを並列実行する。Ubuntu ジョブは zsh を導入し、全単体テストを実行する。Windows ジョブは固定版の chezmoi と runner 標準の PowerShell を使い、全単体テストを実行する。git pre-commit フックや専用エージェント単独には依存せず、CI の機械検査、`.github/copilot-instructions.md` の規約、`review-repo` の意味判断を組み合わせる。
 
 高リスク機能には両シェルで同じ期待結果を検証する共有の振る舞いテストを設け、実装差ではなく意味差を検出する。Windows 固有のパスと PowerShell 処理は Windows runner で検査する。macOS、WSL、利用者端末の構成に依存する実行時挙動は、各環境の実機スモークテストで確認する。
 

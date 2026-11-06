@@ -813,7 +813,7 @@ class MiseConfigTests(unittest.TestCase):
     def test_windows_lock_sync_persists_direct_bin_paths_without_shims(self) -> None:
         """撤去単位: Windows の direct mise bin PATH 同期。
 
-        撤去条件は `.github/copilot-instructions.md` の「Copilot sandbox の
+        撤去条件は `.github/copilot-instructions.md` の「GitHub Copilot sandbox の
         Windows mise shim 回避」に従う。条件が整ったら、このテストと
         User PATH 同期、state file 管理をまとめて削除する。
         """

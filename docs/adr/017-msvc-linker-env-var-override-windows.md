@@ -12,7 +12,7 @@ rustc/cc クレートの MSVC ツールチェイン解決は「PATH 上に `link
 
 Windows のプロセス初期 PATH は Machine PATH → User PATH の順で連結されるため、User PATH で新ディレクトリを prepend しても Machine PATH 上の coreutils を追い越せない（実機確認: 現ユーザーでの当該ファイルへの書き込み・リネームは Access Denied）。
 
-本リポジトリの既存 Windows 自動化スクリプトはすべて非昇格のユーザースコープ操作のみであり、この方針を崩したくない。また Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、プロファイルで `$env:Path` を書き換える方式は効かない。ユーザー環境変数（レジストリ永続化）ならこの制約を回避できる。`.cargo/config.toml` への絶対パスのハードコードは、MSVC ツールセットのバージョンフォルダが Build Tools 更新で変わりうるため陳腐化リスクがある。
+本リポジトリの既存 Windows 自動化スクリプトはすべて非昇格のユーザースコープ操作のみであり、この方針を崩したくない。また GitHub Copilot CLI のシェルセッションでは `$PROFILE` が読み込まれないため、プロファイルで `$env:Path` を書き換える方式は効かない。ユーザー環境変数（レジストリ永続化）ならこの制約を回避できる。`.cargo/config.toml` への絶対パスのハードコードは、MSVC ツールセットのバージョンフォルダが Build Tools 更新で変わりうるため陳腐化リスクがある。
 
 この衝突は上流 `microsoft/coreutils` でも既知の不具合として認識されている（Issue #123「`link` can conflict with MSVC linker」、Issue #31 の重複としてクローズ）。メンテナは `coreutils-manager disable <utility>` による個別無効化を用意しているが、README の「Shell conflicts」一覧（CMD/PowerShell 組み込みコマンドとの衝突が対象）に `link` は載っておらず、Coreutils 自体が preview 段階で無効化にも管理者権限が必要と見られる（未検証）ため、上流対応より本 ADR の方式のほうが現時点で堅牢と判断した。
 

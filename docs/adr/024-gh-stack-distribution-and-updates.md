@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Copilot が Stacked PR を設計して操作するには、判断とコマンドを教える skill と、`gh stack` コマンドを提供する GitHub CLI extension が必要になる。GitHub CLI は `gh extension install` に加えて `gh skill install` を提供しており、skill の取得元と更新状態を管理できる。公式 skill をリポジトリへ複製すると、上流とローカルコピーの同期作業が重複する。
+GitHub Copilot が Stacked PR を設計して操作するには、判断とコマンドを教える skill と、`gh stack` コマンドを提供する GitHub CLI extension が必要になる。GitHub CLI は `gh extension install` に加えて `gh skill install` を提供しており、skill の取得元と更新状態を管理できる。公式 skill をリポジトリへ複製すると、上流とローカルコピーの同期作業が重複する。
 
 ## Decision
 

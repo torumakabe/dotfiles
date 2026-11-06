@@ -4,7 +4,7 @@ README に載せない復旧手順だけをまとめる。一般的な `chezmoi`
 
 ## WinGet blocking pin を確認・修復する
 
-`winget upgrade --all` で Copilot App、Copilot CLI、rustup が更新されないこと自体は正常である。これらは独自 updater を更新主体とし、DSC が blocking pin を設定する（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。mise は直接導入のため pin 対象ではない（[ADR-040](adr/040-windows-mise-standalone-install.md)）。
+`winget upgrade --all` で GitHub Copilot App、GitHub Copilot CLI、rustup が更新されないこと自体は正常である。これらは独自 updater を更新主体とし、DSC が blocking pin を設定する（[ADR-032](adr/032-protect-self-updated-winget-packages-with-blocking-pins.md)）。mise は直接導入のため pin 対象ではない（[ADR-040](adr/040-windows-mise-standalone-install.md)）。
 
 現在の pin は次で確認する。
 
@@ -18,7 +18,7 @@ WinGet 1.29.380 では、`pin list --id <ID> --exact` を指定しても一覧�
 - `GitHub.Copilot`
 - `Rustlang.Rustup`
 
-独自 updater は blocking pin を解除せずに実行する。Copilot CLI は `copilot update`、rustup 自体は `rustup self update` を使う。
+独自 updater は blocking pin を解除せずに実行する。GitHub Copilot CLI は `copilot update`、rustup 自体は `rustup self update` を使う。
 
 WinGet に更新候補があり、WinGet の管理記録と実体を同期する場合は、`--force` で blocking pin を上書きする。
 
@@ -39,8 +39,6 @@ pin が欠落または別の種類になっている場合は、通常の対話�
 ```powershell
 winget configure -f .\reference\windows\configuration.dsc.yaml
 ```
-
-pin を方針から撤回するときは、管理対象配列から直接削除しない。まず `Pinned = false` を配布して DSC を適用し、端末から pin が削除されたことを確認してから、次の変更で配列のエントリを削除する。
 
 ## `warning: config file template has changed`
 
@@ -81,7 +79,7 @@ mise-upgrade
 mise install
 ```
 
-## Copilot sandbox が Linux で起動しない
+## GitHub Copilot sandbox が Linux で起動しない
 
 `sandbox.enabled` が `true` または未設定で、shell command の実行に失敗する場合は、bubblewrap と user namespace を確認する。`false` の場合、`chezmoi apply` の診断はこの probe を省略する。
 
@@ -92,11 +90,11 @@ cat /proc/sys/user/max_user_namespaces 2>/dev/null
 bwrap --unshare-user --uid 0 --gid 0 --ro-bind / / true
 ```
 
-`bwrap` は 0.5.0 以上が必要である。sysctl が無効、または最小起動が失敗する場合は OS、WSL、container runtime の user namespace 設定を確認する。probe の失敗は bubblewrap を利用できないことを示すが、Codespaces と Dev Container の dotfiles 契約は初期値 `false` であるため、probe の成功を適用完了の条件にはしない。Copilot CLI が sandbox 外での再実行方法を提示するとは限らない。
+`bwrap` は 0.5.0 以上が必要である。sysctl が無効、または最小起動が失敗する場合は OS、WSL、container runtime の user namespace 設定を確認する。probe の失敗は bubblewrap を利用できないことを示すが、Codespaces と Dev Container の dotfiles 契約は初期値 `false` であるため、probe の成功を適用完了の条件にはしない。GitHub Copilot CLI が sandbox 外での再実行方法を提示するとは限らない。
 
-## Copilot sandbox 内で uv がキャッシュを書き込めない
+## GitHub Copilot sandbox 内で uv がキャッシュを書き込めない
 
-Copilot CLI は uv の既定 cache に書き込み許可を追加する。dotfiles は `UV_CACHE_DIR` を設定せず、専用 cache grant を追加しない。
+GitHub Copilot CLI は uv の既定 cache に書き込み許可を追加する。dotfiles は `UV_CACHE_DIR` を設定せず、専用 cache grant を追加しない。
 
 ```bash
 unset UV_CACHE_DIR
@@ -104,19 +102,17 @@ chezmoi apply
 uv --offline --directory / --project / cache dir
 ```
 
-既定 cache への書き込みが失敗したら、Copilot CLI の版、`/sandbox policy`、sandbox 内の `uv cache dir` と実行結果を確認する。`/sandbox policy` の表示だけでは書き込み成功を確認できない。Windows の mise shim 起動失敗は cache 許可とは別の問題として調べる。絶対 uv path、PATH 変更、mise の data/state 許可で回避しない。
+既定 cache への書き込みが失敗したら、GitHub Copilot CLI の版、`/sandbox policy`、sandbox 内の `uv cache dir` と実行結果を確認する。`/sandbox policy` の表示だけでは書き込み成功を確認できない。Windows の mise shim 起動失敗は cache 許可とは別の問題として調べる。絶対 uv path、PATH 変更、mise の data/state 許可で回避しない。
 
-Windows の対話 PowerShell または sandboxed Azure MCP が `uv is not a valid shim` / `npx is not a valid shim` を報告する場合は、mise shim が shell の継承 PATH に残っている可能性がある。`Get-Command uv,npx,node -All` で選択元を確認し、`home/dot_config/mise/config.toml.tmpl` から生成された mise 設定に `activate_shims = false` があることを確認する。設定を `chezmoi apply` で配布してから、新しい PowerShell と Copilot CLI を起動する。mise の activation はこの設定で既存 shim も PATH から除き、導入済みツールの実体ディレクトリを維持する。User PATH の実体同期が欠けている場合に限り、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH を確認する。mise の config、state、downloads を sandbox へ追加して shim 解決を回避しない。
+Windows の対話 PowerShell または sandboxed Azure MCP が `uv is not a valid shim` / `npx is not a valid shim` を報告する場合は、mise shim が shell の継承 PATH に残っている可能性がある。`Get-Command uv,npx,node -All` で選択元を確認し、`home/dot_config/mise/config.toml.tmpl` から生成された mise 設定に `activate_shims = false` があることを確認する。設定を `chezmoi apply` で配布してから、新しい PowerShell と GitHub Copilot CLI を起動する。mise の activation はこの設定で既存 shim も PATH から除き、導入済みツールの実体ディレクトリを維持する。User PATH の実体同期が欠けている場合に限り、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH を確認する。mise の config、state、downloads を sandbox へ追加して shim 解決を回避しない。
 
-hook launcher が `missing .../python-runtime.env`、`recorded interpreter is not a regular file`、`python must live under ...` を報告する場合は、Copilot CLI を終了して `chezmoi apply` を再実行する。適用時に uv managed Python 3.14 を provision し、runtime env と `readonlyPaths` を更新してから launcher のスモークテストを実行する。
+`uv was not found` の警告が出た場合は、uv を導入してから `chezmoi apply` を再実行する。`uv python dir failed` で適用が停止した場合は、通常シェルで `uv --version` と `uv python dir` を確認する。Windows では `Get-Command uv.exe -All` と `mise which uv` も確認する。`UV_PYTHON_INSTALL_DIR` を指定する場合は絶対パスにし、同じ環境で `chezmoi apply` を再実行する。
 
-適用が `uv python install 3.14 failed` または `uv was not found` で停止した場合は、通常シェルで `uv --version`、`uv python dir`、`uv python find --managed-python 3.14` を確認する。Windows では `Get-Command uv.exe -All` と `mise which uv` も確認する。hook の sandbox 内へ mise config、state、downloads の許可を追加して回避しない。`~/.config/uv` 全体の許可や sandbox の無効化も行わない。
+sandbox 内で必要な managed Python が使えない場合は、通常シェルの `uv python dir` と必要な版の導入状況を確認し、[事前準備](operations.md#sandbox-内の-uv-managed-python)を行う。sandbox 内では `uv run --managed-python` を使うと、システム Python へのフォールバックを避けて確認できる。
 
-配布済み設定を調べずに、過去のブランチが追加した RW 許可を削除しない。今回の同期処理は既存許可の所有者を推測せず、通常の uv 設定やキャッシュ内容も保持する。
+## GitHub Copilot sandbox.enabled が意図した値にならない
 
-## Copilot sandbox.enabled が意図した値にならない
-
-初回値と設定保持の規則は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照し、user-level `~/.copilot/settings.json` の `sandbox.enabled` を確認する。
+初回値と設定保持の規則は [`operations.md`](operations.md#github-copilot-local-sandbox-の既定値) を参照し、user-level `~/.copilot/settings.json` の `sandbox.enabled` を確認する。
 
 ```bash
 jq .sandbox.enabled ~/.copilot/settings.json
@@ -126,15 +122,13 @@ jq .sandbox.enabled ~/.copilot/settings.json
 - `chezmoi apply` が `sandbox.enabled` の型に関するエラーで失敗する場合、既存の値が null や文字列など真偽値以外になっている。値を `true`/`false` に修正するか、キー自体を削除してから再実行する
 - `/sandbox` の UI が managed もしくは locked と表示される場合、組織の enterprise managed-settings.json が sandbox を強制している。本リポジトリの chezmoi 設定はこの状態を作らないため、組織の IT 部門に確認する
 
-本リポジトリの以前のブランチ（file-based managed settings 方式）を適用したことがある場合、Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json` が残っている可能性がある。組織が所有するファイルの可能性があるため自動削除しない。内容が本リポジトリ由来（`sandbox.enabled=true` の強制のみ等）と確認できた場合に限り、手動で削除するか組織の管理者に確認する。
+組織管理設定の配置先は [`operations.md`](operations.md#github-copilot-local-sandbox-の既定値) を参照する。組織の設定か不明なファイルは削除せず、管理者へ確認する。
 
 ## `mise.lock has changed since chezmoi last wrote it?` と聞かれる
 
 `chezmoi status` が `MM .config/mise/mise.lock` を示し、`chezmoi apply` が上のプロンプトを出す。Codespaces のような TTY の無い環境では `could not open a new TTY` で停止する。
 
-デプロイ済みの lockfile に、意図しないプラットフォームのエントリが加わった状態である。`chezmoi diff ~/.config/mise/mise.lock` で追加された行を確認する。`linux-x64-musl` や `windows-x64-baseline` のようなエントリが増えていれば、`lockfile_platforms` が効かないまま auto-lock が走ったことを意味する（[ADR-021](adr/021-mise-lockfile-platforms.md)）。
-
-原因は二つある。まず mise のバージョンを確認する。
+まず `chezmoi diff ~/.config/mise/mise.lock` で変更内容を確認する。意図しないプラットフォームのエントリが増えている場合は、mise の版、設定、実行環境を確認する（[ADR-021](adr/021-mise-lockfile-platforms.md)）。
 
 ```bash
 mise --version
@@ -144,14 +138,16 @@ mise --version
 
 全環境で `mise-self-update` を実行し、mise の組み込み updater で更新する。
 
-mise が要件を満たしていれば、原因は設定が届いていないことである。次で確認して配り直す。
+mise が要件を満たしていれば、設定を確認して配り直す。
 
 ```bash
 mise settings get lockfile_platforms
 chezmoi apply --force ~/.config/mise/config.toml
 ```
 
-どちらの場合も、最後にデプロイ済み lockfile を source の内容へ戻す。`--force` を付けるのは、対象を lockfile 一つに限ってプロンプトを飛ばすためである。他のファイルのローカル変更には影響しない。
+実行中のプラットフォームは `lockfile_platforms` に無くても追加される。設定が正しくても、対象外の環境で `mise install` を実行するとエントリが増えるため、[対象プラットフォーム](operations.md#対象プラットフォームの定義元)と照合する。
+
+意図した更新を破棄しないことを確認してから、デプロイ済み lockfile を source の内容へ戻す。`--force` を付けるのは、対象を lockfile 一つに限ってプロンプトを飛ばすためである。他のファイルのローカル変更には影響しない。
 
 ```bash
 chezmoi apply --force ~/.config/mise/mise.lock
@@ -201,7 +197,7 @@ mise reshim
 
 ## TypeScript language server が TypeScript を発見できない
 
-Copilot CLI の起動ログに `Could not find a valid TypeScript installation` が出る場合、安定 prefix に LSP 用 TypeScript が導入されているか確認する。`tsc --version` の成功は、別の mise インストール先にあるコンパイラーを確認するだけであり、language server の依存解決を保証しない。
+GitHub Copilot CLI の起動ログに `Could not find a valid TypeScript installation` が出る場合、安定 prefix に LSP 用 TypeScript が導入されているか確認する。`tsc --version` の成功は、別の mise インストール先にあるコンパイラーを確認するだけであり、language server の依存解決を保証しない。
 
 設定と導入スクリプトを配布すると、`run_after_22-install-typescript-lsp` が mise 管理 Node に同梱された npm で LSP 用 TypeScript を確認し、不足または版違いの場合だけ導入する。
 
@@ -224,7 +220,7 @@ tsc --version
 node -p "require('$lsp_typescript_root/node_modules/typescript/package.json').version"
 ```
 
-`tsc` がコンパイラー用 TypeScript 7.x、安定 prefix の `package.json` が LSP 用 TypeScript 6.x を返すことを確認する。その後 Copilot CLI を通常どおり再起動し、起動ログの `Using Typescript version` が安定 prefix の `tsserver.js` を示すことと、`typescript language server ready` を確認する。最後に実際の `.ts` ファイルで定義参照とシンボル検索を実行する。`/lsp test` は stdio を閉じて終了させる経路があるため、この復旧の完了判定には使用しない。
+`tsc` がコンパイラー用 TypeScript 7.x、安定 prefix の `package.json` が LSP 用 TypeScript 6.x を返すことを確認する。その後 GitHub Copilot CLI を通常どおり再起動し、起動ログの `Using Typescript version` が安定 prefix の `tsserver.js` を示すことと、`typescript language server ready` を確認する。最後に実際の `.ts` ファイルで定義参照とシンボル検索を実行する。`/lsp test` は stdio を閉じて終了させる経路があるため、この復旧の完了判定には使用しない。
 
 ## `run_once_*` スクリプトの warning / error
 
@@ -280,12 +276,12 @@ npm config set registry '<管理者指定の registry URL>'
 
 ## 非対話シェルで PATH が通らない
 
-症状: Copilot CLI エージェント、IDE タスク、`bash script.sh` から `copilot` / `uv` / `node` / `kubectl` / `azd` が `command not found`。
+症状: GitHub Copilot のエージェント、IDE タスク、`bash script.sh` から `copilot` / `uv` / `node` / `kubectl` / `azd` が `command not found`。
 
 設計の全体像は [`docs/architecture.md`](architecture.md#path-管理非対話シェル対応) を参照。復旧は以下を試す:
 
 - **Unix**: `chezmoi apply` で `~/.profile` 系が配置されているか確認。新規 login シェル（新しい Terminal タブ）で有効化
-- **macOS GUI アプリ経由**（GitHub Desktop の Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り mise shim が `~/.local/bin` に symlink される。Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）
+- **macOS GUI アプリ経由**（GitHub Desktop の GitHub Copilot SDK 等）: `chezmoi apply` で `run_onchange_after_21-link-mise-shims.sh` が走り mise shim が `~/.local/bin` に symlink される。GitHub Copilot CLI を再起動すれば反映（除外リストの変更は `home/run_onchange_after_21-link-mise-shims.sh.tmpl` で編集）
 - **Windows**: `chezmoi apply` で `run_onchange_after_15-mise-sync-tools.ps1` を再実行し、`mise bin-paths` の実体ディレクトリを User PATH へ同期
 
 それでも反映されないときは state を消して再実行:
@@ -303,9 +299,13 @@ command -v copilot uv
 ```
 
 ```powershell
-(Get-Command uv).Source
-[Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Select-String 'mise\\shims'
+Get-Command uv.exe -All
+mise which uv
+Get-Content "$HOME\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt"
+[Environment]::GetEnvironmentVariable('Path', 'User') -split ';'
 ```
+
+Windows では、state file に記録した実体ディレクトリが User PATH に含まれることを確認する。反映には GitHub Copilot CLI や IDE を含む起動元の再起動が必要である。
 
 ## Windows で `cargo build` / `cargo check` がリンクエラーになる (`link.exe` が見つからない/引数エラー)
 
@@ -385,11 +385,7 @@ chezmoi apply ~/.local/bin/gitleaks-pre-commit
 
 ## Codespaces / Dev Container で `copilot` のバージョンが古い
 
-症状: `copilot --version` が極端に古い（例: 1.0.3）。
-
-原因: ベースイメージ（Codespaces universal 等）に `/usr/local/bin/copilot` が同梱されており、`run_once_before_10-install-packages.sh` の導入判定が `command -v copilot` だと、これを検出して公式スクリプトによる導入をスキップしていた。同梱バイナリはイメージのビルド時点で固定されるため、`copilot update` の対象にもならない。
-
-対策は導入済み。判定は `~/.local/bin/copilot` の実体で行う。既存のコンテナでは [`run_once_*` の再実行](operations.md#run_once_-の再実行)により固定した公式リリースアーカイブを導入し、次を確認する。
+`copilot --version` が古い場合は、ベースイメージ同梱の `/usr/local/bin/copilot` が選ばれていないか確認する。dotfiles は `~/.local/bin/copilot` を管理する。この実体が未配置なら、[`run_once_*` の再実行](operations.md#run_once_-の再実行)により固定した公式リリースアーカイブを導入し、次を確認する。
 
 ```bash
 exec zsh -l
@@ -397,32 +393,13 @@ type -a copilot                                   # 先頭が ~/.local/bin/copil
 ~/.local/bin/copilot --version
 ```
 
-同梱バイナリは削除しない。`~/.local/bin` が PATH で `/usr/local/bin` より前にあれば shadow されるため、特権操作なしで解決する（Codespaces universal イメージではこの順序を確認済み。逆順のイメージでは PATH 側の調整が必要）。`copilot update` が更新するのは実行された側の実体だけで、同梱バイナリは対象外である。
+同梱バイナリは削除せず、PATH で `~/.local/bin` を `/usr/local/bin` より前に置く。`copilot update` が更新するのは実行された側の実体だけである。
 
 VS Code 拡張 (`github.copilot-chat`) が PATH へ注入する `.../globalStorage/github.copilot-chat/copilotCli/copilot` は shim であり、自分のディレクトリを除いた PATH から実体を探して委譲するだけなので、バージョン固定の原因にはならない。ただし `command -v copilot` はこの shim を返すため、確認には `type -a copilot` を使う。
 
-## Copilot CLI: preToolUse フックが並列実行時にすり抜ける
+## GitHub Copilot CLI: `hook errored` の詳細を確認する
 
-症状: 短時間に複数のツール呼び出しが走った際、`copilot-guard.py` / `uv-enforcer.py` の deny が適用されず、ブロックすべき操作が実行される。
-
-原因 (CLI v1.0.35 系で観測):
-
-- **タイムアウト時の挙動は fail-open**: `timeoutSec` を超えても hook プロセスは kill されず、CLI 側が待機を打ち切って allow フォールバックし、遅れて届く deny は破棄される
-- **hook 起動が逐次キュー化**: 同時に 5 件のツール呼び出しが来ても hook は 1.5〜4 秒間隔で順番に起動される。並列数が増えるほどキュー末尾が `timeoutSec` を超え、上記 fail-open が発動しやすい
-
-対策 (本リポジトリで適用済み):
-
-- `home/private_dot_copilot/hooks/hooks.json` の `timeoutSec` を引き上げ、キューが長くなっても fail-open に落ちにくくする（現在値は同ファイルを参照）
-- 上流の挙動変更を追跡する (`github/copilot-cli` の issue)
-
-暫定回避:
-
-- 高並列が予想される作業（一括コマンド送信など）では、1 応答内のツール呼び出し数を抑える
-- deny すべき操作が通ってしまった場合は `~/.copilot/audit.jsonl`（成功ログ）/ `audit-denies.jsonl`（preToolUse deny）/ `audit-failures.jsonl`（tool handler error）で事後検出し、手動で巻き戻す
-
-## Copilot CLI: `hook errored` の詳細を確認する
-
-`preToolUse` command Hook が非ゼロで終了すると、Copilot CLI はツール呼び出しを拒否する。ツール結果には `hook errored` だけが表示される場合でも、セッションの `events.jsonl` に Hook の標準エラーが記録されている。
+`preToolUse` command Hook が非ゼロで終了すると、GitHub Copilot CLI はツール呼び出しを拒否する。ツール結果には `hook errored` だけが表示される場合でも、セッションの `events.jsonl` に Hook の標準エラーが記録されている。
 
 ```powershell
 Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
@@ -437,8 +414,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
 
-本リポジトリの command hook は OS 別 launcher から記録済みの uv managed Python を直接起動し、sandbox 内で mise と uv を起動しない。標準エラーに mise の config、state、downloads、shim 解決、uv cache 初期化のエラーが出る場合は、`~/.copilot/hooks/hooks.json` が古い可能性がある。Copilot CLI を終了し、`chezmoi apply` で hooks、runtime env、sandbox 設定を配り直してから新しいセッションを開始する。
-
-`azure@azure-skills` の `track-telemetry` hook が timeout し、間接起動された `npx` に `.npmrc` の許可が無い場合は、Issue #25355 の問題に該当する。新しいシェルで `AZURE_MCP_COLLECT_TELEMETRY` が `false` であることを確認し、そのシェルから Copilot CLI を再起動する。`.npmrc` や home directory 全体を `readonlyPaths` へ追加せず、sandbox も無効化しない。
+`azure@azure-skills` の `track-telemetry` hook が timeout し、間接起動された `npx` に `.npmrc` の許可が無い場合は、Issue #25355 の問題に該当する。新しいシェルで `AZURE_MCP_COLLECT_TELEMETRY` が `false` であることを確認し、そのシェルから GitHub Copilot CLI を再起動する。`.npmrc` や home directory 全体を `readonlyPaths` へ追加せず、sandbox も無効化しない。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

@@ -4,7 +4,7 @@
 
 Accepted
 
-Windows の mise 更新と `jdx.mise` の pin 方針だけは [ADR-040](040-windows-mise-standalone-install.md) が置換する。CopilotApp、Copilot、Rustup の blocking pin 方針は引き続き有効とする。
+Windows の mise 更新と `jdx.mise` の pin 方針だけは [ADR-040](040-windows-mise-standalone-install.md) が置換する。CopilotApp、GitHub Copilot、Rustup の blocking pin 方針は引き続き有効とする。
 
 ## Context
 
@@ -29,4 +29,4 @@ Windows では DSC が導入した WinGet パッケージを `winget upgrade --a
 - 一括更新を残したまま、正式な独自 updater と WinGet の更新競合を防げる。
 - mise 本体の更新操作が全環境で共通になり、Windows 固有の `mise-self-upgrade` と専用契約が不要になる。
 - 本決定は ADR-030 を置換する。Windows の mise に関する旧判断だけは ADR-040 が置換し、他のパッケージの blocking pin 方針は維持する。
-- macOS は後続課題として Homebrew 登録版・実体版・PATH、自己更新後の不整合、`brew upgrade` の置換を棚卸しし、対象ごとに独自 updater 優先、Homebrew 統一、導入方法変更を判断する。Windows の pin を転用できるとは仮定せず、決定を必要な ADR、operations、関連文書、契約テストへ反映する。
+- macOS の導入元と updater の分担は [ADR-033](033-manage-azd-and-copilot-cli-via-official-os-channels.md) で扱う。

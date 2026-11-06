@@ -106,12 +106,12 @@ class WindowsConfigurationTests(unittest.TestCase):
         self.assertIn("`winget upgrade --all`", self.operations)
         self.assertIn("管理していないパッケージの結果は保証しない", self.operations)
         self.assertIn("`Pinned = false`", self.operations)
-        self.assertIn(
-            "Windows の pin を転用できるとは仮定せず",
-            (REPO_ROOT / "docs/adr/032-protect-self-updated-winget-packages-with-blocking-pins.md").read_text(
-                encoding="utf-8"
-            ),
-        )
+        adr = REPO_ROOT / "docs/adr/032-protect-self-updated-winget-packages-with-blocking-pins.md"
+        for target in re.findall(
+            r"\[[^\]]+\]\(([^)]+\.md)\)", adr.read_text(encoding="utf-8")
+        ):
+            with self.subTest(target=target):
+                self.assertTrue((adr.parent / target).is_file())
 
     def test_retired_desktop_apps_are_not_managed(self) -> None:
         self.assertNotIn("TheDocumentFoundation.LibreOffice", self.config)

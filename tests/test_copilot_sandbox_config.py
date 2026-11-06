@@ -1,4 +1,4 @@
-"""Guard static Copilot sandbox configuration contracts."""
+"""Guard static GitHub Copilot sandbox configuration contracts."""
 
 import json
 import os
@@ -15,8 +15,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "home"
 POSIX_SCRIPT_PATH = SOURCE_ROOT / "run_after_35-configure-copilot-sandbox.sh.tmpl"
 POWERSHELL_SCRIPT_PATH = (
-    SOURCE_ROOT / "run_onchange_after_35-configure-copilot-sandbox.ps1.tmpl"
+    SOURCE_ROOT / "run_after_35-configure-copilot-sandbox.ps1.tmpl"
 )
+CHEZMOI_REMOVE_PATH = SOURCE_ROOT / ".chezmoiremove"
 ZSHRC_PATH = SOURCE_ROOT / "dot_zshrc.tmpl"
 POSIX_PROFILE_PATH = SOURCE_ROOT / "dot_profile.tmpl"
 POWERSHELL_PROFILE_PATH = SOURCE_ROOT / "PowerShell_profile.ps1.tmpl"
@@ -139,6 +140,10 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
             self.assertIn(expected, self.powershell)
         self.assertIn("reduce $readonly_grants[] as $path", self.posix)
         self.assertIn("Add-ReadonlyDirectoryAndTarget", self.powershell)
+        self.assertIn(
+            "$target = Join-Path (Split-Path -Parent $item.FullName) $target",
+            self.powershell,
+        )
 
     def test_uv_config_grants_are_one_readonly_file_and_idempotent(self) -> None:
         self.assertIn('uv_config_home="${XDG_CONFIG_HOME:-}"', self.posix)
@@ -190,20 +195,64 @@ class CopilotSandboxPolicyTests(unittest.TestCase):
         self.assertNotIn("Test-Path -LiteralPath $uvConfigPath", self.powershell)
         self.assertNotIn("Get-Content -LiteralPath $uvConfigPath", self.powershell)
 
-    def test_pinned_hook_interpreter_grants_come_from_the_recorded_runtime(self) -> None:
-        """撤去単位: 固定 Python interpreter。
+    def test_managed_python_root_is_discovered_for_each_apply(self) -> None:
+        self.assertIn('"${uv_cmd}" python dir', self.posix)
+        self.assertIn('add_directory_grant "${uv_python_dir}"', self.posix)
+        self.assertIn("& $uvExe python dir", self.powershell)
+        self.assertLess(
+            self.powershell.index("Get-Command -CommandType Application -Name 'uv.exe'"),
+            self.powershell.index("& $miseExe which uv"),
+        )
+        self.assertIn(
+            "Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvPythonDir",
+            self.powershell,
+        )
+        for script in (self.posix, self.powershell):
+            self.assertNotIn("python-runtime.env", script)
+        for path in (POSIX_SCRIPT_PATH, POWERSHELL_SCRIPT_PATH):
+            self.assertTrue(path.name.startswith("run_after_"))
 
-        撤去条件は `.github/copilot-instructions.md` の「Copilot command hook の
-        固定 Python interpreter」に従う。条件が整ったら、このテストと
-        hook directory / managed Python root の grant をまとめて削除する。
-        """
-        for expected in ("uv_python_dir", "hooks_dir", "python-runtime.env", "s/^python_root=//p"):
-            self.assertIn(expected, self.posix)
-        for expected in ("$uvPythonDir", "$hooksDir", "$hookRuntimeFile", "python_root="):
-            self.assertIn(expected, self.powershell)
+    def test_missing_uv_warns_without_blocking_settings(self) -> None:
+        for script in (self.posix, self.powershell):
+            self.assertIn("uv was not found on PATH or by mise", script)
+            self.assertIn("install uv and re-run chezmoi apply", script)
+        self.assertIn('if [ -n "${uv_python_dir}" ]; then', self.posix)
+        self.assertIn("if ($uvPythonDir) {", self.powershell)
+
+    def test_hook_grant_migration_is_limited_and_recorded(self) -> None:
+        marker = ".dotfiles-copilot-hooks-retired"
+        for script in (self.posix, self.powershell):
+            self.assertIn(marker, script)
         self.assertIn('hooks_dir="${HOME}/.copilot/hooks"', self.posix)
+        self.assertIn("map(select(. != $hooks_dir))", self.posix)
+        self.assertIn("if $remove_hooks_grant", self.posix)
+        self.assertNotIn('add_directory_grant "${hooks_dir}"', self.posix)
         self.assertIn("$hooksDir = Join-Path $HOME '.copilot\\hooks'", self.powershell)
-        self.assertNotIn("$hooksDir = Join-Path $copilotHome 'hooks'", self.powershell)
+        self.assertIn("if ($removeHooksGrant)", self.powershell)
+        self.assertIn("-ne $hooksPathKey", self.powershell)
+        self.assertNotIn(
+            "Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $hooksDir",
+            self.powershell,
+        )
+
+    def test_retired_hook_removal_lists_only_distributed_files(self) -> None:
+        paths = set(CHEZMOI_REMOVE_PATH.read_text(encoding="utf-8").splitlines())
+        self.assertEqual(
+            paths,
+            {
+                ".copilot/hooks/allowed-files.txt",
+                ".copilot/hooks/ask-files.txt",
+                ".copilot/hooks/blocked-files.txt",
+                ".copilot/hooks/hooks.json",
+                ".copilot/hooks/python-runtime.env",
+                ".copilot/hooks/run-hook.ps1",
+                ".copilot/hooks/run-hook.sh",
+                ".copilot/hooks/scripts/audit-failure.py",
+                ".copilot/hooks/scripts/audit-log.py",
+                ".copilot/hooks/scripts/copilot-guard.py",
+                ".copilot/hooks/scripts/uv-enforcer.py",
+            },
+        )
 
     def test_stale_policy_and_network_keys_are_removed(self) -> None:
         self.assertRegex(
