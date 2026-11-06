@@ -16,7 +16,7 @@ home/                           ← chezmoi source
 ├── dot_local/bin/executable_gitleaks-pre-commit          ← gitleaks (設定ベースフック経由)
 ├── dot_config/mise/{config.toml.tmpl,private_mise.lock,exact_locks/}
 ├── PowerShell_profile.ps1.tmpl
-├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, hooks, mcp）
+├── private_dot_copilot/        ← ~/.copilot/ 配下（instructions, lsp, mcp）
 └── run_once_{before,after}_*   ← bootstrap スクリプト
 .devcontainer/devcontainer.json  ← このリポジトリを開発する Dev Container の構成
 reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
@@ -26,21 +26,12 @@ reference/windows/configuration.dsc.yaml  ← WinGet DSC（参照専用）
 
 - 設定配布 `chezmoi` / ツール版管理 `mise` / Python 実行 `uv`
 - Git の環境差分は `includeIf`、コミット署名は 1Password SSH エージェント（コンテナ系は自動無効化）
-- `copilot-guard.py` で保護対象ファイルの操作と `git commit` を判定し、`uv-enforcer.py` で Python / pip の直接実行を抑止。`postToolUse` で監査ログ
 - Copilot CLI local sandbox は環境別の初期値を user-level settings へ設定し、OS 別 backend で shell と filesystem policy を適用
 - `gitleaks` 付き pre-commit を `init.templateDir`（ADR-018）と設定ベースフック（ADR-020）の 2 レイヤで配布
 
-## Copilot Guard の設計
+## Copilot CLI local sandbox
 
-`copilot-guard.py` は `preToolUse` フックで以下を検査する。優先度は **deny > ask > no opinion（空出力）**（[ADR-006](adr/006-pretooluse-hook-no-allow.md)）。
-
-1. ファイル操作と読み取り専用検索のプロジェクト配下パス例外 (`allowed-files.txt`)
-2. 秘匿ファイル拒否 (`blocked-files.txt`)
-3. 確認付きアクセス (`ask-files.txt`)
-4. `git commit` の明示承認
-
-パス比較前に `\` を `/` へ正規化する。`allowed-files.txt` は、ワイルドカードのない単一のプロジェクト相対パスを `/` 前提で書く。ファイルツールが絶対パスを渡した場合は、現在のプロジェクトルート配下にあるパスだけを相対パスへ変換して例外と照合する。読み取り専用の `rg` と `glob` にも例外を適用するが、検索フィルターはワイルドカードのない許可パスに限定し、明示された検索ルートがすべてプロジェクト内にあることを確認する。シンボリックリンク、ジャンクション、file URI、`..` を含むパス、シェルコマンドには例外を適用しない。`apply_patch` は freeform 引数から `Add File`、`Update File`、`Delete File`、`Move to` の対象パスを抽出し、同じパス判定へ渡す。
-各 command hook は `~/.copilot/hooks/run-hook.sh` または `run-hook.ps1` から、記録済みの uv managed Python を絶対パスで直接起動する。`chezmoi apply` は先に Python 3.14 を provision し、interpreter と install root を `~/.copilot/hooks/python-runtime.env` へ記録する。launcher は script 名と interpreter の所在を検証してから実行し、sandbox 内では mise と uv を起動しない。hook scripts は標準ライブラリだけを使い、Python の要件は PEP 723 の `requires-python` にも残す（[ADR-007](adr/007-python-with-uv-and-pep723.md)）。
+このリポジトリは Copilot CLI の command hook を配布しない。以前の独自パス拒否、`git commit` の確認、監査ログの自動記録は引き継がない。sandbox と uv managed Python の設定は [ADR-041](adr/041-copilot-cli-hooks-retirement-and-uv-sandbox.md) を参照する。
 
 Copilot CLI local sandbox は user-level settings で管理し、未設定時の初回値だけを環境別に選ぶ。初回値と明示設定保持は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md)、ローカル MCP sandbox は [ADR-035](adr/035-copilot-cli-sandbox-mcp-servers.md)、初回値と設定保持の手順は [`operations.md`](operations.md#copilot-local-sandbox-の既定値) を参照する。
 

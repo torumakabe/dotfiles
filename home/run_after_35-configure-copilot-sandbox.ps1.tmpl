@@ -1,7 +1,7 @@
 {{- if eq .chezmoi.os "windows" -}}
 # Copilot CLI local sandbox 設定 (Windows)
 #
-# Copilot sandbox policy version: 14
+# Copilot sandbox policy version: 15
 
 $ErrorActionPreference = 'Stop'
 
@@ -9,6 +9,8 @@ $copilotHome = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HO
 $settingsPath = Join-Path $copilotHome 'settings.json'
 $settingsDir = Split-Path -Parent $settingsPath
 $hooksDir = Join-Path $HOME '.copilot\hooks'
+$hooksMigrationMarker = Join-Path $settingsDir '.dotfiles-copilot-hooks-retired'
+$removeHooksGrant = -not (Test-Path -LiteralPath $hooksMigrationMarker -PathType Leaf)
 
 $desiredSettings = @'
 {{ include ".chezmoitemplates/copilot-user-settings.json" }}
@@ -136,7 +138,7 @@ function Get-ResolvedPathTarget {
   $target = @($item.Target) | Select-Object -First 1
   if (-not $target) { return $item.FullName }
   if (-not [System.IO.Path]::IsPathFullyQualified($target)) {
-    $target = Join-Path $item.DirectoryName $target
+    $target = Join-Path (Split-Path -Parent $item.FullName) $target
   }
   return [System.IO.Path]::GetFullPath($target)
 }
@@ -164,43 +166,31 @@ $miseDataDir = if ($env:MISE_DATA_DIR) {
 } else {
   Join-Path $env:LOCALAPPDATA 'mise'
 }
-$uvPythonDir = if ($env:UV_PYTHON_INSTALL_DIR) {
-  $env:UV_PYTHON_INSTALL_DIR
-} else {
-  Join-Path $env:APPDATA 'uv\python'
-}
 $uvConfigPath = Join-Path $env:APPDATA 'uv\uv.toml'
 
-# hook interpreter の root は run_after_25 が記録した値を使う。sandbox 設定の
-# ために mise や uv を起動すると、hook が実際に使う interpreter と食い違う。
-$hookRuntimeFile = Join-Path $hooksDir 'python-runtime.env'
-if (Test-Path -LiteralPath $hookRuntimeFile -PathType Leaf) {
-  foreach ($line in [System.IO.File]::ReadAllLines($hookRuntimeFile)) {
-    if (-not $line.StartsWith('python_root=', [System.StringComparison]::Ordinal)) { continue }
-    $recordedPythonRoot = $line.Substring('python_root='.Length).Trim()
-    if (-not $recordedPythonRoot) { continue }
-    if (-not [System.IO.Path]::IsPathFullyQualified($recordedPythonRoot)) {
-      Fail-SandboxSettings "$hookRuntimeFile has a non-absolute python_root: $recordedPythonRoot"
-    }
-    $uvPythonDir = $recordedPythonRoot
-    break
-  }
-}
-
 # mise shims と install ディレクトリは agent の PowerShell tool が jq/rg/node/uv
-# を解決するために必要で、hook interpreter とは別の理由で読み取り許可が要る。
+# を解決するために必要。
 {{ include ".chezmoitemplates/mise-executable.ps1" }}
 
-$uvExe = $null
-if ($miseExe -and (Test-Path -LiteralPath $miseExe)) {
+$uvCommand = Get-Command -CommandType Application -Name 'uv.exe' -ErrorAction SilentlyContinue |
+  Select-Object -First 1
+$uvExe = if ($uvCommand) { $uvCommand.Source } else { $null }
+if ((-not $uvExe -or -not (Test-Path -LiteralPath $uvExe -PathType Leaf)) -and
+    $miseExe -and (Test-Path -LiteralPath $miseExe)) {
   $uvOutput = & $miseExe which uv 2>$null
   if ($LASTEXITCODE -eq 0 -and $uvOutput) {
     $uvExe = ([string]$uvOutput).Trim()
   }
 }
-if (-not $uvExe) {
-  $uvExe = (Get-Command -CommandType Application -Name 'uv.exe' -ErrorAction SilentlyContinue |
-    Select-Object -First 1).Source
+if (-not $uvExe -or -not (Test-Path -LiteralPath $uvExe -PathType Leaf)) {
+  $uvExe = $null
+  $uvPythonDir = $null
+  Write-Warning 'uv was not found on PATH or by mise; install uv and re-run chezmoi apply to allow managed Python in the sandbox.'
+} else {
+  $uvPythonDir = ([string](& $uvExe python dir)).Trim()
+  if ($LASTEXITCODE -ne 0 -or -not $uvPythonDir) {
+    Fail-SandboxSettings 'uv python dir failed or returned an empty path.'
+  }
 }
 
 # `/sandbox disable` persists sandbox.enabled=$false in settings.json, and that
@@ -266,9 +256,16 @@ $readwritePaths = @(
 $readonlyPaths = @(
   Get-JsonArrayOrEmpty (Get-JsonProperty -Object $existingFilesystem -Name 'readonlyPaths')
 )
+if ($removeHooksGrant) {
+  $hooksPathKey = Get-NormalizedPathKey -Path $hooksDir
+  $readonlyPaths = @($readonlyPaths | Where-Object {
+    (Get-NormalizedPathKey -Path ([string]$_)) -ne $hooksPathKey
+  })
+}
 $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $miseDataDir)
-$readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $hooksDir)
-$readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvPythonDir)
+if ($uvPythonDir) {
+  $readonlyPaths = @(Add-ReadonlyDirectoryAndTarget -Paths $readonlyPaths -Path $uvPythonDir)
+}
 # readonlyPaths は sandbox 内のすべてのプロセスに適用するため、このファイルだけを追加する。
 $readonlyPaths = @(Add-UniquePath -Paths $readonlyPaths -Path $uvConfigPath)
 
@@ -350,6 +347,16 @@ try {
   if ($backupPath) {
     Remove-Item -LiteralPath $backupPath -Force -ErrorAction SilentlyContinue
   }
+}
+
+if ($removeHooksGrant) {
+  $markerStream = [System.IO.File]::Open(
+    $hooksMigrationMarker,
+    [System.IO.FileMode]::CreateNew,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::None
+  )
+  $markerStream.Dispose()
 }
 
 Write-Host "Configured GitHub Copilot user settings in $settingsPath"

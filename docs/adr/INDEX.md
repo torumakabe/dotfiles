@@ -18,8 +18,8 @@
 | [003](003-mise-shim-exclude-pattern.md) | mise shim symlink は除外パターン方式にする | Accepted |
 | [004](004-azd-and-copilot-cli-outside-mise.md) | azd と copilot-cli を mise 外で管理する | Superseded by ADR-033 |
 | [005](005-no-github-token-in-shell-env.md) | GITHUB_TOKEN を環境変数に常駐させない | Accepted |
-| [006](006-pretooluse-hook-no-allow.md) | Copilot CLI preToolUse フックは allow を出力しない | Accepted |
-| [007](007-python-with-uv-and-pep723.md) | Python スクリプトは uv run + PEP 723 を原則とする | Accepted |
+| [006](006-pretooluse-hook-no-allow.md) | Copilot CLI preToolUse フックは allow を出力しない | Deprecated |
+| [007](007-python-with-uv-and-pep723.md) | Python スクリプトは uv run + PEP 723 を原則とする（command hook の固定 interpreter とフックによる強制は ADR-041 が廃止） | Accepted |
 | [008](008-zshenv-sources-profile.md) | ~/.zshenv は ~/.profile を source する | Accepted |
 | [009](009-mise-rust-windows-isolate-home.md) | Windows では mise の rust home を外部 rustup から分離する | Superseded by ADR-016 |
 | [010](010-url-allowlist-via-pretooluse-hook.md) | Copilot CLI の URL 包括制御は preToolUse Hook で行う | Superseded by ADR-015 |
@@ -50,9 +50,10 @@
 | [035](035-copilot-cli-sandbox-mcp-servers.md) | Copilot CLI MCP servers を sandbox 対象にする | Accepted |
 | [036](036-windows-uv-default-sandbox-cache.md) | Windows Copilot sandbox は標準 uv cache を使う | Accepted |
 | [037](037-windows-mise-activation-without-shims.md) | Windows の mise activation は shim を追加しない | Accepted |
-| [038](038-windows-uv-config-readonly-grant.md) | Windows sandbox で uv.toml だけを読み取り専用にする | Accepted |
-| [039](039-macos-linux-uv-config-readonly-grant.md) | macOS/Linux sandbox で uv.toml だけを読み取り専用にする | Accepted |
+| [038](038-windows-uv-config-readonly-grant.md) | Windows sandbox の uv 設定ファイルは uv.toml だけを読み取り専用にする | Accepted |
+| [039](039-macos-linux-uv-config-readonly-grant.md) | macOS/Linux sandbox の uv 設定ファイルは uv.toml だけを読み取り専用にする | Accepted |
 | [040](040-windows-mise-standalone-install.md) | Windows の mise は公式 standalone installer で直接導入する | Accepted |
+| [041](041-copilot-cli-hooks-retirement-and-uv-sandbox.md) | Copilot CLI フックを廃止し uv の通常実行を維持する | Accepted |
 
 ## テンプレート
 

@@ -18,10 +18,6 @@
 - 手順と構造の文書は `docs/`
 - 回避策の撤去条件と対象範囲は「ワークアラウンド（定期チェック対象）」へ集約する
 
-## Copilot Guard 変更時の注意
-
-- パス比較前に `\` → `/` へ正規化すること。パターンファイルは `/` で記述する
-
 ## プラットフォーム機能契約
 
 - 利用者向け機能は Windows/PowerShell、macOS/zsh、Linux/zsh、WSL/zsh で等価にする
@@ -69,10 +65,8 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 
 - **Copilot sandbox の Windows mise shim 回避**: Windows ProcessContainer 内では mise shim が config、lockfile、state を読めず `uv is not a valid shim` になるため、`mise bin-paths` が返す実体ディレクトリを User PATH の先頭へ同期し、state file `~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` で前回分を管理する（ADR-013）。ProcessContainer 内で shim が config、lockfile、state を解決し、非対話 PowerShell tool から `jq`、`rg`、`uv` を起動できるようになったら、PATH 同期、state file、関連テストを撤去し、PATH から同期済みエントリを削除する
 - **macOS Azure MCP の.NET bundle展開先**: `dot_profile.tmpl` は `DOTNET_BUNDLE_EXTRACT_BASE_DIR` が未設定の場合だけ、所有者とmode `0700` を確認したmacOS標準のユーザー専用 `TMPDIR` を設定する。上流 [microsoft/mcp#3976](https://github.com/microsoft/mcp/issues/3976) の修正が利用版に入り、macOS sandboxで環境変数の上書きなしにAzure MCPが起動すると確認できたら、設定と関連テストを撤去する
-- **Copilot command hook の固定 Python interpreter**: command hook では mise と uv を起動せず、`chezmoi apply` が uv managed Python 3.14 の絶対パスを `~/.copilot/hooks/python-runtime.env` に記録し、OS 別 launcher が直接実行する。設定同期は `~/.copilot/hooks` と記録した managed Python root を `readonlyPaths` へ追加する。Copilot CLI が command hook の launcher、payload、runtime env と、`uv run` に必要な実体、設定、cache、managed Python 標準ライブラリを自動許可し、macOS、Windows、WSL2 の実 CLI probe が追加 grant なしで成功したら、launcher、runtime env、追加許可、関連テストを撤去する
 - **Azure skills telemetry hook の無効化**: POSIX の `.profile` と Windows の PowerShell profile で `AZURE_MCP_COLLECT_TELEMETRY=false` を設定し、Azure skills の telemetry を停止する
 - **Visual Studio Build Tools の WinGet Configuration v2 昇格**: Build Tools 本体は通常権限の `WinGetPackage`、C++ ワークロードは `vswhere.exe` で MSVC の `link.exe` を検査して必要時だけ対話型セッションから Visual Studio Installer を UAC 昇格する `PSDscResources/Script` で管理する。通常権限から `securityContext: elevated` のユニットを実行しても `0x800706BA` が発生せず、管理者 PowerShellでも `WinGetPackage` のカタログ接続が成功するようになったら、公式の `Microsoft.VisualStudio.DSC/VSComponents` 構成へ戻す
-- **azure-deploy の `.azure/deployment-plan.md` 参照**: このファイルだけを Copilot Guard の拒否対象から除外する。PreToolUse で呼び出し元 skill を限定できるようになるか、上流 skill が直接参照しなくなったら、許可規則と関連テストを撤去する
 - **op-ssh-sign-wsl.exe の CRLF（ADR-012）**: WSL 用 wrapper が stdout と stderr の CR を除去する。1Password が LF を出力するか、全対応 WSL で Git 2.36 以上を保証できたら wrapper と Git 設定の切替を撤去する
 - **コンテナ内の git 張り替え（ADR-020）**: Codespaces と Dev Container で `/usr/local/bin/git` が 2.54 未満の場合だけ、PPA 版への symlink に置き換える。対象イメージがすべて 2.54 以上になったら `git_unshadow` を撤去する
 - **npm:typescript-language-server の `trust_policy_excludes`**: npm レジストリプロキシが証跡を落とす版だけを除外する。対象版で証跡が保持されるようになったら除外を撤去し、別の版へパッケージ単位で拡張しない

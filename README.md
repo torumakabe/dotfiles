@@ -2,14 +2,14 @@
 
 Cross-platform dotfiles managed by [chezmoi](https://www.chezmoi.io/) + [mise](https://mise.jdx.dev/).
 
-Linux / macOS / WSL / Windows / Codespaces / Dev Container で、できるだけ同じ運用感を保つための dotfiles である。設定ファイルは `chezmoi` で管理し、開発ツールのバージョンは `mise` でそろえ、GitHub Copilot CLI 向けの指示とフックも同じリポジトリで管理する。
+Linux / macOS / WSL / Windows / Codespaces / Dev Container で、できるだけ同じ運用感を保つための dotfiles である。設定ファイルは `chezmoi` で管理し、開発ツールのバージョンは `mise` でそろえ、GitHub Copilot CLI 向けの指示と設定も同じリポジトリで管理する。
 
 ## このリポジトリが扱うもの
 
 - **設定ファイルの配布**: `chezmoi` テンプレートで OS ごとの差分を吸収する
 - **ツールバージョンの固定**: `mise` と lockfile で取得元と版をそろえる
-- **Copilot CLI の共通設定**: カスタム指示、フック、プラグイン設定を管理する
-- **安全寄りの既定値**: `gitleaks` の pre-commit フックと Copilot Guard を組み込む
+- **Copilot CLI の共通設定**: カスタム指示、sandbox、プラグイン設定を管理する
+- **安全寄りの既定値**: `gitleaks` の pre-commit フックと Copilot local sandbox を設定する
 
 詳細は [`docs/architecture.md`](docs/architecture.md) と [`docs/copilot-cli.md`](docs/copilot-cli.md) を参照。
 
@@ -113,6 +113,6 @@ chezmoi update
 ## 詳細ドキュメント
 
 - [`docs/operations.md`](docs/operations.md): `mise` と `uv tool` の更新、lockfile 再生成、pre-commit フック管理、`run_once_*` の再実行
-- [`docs/architecture.md`](docs/architecture.md): ディレクトリ構造、設計判断、プラットフォーム分岐、Copilot Guard の構成
-- [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の管理対象、sandbox、フック、監査ログ
+- [`docs/architecture.md`](docs/architecture.md): ディレクトリ構造、設計判断、プラットフォーム分岐
+- [`docs/copilot-cli.md`](docs/copilot-cli.md): Copilot CLI の管理対象と sandbox
 - [`docs/troubleshooting.md`](docs/troubleshooting.md): よくある失敗と復旧手順

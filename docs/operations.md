@@ -37,7 +37,7 @@ gh extension upgrade gh-stack --dry-run
 
 `chezmoi apply` は `~/.copilot/settings.json` の user-level 設定へ sandbox policy をマージする。`sandbox.enabled` が未設定の場合、通常の macOS、Windows、Linux、WSL では `true`、Codespaces と Dev Container では `false` を設定する。既存値が boolean であれば、他のリポジトリ管理キーをマージした後にその値を復元する。既存値が null や真偽値以外の場合は、`chezmoi apply` を明示的なエラーで止める。
 
-同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。通常の shell tool に必要な mise の path、`~/.copilot/hooks`、command hook の固定 interpreter を含む uv managed Python root は `readonlyPaths` へ重複なく追記する。uv 設定ファイルも、POSIX では有効な絶対 `XDG_CONFIG_HOME`（未設定、空、相対パスなら `$HOME/.config`）、Windows では `%APPDATA%` から求めた `uv/uv.toml` だけを読み取り専用で追加する。この規則は uv に限らず sandbox 内のすべてのプロセスに適用され、親の `uv` ディレクトリや書き込み許可は追加しない。ファイルに認証情報が含まれる場合、それらも sandbox 内のすべてのプロセスから読み取り可能になる。
+同期処理は、トップレベルと `sandbox` 配下のどちらでも、リポジトリが管理しないキーを保持する。filesystem の `readwritePaths`、`readonlyPaths`、`deniedPaths` は、未設定または null の場合だけ空配列へ正規化する。配列以外の値は設定ファイルを書き換える前に拒否する。通常の shell tool に必要な mise のパスと `uv python dir` が返す uv managed Python の保存先は `readonlyPaths` へ重複なく追記する。uv 設定ファイルも、POSIX では有効な絶対 `XDG_CONFIG_HOME`（未設定、空、相対パスなら `$HOME/.config`）、Windows では `%APPDATA%` から求めた `uv/uv.toml` だけを読み取り専用で追加する。この規則は uv に限らず sandbox 内のすべてのプロセスに適用される。設定ファイルに認証情報が含まれる場合、それらも読み取り可能になる。
 
 現行ポリシーと競合する旧設定は例外として削除する。対象は `sandbox.userPolicy.network.allowedHosts`、`sandbox.userPolicy.network.blockedHosts`、旧 Windows AppContainer schema の `sandbox.userPolicy.version` である。同期処理は JSON 全体を再シリアライズするため、保持するキーでもインデントとキー順は変わる場合がある。
 
@@ -49,7 +49,7 @@ gh extension upgrade gh-stack --dry-run
 
 更新後は Copilot CLI を再起動し、`/sandbox` の General、Auth、Filesystem、Network の各タブを確認する。Linux 系では `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap 診断が実行され、`false` の場合は probe が省略される。
 
-WSL2、macOS、Codespaces、Dev Container でリモートブランチを検証するときは、[Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) に従う。ホストからの非対話起動だけでスラッシュコマンドや backend を確認済みと扱わない。
+Linux、WSL2、macOS、Windows、Codespaces、Dev Container でリモートブランチを検証するときは、[Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) に従う。ホストからの非対話起動だけでスラッシュコマンドや backend を確認済みと扱わない。
 
 ### uv cache の sandbox grant
 
@@ -57,24 +57,36 @@ macOS、Linux、WSL は Copilot CLI 1.0.92-4 以降が追加する uv 既定 cac
 
 設定同期は既存の filesystem grant を保持し、uv 用の環境変数と cache データを変更しない。
 
-### command hook の固定 Python interpreter
+### sandbox 内の uv managed Python
 
-`chezmoi apply` は sandbox 設定の同期前に `run_after_25-provision-copilot-hook-python` を実行する。このスクリプトは通常環境で `uv python install 3.14` と `uv python find --managed-python 3.14` を実行し、次の2行を `~/.copilot/hooks/python-runtime.env` へ原子的に書き込む。
+local sandbox で `uv run` が managed Python を使えるよう、設定同期は uv が利用可能なとき `uv python dir` で保存先を取得し、シンボリックリンクまたは reparse point の実体も読み取り専用で許可する。Copilot CLI の `allowDevToolAccess` はこの保存先を自動許可しない。保存先への書き込みは許可しないため、必要な Python は sandbox 外で事前に導入する。Windows の ProcessContainer では、保存先への書き込みを許可しても uv の junction 作成が拒否される。
 
-```text
-python_root=<uv managed Python の install root>
-python=<Python 3.14 interpreter の絶対パス>
+例えば Python 3.14 が必要な場合、通常のシェルで準備してから Copilot CLI を再起動する。
+
+```bash
+uv python install 3.14
+uv python dir
+uv python find --managed-python 3.14
+chezmoi apply
 ```
 
-POSIX では PATH 上の uv を使う。Windows では PATH 上の `uv.exe` を探し、見つからなければ共通テンプレートで解決した mise の `which uv` から実体を取得する。uv を利用できない場合でも既存の runtime env があれば、その interpreter でスモークテストを実行する。runtime env も無い場合は適用を失敗させる。
+使用する版は各プロジェクトの要件に従う。`.python-version` は版の選択、`pyproject.toml` の `requires-python` は互換範囲、`uv.toml` は uv の動作設定に使う。`python-preference = "managed"` は managed Python を優先するが、システム Python へのフォールバックを禁止しない。
 
-各 command hook は `run-hook.sh` または `run-hook.ps1` を起動する。launcher は script 名が単一のファイル名であること、interpreter が記録済み root 配下の通常ファイルであることを検査し、その interpreter から hook script を直接実行する。hook 実行時に mise と uv は起動しない。hook scripts は標準ライブラリだけを使い、Python の要件は PEP 723 にも残す。
+`UV_PYTHON_INSTALL_DIR` を変更した場合は、その値を設定した環境で `chezmoi apply` を再実行する。以前の保存先の許可は、利用者の設定と区別できないため保持する。uv が見つからない場合は警告を表示して他の設定を同期する。uv を導入した後、`chezmoi apply` を再実行して保存先を許可する。`uv python dir` が失敗するか絶対パスを返さない場合は適用を停止する。
 
-後続の sandbox 設定同期は `~/.copilot/hooks` と runtime env の `python_root` を読み、symlink または reparse point の実体を含めて `readonlyPaths` へ追加する。Copilot CLI は command hook の launcher を自動許可しないため、hook ディレクトリの許可には launcher、payload、runtime env が含まれる。runtime env が無い場合は `UV_PYTHON_INSTALL_DIR` または OS の uv 既定 install root を使う。uv の設定と認証情報を含み得る `~/.config/uv` は追加しない。
+Copilot Cloud sandbox は local sandbox の設定を共有しない。Cloud では必要な Python を `uv run` が自動導入できる。local と Cloud の選択理由は [ADR-041](adr/041-copilot-cli-hooks-retirement-and-uv-sandbox.md) を参照する。
 
-mise のデータディレクトリと実体ディレクトリへの読み取り許可は、通常の shell tool が mise 管理コマンドを起動するために維持する。Windows の非対話プロセスは `mise bin-paths` から同期した User PATH を使い、shim 実行時の config、state、downloads を sandbox へ許可しない。command hook 自体は mise と uv に依存しない。対象範囲と撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。
+mise のデータディレクトリと実体ディレクトリへの読み取り許可は、通常の shell tool が mise 管理コマンドを起動するために維持する。Windows の非対話プロセスは `mise bin-paths` から同期した User PATH を使い、shim 実行時の config、state、downloads を sandbox へ許可しない。
 
 Windows では `home/dot_config/mise/config.toml.tmpl` が `activate_shims = false` を設定し、PowerShell activation が shim を PATH に追加しない。mise 管理ツールの実体ディレクトリは PATH に維持する。shim のみで利用するツールは `mise install` または `mise exec` で起動する。
+
+### Copilot フック廃止時の移行
+
+`home/.chezmoiremove` は以前配布した `~/.copilot/hooks` 内の11ファイルを個別に削除する。ほかのファイルや既存の `~/.copilot/audit*.jsonl` は残るが、このリポジトリから監査ログは更新しない。削除指定が残る間は、対象11パスに作成したファイルも次回の適用で削除される。
+
+設定同期は最初の適用で、以前の `~/.copilot/hooks` の `readonlyPaths` 項目だけを削除する。リンク先の別項目と、それ以外の filesystem rules は保持する。完了後は `settings.json` と同じディレクトリに `.dotfiles-copilot-hooks-retired` を記録し、後から利用者が追加した同じパスを再び削除しない。
+
+対象端末への適用が行き渡ったら、`.chezmoiremove`、設定同期の移行処理と関連テストを撤去し、各 `settings.json` の隣にある移行済みマーカーを削除する。
 
 ### Azure skills telemetry hook
 
@@ -88,21 +100,9 @@ macOS の `.profile` は `DOTNET_BUNDLE_EXTRACT_BASE_DIR` が未設定の場合�
 
 この設定は `.profile` を読み込むシェルから起動するすべての .NET single-file app に影響する。`.profile` を読み込まない GUI 起動元へ環境変数が継承されることは保証しない。上流修正を確認した後の撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)に記録する。
 
-### sandbox ワークアラウンドの撤去手順
+### Windows mise PATH のワークアラウンド撤去
 
-Copilot CLI 側の修正で前提が変わったときに備え、撤去単位を2つに分けている。各単位は独立して撤去でき、他の単位を残したまま適用できる。
-
-| 撤去単位 | 主な実装 | 撤去条件 |
-|---|---|---|
-| 固定 Python interpreter | `run_after_25-provision-copilot-hook-python.*`、`run-hook.sh`、`run-hook.ps1`、`hooks.json`、hook ディレクトリと managed Python root の `readonlyPaths` | Copilot CLI が command hook の実行に必要なファイルを自動許可する |
-| Windows の direct mise bin PATH | `run_onchange_after_15-mise-sync-tools.ps1.tmpl` の PATH 同期と state file | Windows sandbox 内で mise shim が設定を解決できるようになる |
-
-撤去では、利用者の端末に残る副作用を一度の適用で消し切れない。実装を削除する版と、残留物を除去する版を分ける。
-
-1. 実装と関連テストを削除し、同時に残留物の完全一致除去を設定同期へ加える。direct PATH なら state file に記録した entry と state file 自体、固定 interpreter なら `~/.copilot/hooks` と managed Python root の `readonlyPaths` entry を対象にする。
-2. 対象端末すべてに `chezmoi apply` が行き渡ってから、次の版で完全一致除去を削除する。除去を残したまま次の変更を重ねると、撤去対象の判別が難しくなる。
-
-cache ディレクトリの実体と、利用者が追加した親子 path は削除しない。User PATH からは state file に記録した entry だけを除去し、記録外の entry は保持する。撤去後は対象環境で [Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) を実施し、追加許可なしで成功することを確認する。
+撤去条件は[ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象)を参照する。条件を満たしたら `run_onchange_after_15-mise-sync-tools.ps1.tmpl` の PATH 同期を撤去し、state file に記録した entry と state file を削除する移行処理を追加する。記録外の User PATH entry は保持する。全対象端末へ適用後に移行処理を撤去し、対象環境で [Copilot CLI local sandbox 実機検証](copilot-sandbox-verification.md) を行う。
 
 ## chezmoi での編集
 
@@ -380,7 +380,7 @@ PYTHONDONTWRITEBYTECODE=1 uv run -m unittest discover -s tests
 uv run -m unittest tests.test_platform_parity tests.test_mise_config -v
 ```
 
-CI は Ubuntu と Windows のジョブを並列実行する。Ubuntu ジョブは zsh を導入して全単体テストと POSIX shell の hook smoke test を実行する。Windows ジョブは固定版の chezmoi と runner 標準の PowerShell を使い、全単体テストを discover 形式で実行する。Windows 以外の OS に固有のテストは、各テストの条件に従って skip する。
+CI は Ubuntu と Windows のジョブを並列実行する。Ubuntu ジョブは zsh を導入し、Windows ジョブは固定版の chezmoi と runner 標準の PowerShell を使い、両方で全単体テストを discover 形式で実行する。各 OS に固有のテストは、それぞれの実行条件に従って skip する。
 
 ## git pre-commit フック
 

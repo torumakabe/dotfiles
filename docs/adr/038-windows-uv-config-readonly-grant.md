@@ -1,4 +1,4 @@
-# ADR-038: Windows sandbox で uv.toml だけを読み取り専用にする
+# ADR-038: Windows sandbox の uv 設定ファイルは uv.toml だけを読み取り専用にする
 
 ## Status
 
@@ -8,6 +8,7 @@ Accepted
 
 uv の設定ファイルを sandbox 内から読み取るには、対象ファイルへの読み取り許可が必要になる。
 `readonlyPaths` は uv だけでなく sandbox 内のすべてのプロセスに適用される。
+uv 管理 Python root の読み取り許可は [ADR-041](041-copilot-cli-hooks-retirement-and-uv-sandbox.md) で別に扱う。
 
 ## Decision
 

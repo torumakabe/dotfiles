@@ -1,0 +1,11 @@
+.copilot/hooks/allowed-files.txt
+.copilot/hooks/ask-files.txt
+.copilot/hooks/blocked-files.txt
+.copilot/hooks/hooks.json
+.copilot/hooks/python-runtime.env
+.copilot/hooks/run-hook.ps1
+.copilot/hooks/run-hook.sh
+.copilot/hooks/scripts/audit-failure.py
+.copilot/hooks/scripts/audit-log.py
+.copilot/hooks/scripts/copilot-guard.py
+.copilot/hooks/scripts/uv-enforcer.py

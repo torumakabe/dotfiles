@@ -52,12 +52,10 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 
 - `home/dot_config/mise/config.toml.tmpl`、`home/run_once_before_10-install-packages.sh.tmpl`、`home/run_once_before_15-install-copilot-cli.sh.tmpl` の重複と欠落、ADR-033 の `azd` と Copilot CLI の管理範囲を確認する
 - lockfile 操作と backend 移行は[リポジトリの mise 操作規則](../copilot-instructions.md#mise-操作のトラップ)に照合する。任意の実機検査では `mise ls` の Source が空の孤児ツールと余剰版も確認する
-- 公開関数、alias、補完、ツール導入を[プラットフォーム機能契約](../copilot-instructions.md#プラットフォーム機能契約)、`tests/test_platform_parity.py`、`.github/workflows/test-copilot-hooks.yml` と照合する。未分類の機能、理由と範囲のない例外、片方の shell だけの検査を見落とさない
+- 公開関数、alias、補完、ツール導入を[プラットフォーム機能契約](../copilot-instructions.md#プラットフォーム機能契約)、`tests/test_platform_parity.py`、`.github/workflows/test-dotfiles.yml` と照合する。未分類の機能、理由と範囲のない例外、片方の shell だけの検査を見落とさない
 
 ## hooks と CI
 
-- `home/private_dot_copilot/hooks/hooks.json` の参照先を `executable_` 除去後の配布パスに照合し、bash と PowerShell が同じスクリプトと環境変数を使うか確認する
-- 同ディレクトリのパターンファイルが `/` 区切りで `copilot-guard.py` の正規化と一致し、`tests/test_copilot_hooks_config.py` が現在の構成を検査するか確認する
 - 配布 Python スクリプトの PEP 723 メタデータ、`tests/` の `uv run -m unittest` 経由の実行を確認する
 - `home/private_dot_copilot/` の `lsp-config.json.tmpl` と `mcp-config.json` のコマンドが、mise 管理下または導入手順に存在するか確認する
 - `.github/workflows/` の `paths` と実行対象に検査漏れがないか、smoke テストと unittest が独立した重複を持たないか、`permissions` と action の固定方法が方針に合うか確認する

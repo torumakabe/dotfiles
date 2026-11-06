@@ -1,4 +1,4 @@
-# ADR-039: macOS/Linux sandbox で uv.toml だけを読み取り専用にする
+# ADR-039: macOS/Linux sandbox の uv 設定ファイルは uv.toml だけを読み取り専用にする
 
 ## Status
 
@@ -9,6 +9,7 @@ Accepted
 “ですよね。windowsと同じ効果を得られるようにしてください。”
 
 ADR-026 は共有 `uv.toml` の readonly grant を採用しないとした。ADR-038 は Windows でユーザーの uv 設定ファイルだけを許可した。
+uv 管理 Python root の読み取り許可は [ADR-041](041-copilot-cli-hooks-retirement-and-uv-sandbox.md) で別に扱う。
 
 ## Decision
 

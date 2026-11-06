@@ -108,9 +108,9 @@ uv --offline --directory / --project / cache dir
 
 Windows の対話 PowerShell または sandboxed Azure MCP が `uv is not a valid shim` / `npx is not a valid shim` を報告する場合は、mise shim が shell の継承 PATH に残っている可能性がある。`Get-Command uv,npx,node -All` で選択元を確認し、`home/dot_config/mise/config.toml.tmpl` から生成された mise 設定に `activate_shims = false` があることを確認する。設定を `chezmoi apply` で配布してから、新しい PowerShell と Copilot CLI を起動する。mise の activation はこの設定で既存 shim も PATH から除き、導入済みツールの実体ディレクトリを維持する。User PATH の実体同期が欠けている場合に限り、`~\.local\state\chezmoi-dotfiles\mise-windows-user-paths.txt` と User PATH を確認する。mise の config、state、downloads を sandbox へ追加して shim 解決を回避しない。
 
-hook launcher が `missing .../python-runtime.env`、`recorded interpreter is not a regular file`、`python must live under ...` を報告する場合は、Copilot CLI を終了して `chezmoi apply` を再実行する。適用時に uv managed Python 3.14 を provision し、runtime env と `readonlyPaths` を更新してから launcher のスモークテストを実行する。
+`uv was not found` の警告が出た場合は、uv を導入してから `chezmoi apply` を再実行する。`uv python dir failed` で適用が停止した場合は、通常シェルで `uv --version` と `uv python dir` を確認する。Windows では `Get-Command uv.exe -All` と `mise which uv` も確認する。`UV_PYTHON_INSTALL_DIR` を指定する場合は絶対パスにし、同じ環境で `chezmoi apply` を再実行する。
 
-適用が `uv python install 3.14 failed` または `uv was not found` で停止した場合は、通常シェルで `uv --version`、`uv python dir`、`uv python find --managed-python 3.14` を確認する。Windows では `Get-Command uv.exe -All` と `mise which uv` も確認する。hook の sandbox 内へ mise config、state、downloads の許可を追加して回避しない。`~/.config/uv` 全体の許可や sandbox の無効化も行わない。
+sandbox 内で必要な managed Python が使えない場合は、通常シェルの `uv python dir` と必要な版の導入状況を確認し、[事前準備](operations.md#sandbox-内の-uv-managed-python)を行う。sandbox 内では `uv run --managed-python` を使うと、システム Python へのフォールバックを避けて確認できる。
 
 配布済み設定を調べずに、過去のブランチが追加した RW 許可を削除しない。今回の同期処理は既存許可の所有者を推測せず、通常の uv 設定やキャッシュ内容も保持する。
 
@@ -401,25 +401,6 @@ type -a copilot                                   # 先頭が ~/.local/bin/copil
 
 VS Code 拡張 (`github.copilot-chat`) が PATH へ注入する `.../globalStorage/github.copilot-chat/copilotCli/copilot` は shim であり、自分のディレクトリを除いた PATH から実体を探して委譲するだけなので、バージョン固定の原因にはならない。ただし `command -v copilot` はこの shim を返すため、確認には `type -a copilot` を使う。
 
-## Copilot CLI: preToolUse フックが並列実行時にすり抜ける
-
-症状: 短時間に複数のツール呼び出しが走った際、`copilot-guard.py` / `uv-enforcer.py` の deny が適用されず、ブロックすべき操作が実行される。
-
-原因 (CLI v1.0.35 系で観測):
-
-- **タイムアウト時の挙動は fail-open**: `timeoutSec` を超えても hook プロセスは kill されず、CLI 側が待機を打ち切って allow フォールバックし、遅れて届く deny は破棄される
-- **hook 起動が逐次キュー化**: 同時に 5 件のツール呼び出しが来ても hook は 1.5〜4 秒間隔で順番に起動される。並列数が増えるほどキュー末尾が `timeoutSec` を超え、上記 fail-open が発動しやすい
-
-対策 (本リポジトリで適用済み):
-
-- `home/private_dot_copilot/hooks/hooks.json` の `timeoutSec` を引き上げ、キューが長くなっても fail-open に落ちにくくする（現在値は同ファイルを参照）
-- 上流の挙動変更を追跡する (`github/copilot-cli` の issue)
-
-暫定回避:
-
-- 高並列が予想される作業（一括コマンド送信など）では、1 応答内のツール呼び出し数を抑える
-- deny すべき操作が通ってしまった場合は `~/.copilot/audit.jsonl`（成功ログ）/ `audit-denies.jsonl`（preToolUse deny）/ `audit-failures.jsonl`（tool handler error）で事後検出し、手動で巻き戻す
-
 ## Copilot CLI: `hook errored` の詳細を確認する
 
 `preToolUse` command Hook が非ゼロで終了すると、Copilot CLI はツール呼び出しを拒否する。ツール結果には `hook errored` だけが表示される場合でも、セッションの `events.jsonl` に Hook の標準エラーが記録されている。
@@ -436,8 +417,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 ```
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
-
-本リポジトリの command hook は OS 別 launcher から記録済みの uv managed Python を直接起動し、sandbox 内で mise と uv を起動しない。標準エラーに mise の config、state、downloads、shim 解決、uv cache 初期化のエラーが出る場合は、`~/.copilot/hooks/hooks.json` が古い可能性がある。Copilot CLI を終了し、`chezmoi apply` で hooks、runtime env、sandbox 設定を配り直してから新しいセッションを開始する。
 
 `azure@azure-skills` の `track-telemetry` hook が timeout し、間接起動された `npx` に `.npmrc` の許可が無い場合は、Issue #25355 の問題に該当する。新しいシェルで `AZURE_MCP_COLLECT_TELEMETRY` が `false` であることを確認し、そのシェルから Copilot CLI を再起動する。`.npmrc` や home directory 全体を `readonlyPaths` へ追加せず、sandbox も無効化しない。
 

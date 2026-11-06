@@ -4,6 +4,8 @@
 
 Superseded by ADR-035
 
+Windows の uv cache と各環境の uv 設定ファイルの許可に関する以下の判断は、後に [ADR-036](036-windows-uv-default-sandbox-cache.md)、[ADR-038](038-windows-uv-config-readonly-grant.md)、[ADR-039](039-macos-linux-uv-config-readonly-grant.md) で変更した。該当する記述は当時の判断である。
+
 ## Context
 
 ADR-025 は全環境で local sandbox を初回から有効にしたが、Dev Container では bubblewrap のネスト実行を保証できない。ADR-025 を本 ADR で置換する。
