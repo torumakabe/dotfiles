@@ -447,16 +447,16 @@ class MiseConfigTests(unittest.TestCase):
         )
         archives = {
             "macos-arm64.tar.gz": (
-                "ac6ed53215e70abfb220524aed121bf02"
-                "dbd3fbd4a19355032dd1c5a108fb212"
+                "de9a54330fee4edede51a3cf6196bbf5"
+                "22f01c5e3fd981e0bebea33f561a0431"
             ),
             "linux-x64.tar.gz": (
-                "e013fe11a0a9055fe78d2546baa85eba"
-                "90a56e6445c431021b4fe328e6910fe2"
+                "837acae6defb8c9ad74823f6e3885663"
+                "3bacb04c65c1ac67d952749847543bd9"
             ),
             "linux-arm64.tar.gz": (
-                "5fd8a9ffb312b47e29f642d377ad4fa"
-                "9093962b47061ef5c15665086904e1046"
+                "13547a80d1dc2d5f81bb183023732f49"
+                "81486e894d060e30993cc4364b4af51d"
             ),
         }
         for archive, checksum in archives.items():

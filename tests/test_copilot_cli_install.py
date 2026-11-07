@@ -24,36 +24,36 @@ SHELL_SETUP_PATH = REPO_ROOT / "home/run_once_after_10-setup-shell.sh.tmpl"
 COPILOT_RELEASES = {
     "amd64": (
         "copilot-linux-x64.tar.gz",
-        "716d9c70b11660043911be6c95cc300561535f26206a70eae6b0ad117f94cdae",
+        "aff04181566f637010a88e68ea145ac1515ec596fae3890d06d81bb8c4be0c4e",
     ),
     "arm64": (
         "copilot-linux-arm64.tar.gz",
-        "b61e6f9691a923b8dc0c72ac7de7fa957e4a1520b2eb076a2a57a818f6a341a2",
+        "28c9c911af64521821ba908dc1866bf4bfd1705cd9b3320abc2353704de952a0",
     ),
 }
 MACOS_COPILOT_RELEASES = {
     "arm64": (
         "copilot-darwin-arm64.tar.gz",
-        "4beb6c5e94c5fd3243651e7c692a0ab051ebeb8ab0a3e48ce524450346f1d97c",
+        "85c58e1ba11a5869c9f5f59017571674ef6199e474c118caad3cb23ebe99448a",
     ),
 }
 MINIMUM_COPILOT_VERSION = "1.0.92-4"
 AZD_RELEASES = {
-    "amd64": "414bc5a111ade678f2bf81f5396019b8c42e6151154a7e332307e7ce1146180e",
-    "arm64": "009dae211c4a8f9001f7e7dd3aca88e89caba9d45a7e7c80506c9d8372c95514",
+    "amd64": "ac3640375d88372dd7f49bfda959e965da0038dc7f2909d44d761b28b4c43395",
+    "arm64": "c4fe0824f71dcc163352cf00a7bb50eea5a9bad9f852364a0000c08056090267",
 }
 RUSTUP_RELEASES = {
     "Linux-x86_64": (
         "x86_64-unknown-linux-gnu",
-        "4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10",
+        "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55",
     ),
     "Linux-aarch64|Linux-arm64": (
         "aarch64-unknown-linux-gnu",
-        "9732d6c5e2a098d3521fca8145d826ae0aaa067ef2385ead08e6feac88fa5792",
+        "9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282",
     ),
     "Darwin-arm64": (
         "aarch64-apple-darwin",
-        "aeb4105778ca1bd3c6b0e75768f581c656633cd51368fa61289b6a71696ac7e1",
+        "63752a1919a3a4793173ec70f8f212621a7ce38ba6a246095984482f4de20f9f",
     ),
 }
 
@@ -184,7 +184,13 @@ class CopilotCliInstallTests(unittest.TestCase):
         self.assertIsNotNone(linux_version)
         self.assertIsNotNone(macos_version)
         self.assertEqual(linux_version.group(1), macos_version.group(1))
-        self.assertEqual(linux_version.group(1), MINIMUM_COPILOT_VERSION)
+        self.assertGreaterEqual(
+            tuple(int(part) for part in re.findall(r"\d+", linux_version.group(1))),
+            tuple(
+                int(part)
+                for part in re.findall(r"\d+", MINIMUM_COPILOT_VERSION)
+            ),
+        )
 
     def test_macos_copilot_removes_homebrew_formula_after_install(self) -> None:
         self.assertNotRegex(
@@ -279,7 +285,7 @@ class CopilotCliInstallTests(unittest.TestCase):
         )
 
     def test_azd_uses_pinned_verified_release(self) -> None:
-        self.assertIn('AZD_VERSION="1.31.1"', self.bootstrap)
+        self.assertIn('AZD_VERSION="1.37.3"', self.bootstrap)
         self.assertNotIn("aka.ms/install-azd.sh", self.bootstrap)
         azd_block = _case_block(self.bootstrap, "AZD_VERSION")
         self.assertEqual(_parse_checksums(azd_block), AZD_RELEASES)
@@ -295,7 +301,7 @@ class CopilotCliInstallTests(unittest.TestCase):
         )
 
     def test_rustup_uses_pinned_verified_binary(self) -> None:
-        self.assertIn('RUSTUP_VERSION="1.29.0"', self.bootstrap)
+        self.assertIn('RUSTUP_VERSION="1.29.3"', self.bootstrap)
         self.assertNotIn("sh.rustup.rs", self.bootstrap)
         rustup_block = _case_block(self.bootstrap, "RUSTUP_VERSION")
         self.assertEqual(
