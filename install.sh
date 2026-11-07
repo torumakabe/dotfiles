@@ -5,7 +5,7 @@
 
 set -eu
 
-CHEZMOI_VERSION="2.72.0"
+CHEZMOI_VERSION="2.74.0"
 
 download_file() {
   url=$1
@@ -74,15 +74,15 @@ if ! command -v chezmoi >/dev/null 2>&1; then
   case "${os}-${arch}" in
     linux-amd64)
       archive="chezmoi_${CHEZMOI_VERSION}_linux_amd64.tar.gz"
-      expected_sha256="0d6665b96c527d57fdc562bf19e808f80f48c2d977062c03e3e65c6b09eafbce"
+      expected_sha256="1b98a567f726f41540414aea4caf912699d53e248b29ccf8369cf553657b2374"
       ;;
     linux-arm64)
       archive="chezmoi_${CHEZMOI_VERSION}_linux_arm64.tar.gz"
-      expected_sha256="e79a27621256390f03166d3965e6a1946f983a096c4d90f02c43d2aa5b563728"
+      expected_sha256="bf89495d1aab5e4fa0fc1ba9457837b34ee8dec9b787570f2de3e1c12a5835a5"
       ;;
     darwin-arm64)
       archive="chezmoi_${CHEZMOI_VERSION}_darwin_arm64.tar.gz"
-      expected_sha256="53e576042afba703290bbc320e64d0b6bdf1082a8fb9f0d13b97e68a6e6c059f"
+      expected_sha256="9d89672a597a9333ab47ea5173fcececb85c04864205686a7aa5699c3d8bd98c"
       ;;
     *)
       echo "error: unsupported platform: ${os}-${arch}" >&2
