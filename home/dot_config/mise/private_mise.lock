@@ -604,8 +604,8 @@ backend = "npm:typescript"
 specifiers = ["latest"]
 
 [[tools."npm:typescript-language-server"]]
-version = "6.0.2"
-aube = { path = "locks/npm-typescript-language-server/6.0.2~910907fa", digest = "sha256:c04c228752c1b960fe23a17ede2a5332d60f7a757f2485adadabf23ec0facdf0" }
+version = "6.0.3"
+aube = { path = "locks/npm-typescript-language-server/6.0.3~910907fa", digest = "sha256:e4cdcc07515542ffa6a9a4f6a23faa66433e1c1b54b110d71fc149e9894775c9" }
 backend = "npm:typescript-language-server"
 specifiers = ["latest"]
 

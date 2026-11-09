@@ -1,0 +1,24 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      typescript-language-server:
+        specifier: 6.0.3
+        version: 6.0.3
+
+packages:
+
+  typescript-language-server@6.0.3:
+    resolution: {integrity: sha512-iAxKyLXRNbnxGfCGZ/j4ilAb0PSNommvTvcghF8B8sq5JFGDKEQwzNEFZ0KTYEwzcA7rtRa+2OPeouiFR8L5KA==}
+    engines: {node: '>=22.22.2'}
+    hasBin: true
+
+snapshots:
+
+  typescript-language-server@6.0.3: {}
