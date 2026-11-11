@@ -18,7 +18,6 @@
     }
   },
   "enabledPlugins": {
-    "azure-sre-agent@awesome-copilot": true,
     "azure-cost-health-check@awesome-copilot": true,
     "ai-credits-breakdown@awesome-copilot": true,
     "personal-skills@torumakabe-agent-plugins": true,

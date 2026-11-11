@@ -60,7 +60,7 @@ GitHub Copilot CLI の LSP サーバーは `~/.copilot/lsp-config.json` (chezmoi
 
 ## プラグインとスキル
 
-プラグインのマーケットプレース登録と有効化は [`home/.chezmoitemplates/copilot-user-settings.json`](../home/.chezmoitemplates/copilot-user-settings.json) を管理元とし、既存の `settings.json` へマージする。`github/awesome-copilot` の `azure-sre-agent`、`azure-cost-health-check`、`ai-credits-breakdown` と、`torumakabe/copilot-agent-plugins` の `personal-skills`、`skill-creator` を有効にする。登録外の既存プラグインも保持するため、排他的な許可リストではない。GitHub Copilot CLI がプラグイン本体の導入とセッション開始時の更新を担当し、スキル本文の管理元は提供元にある。
+プラグインのマーケットプレース登録と有効化は [`home/.chezmoitemplates/copilot-user-settings.json`](../home/.chezmoitemplates/copilot-user-settings.json) を管理元とし、既存の `settings.json` へマージする。`github/awesome-copilot` の `azure-cost-health-check`、`ai-credits-breakdown` と、`torumakabe/copilot-agent-plugins` の `personal-skills`、`skill-creator` を有効にする。登録外の既存プラグインも保持するため、排他的な許可リストではない。GitHub Copilot CLI がプラグイン本体の導入とセッション開始時の更新を担当し、スキル本文の管理元は提供元にある。
 
 外部 skill はプラグインまたは `gh skill` で管理し、このリポジトリへ複製しない。
 
