@@ -120,9 +120,9 @@ jq .sandbox.enabled ~/.copilot/settings.json
 
 - `true` または `false`: 利用者設定の明示値として次回の `chezmoi apply` でも維持される
 - `chezmoi apply` が `sandbox.enabled` の型に関するエラーで失敗する場合、既存の値が null や文字列など真偽値以外になっている。値を `true`/`false` に修正するか、キー自体を削除してから再実行する
-- `/sandbox` の UI が managed もしくは locked と表示される場合、組織の enterprise managed-settings.json が sandbox を強制している。本リポジトリの chezmoi 設定はこの状態を作らないため、組織の IT 部門に確認する
+- `/sandbox` の UI が managed もしくは locked と表示される場合、組織の managed settings が sandbox を強制している可能性がある。本リポジトリは sandbox の managed 値を設定しないため、組織の IT 部門に確認する
 
-組織管理設定の配置先は [`operations.md`](operations.md#github-copilot-local-sandbox-の既定値) を参照する。組織の設定か不明なファイルは削除せず、管理者へ確認する。
+端末の managed-settings.json の配置先は [GitHub の文書](https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-for-enterprise/use-managed-settings/deploy-managed-settings#deploying-file-based-settings)を参照する。組織の設定か不明なファイルは削除せず、管理者へ確認する。
 
 ## `mise.lock has changed since chezmoi last wrote it?` と聞かれる
 

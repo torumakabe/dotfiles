@@ -34,6 +34,8 @@ sandbox の設定は GitHub Copilot app と GitHub Copilot CLI で別々に管�
 
 `installed-plugins/` と `plugin-data/` は GitHub Copilot CLI が管理し、chezmoi の対象外とする。
 
+GitHub Copilot の新規会話の既定モデルは、[`copilot-managed-settings.json`](../home/.chezmoitemplates/copilot-managed-settings.json) を[エンタープライズ管理設定](https://docs.github.com/en/copilot/reference/enterprise-administrators/enterprise-managed-settings)へ反映して指定する。
+
 共通設定で `defaultPermissionMode` を `assisted` に指定し、`assistedApprovalInstructions` に承認判断への追加指示を定義する。
 
 設定ファイルの値と構造の検証は GitHub Copilot CLI に任せ、設定値を期待値として固定するテストは追加しない。リポジトリのテストでは、設定同期スクリプトの既存値の保持や移行処理を確認する。

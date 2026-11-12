@@ -1,0 +1,137 @@
+{{- if eq .chezmoi.os "windows" -}}
+param([switch] $Elevated)
+
+$ErrorActionPreference = 'Stop'
+$settingsDir = Join-Path $env:ProgramFiles 'GitHubCopilot'
+$settingsPath = Join-Path $settingsDir 'managed-settings.json'
+$managedJson = @'
+{{ include ".chezmoitemplates/copilot-managed-settings.json" }}
+'@
+$managed = [System.Text.Json.Nodes.JsonNode]::Parse($managedJson)
+if ($managed -isnot [System.Text.Json.Nodes.JsonObject]) {
+  throw 'GitHub Copilot managed settings: the distributed settings must be a JSON object.'
+}
+
+function Get-ExistingItem {
+  param([string] $Path)
+
+  try {
+    return Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  } catch [System.Management.Automation.ItemNotFoundException] {
+    return $null
+  }
+}
+
+$directoryItem = Get-ExistingItem -Path $settingsDir
+$settingsItem = Get-ExistingItem -Path $settingsPath
+if ($settingsItem -and (
+    $settingsItem.PSIsContainer -or
+    ($settingsItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)
+)) {
+  throw "GitHub Copilot managed settings: refusing a directory or reparse point: $settingsPath"
+}
+
+$originalJson = if ($settingsItem) {
+  [System.IO.File]::ReadAllText($settingsPath)
+} else {
+  '{}'
+}
+try {
+  $settings = [System.Text.Json.Nodes.JsonNode]::Parse($originalJson)
+} catch {
+  throw "GitHub Copilot managed settings: failed to parse ${settingsPath}: $($_.Exception.Message)"
+}
+if ($settings -isnot [System.Text.Json.Nodes.JsonObject]) {
+  throw "GitHub Copilot managed settings: ${settingsPath} must contain one JSON object."
+}
+$changed = $false
+foreach ($entry in $managed) {
+  $key = $entry.Key
+  $newJson = if ($null -eq $entry.Value) { 'null' } else { $entry.Value.ToJsonString() }
+  $current = $settings[$key]
+  $currentJson = if ($null -eq $current) { 'null' } else { $current.ToJsonString() }
+  if (-not $settings.ContainsKey($key) -or $currentJson -cne $newJson) {
+    $settings[$key] = [System.Text.Json.Nodes.JsonNode]::Parse($newJson)
+    $changed = $true
+  }
+}
+if ($settingsItem -and -not $changed) { return }
+
+$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [System.Security.Principal.WindowsPrincipal]::new($identity)
+$isAdministrator = $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdministrator) {
+  if ($Elevated) {
+    throw 'GitHub Copilot managed settings: the elevated process does not have administrator privileges.'
+  }
+  $arguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-File', "`"$PSCommandPath`"", '-Elevated')
+  try {
+    $process = Start-Process -FilePath (Join-Path $PSHOME 'pwsh.exe') -Verb RunAs `
+      -ArgumentList $arguments -Wait -PassThru -ErrorAction Stop
+  } catch {
+    throw "GitHub Copilot managed settings: administrator approval is required to update ${settingsPath}: $($_.Exception.Message)"
+  }
+  if ($null -eq $process -or $null -eq $process.ExitCode -or $process.ExitCode -ne 0) {
+    throw "GitHub Copilot managed settings: elevated update failed (exit code: $($process.ExitCode))."
+  }
+  Write-Host "Configured GitHub Copilot managed settings in $settingsPath"
+  return
+}
+
+if (-not $directoryItem) {
+  New-Item -ItemType Directory -Path $settingsDir -ErrorAction Stop | Out-Null
+}
+$directoryItem = Get-ExistingItem -Path $settingsDir
+if (-not $directoryItem.PSIsContainer -or
+    ($directoryItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+  throw "GitHub Copilot managed settings: refusing a non-directory or reparse point: $settingsDir"
+}
+
+$temporaryPath = Join-Path $settingsDir ('.managed-settings.' + [guid]::NewGuid().ToString('N') + '.tmp')
+try {
+  $stream = [System.IO.File]::Open(
+    $temporaryPath,
+    [System.IO.FileMode]::CreateNew,
+    [System.IO.FileAccess]::Write,
+    [System.IO.FileShare]::None
+  )
+  $stream.Dispose()
+  if ($settingsItem) {
+    Set-Acl -LiteralPath $temporaryPath -AclObject (Get-Acl -LiteralPath $settingsPath)
+  }
+  $options = [System.Text.Json.JsonSerializerOptions]::new()
+  $options.WriteIndented = $true
+  [System.IO.File]::WriteAllText(
+    $temporaryPath,
+    $settings.ToJsonString($options) + [Environment]::NewLine,
+    [System.Text.UTF8Encoding]::new($false)
+  )
+
+  if ($settingsItem) {
+    $currentItem = Get-ExistingItem -Path $settingsPath
+    if (-not $currentItem -or $currentItem.PSIsContainer -or
+        ($currentItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -or
+        [System.IO.File]::ReadAllText($settingsPath) -cne $originalJson) {
+      throw "GitHub Copilot managed settings: ${settingsPath} changed during the update; retry."
+    }
+    $backupPath = Join-Path $settingsDir ('.managed-settings.' + [guid]::NewGuid().ToString('N') + '.bak')
+    try {
+      [System.IO.File]::Replace($temporaryPath, $settingsPath, $backupPath)
+    } catch {
+      if (Test-Path -LiteralPath $backupPath) {
+        throw "GitHub Copilot managed settings: replacement failed; the original backup remains at ${backupPath}: $($_.Exception.Message)"
+      }
+      throw
+    }
+    Remove-Item -LiteralPath $backupPath -Force
+  } else {
+    [System.IO.File]::Move($temporaryPath, $settingsPath)
+  }
+} finally {
+  if (Test-Path -LiteralPath $temporaryPath) {
+    Remove-Item -LiteralPath $temporaryPath -Force
+  }
+}
+
+Write-Host "Configured GitHub Copilot managed settings in $settingsPath"
+{{- end -}}

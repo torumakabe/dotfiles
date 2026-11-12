@@ -1,0 +1,123 @@
+{{- if ne .chezmoi.os "windows" -}}
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+fail() {
+  echo "Error: GitHub Copilot managed settings: $*" >&2
+  exit 1
+}
+
+{{- if eq .chezmoi.os "darwin" }}
+settings_dir="/Library/Application Support/GitHubCopilot"
+stat_owner_mode() { stat -f '%u %Lp' "$1"; }
+{{- else if eq .chezmoi.os "linux" }}
+settings_dir="/etc/github-copilot"
+stat_owner_mode() { stat -c '%u %a' "$1"; }
+{{- else }}
+fail "unsupported operating system: {{ .chezmoi.os }}"
+{{- end }}
+settings_path="${settings_dir}/managed-settings.json"
+managed="$(cat <<'JSON'
+{{ include ".chezmoitemplates/copilot-managed-settings.json" }}
+JSON
+)"
+
+command -v jq >/dev/null 2>&1 || fail "jq not found on PATH."
+
+check_secure_path() {
+  local path="$1" metadata owner mode
+  metadata="$(stat_owner_mode "${path}")" || fail "cannot inspect ${path}."
+  read -r owner mode <<<"${metadata}"
+  if [ "${owner}" != 0 ] || (( (8#${mode} & 8#022) != 0 )); then
+    fail "${path} must be owned by root and not group- or world-writable."
+  fi
+}
+
+exists=false
+if [ -L "${settings_path}" ]; then fail "refusing a file symlink: ${settings_path}"; fi
+if [ -e "${settings_path}" ]; then
+  [ -f "${settings_path}" ] || fail "not a regular file: ${settings_path}"
+  check_secure_path "${settings_path}"
+  exists=true
+fi
+
+snapshot="$(mktemp "${TMPDIR:-/tmp}/copilot-managed-settings.XXXXXX")"
+system_tmp=""
+needs_sudo=false
+run_as_root() {
+  if [ "${needs_sudo}" = true ]; then sudo "$@"; else "$@"; fi
+}
+cleanup() {
+  rm -f -- "${snapshot}"
+  if [ -n "${system_tmp}" ]; then
+    run_as_root rm -f -- "${system_tmp}" ||
+      echo "Warning: could not remove ${system_tmp}." >&2
+  fi
+}
+trap cleanup EXIT
+
+if [ "${exists}" = true ]; then
+  cat "${settings_path}" >"${snapshot}" || fail "cannot read ${settings_path}."
+else
+  printf '{}\n' >"${snapshot}"
+fi
+matches="$(jq -r -s --argjson managed "${managed}" '
+  if length != 1 or (.[0] | type) != "object" or ($managed | type) != "object"
+  then error("expected one JSON object")
+  else (.[0] + $managed) == .[0]
+  end
+' "${snapshot}")" || fail "cannot read managed settings as JSON objects."
+if [ "${exists}" = true ] && [ "${matches}" = true ]; then
+  exit 0
+fi
+
+merge_jq=jq
+if [ "${exists}" = true ] && ! jq -ne 'have_decnum' >/dev/null 2>&1; then
+  if command -v mise >/dev/null 2>&1 &&
+    jq_candidate="$(MISE_ENABLE_TOOLS=jq mise which jq 2>/dev/null)" &&
+    [ -x "${jq_candidate}" ] &&
+    "${jq_candidate}" -ne 'have_decnum' >/dev/null 2>&1; then
+    merge_jq="${jq_candidate}"
+  else
+    fail "updating ${settings_path} requires a jq that preserves JSON number literals."
+  fi
+fi
+# shellcheck disable=SC2016
+updated="$("${merge_jq}" -s --argjson managed "${managed}" '.[0] + $managed' "${snapshot}")"
+
+if [ "$(id -u)" -ne 0 ]; then
+  command -v sudo >/dev/null 2>&1 || fail "sudo is required to update ${settings_path}."
+  needs_sudo=true
+fi
+
+echo "Updating GitHub Copilot managed settings in ${settings_path}..."
+[ ! -L "${settings_dir}" ] || fail "refusing a directory symlink: ${settings_dir}"
+if [ ! -e "${settings_dir}" ]; then
+  run_as_root mkdir -p -m 0755 "${settings_dir}"
+fi
+[ ! -L "${settings_dir}" ] && [ -d "${settings_dir}" ] ||
+  fail "not a directory or a directory symlink: ${settings_dir}"
+check_secure_path "${settings_dir}"
+system_tmp="$(run_as_root mktemp "${settings_dir}/.managed-settings.XXXXXX")"
+if [ "${exists}" = true ]; then
+  run_as_root cp -p "${settings_path}" "${system_tmp}"
+else
+  run_as_root chmod 0644 "${system_tmp}"
+fi
+printf '%s\n' "${updated}" | run_as_root tee "${system_tmp}" >/dev/null
+
+if [ "${exists}" = true ]; then
+  [ ! -L "${settings_path}" ] && [ -f "${settings_path}" ] ||
+    fail "${settings_path} changed during the update; retry."
+  check_secure_path "${settings_path}"
+  cmp -s "${snapshot}" "${settings_path}" ||
+    fail "${settings_path} changed during the update; retry."
+else
+  [ ! -e "${settings_path}" ] && [ ! -L "${settings_path}" ] ||
+    fail "${settings_path} appeared during the update; retry."
+fi
+run_as_root mv -f "${system_tmp}" "${settings_path}"
+system_tmp=""
+echo "Configured GitHub Copilot managed settings in ${settings_path}"
+{{- end -}}

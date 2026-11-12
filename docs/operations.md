@@ -43,7 +43,7 @@ gh extension upgrade gh-stack --dry-run
 
 利用者は `/sandbox enable` と `/sandbox disable` で値を変更でき、変更後の boolean 値も次回の適用で維持される。コンテナでの手動有効化は互換性調査の対象であり、このリポジトリは動作を保証しない。GitHub Copilot CLI が sandbox 外での再実行方法を常に提示するとは限らない。WinGet Configuration は GitHub Copilot CLI パッケージの導入だけを担い、設定ファイルは配布しない。環境別の初期値を採用した判断は [ADR-026](adr/026-copilot-cli-sandbox-environment-defaults-and-explicit-setting-preservation.md) を参照する。
 
-組織が enterprise の managed-settings.json（Linux 系 `/etc/github-copilot/managed-settings.json`、macOS `/Library/Application Support/GitHubCopilot/managed-settings.json`、Windows `%ProgramFiles%\GitHubCopilot\managed-settings.json`）で sandbox を強制している場合、`/sandbox` の UI は managed もしくは locked と表示され、利用者はローカルで無効化できない。これは組織のポリシーによるものであり、本リポジトリの chezmoi 設定は関与しない。
+組織が enterprise の managed-settings.json で sandbox を強制している場合、利用者の設定では解除できない。このリポジトリは sandbox の managed 値を変更しない。
 
 更新後は GitHub Copilot CLI を再起動し、`/sandbox` の General、Auth、Filesystem、Network の各タブを確認する。Linux 系では `sandbox.enabled` が `true` または未設定の場合だけ bubblewrap 診断が実行され、`false` の場合は probe が省略される。
 
@@ -371,6 +371,8 @@ uv run -m unittest tests.test_platform_parity tests.test_mise_config -v
 ```
 
 CI は Ubuntu と Windows のジョブを並列実行する。Ubuntu ジョブは zsh を導入し、Windows ジョブは固定版の chezmoi と runner 標準の PowerShell を使い、両方で全単体テストを discover 形式で実行する。各 OS に固有のテストは、それぞれの実行条件に従って skip する。
+
+GitHub Copilot の管理設定は、各対象環境で配置、既存設定の保持、再適用時の昇格省略とクライアントへの反映を確認する。
 
 ## git pre-commit フック
 

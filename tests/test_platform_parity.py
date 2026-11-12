@@ -101,6 +101,7 @@ PLATFORM_CONTRACT = {
     "shell:ll": _implemented_everywhere(),
     "shell:zoxide": _implemented_everywhere(),
     "feature:copilot-local-sandbox": _implemented_everywhere(),
+    "feature:copilot-managed-model": _implemented_everywhere(),
     "feature:copilot-uv-managed-python": _implemented_everywhere(),
     "skill:gh-stack": _implemented_everywhere(),
     "completion:azure-cli": _implemented_everywhere(),
@@ -489,6 +490,48 @@ class PlatformParityTests(unittest.TestCase):
                             "gh extension install github/gh-stack",
                             source,
                         )
+
+    @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
+    def test_copilot_managed_model_renders_only_the_matching_platform(self) -> None:
+        settings = (
+            REPO_ROOT / "home/.chezmoitemplates/copilot-managed-settings.json"
+        ).read_text(encoding="utf-8").strip()
+        templates = {
+            "shell": REPO_ROOT
+            / "home/run_after_36-configure-copilot-managed-settings.sh.tmpl",
+            "powershell": REPO_ROOT
+            / "home/run_after_36-configure-copilot-managed-settings.ps1.tmpl",
+        }
+        cases = {
+            "darwin": ("shell", "/Library/Application Support/GitHubCopilot"),
+            "linux": ("shell", "/etc/github-copilot"),
+            "windows": ("powershell", "Join-Path $env:ProgramFiles 'GitHubCopilot'"),
+        }
+        for os_name, (active, location) in cases.items():
+            for kind, path in templates.items():
+                with self.subTest(os=os_name, template=kind):
+                    result = subprocess.run(
+                        [
+                            "chezmoi",
+                            "--source",
+                            str(REPO_ROOT / "home"),
+                            "execute-template",
+                            "--override-data",
+                            json.dumps({"chezmoi": {"os": os_name}}),
+                            "--file",
+                            str(path),
+                        ],
+                        check=False,
+                        capture_output=True,
+                        encoding="utf-8",
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    if kind == active:
+                        self.assertIn(location, result.stdout)
+                        self.assertIn("managed-settings.json", result.stdout)
+                        self.assertIn(settings, result.stdout)
+                    else:
+                        self.assertEqual(result.stdout, "")
 
     def test_exceptions_reference_relevant_existing_documentation(self) -> None:
         checked_features = set()
