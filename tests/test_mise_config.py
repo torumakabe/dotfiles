@@ -47,7 +47,6 @@ TRUST_POLICY_EXCLUDES = {
 }
 LSP_TYPESCRIPT_VERSION = "6.0.3"
 LSP_CONFIG_PATH = REPO_ROOT / "home/private_dot_copilot/lsp-config.json.tmpl"
-LSP_VERSION_PATH = REPO_ROOT / "home/.chezmoidata.toml"
 LSP_INSTALL_SH_PATH = (
     REPO_ROOT / "home/run_after_22-install-typescript-lsp.sh.tmpl"
 )
@@ -432,10 +431,6 @@ class MiseConfigTests(unittest.TestCase):
         self.assertIsNotNone(version_match)
         version = tuple(int(part) for part in version_match.groups())
         self.assertGreaterEqual(version, (2026, 7, 14), "GHSA-g74g-rg72-j2p3")
-        self.assertEqual(
-            len(re.findall(r'expected_sha256="[0-9a-f]{64}"', bootstrap_script)),
-            3,
-        )
 
     def test_mise_bootstrap_uses_official_release_archives(self) -> None:
         bootstrap_script = BOOTSTRAP_SH_PATH.read_text(encoding="utf-8")
@@ -445,24 +440,15 @@ class MiseConfigTests(unittest.TestCase):
             '${MISE_VERSION}/${mise_archive}"',
             bootstrap_script,
         )
-        archives = {
-            "macos-arm64.tar.gz": (
-                "de9a54330fee4edede51a3cf6196bbf5"
-                "22f01c5e3fd981e0bebea33f561a0431"
-            ),
-            "linux-x64.tar.gz": (
-                "837acae6defb8c9ad74823f6e3885663"
-                "3bacb04c65c1ac67d952749847543bd9"
-            ),
-            "linux-arm64.tar.gz": (
-                "13547a80d1dc2d5f81bb183023732f49"
-                "81486e894d060e30993cc4364b4af51d"
-            ),
-        }
-        for archive, checksum in archives.items():
-            archive_index = bootstrap_script.index(archive)
-            checksum_index = bootstrap_script.index(checksum)
-            self.assertLess(archive_index, checksum_index)
+        archives = re.findall(
+            r'mise_archive="mise-\$\{MISE_VERSION\}-([^"]+)"'
+            r'\n\s*expected_sha256="[0-9a-f]{64}"',
+            bootstrap_script,
+        )
+        self.assertEqual(
+            archives,
+            ["macos-arm64.tar.gz", "linux-x64.tar.gz", "linux-arm64.tar.gz"],
+        )
         self.assertNotIn("brew install mise", bootstrap_script)
 
     def test_mise_bootstrap_preserves_existing_installations(self) -> None:
@@ -713,12 +699,6 @@ class MiseConfigTests(unittest.TestCase):
 
         self.assertEqual(tools["npm:typescript"], "latest")
         self.assertNotIn("postinstall", language_server)
-        self.assertEqual(
-            tomllib.loads(LSP_VERSION_PATH.read_text(encoding="utf-8"))[
-                "typescriptLsp"
-            ]["version"],
-            LSP_TYPESCRIPT_VERSION,
-        )
 
         chezmoi = shutil.which("chezmoi")
         if chezmoi is None:

@@ -300,9 +300,12 @@ GITHUB_TOKEN=$(gh auth token) mise install
 | 正本 | pin |
 |------|-----|
 | `install.sh` | `CHEZMOI_VERSION` とアーキテクチャ別 SHA-256 |
+| `.github/workflows/test-dotfiles.yml` | `CHEZMOI_VERSION` に対応する Windows amd64 用 SHA-256（`CHEZMOI_WINDOWS_AMD64_SHA256`） |
 | `home/run_once_before_20-install-mise.sh.tmpl` | `MISE_VERSION` とアーキテクチャ別 SHA-256 |
-| `home/run_once_before_10-install-packages.sh.tmpl` | Linux 用 `COPILOT_VERSION`、`AZD_VERSION`、`RUSTUP_VERSION` と各プラットフォーム別 SHA-256、Microsoft 署名鍵の primary-key fingerprint |
-| `home/run_once_before_15-install-copilot-cli.sh.tmpl` | macOS 用 `COPILOT_VERSION` と arm64 SHA-256 |
+| `home/run_once_before_20-install-mise.ps1.tmpl` | Windows 用 `$version` と公式 installer の SHA-256。`MISE_VERSION` と同じ版にする |
+| `home/.chezmoidata.toml` | Linux/macOS 共通の Copilot CLI 版 `copilotCli.version` |
+| `home/run_once_before_10-install-packages.sh.tmpl` | Linux 用 Copilot CLI のアーキテクチャ別 SHA-256、`AZD_VERSION`、`RUSTUP_VERSION` と各プラットフォーム別 SHA-256、Microsoft 署名鍵の primary-key fingerprint |
+| `home/run_once_before_15-install-copilot-cli.sh.tmpl` | macOS 用 Copilot CLI の arm64 SHA-256 |
 | `home/run_once_after_10-setup-shell.sh.tmpl` | `OH_MY_ZSH_COMMIT`、zsh-completions の更新確認用 `ZSH_COMPLETIONS_TAG` と取得を強制する `ZSH_COMPLETIONS_COMMIT` |
 
 成果物を更新するときは、バージョンに対応する公式 SHA-256 を確認してからスクリプトへ反映する。zsh-completions を更新するときは、タグが指す commit を完全な SHA まで解決して確認し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` を同時に更新する。取得と取得後の検証には `ZSH_COMPLETIONS_COMMIT` だけを使う。

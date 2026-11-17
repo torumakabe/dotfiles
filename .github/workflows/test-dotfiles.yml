@@ -70,7 +70,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     env:
-      CHEZMOI_WINDOWS_AMD64_SHA256: 13dee2831d371c6ce2ac30fc9ae1aad4f70c68e7d44700f6129fe4b244ee7a95
+      CHEZMOI_WINDOWS_AMD64_SHA256: 208b393f9ad266fc10aab514a8adf87ac4dc5bdd968a54b7eb5b2764ca41eda4
     steps:
       - uses: actions/checkout@v6
 
