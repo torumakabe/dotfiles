@@ -121,6 +121,7 @@ url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-windows-x
 version = "0.37.24"
 backend = "aqua:sagiegurari/cargo-make"
 specifiers = ["latest"]
+unsupported_platforms = ["linux-arm64"]
 
 [tools.cargo-make."platforms.linux-x64"]
 checksum = "sha256:92a663fe3eeae741c17788202937f2e2f3f7effa2669f733f4d6a1659954288b"
