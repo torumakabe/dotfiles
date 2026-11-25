@@ -71,3 +71,4 @@ mise 設定を変更する際は、以下のツールの対応状況を確認し
 - **コンテナ内の git 張り替え（ADR-020）**: Codespaces と Dev Container で `/usr/local/bin/git` が 2.54 未満の場合だけ、PPA 版への symlink に置き換える。対象イメージがすべて 2.54 以上になったら `git_unshadow` を撤去する
 - **npm:typescript-language-server の `trust_policy_excludes`**: npm レジストリプロキシが証跡を落とす版だけを除外する。対象版で証跡が保持されるようになったら除外を撤去し、別の版へパッケージ単位で拡張しない
 - **Azure MCP Server の sandbox**: `sandboxMcpServers: true`（ADR-035）を維持する
+- **WinGet ポータブルパッケージのリンクと RedirectionGuard**: 通常権限の WinGet が `%LOCALAPPDATA%\Microsoft\WinGet\Links` に作るシンボリックリンクは、RedirectionGuard が有効なプロセス（Command Palette など一部のパッケージアプリと、そこから起動した Windows Terminal や PowerShell）から辿れず、error 448 で起動に失敗する（[microsoft/winget-cli#6454](https://github.com/microsoft/winget-cli/issues/6454)）。chezmoi など `Links` にリンクを作るパッケージを通常権限で導入・更新した後は、管理者 PowerShell で該当リンクを削除し、同じターゲットへ作り直す。mise で管理できるツールは WinGet で重複導入しない。上流で修正され、通常権限の WinGet が作ったリンクを Command Palette から起動した Windows Terminal で実行できるようになったら、この手順を撤去する
