@@ -260,33 +260,33 @@ specifiers = ["latest"]
 
 [tools.ghq."platforms.linux-arm64"]
 checksum = "sha256:3108a4d8a06c968bd669897a1c3d17c6af70afe015c72b982cc8f227b9c4e8e1"
-checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_linux_arm64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/706006375"
+provenance = "github-attestations"
 
 [tools.ghq."platforms.linux-x64"]
 checksum = "sha256:160e4430014f67eceea4aa899e9dcd8c09e3944d90902ed96fd6cac916f8aad6"
-checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_linux_amd64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/706006368"
+provenance = "github-attestations"
 
 [tools.ghq."platforms.macos-arm64"]
 checksum = "sha256:c1a3d26d435c35b3fa7ca1188488a7cd81d1ee975a4a00db8ee4dbe32be56dfe"
-checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_darwin_arm64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/706006438"
+provenance = "github-attestations"
 
 [tools.ghq."platforms.windows-arm64"]
 checksum = "sha256:8ce738041c0022c4b1a27808a2306ed508ccf7bd351344d48fe397d1a5678a28"
-checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_windows_arm64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/706006371"
+provenance = "github-attestations"
 
 [tools.ghq."platforms.windows-x64"]
 checksum = "sha256:1525c69728ced46ccf7ed364c8daf7ea12b25b3ee63881e6da0e8584c8ca3159"
-checksum_source = "mise-versions"
 url = "https://github.com/x-motemen/ghq/releases/download/v1.12.0/ghq_windows_amd64.zip"
 url_api = "https://api.github.com/repos/x-motemen/ghq/releases/assets/706006431"
+provenance = "github-attestations"
 
 [[tools.github-cli]]
 version = "2.105.0"
