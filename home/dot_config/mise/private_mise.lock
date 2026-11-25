@@ -598,6 +598,12 @@ url = "https://nodejs.org/dist/v26.13.1/node-v26.13.1-win-arm64.zip"
 checksum = "sha256:e2edda75bfb089654705cf65a13b58933bfd5f57148e8ebda916f58a2474f1f7"
 url = "https://nodejs.org/dist/v26.13.1/node-v26.13.1-win-x64.zip"
 
+[[tools."npm:@microsoft/vally-cli"]]
+version = "0.21.0"
+aube = { path = "locks/npm-microsoft-vally-cli/0.21.0", digest = "sha256:e43f935185c678f6c5a0441da98e0561e08e5bff95f2bdfd8a1f35c21d05263c" }
+backend = "npm:@microsoft/vally-cli"
+specifiers = ["latest"]
+
 [[tools."npm:typescript"]]
 version = "7.0.2"
 aube = { path = "locks/npm-typescript/7.0.2", digest = "sha256:8053cb3affffd94d0e4dc89891ac54cdf2f29cb5000b9ed95ddd129b60b84feb" }
