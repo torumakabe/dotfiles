@@ -364,16 +364,15 @@ winget upgrade --id Git.Git                         # Windows
 
 macOS では新しい login shell で `git --version` が 2.54 以降になることを確認する。`/etc/zprofile` の `path_helper` が PATH を並べ替えるため、`~/.zprofile` が `/opt/homebrew/opt/git/bin` を先頭へ戻している（[`architecture.md`](architecture.md#各シェルの読み込み経路)）。
 
-Linux で apt を実行しても `git --version` が変わらない場合は、より前の PATH にある別の実体が新しい git を隠している。Codespaces と Dev Container のベースイメージは git をソースビルドして `/usr/local/bin` へ入れるため、この状態になる。`chezmoi apply` の bootstrap はこの二つの環境でだけ張り替える。手動で直す場合は、対象が確かにベースイメージのビルドであることを先に確かめる。
+Linux で apt を実行しても `git --version` が変わらない場合は、より前の PATH にある別の実体が新しい git を隠している。次のコマンドで実行ファイルと版を確認し、PATH またはその Git を提供するツールを更新する。
 
 ```bash
-command -v git                       # /usr/local/bin/git が返るか確認
-test -L /usr/local/bin/git           # symlink なら誰かが張り替えた後なので触らない
-/usr/bin/git --version               # apt 側が 2.54 以降か確認
-sudo ln -sfn /usr/bin/git /usr/local/bin/git
+command -v git
+git --version
+/usr/bin/git --version
 ```
 
-`command -v git` が `/usr/local/bin/git` 以外を返す場合や、すでに symlink である場合は、mise の shim や利用者自身のビルドである可能性がある。張り替える前に、その git の出所と PATH の並びを確認する。
+コンテナでは、[`README.md` の前提条件](../README.md#dev-container-ローカル)を満たすイメージまたは Git feature を使う。dotfiles の再適用ではイメージ内の Git は更新されない。
 
 ## commit が gitleaks-pre-commit not found で拒否される
 
@@ -414,6 +413,6 @@ Get-Content "$HOME\.copilot\session-state\<session-id>\events.jsonl" |
 
 `hook errored` だけから Hook 本体の障害と判断しない。標準エラー、Hook の起動コマンド、起動時に解決された runtime を確認する。
 
-`azure@azure-skills` の `track-telemetry` hook が timeout し、間接起動された `npx` に `.npmrc` の許可が無い場合は、Issue #25355 の問題に該当する。新しいシェルで `AZURE_MCP_COLLECT_TELEMETRY` が `false` であることを確認し、そのシェルから GitHub Copilot CLI を再起動する。`.npmrc` や home directory 全体を `readonlyPaths` へ追加せず、sandbox も無効化しない。
+Azure skills の telemetry hook が動作している場合は、起動元のシェルで `AZURE_MCP_COLLECT_TELEMETRY` が `false` であることを確認し、新しいシェルから GitHub Copilot CLI を再起動する。無効化設定の適用方法は [Azure skills telemetry hook](operations.md#azure-skills-telemetry-hook) を参照する。
 
 上のフィルターで何も表示されない場合は、CLI の更新でイベント形式が変わった可能性がある。`Where-Object { $_.type -eq 'hook.end' }` まで条件を緩め、直近イベントの `data` 全体を確認する。

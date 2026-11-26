@@ -454,6 +454,18 @@ class PlatformParityTests(unittest.TestCase):
                 with self.subTest(shell=shell, declaration=text):
                     self.assertEqual(bool(re.search(pattern, text)), allowed)
 
+    def test_git_setup_preserves_container_image_binaries(self) -> None:
+        for name in (
+            "run_once_before_10-install-packages.sh.tmpl",
+            "run_after_40-check-git-hooks.sh.tmpl",
+        ):
+            with self.subTest(template=name):
+                source = (REPO_ROOT / "home" / name).read_text(encoding="utf-8")
+                self.assertNotRegex(
+                    source,
+                    r"\b(?:ln|mv|rm)\b[^\n]*(?:/usr/local/bin/git|\$\{unshadow_)",
+                )
+
     def test_ci_enforces_the_cross_platform_contract(self) -> None:
         workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
 

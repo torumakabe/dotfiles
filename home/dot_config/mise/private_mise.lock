@@ -612,12 +612,9 @@ specifiers = ["latest"]
 
 [[tools."npm:typescript-language-server"]]
 version = "6.1.0"
-aube = { path = "locks/npm-typescript-language-server/6.1.0~910907fa", digest = "sha256:f86c7cfd9fe629ca833f239e754750b6d0cf1dd9524941638366bcaca28b85fe" }
+aube = { path = "locks/npm-typescript-language-server/6.1.0", digest = "sha256:f86c7cfd9fe629ca833f239e754750b6d0cf1dd9524941638366bcaca28b85fe" }
 backend = "npm:typescript-language-server"
 specifiers = ["latest"]
-
-[tools."npm:typescript-language-server".options]
-trust_policy_excludes = '["typescript-language-server@5.3.0", "typescript-language-server@>=6 <7"]'
 
 [[tools.pnpm]]
 version = "12.23.0"

@@ -37,14 +37,6 @@ EXACT_LOCKS_SOURCE_PATTERN = re.compile(
     r"(?:remove_)?(?:external_)?exact_(?:private_)?(?:readonly_)?locks"
 )
 
-# aube の trustPolicy=no-downgrade 除外。プロキシが証跡を落とす版だけを明記し、
-# パッケージ名だけの除外へ広げない（将来版の検査を残すため）。
-TRUST_POLICY_EXCLUDES = {
-    "npm:typescript-language-server": (
-        "typescript-language-server@5.3.0",
-        "typescript-language-server@>=6 <7",
-    ),
-}
 LSP_TYPESCRIPT_VERSION = "6.0.3"
 LSP_CONFIG_PATH = REPO_ROOT / "home/private_dot_copilot/lsp-config.json.tmpl"
 LSP_INSTALL_SH_PATH = (
@@ -1847,22 +1839,11 @@ $result = @{{
         self.assertIsNotNone(cargo_make_block)
         self.assertEqual(cargo_make_block.groups(), CARGO_MAKE_EXCLUDED_PLATFORM)
 
-    def test_trust_policy_excludes_stay_version_scoped(self) -> None:
+    def test_typescript_language_server_uses_default_trust_policy(self) -> None:
         config = CONFIG_PATH.read_text(encoding="utf-8")
         tools = _config_toml(config)["tools"]
-
-        configured = {
-            name: tuple(spec["trust_policy_excludes"])
-            for name, spec in tools.items()
-            if isinstance(spec, dict) and "trust_policy_excludes" in spec
-        }
-        self.assertEqual(configured, TRUST_POLICY_EXCLUDES)
-
-        for name, patterns in configured.items():
-            with self.subTest(tool=name):
-                # パッケージ名だけの除外は将来版の downgrade 検査も無効化する。
-                for pattern in patterns:
-                    self.assertIn("@", pattern)
+        language_server = tools["npm:typescript-language-server"]
+        self.assertEqual(language_server, "latest")
 
     def test_powershell_registers_kubectl_completer_for_k_alias(self) -> None:
         profile = POWERSHELL_PROFILE_PATH.read_text(encoding="utf-8")

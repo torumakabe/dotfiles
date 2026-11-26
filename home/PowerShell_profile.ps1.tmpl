@@ -13,30 +13,25 @@ $env:Path = (@($miseBinDir) + @($env:Path -split ';' | Where-Object { $_ -ne $mi
 
 # === Environment variables ===
 $env:EDITOR = 'edit'
-# microsoft/azure-skills の telemetry hook は sandbox 内で npx を間接起動し、
-# Node developer-tool grant を受けられないため、上流修正まで telemetry を止める。
+# このリポジトリでは Azure skills の利用状況 telemetry を使わない。
 $env:AZURE_MCP_COLLECT_TELEMETRY = 'false'
 
 # === Functions ===
 
-# GitHub Copilot CLI workaround: edit.exe を新コンソールで開く短縮コマンド
+# edit.exe を新しいコンソールで開く短縮コマンド
 function Open-EditInNewConsole {
     param(
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]]$Path
     )
 
-    $escapedPath = $Path | ForEach-Object {
-        '"' + ($_ -replace '"', '\"') + '"'
+    $params = @{ FilePath = 'edit' }
+    if ($Path) {
+        $params.ArgumentList = $Path | ForEach-Object {
+            '"' + ($_ -replace '"', '\"') + '"'
+        }
     }
-    $command = if ($escapedPath) {
-        'start "" edit ' + ($escapedPath -join ' ')
-    }
-    else {
-        'start "" edit'
-    }
-
-    Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', $command | Out-Null
+    Start-Process @params
 }
 
 function zi { cdi @args }

@@ -18,8 +18,6 @@
 
 制約の対象と撤去条件は [リポジトリ指示](../.github/copilot-instructions.md#プラットフォーム制約定期チェック対象) と [ワークアラウンド一覧](../.github/copilot-instructions.md#ワークアラウンド定期チェック対象) で管理する。`azd` と GitHub Copilot CLI を mise 外で管理する判断は [ADR-033](adr/033-manage-azd-and-copilot-cli-via-official-os-channels.md)、Microsoft Edit を Windows のみで管理する判断は [ADR-011](adr/011-edit-windows-via-winget-dsc.md) を参照する。
 
-TypeScript language server の除外を撤去するときは、`home/dot_config/mise/config.toml.tmpl` の版限定エントリを削除し、`mise install --force npm:typescript-language-server` で既存導入済み版も再検証する。成功後に `uv run -m unittest tests.test_mise_config -v` を実行する。失敗時の確認は [`troubleshooting.md`](troubleshooting.md#mise-install-が-aube-install-failed-failed-to-resolve-dependencies-で止まる) を参照する。
-
 ## gh-stack の更新
 
 セットアップスクリプトは、`gh-stack` の GitHub CLI extension と公式 GitHub Copilot skill が未導入の場合だけ、その時点の最新安定版を取得する。skill の一覧取得と更新用メタデータの記録に対応するため、初期セットアップには GitHub CLI 2.94 以降が必要である。`chezmoi apply` は導入済みの版を更新しないため、端末の構築時期によって版が異なり得る。
@@ -355,9 +353,7 @@ chezmoi apply
 
 ホストの npm 設定と資格情報はコンテナへ自動継承しない。公式レジストリへ接続できない場合の確認と設定は、[`troubleshooting.md`](troubleshooting.md#dev-container-から-npm-registry-へ接続できない) を参照する。
 
-イメージ内の Git を維持する理由は [ADR-020](adr/020-git-hooks-via-config.md)、PowerShell を含むクロスプラットフォーム検査の保証範囲は [ADR-019](adr/019-cross-platform-parity-contract.md) を参照する。
-
-`tests/test_git_shadow_resolution.py` の POSIX 版チェックスクリプトのテストは、コンテナ、WSL、または Ubuntu CI で実行する。Windows ホストでは対象外として skip される。
+イメージの Git の前提条件は [`README.md`](../README.md#dev-container-ローカル)、PowerShell を含むクロスプラットフォーム検査の保証範囲は [ADR-019](adr/019-cross-platform-parity-contract.md) を参照する。
 
 構成を更新した後は、コンテナ内で全テストを実行する。
 
