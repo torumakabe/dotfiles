@@ -59,8 +59,7 @@ if [ -z "${__DOTFILES_PROFILE_LOADED:-}" ]; then
   fi
 {{ end }}
   export GOPATH="${HOME}/go"
-  # microsoft/azure-skills の telemetry hook は sandbox 内で npx を間接起動し、
-  # Node developer-tool grant を受けられないため、上流修正まで telemetry を止める。
+  # このリポジトリでは Azure skills の利用状況 telemetry を使わない。
   export AZURE_MCP_COLLECT_TELEMETRY=false
 
   # Prepend a user-local tool directory to PATH only if it exists and is not

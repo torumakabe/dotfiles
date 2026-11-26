@@ -23,11 +23,13 @@ Git 2.54 の設定ベースフックは `$GIT_DIR/hooks` と別の層で加算�
 
 ADR-018 の `init.templateDir` は、Git 2.54 より前の配布経路として残す。テンプレート側の hook は、同じ Git が有効な `dotfiles-gitleaks` を列挙した場合だけ走査を省略する。判定できない場合はテンプレート側も実行し、未走査ではなく重複走査へ倒す。
 
-`dotfiles` は macOS と Linux で Git 2.54 以降の導入と解決順を管理し、Windows では Git for Windows 2.54 以降を前提とする。利用者が選んだ Git を壊さないため、`/usr/local` の実体置換は Codespaces または Dev Container の既知の通常ファイルが古い Git を隠す場合に限り、既存の symlink と一般の Linux 環境には介入しない。
+`dotfiles` は macOS と Linux で Git 2.54 以降を導入し、macOS では login shell の解決順も管理する。Windows では Git for Windows 2.54 以降を前提とする。
+
+Codespaces の既定の `universal` イメージは、[公開構成表](https://github.com/devcontainers/images/blob/ee2bb7abb3ec6772d0289eca8dcaaa6762a23f8c/src/universal/history/6.1.11.md)で Git 2.56.0 を提供している。Dev Container の Git は利用するイメージによって異なるため、PATH で選ばれる Git 2.54 以降を利用条件とし、イメージ内の Git は自動で張り替えない。独自のイメージを使う Codespaces にも同じ条件を適用する。前提条件は [`README.md`](../../README.md#dev-container-ローカル) を参照する。
 
 `chezmoi apply` は、実際に解決された Git の hook 一覧を確認する。設定ベースフックが無効なら原因別の警告を出すが、apply は失敗させず、出所を特定できない Git を自動変更しない。
 
-構成と実装の対応は [`architecture.md`](../architecture.md#git-pre-commit-フック)、操作は [`operations.md`](../operations.md#git-pre-commit-フック)、復旧は [`troubleshooting.md`](../troubleshooting.md#設定ベースフックが全リポジトリで動いていない) を参照する。回帰条件は [`test_gitleaks_hook_sync.py`](../../tests/test_gitleaks_hook_sync.py) と [`test_git_shadow_resolution.py`](../../tests/test_git_shadow_resolution.py) が固定する。
+構成と実装の対応は [`architecture.md`](../architecture.md#git-pre-commit-フック)、操作は [`operations.md`](../operations.md#git-pre-commit-フック)、復旧は [`troubleshooting.md`](../troubleshooting.md#設定ベースフックが全リポジトリで動いていない) を参照する。回帰条件は [`test_gitleaks_hook_sync.py`](../../tests/test_gitleaks_hook_sync.py) と [`test_platform_parity.py`](../../tests/test_platform_parity.py) が固定する。
 
 ## Consequences
 

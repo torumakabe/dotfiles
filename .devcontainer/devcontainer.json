@@ -2,11 +2,9 @@
   // dotfiles は VS Code のユーザ設定から適用する。手順は README を参照する。
   "name": "dotfiles",
 
-  // ADR-020 の Git 張り替えを検証するため、git feature は追加しない。
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
 
   "features": {
-    // Git の張り替えが git-lfs を変更しないことを検証する。
     "ghcr.io/devcontainers/features/git-lfs:1": {},
     // PowerShell 依存テストを CI と同じ範囲で実行する。
     "ghcr.io/devcontainers/features/powershell:1": {}

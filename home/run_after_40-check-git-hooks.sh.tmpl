@@ -66,27 +66,10 @@ else
   apt_git_version="$(/usr/bin/git --version 2>/dev/null | awk '{print $3}' || true)"
   if [ -n "${resolved_git}" ] && [ "${resolved_git}" != "/usr/bin/git" ] \
     && supports_config_hooks "${apt_git_version}"; then
-{{- if or .codespaces .devcontainer }}
-    # ベースイメージがソースビルドした git を /usr/local へ入れた場合に限り、
-    # 張り替えるコマンドまで示す。symlink であれば利用者か過去の張り替えが
-    # 作ったものなので、出所を判定できたことにはならない。
-    if [ "${resolved_git}" = "/usr/local/bin/git" ] && [ ! -L /usr/local/bin/git ]; then
-      remediation="  Enabling it requires git 2.54 or later. /usr/bin/git is ${apt_git_version},
-  but /usr/local/bin/git shadows it, so installing git through apt will not
-  change which binary runs. This container image builds git from source there.
-  Relink it:
-    sudo ln -sfn /usr/bin/git /usr/local/bin/git"
-    else
-{{- end }}
-    # 出所を判定できないため、張り替えは案内しない。mise の shim や利用者が
-    # 置いた git を壊し得るためである。
     remediation="  Enabling it requires git 2.54 or later. /usr/bin/git is ${apt_git_version},
   but PATH resolves git to ${resolved_git}, so installing git through apt will
   not change which binary runs. Check PATH and whichever tool manager provides
   ${resolved_git}."
-{{- if or .codespaces .devcontainer }}
-    fi
-{{- end }}
   fi
 fi
 {{ end -}}

@@ -44,12 +44,16 @@ GitHub Copilot local sandbox の初回値、設定保持、確認手順は [`doc
 
 GitHub の dotfiles リポジトリに登録すると自動適用される。
 
+GitHub の既定の `universal` イメージは、設定ベースの gitleaks フックに必要な Git を提供する。独自のイメージを指定する場合は、[Dev Container の前提条件](#dev-container-ローカル)を満たすこと。
+
 - `corpUser` / `windowsUser` の入力は省略される
 - 1Password SSH エージェントが使えないため、コミット署名は自動で無効化する
 
 参考: [Codespaces docs](https://docs.github.com/en/codespaces/setting-your-user-preferences/personalizing-github-codespaces-for-your-account#dotfiles)
 
 ### Dev Container (ローカル)
+
+利用するイメージは、PATH で選ばれる `git` が 2.54 以上であることを前提とする（[ADR-020](docs/adr/020-git-hooks-via-config.md)）。`git --version` で確認し、古い場合はイメージまたは Git feature を更新する。dotfiles はイメージ内の Git を張り替えない。
 
 VS Code の **Dotfiles** 設定で次を指定する。
 
