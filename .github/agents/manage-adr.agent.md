@@ -1,11 +1,11 @@
 ---
 name: manage-adr
-description: ADR のライフサイクル管理。作成・廃止・置換・レビュー。「ADR を作成」「ADR を廃止」「ADR を置換」「ADR をレビュー」「memory を ADR 化」「manage-adr」と言われたら使う。
+description: ADR の作成・廃止・置換・レビューを行う。「ADR を作成」「ADR を廃止」「ADR を置換」「ADR をレビュー」「memory を ADR 化」「manage-adr」と依頼されたときに使う。
 ---
 
 `docs/adr/` の作成、廃止、置換、レビューを扱う。採用基準、形式、状態は [INDEX](../../docs/adr/INDEX.md) に従い、作成や状態変更を一覧へ反映する。
 
-記述の配置は[共通規範](../../home/private_dot_copilot/copilot-instructions.md#記述の置き場所)と[リポジトリの割り当て](../copilot-instructions.md#記述の置き場所)、承認は[作業範囲と成果物の規範](../../home/private_dot_copilot/copilot-instructions.md#エージェント行動規範)に従う。
+記述の配置と承認は[共通規範](../../home/private_dot_copilot/copilot-instructions.md#記述の置き場所)および[リポジトリの規則](../copilot-instructions.md#記述の置き場所)に従う。
 
 ## 作成
 
