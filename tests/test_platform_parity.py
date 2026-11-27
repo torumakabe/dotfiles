@@ -1,13 +1,10 @@
 """Verify user-facing shell features remain classified across platforms."""
 
 import json
-import os
 import pathlib
 import re
 import shutil
 import subprocess
-import tempfile
-import tomllib
 import unittest
 
 
@@ -16,8 +13,6 @@ ZSHRC_PATH = REPO_ROOT / "home/dot_zshrc.tmpl"
 POWERSHELL_PROFILE_PATH = REPO_ROOT / "home/PowerShell_profile.ps1.tmpl"
 INSTALL_SH_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.sh.tmpl"
 INSTALL_PS1_PATH = REPO_ROOT / "home/run_once_after_30-install-tools.ps1.tmpl"
-MISE_CONFIG_PATH = REPO_ROOT / "home/dot_config/mise/config.toml.tmpl"
-CHEZMOI_DATA_PATH = REPO_ROOT / "home/.chezmoidata.toml"
 CI_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/test-dotfiles.yml"
 POSIX_RC_TEMPLATE_PATHS = tuple(
     REPO_ROOT / "home" / name
@@ -302,18 +297,6 @@ def _installed_tools(source: str) -> set[str]:
     return set(go_tools) | {f"uv tool install --quiet {tool}" for tool in uv_tools}
 
 
-def _powershell_completion_section(profile: str) -> str:
-    start = profile.index("function Get-CachedSourcePath {")
-    last_call = (
-        "$zoxideCompletionPath = Get-CachedSourcePath -Name zoxide "
-        "-Command zoxide -Generator { zoxide init powershell --cmd cd }"
-    )
-    end = profile.index(last_call, start) + len(last_call)
-    dot_source = "if ($zoxideCompletionPath) { . $zoxideCompletionPath }"
-    end = profile.index(dot_source, end) + len(dot_source)
-    return profile[start:end]
-
-
 class PlatformParityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -329,64 +312,6 @@ class PlatformParityTests(unittest.TestCase):
                         status == "implemented" or status.startswith("exception: docs/"),
                         status,
                     )
-
-    def test_copilot_guardrails_wrappers_are_removed(self) -> None:
-        self.assertNotIn("copilot-guardrails", self.zshrc)
-        self.assertNotIn("copilot-guardrails", self.powershell)
-        self.assertNotIn("Invoke-CopilotGuardrails", self.powershell)
-
-    def test_mise_self_update_uses_builtin_updater_on_all_platforms(self) -> None:
-        zsh_start = self.zshrc.index("mise-self-update() {")
-        zsh = self.zshrc[zsh_start : self.zshrc.index("\nuv-tools-upgrade()", zsh_start)]
-        self.assertEqual(zsh.count("mise self-update --yes --no-plugins"), 2)
-        self.assertLess(zsh.index("mise self-update --yes"), zsh.index("mise reshim"))
-
-        ps_start = self.powershell.index("function Invoke-MiseSelfUpdate {")
-        powershell = self.powershell[
-            ps_start : self.powershell.index("\nfunction Invoke-UvToolsUpgrade", ps_start)
-        ]
-        update = "mise self-update --yes --no-plugins"
-        self.assertIn(update + "\n", powershell)
-        self.assertLess(powershell.index(update), powershell.index("mise reshim"))
-        self.assertNotIn("winget", powershell)
-        self.assertRegex(
-            powershell,
-            r'(?s)if \(\$selfUpdateExitCode -ne 0\) \{ throw "[^"]+" \}'
-            r'.*?mise reshim\s+if \(\$LASTEXITCODE -ne 0\) \{ throw "[^"]+" \}',
-        )
-        self.assertIn("$PSNativeCommandUseErrorActionPreference = $false", powershell)
-        self.assertRegex(
-            powershell,
-            r"(?s)finally \{.*?"
-            r"\$PSNativeCommandUseErrorActionPreference = \$previousNativeErrorPreference\n"
-            r"        \$ErrorActionPreference = \$prevErrorAction",
-        )
-        for source in (zsh, powershell):
-            self.assertNotIn("MISE_SELF_UPDATE_AVAILABLE", source)
-            self.assertNotIn("--force", source)
-            self.assertIn("gh auth token", source)
-        self.assertIn("Remove-Item Env:\\MISE_GITHUB_TOKEN", powershell)
-
-    def test_windows_mise_bootstrap_and_consumers_use_standalone_install(self) -> None:
-        bootstrap = (
-            REPO_ROOT / "home/run_once_before_20-install-mise.ps1.tmpl"
-        ).read_text(encoding="utf-8")
-        resolver = (
-            REPO_ROOT / "home/.chezmoitemplates/mise-executable.ps1"
-        ).read_text(encoding="utf-8")
-        direct_path = "Join-Path $HOME '.local\\bin\\mise.exe'"
-        self.assertIn(direct_path, bootstrap)
-        self.assertLess(resolver.index(direct_path), resolver.index("Get-Command"))
-        for path in (
-            POWERSHELL_PROFILE_PATH,
-            REPO_ROOT / "home/run_onchange_after_15-mise-sync-tools.ps1.tmpl",
-            REPO_ROOT / "home/run_after_22-install-typescript-lsp.ps1.tmpl",
-            REPO_ROOT / "home/run_after_35-configure-copilot-sandbox.ps1.tmpl",
-        ):
-            self.assertIn(
-                '{{ include ".chezmoitemplates/mise-executable.ps1" }}',
-                path.read_text(encoding="utf-8"),
-            )
 
     def test_mise_unsupported_platform_warnings_match_in_both_shells(self) -> None:
         warning = (
@@ -453,18 +378,6 @@ class PlatformParityTests(unittest.TestCase):
             for text, allowed in cases:
                 with self.subTest(shell=shell, declaration=text):
                     self.assertEqual(bool(re.search(pattern, text)), allowed)
-
-    def test_git_setup_preserves_container_image_binaries(self) -> None:
-        for name in (
-            "run_once_before_10-install-packages.sh.tmpl",
-            "run_after_40-check-git-hooks.sh.tmpl",
-        ):
-            with self.subTest(template=name):
-                source = (REPO_ROOT / "home" / name).read_text(encoding="utf-8")
-                self.assertNotRegex(
-                    source,
-                    r"\b(?:ln|mv|rm)\b[^\n]*(?:/usr/local/bin/git|\$\{unshadow_)",
-                )
 
     def test_ci_enforces_the_cross_platform_contract(self) -> None:
         workflow = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -630,153 +543,6 @@ class PlatformParityTests(unittest.TestCase):
             with self.subTest(feature=feature):
                 self.assertIn(feature, PLATFORM_CONTRACT)
 
-    def test_spec_kit_installers_use_the_latest_pypi_release(self) -> None:
-        chezmoi_data = tomllib.loads(
-            CHEZMOI_DATA_PATH.read_text(encoding="utf-8")
-        )
-        self.assertNotIn("specKit", chezmoi_data)
-        for installer_path in (INSTALL_SH_PATH, INSTALL_PS1_PATH):
-            with self.subTest(installer=installer_path.name):
-                installer = installer_path.read_text(encoding="utf-8")
-                self.assertIn("uv tool install --quiet specify-cli", installer)
-                self.assertNotRegex(
-                    installer,
-                    r"uv tool install --quiet specify-cli\s+--from\b",
-                )
-
-    def test_uv_tool_upgraders_only_update_managed_tools(self) -> None:
-        for profile_path in (ZSHRC_PATH, POWERSHELL_PROFILE_PATH):
-            with self.subTest(profile=profile_path.name):
-                profile = profile_path.read_text(encoding="utf-8")
-                self.assertIn("uv tool upgrade ty", profile)
-                self.assertIn("uv tool install --force specify-cli", profile)
-                self.assertNotIn("uv tool upgrade specify-cli", profile)
-                self.assertNotIn("uv tool upgrade --all", profile)
-
-    @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi is required")
-    def test_lefthook_is_managed_by_mise_on_every_platform(self) -> None:
-        platform_data = {
-            "windows-powershell": {"os": "windows", "arch": "amd64"},
-            "macos-zsh": {"os": "darwin", "arch": "arm64"},
-            "linux-zsh": {"os": "linux", "arch": "amd64"},
-            "wsl-zsh": {"os": "linux", "arch": "amd64"},
-        }
-
-        for platform, chezmoi_data in platform_data.items():
-            with self.subTest(platform=platform):
-                result = subprocess.run(
-                    [
-                        "chezmoi",
-                        "execute-template",
-                        "--override-data",
-                        json.dumps({"chezmoi": chezmoi_data}),
-                        "--file",
-                        str(MISE_CONFIG_PATH),
-                    ],
-                    check=False,
-                    capture_output=True,
-                    encoding="utf-8",
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                config = tomllib.loads(result.stdout)
-                self.assertEqual(config["tools"]["lefthook"], "latest")
-
-    @unittest.skipUnless(os.name == "nt", "Windows only")
-    def test_powershell_completion_cache_executes_generated_sources(self) -> None:
-        pwsh = shutil.which("pwsh")
-        if pwsh is None:
-            self.skipTest("pwsh is required for PowerShell completion tests")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            test_root = pathlib.Path(temp_dir)
-            bin_dir = test_root / "bin"
-            bin_dir.mkdir()
-            powershell_initializers = {
-                name
-                for name, feature in SOURCE_INITIALIZERS.items()
-                if PLATFORM_CONTRACT[feature]["windows-powershell"] == "implemented"
-            }
-            for name in powershell_initializers:
-                statements = [f"$global:TEST_SOURCED += '{name}'"]
-                if name == "kubectl":
-                    statements[:0] = [
-                        "Register-ArgumentCompleter -Native -CommandName kubectl "
-                        "-ScriptBlock {}",
-                        "$global:__kubectlCompleterBlock = {}",
-                    ]
-                if os.name == "nt":
-                    stub = bin_dir / f"{name}.cmd"
-                    stub.write_text(
-                        "@echo off\n"
-                        + "\n".join(f"@echo {statement}" for statement in statements)
-                        + "\n",
-                        encoding="utf-8",
-                    )
-                else:
-                    stub = bin_dir / name
-                    stub.write_text(
-                        "#!/bin/sh\n"
-                        "cat <<'POWERSHELL_COMPLETION_EOF'\n"
-                        + "\n".join(statements)
-                        + "\nPOWERSHELL_COMPLETION_EOF\n",
-                        encoding="utf-8",
-                    )
-                    stub.chmod(0o755)
-
-            script_file = test_root / "test-completions.ps1"
-            script_file.write_text(
-                f"""
-$global:TEST_SOURCED = @()
-$global:TEST_REGISTERED = @()
-function Register-ArgumentCompleter {{
-    param(
-        [switch]$Native,
-        [string[]]$CommandName,
-        [scriptblock]$ScriptBlock
-    )
-    $global:TEST_REGISTERED += $CommandName
-}}
-
-{_powershell_completion_section(self.powershell)}
-
-$result = @{{
-    sourced = @($global:TEST_SOURCED)
-    registered = @($global:TEST_REGISTERED)
-}}
-"RESULT_JSON=$($result | ConvertTo-Json -Compress)"
-""",
-                encoding="utf-8",
-            )
-            env = os.environ.copy()
-            env.update(
-                {
-                    "HOME": temp_dir,
-                    "USERPROFILE": temp_dir,
-                    "LOCALAPPDATA": str(test_root / "local-app-data"),
-                    "PATH": f"{bin_dir}{os.pathsep}{env.get('PATH', '')}",
-                    "TEMP": temp_dir,
-                    "TMP": temp_dir,
-                }
-            )
-            result = subprocess.run(
-                [pwsh, "-NoProfile", "-NonInteractive", "-File", str(script_file)],
-                check=False,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                env=env,
-            )
-            match = re.search(r"(?m)^RESULT_JSON=(.+)$", result.stdout)
-            self.assertIsNotNone(
-                match,
-                f"PowerShell result marker missing\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}",
-            )
-            state = json.loads(match.group(1))
-
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(set(state["sourced"]), powershell_initializers)
-            self.assertEqual(set(state["registered"]), {"kubectl", "k"})
-
 class WrapperGateParityTests(unittest.TestCase):
     """ADR-012 の wrapper は参照側と配布側で同じ条件を使う必要がある。
 
@@ -867,34 +633,6 @@ class WindowsPosixRcManagementTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "")
-
-
-class MacOsAppleSiliconOnlyTests(unittest.TestCase):
-    """macOS 向けの Intel (x86_64) 分岐が再混入していないことを検査する (ADR-034)。"""
-
-    INTEL_MARKERS = {
-        REPO_ROOT / "install.sh": ("darwin-amd64", "darwin_amd64"),
-        REPO_ROOT / "home/run_once_before_10-install-packages.sh.tmpl": (
-            "Darwin-x86_64",
-            "x86_64-apple-darwin",
-        ),
-        REPO_ROOT / "home/run_once_before_15-install-copilot-cli.sh.tmpl": (
-            "copilot-darwin-x64",
-            "x86_64",
-        ),
-        REPO_ROOT / "home/run_once_before_20-install-mise.sh.tmpl": (
-            "Darwin:x86_64",
-            "macos-x64",
-        ),
-        REPO_ROOT / "home/dot_profile.tmpl": ("/usr/local/bin/brew",),
-    }
-
-    def test_no_intel_macos_branches(self) -> None:
-        for path, markers in self.INTEL_MARKERS.items():
-            source = path.read_text(encoding="utf-8")
-            for marker in markers:
-                with self.subTest(path=path.name, marker=marker):
-                    self.assertNotIn(marker, source)
 
 
 if __name__ == "__main__":

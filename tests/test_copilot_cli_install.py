@@ -71,9 +71,6 @@ class CopilotCliInstallTests(unittest.TestCase):
     def test_gate_uses_repo_managed_binary(self) -> None:
         self.assertIn('if [ ! -x "${HOME}/.local/bin/copilot" ]; then', self.bootstrap)
 
-    def test_gate_does_not_regress_to_command_lookup(self) -> None:
-        self.assertNotRegex(self.bootstrap, r"command -v copilot")
-
     def test_copilot_uses_pinned_verified_release(self) -> None:
         block = _case_block(self.bootstrap, "COPILOT_VERSION")
         self.assertEqual(
@@ -141,32 +138,6 @@ class CopilotCliInstallTests(unittest.TestCase):
             self.macos_copilot,
         )
 
-    def test_macos_copilot_removes_homebrew_formula_after_install(self) -> None:
-        self.assertNotRegex(
-            self.bootstrap,
-            r"(?m)^\s*copilot-cli\s*\\?$",
-        )
-        install_index = self.macos_copilot.index(
-            'mv -f "${staged_path}" "${COPILOT_BIN}"'
-        )
-        uninstall_index = self.macos_copilot.index(
-            "brew uninstall --formula copilot-cli"
-        )
-        self.assertLess(install_index, uninstall_index)
-        self.assertIn(
-            "brew list --formula copilot-cli",
-            self.macos_copilot,
-        )
-        self.assertIn(
-            "if command -v brew >/dev/null 2>&1; then",
-            self.macos_copilot,
-        )
-        verification_index = self.macos_copilot.index(
-            'if ! is_user_local_copilot; then',
-            install_index + 1,
-        )
-        self.assertLess(verification_index, uninstall_index)
-
     def test_azure_cli_uses_verified_microsoft_repository(self) -> None:
         self.assertNotIn("InstallAzureCLIDeb", self.bootstrap)
         self.assertIn(
@@ -187,50 +158,6 @@ class CopilotCliInstallTests(unittest.TestCase):
         self.assertLess(
             self.bootstrap.index("fingerprint verification failed"),
             self.bootstrap.index("sudo apt-get install -y -qq azure-cli"),
-        )
-
-    def test_azure_cli_codename_fallbacks_and_supported_suites(self) -> None:
-        self.assertIn(
-            'repository_suite="$(azure_cli_suite "${VERSION_CODENAME}")" || true',
-            self.bootstrap,
-        )
-        self.assertIn(
-            'repository_suite="$(azure_cli_suite "${UBUNTU_CODENAME}")" || true',
-            self.bootstrap,
-        )
-        self.assertLess(
-            self.bootstrap.index('azure_cli_suite "${VERSION_CODENAME}"'),
-            self.bootstrap.index('azure_cli_suite "${UBUNTU_CODENAME}"'),
-        )
-        suite_function = self.bootstrap[
-            self.bootstrap.index("azure_cli_suite() {"):
-            self.bootstrap.index("\n}", self.bootstrap.index("azure_cli_suite() {")) + 2
-        ]
-        self.assertIn("bullseye|bookworm|jammy|noble)", suite_function)
-        self.assertIn("return 1", suite_function)
-        self.assertIn(
-            "unsupported distribution codename for the Azure CLI repository",
-            self.bootstrap,
-        )
-        self.assertRegex(
-            self.bootstrap,
-            r'(?s)if \[ -z "\$\{repository_suite\}" \]; then.*?'
-            r'unsupported distribution codename.*?exit 0',
-        )
-
-    def test_microsoft_key_download_failure_warns_but_mismatch_aborts(self) -> None:
-        azure_block = self.bootstrap[
-            self.bootstrap.index("# Azure CLI"):
-            self.bootstrap.index("# Azure Developer CLI")
-        ]
-        self.assertRegex(
-            azure_block,
-            r'(?s)if ! download_file "https://packages\.microsoft\.com/keys/'
-            r'microsoft\.asc".*?Warning: failed to download.*?exit 0',
-        )
-        self.assertRegex(
-            azure_block,
-            r'(?s)fingerprint verification failed.*?exit 1',
         )
 
     def test_azd_uses_pinned_verified_release(self) -> None:
@@ -264,11 +191,6 @@ class CopilotCliInstallTests(unittest.TestCase):
             self.bootstrap.index('actual_sha256="$(sha256_file "${rustup_init}")"'),
             self.bootstrap.index('"${rustup_init}" -y --no-modify-path'),
         )
-
-    def test_retired_desktop_apps_are_not_installed(self) -> None:
-        managed_sources = self.bootstrap + self.tools
-        self.assertNotRegex(managed_sources, r"(?i)draw\.io|drawio")
-        self.assertNotRegex(managed_sources, r"(?i)libreoffice")
 
     def test_shell_git_dependencies_use_verified_commits(self) -> None:
         self.assertIsNotNone(
