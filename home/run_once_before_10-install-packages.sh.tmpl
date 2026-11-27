@@ -99,11 +99,11 @@ if [ ! -x "${HOME}/.local/bin/copilot" ]; then
   case "$(dpkg --print-architecture)" in
     amd64)
       copilot_archive="copilot-linux-x64.tar.gz"
-      expected_sha256="dfe7e59acf04f0b7f59b024ea9db101a9246503e9bf7152eb668fbb2a469b151"
+      expected_sha256="ffea833980a9767a18aff7fd8459085a044266c26ca6a9edafe59cdcff718c79"
       ;;
     arm64)
       copilot_archive="copilot-linux-arm64.tar.gz"
-      expected_sha256="491d18303505935675dc20987ef0c5f3ae899f81e66c53d567ad97a8b03e504e"
+      expected_sha256="ba3207afd858a93b63c5ccd83c53f43fdb20fc00fd43260a532fb14b5f8d0776"
       ;;
     *)
       echo "error: unsupported architecture for GitHub Copilot CLI: $(dpkg --print-architecture)" >&2
@@ -221,13 +221,13 @@ fi
 # github: バックエンドはバイナリ名を正規化しないため、macOS (brew) / Windows (winget) と同様に
 # mise 外で管理する。更新は azd update で行う
 if ! command -v azd >/dev/null 2>&1; then
-  AZD_VERSION="1.38.0"
+  AZD_VERSION="1.40.0"
   case "$(dpkg --print-architecture)" in
     amd64)
-      expected_sha256="d30a3bb8a85fc7009ba098392fcee4c62f3a7ef1dc2043c056931325521e9439"
+      expected_sha256="c8d682d0855f093f06d568e3fab4cb6ceb3158fb10cb5c7812b13ba7c91e9776"
       ;;
     arm64)
-      expected_sha256="3e922f56d625a9d56661cd0d3e5d9655c1a648d0a6b7da046c499feb6e5a34bf"
+      expected_sha256="e470da3794bac21f081731de4054139416eb7027569b77a962438bdac55005bd"
       ;;
     *)
       echo "error: unsupported architecture for Azure Developer CLI: $(dpkg --print-architecture)" >&2

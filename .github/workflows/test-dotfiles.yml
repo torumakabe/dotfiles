@@ -11,6 +11,7 @@ on:
       - '.github/workflows/test-dotfiles.yml'
       - 'install.sh'
       - 'README.md'
+      - '.gitattributes'
   push:
     branches: [main]
     paths:
@@ -23,6 +24,7 @@ on:
       - '.github/workflows/test-dotfiles.yml'
       - 'install.sh'
       - 'README.md'
+      - '.gitattributes'
   schedule:
     # Weekly Monday 00:00 UTC
     - cron: '0 0 * * 1'
@@ -70,7 +72,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     env:
-      CHEZMOI_WINDOWS_AMD64_SHA256: 208b393f9ad266fc10aab514a8adf87ac4dc5bdd968a54b7eb5b2764ca41eda4
+      CHEZMOI_WINDOWS_AMD64_SHA256: 6b3a0480d0d31cc72a9ef676ae44bb6a5de1222c7bca11db8799a59e9df0e78a
     steps:
       - uses: actions/checkout@v6
 

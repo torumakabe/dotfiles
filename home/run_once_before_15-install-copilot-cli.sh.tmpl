@@ -18,7 +18,7 @@ is_user_local_copilot() {
 case "$(uname -m)" in
   arm64)
     copilot_archive="copilot-darwin-arm64.tar.gz"
-    expected_sha256="4a4a6aa624dceb76a23e1a53fb5f64e87a0bb5a2161a5017e0edf78d7082ce68"
+    expected_sha256="acaa227712860978d8a73a7a64395f64dba2c77fcab2304fa21a995f12355584"
     ;;
   *)
     echo "error: unsupported architecture for GitHub Copilot CLI: $(uname -m)" >&2

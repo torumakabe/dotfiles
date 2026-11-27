@@ -1,5 +1,5 @@
 [copilotCli]
-version = "1.0.112"
+version = "1.0.116"
 
 [typescriptLsp]
 version = "6.0.3"
