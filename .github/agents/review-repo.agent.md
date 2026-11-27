@@ -1,6 +1,6 @@
 ---
 name: review-repo
-description: リポジトリの整頓。instructions、agents、README、docs、install.sh の鮮度と規模、記述の置き場所、ADR/memories の健全性、git 追跡、chezmoi 規約、mise 整合性、hooks と CI を確認する。「リポジトリを点検」「整頓」「hygiene」「文書の陳腐化を確認」「文書の肥大化を確認」「priming をレビュー」「instructions を見直して」「review-repo」と言われたら使う。
+description: リポジトリの指示、文書、ADR、chezmoi・mise の設定、git 追跡、テスト・CI を根拠に基づいて点検する。全体の点検や「リポジトリを点検」「指示を見直して」「文書の肥大化を確認」「hygiene」「priming」のレビューに使う。
 ---
 
 リポジトリを点検し、根拠のある問題と修正案を報告する。編集や保存の承認は[作業範囲と成果物の規範](../../home/private_dot_copilot/copilot-instructions.md#エージェント行動規範)に従う。
@@ -35,9 +35,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 運用中の URL、pin、checksum と、`.github/copilot-instructions.md` の「プラットフォーム制約」「ワークアラウンド」を公式情報に照合する。対象指定がある場合は関連する項目を扱う。
 
 - 固定版のリリース、asset、checksum、URL の到達先を確認し、最新安定版までの差分、Security Advisories、根拠となる上流 issue から、セキュリティ、互換性、利用機能、更新方針への影響を調べる
-- `home/run_once_after_10-setup-shell.sh.tmpl` を正本として、Oh My Zsh の固定 commit の存在と公式 default branch との差分を確認する
-- 同テンプレートの zsh-completions は lightweight tag と annotated tag を commit まで解決し、`ZSH_COMPLETIONS_TAG` と `ZSH_COMPLETIONS_COMMIT` の不一致を報告する。tag は最新の draft でも prerelease でもない release と比較する
-- 上記二つの pin は、新版の存在だけなら外部情報の更新候補とし、自動更新しない
+- Oh My Zsh と zsh-completions の pin は [`operations.md`](../../docs/operations.md#bootstrap--shell-pin-の更新) に従って公式情報と照合する。新版の存在だけなら更新候補として報告し、自動更新しない
 - `gh-stack` の skill と CLI extension は [gh-stack の更新](../../docs/operations.md#gh-stack-の更新)の候補確認手順を使い、導入版と更新候補を分けて確認する。CLI extension 全般へ対象を広げない
 - 回避策の適用範囲と撤去条件を現行環境に照合し、条件が満たされていれば実装、テスト、文書を含めて撤去を提案する
 
@@ -51,7 +49,7 @@ description: リポジトリの整頓。instructions、agents、README、docs、
 ## mise とプラットフォーム契約
 
 - `home/dot_config/mise/config.toml.tmpl`、`home/run_once_before_10-install-packages.sh.tmpl`、`home/run_once_before_15-install-copilot-cli.sh.tmpl` の重複と欠落、ADR-033 の `azd` と GitHub Copilot CLI の管理範囲を確認する
-- lockfile 操作と backend 移行は[リポジトリの mise 操作規則](../copilot-instructions.md#mise-操作のトラップ)に照合する。任意の実機検査では `mise ls` の Source が空の孤児ツールと余剰版も確認する
+- lockfile と backend の操作は[リポジトリの mise 操作規則](../copilot-instructions.md#mise-操作のトラップ)に照合する。実機を確認できる場合は、`mise ls` の Source が空の孤児ツールと余剰版も調べる
 - 公開関数、alias、補完、ツール導入を[プラットフォーム機能契約](../copilot-instructions.md#プラットフォーム機能契約)、`tests/test_platform_parity.py`、`.github/workflows/test-dotfiles.yml` と照合する。未分類の機能、理由と範囲のない例外、片方の shell だけの検査を見落とさない
 
 ## テストと CI

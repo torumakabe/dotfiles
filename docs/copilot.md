@@ -73,7 +73,7 @@ gh skill install <owner>/<repo> <skill-name> --agent github-copilot --scope user
 
 `personal-skills@torumakabe-agent-plugins` は `agentfinder`、`japanese-technical-writing`、`lsp-setup` を提供する。利用時はスキル名を指定する。`agentfinder` が返した候補は、ユーザーが明示的に選ぶまで自動インストールしない。
 
-`gh-stack` は Stacked PR の設計と `gh stack` の非対話操作を GitHub Copilot に教える公式 skill である。セットアップスクリプトは、公式 skill と対応する GitHub CLI extension が未導入の場合だけ `github/gh-stack` から取得する。提案条件は[配布用カスタム指示](../home/private_dot_copilot/copilot-instructions.md#エージェント行動規範)、操作方法は公式 skill を参照する。管理境界は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
+`gh-stack` の公式 skill と GitHub CLI extension は、未導入の場合にセットアップスクリプトが `github/gh-stack` から導入する。管理方針は [ADR-024](adr/024-gh-stack-distribution-and-updates.md)、更新手順は [operations.md](operations.md#gh-stack-の更新) を参照する。
 
 ## GitHub Copilot フック
 

@@ -25,35 +25,20 @@
 
 ## テスト対象と実行環境
 
-- このリポジトリは開発環境の構築と管理を目的とする。GitHub Copilot CLI、GitHub Copilot app など、このリポジトリが管理するツールや隔離環境の内部から、環境構築、更新、適用処理を実行することは想定しない。テストとレビューでは、管理対象内から管理処理を実行できることを要件にしない
-- 通常の単体テストは、実行環境に依存しない純粋ロジック、静的な契約、小さく完全に隔離した入出力を対象とする
-- 環境変数、OS、filesystem、process、package manager、導入済みコマンド、sandbox backend、コンテナ、ユーザープロファイルに依存する動作は、通常の単体テストではなく対象環境で確認する
-- 既存の環境依存テストは fixture、fake、shim を増やして維持せず、削除または静的検査・純粋ロジックへ置き換える。subprocess のテストは利用者向け契約に必要な最小限に絞る
-- 動作テストは、そのコードを実際に利用する OS、shell、sandbox backend、コンテナ種別で実行する。別環境にパス変換、仮想 drive、shim、偽の OS 情報を追加して実行結果を再現しない
-- 対象環境を用意できない場合は、テンプレートの分岐、生成物、構文、共有契約の静的検査までに留める。別環境での実行を対象環境の動作確認として扱わず、必要な実機検証を関連文書へ記録する
-- OS API、filesystem、process、package manager に依存しない共有の純粋ロジックは、実行ホストを限定せず単体テストしてよい
-
-今後、次の組み合わせを動作テストとして追加しない:
-
-- Linux、macOS、WSL 上で Windows 用 PowerShell profile、Windows sandbox 同期スクリプト、WinGet/DSC、WindowsApps alias を実行するテスト
-- Windows 上の Git Bash や WSL interop を使い、macOS/Linux/WSL 用の zsh、POSIX shell、bubblewrap 処理を実行するテスト
-- Linux/WSL 上で macOS の Seatbelt、Homebrew 固有処理、macOS 固有パスを実行するテスト、および macOS 上で apt/dpkg、Linux 固有パスを実行するテスト
-- 通常の Linux 上で WSL interop、Codespaces、Dev Container 固有のライフサイクルや sandbox 動作を再現するテスト
-- Windows 以外で ProcessContainer、macOS 以外で Seatbelt、Linux/WSL/コンテナ以外で bubblewrap の実動作を再現するテスト
-
-クロスプラットフォーム契約の確認には、対象外環境での擬似実行ではなく、`tests/test_platform_parity.py` の分類、chezmoi のテンプレート生成結果、構文検査、対象環境でのテストを組み合わせる。
+- このリポジトリは開発環境を構築・管理する。GitHub Copilot CLI や app など管理対象の環境内から管理処理を実行できることは要件にしない
+- 単体テストは純粋ロジック、静的検査、小さく隔離した入出力を対象とする。OS、filesystem、process、package manager、導入済みコマンド、sandbox backend、コンテナ、ユーザープロファイルに依存する動作は、その対象環境で確認する
+- 対象環境を用意できない場合は、テンプレート生成結果や構文などを静的に確認する。別環境での擬似実行を動作確認として扱わず、必要な実機検証を関連文書に記録する
 
 ## chezmoi 操作のトラップ
 
-- `private_` は属性でありターゲット名から除かれる。ソースの `private_mise.lock` はデプロイ先で `mise.lock` になる。文書ではどちらを指すかで表記を使い分ける
+- `private_mise.lock` の `private_` は属性で、ターゲット名から除かれる。ソース名と配置先の `mise.lock` を区別して記す
 - `chezmoi execute-template --init` の `--stdinisatty` は既定 true で、実際の stdin を見ない。非対話経路を検査するテストでは明示的に渡す。詳細は `tests/test_chezmoi_config_template.py` の `ConfigTemplateBehaviourTests` docstring
 
 ## mise 操作のトラップ
 
 - グローバル設定の lockfile を操作する `mise lock` では **`--global`** と **`--platform`** を必ず指定する。理由と対象プラットフォームは [`docs/operations.md`](../docs/operations.md#手動操作の重要ルール) を参照する
-- lockfile を書き戻すのは `mise lock` だけではない。`lockfile = true` のもとで `mise install` が実インストールを行うと、対象ツールのエントリを auto-lock が書き直す。基準集合は `[settings] lockfile_platforms`（`home/dot_config/mise/config.toml.tmpl`）が正本であり、プラットフォームを増減するときはここを変更する。ただし実行中のプラットフォームは設定に関わらず常に加わり、既存エントリは削除されない
-- 同じツールとバージョンを維持したまま backend を変更すると、mise は既存の install path をインストール済みと判定し、新しい backend で再インストールしない場合がある。backend を変更した端末では、`mise install --force <tool>` または `mise uninstall <tool>@<version>` と `mise install <tool>` を一度実行する。バージョンも同時に変更し、新しい install path へ通常の `mise install` が実行される場合、この操作は不要
-- backend 移行はコマンドの終了だけで完了と判断しない。`mise ls <tool>` が `missing` を表示しないこと、`mise which <tool>` が新 backend の実体を返すこと、`<tool> --version` 等の実行確認が成功することを確認する。force install が失敗した場合は `reshim` や auto-install の無効化で回避せず、backend 固有の install path と検証コマンドを調査する
+- `lockfile = true` で `mise install` が実際にインストールすると lockfile も更新される。`[settings] lockfile_platforms` で定義した対象プラットフォームには実行中の環境が常に加わり、既存エントリは削除されない。詳細は [`docs/operations.md`](../docs/operations.md#対象プラットフォームの定義元) を参照する
+- mise の backend を変更した場合は、必要に応じて `mise install --force <tool>` で再導入し、`mise ls`、`mise which`、ツールの実行で確認する。再導入に失敗したら、backend 固有の install path と原因を調べる
 
 ## プラットフォーム制約（定期チェック対象）
 
