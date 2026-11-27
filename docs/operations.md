@@ -314,6 +314,8 @@ macOS の GitHub Copilot CLI 移行は例外とする。公式バイナリを配
 
 `run_once` とコマンド存在確認は、pin の変更を導入済み端末へ適用する更新機構ではない。pin の変更は新規環境の導入内容を決める。導入済み端末では、mise は全環境で `mise-self-update` を実行する。GitHub Copilot CLI は `copilot update`、Azure Developer CLI は `azd update`、rustup 自体は `rustup self update` を明示的に実行する。Microsoft apt リポジトリの鍵や suite を更新した場合は、後述の手順で `run_once` の状態を消して `chezmoi apply` を実行する。
 
+成果物の版を更新した場合は、対応する OS と CPU アーキテクチャの新規環境で導入し、チェックサム検証と導入後のバージョンを確認する。Oh My Zsh の commit を更新した場合は、取得した commit と zsh の起動も確認する。
+
 最低限の確認:
 
 ```bash
