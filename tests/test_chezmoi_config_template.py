@@ -38,44 +38,6 @@ PROMPTED_VARIABLES = ("windowsUser", "corpUser")
 EXPECTED_PS1_INTERPRETER = {"command": "pwsh", "args": ["-NoLogo", "-NoProfile", "-File"]}
 
 
-class ConfigTemplateSourceTests(unittest.TestCase):
-    """Every prompted variable seeds itself from the existing config data."""
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.template = CONFIG_TEMPLATE_PATH.read_text(encoding="utf-8")
-
-    def test_prompted_variables_seed_from_existing_data(self) -> None:
-        for name in PROMPTED_VARIABLES:
-            with self.subTest(variable=name):
-                self.assertIn(f'{{{{- if hasKey . "{name}" -}}}}', self.template)
-                self.assertIn(f"{{{{-   ${name} = .{name} -}}}}", self.template)
-
-    def test_seed_precedes_the_tty_guarded_prompt(self) -> None:
-        """The seed is a fallback, so the prompt has to be able to override it."""
-        for name in PROMPTED_VARIABLES:
-            with self.subTest(variable=name):
-                seed = self.template.find(f'{{{{- if hasKey . "{name}" -}}}}')
-                prompt = self.template.find(f'promptStringOnce . "{name}"')
-                self.assertNotEqual(seed, -1)
-                self.assertNotEqual(prompt, -1)
-                self.assertLess(seed, prompt)
-
-    def test_ps1_interpreter_is_pinned_without_the_profile(self) -> None:
-        """The interpreter is literal TOML, so the source has to carry it verbatim."""
-        args = ", ".join(f'"{arg}"' for arg in EXPECTED_PS1_INTERPRETER["args"])
-        self.assertIn("[interpreters.ps1]", self.template)
-        self.assertIn(f'command = "{EXPECTED_PS1_INTERPRETER["command"]}"', self.template)
-        self.assertIn(f"args = [{args}]", self.template)
-
-    def test_devcontainer_detection_uses_remote_containers(self) -> None:
-        self.assertIn(
-            '$devcontainer := env "REMOTE_CONTAINERS" | not | not',
-            self.template,
-        )
-        self.assertNotIn('stat "/.dockerenv"', self.template)
-
-
 @unittest.skipUnless(shutil.which("chezmoi"), "chezmoi renders the config template")
 class ConfigTemplateBehaviourTests(unittest.TestCase):
     """Render the real template the way ``chezmoi init`` does.

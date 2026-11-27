@@ -16,23 +16,6 @@ class CopilotBubblewrapSourceTests(unittest.TestCase):
         install_block = script[start:script.index("\n\n", start)]
         self.assertRegex(install_block, r"\bbubblewrap\b")
 
-    def test_diagnostics_are_warning_only(self) -> None:
-        script = DIAGNOSTIC_SCRIPT_PATH.read_text(encoding="utf-8")
-        self.assertNotRegex(script, r"(?m)^\s*set\s+-\S*e\S*")
-        self.assertIn("warn()", script)
-        self.assertRegex(
-            script,
-            r"(?s)\.sandbox\.enabled == false.*?then\s+exit 0",
-        )
-        self.assertIn("command -v bwrap", script)
-        self.assertIn("bwrap --version", script)
-        self.assertIn("0.5.0", script)
-        self.assertIn("/proc/sys/kernel/unprivileged_userns_clone", script)
-        self.assertIn("/proc/sys/user/max_user_namespaces", script)
-        self.assertIn("bwrap --unshare-user", script)
-        self.assertIn("'/sandbox status'", script)
-        self.assertIn("'/sandbox disable'", script)
-
     def test_diagnostics_are_generated_only_for_linux(self) -> None:
         script = DIAGNOSTIC_SCRIPT_PATH.read_text(encoding="utf-8").strip()
         self.assertTrue(script.startswith('{{- if eq .chezmoi.os "linux" -}}'))

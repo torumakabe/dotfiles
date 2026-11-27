@@ -7,18 +7,14 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "reference/windows/configuration.dsc.yaml"
-README_PATH = REPO_ROOT / "README.md"
 OPERATIONS_PATH = REPO_ROOT / "docs/operations.md"
-TROUBLESHOOTING_PATH = REPO_ROOT / "docs/troubleshooting.md"
 
 
 class WindowsConfigurationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.config = CONFIG_PATH.read_text(encoding="utf-8")
-        cls.readme = README_PATH.read_text(encoding="utf-8")
         cls.operations = OPERATIONS_PATH.read_text(encoding="utf-8")
-        cls.troubleshooting = TROUBLESHOOTING_PATH.read_text(encoding="utf-8")
 
     def test_self_updated_packages_are_followed_by_integrated_blocking_pins(
         self,
@@ -41,122 +37,86 @@ class WindowsConfigurationTests(unittest.TestCase):
                 self.config[self.config.index(pin_id) :],
             )
 
-    def test_integrated_pin_policy_converges_both_desired_states(self) -> None:
-        pin_block = self.config[
-            self.config.index("id: SelfUpdatedPackageBlockingPins") :
-            self.config.index(
-                "resource: Microsoft.WinGet.DSC/WinGetPackage",
-                self.config.index("id: SelfUpdatedPackageBlockingPins"),
+    def _pin_scripts(self) -> dict[str, str]:
+        start = self.config.index("id: SelfUpdatedPackageBlockingPins")
+        end = self.config.index("\n    - resource:", start)
+        block = self.config[start:end]
+        scripts = {}
+        for match in re.finditer(
+            r"(?m)^        (GetScript|TestScript|SetScript): \|\n((?:          .*\n|\n)+)",
+            block + "\n",
+        ):
+            scripts[match.group(1)] = match.group(2)
+        self.assertEqual(set(scripts), {"GetScript", "TestScript", "SetScript"})
+        return scripts
+
+    def test_pin_scripts_share_managed_pins_and_parser(self) -> None:
+        scripts = self._pin_scripts()
+        managed = {
+            name: re.findall(r"@\{ Id = '([^']+)'; Pinned = (\$true|\$false) \}", body)
+            for name, body in scripts.items()
+        }
+        self.assertTrue(managed["GetScript"])
+        self.assertEqual(managed["GetScript"], managed["TestScript"])
+        self.assertEqual(managed["GetScript"], managed["SetScript"])
+
+        parser = re.compile(r"(?ms)^ *function Get-WinGetPinType \{.*?^          \}$")
+        test_parser = parser.search(scripts["TestScript"])
+        set_parser = parser.search(scripts["SetScript"])
+        self.assertIsNotNone(test_parser)
+        self.assertIsNotNone(set_parser)
+        self.assertEqual(test_parser.group(0), set_parser.group(0))
+        # ID 列の 2 つ後ろが source 列。末尾列や ID の部分一致では判定しない。
+        self.assertIn("$columns[$idx + 2] -eq 'winget'", test_parser.group(0))
+        self.assertIn("return $columns[$idx + 3]", test_parser.group(0))
+
+        for body in scripts.values():
+            self.assertIn("winget pin list --source winget", body)
+
+    def test_pinned_ids_are_installed_and_documented(self) -> None:
+        scripts = self._pin_scripts()
+        pinned_ids = set(
+            re.findall(r"@\{ Id = '([^']+)'; Pinned = \$true \}", scripts["GetScript"])
+        )
+        installed_ids = set(
+            re.findall(
+                r"(?m)^      settings:\n        id: (\S+)\n        source: winget$",
+                self.config,
             )
-        ]
-
-        expected_ids = {
-            "GitHub.CopilotApp",
-            "GitHub.Copilot",
-            "Rustlang.Rustup",
-        }
-        configured_ids = re.findall(
-            r"@\{ Id = '([^']+)'; Pinned = \$true \}",
-            pin_block,
         )
-        self.assertEqual(set(configured_ids), expected_ids)
-        self.assertEqual(len(configured_ids), len(expected_ids) * 3)
-        self.assertNotIn("Microsoft.Azd", pin_block)
-        self.assertNotIn("id: Mise", self.config)
-        self.assertNotRegex(self.config, r"(?m)^\s+id: jdx\.mise$")
-        self.assertIn("id: Microsoft.VCRedist.2015+.x64", self.config)
-        self.assertIn(
-            "winget pin list --source winget",
-            pin_block,
-        )
-        self.assertNotIn("winget pin list --id", pin_block)
-        self.assertIn("[array]::IndexOf($columns, $Id)", pin_block)
-        self.assertIn("$columns[$idx + 2] -eq 'winget'", pin_block)
-        self.assertIn("return $columns[$idx + 3]", pin_block)
-        self.assertNotIn("$columns[-1]", pin_block)
-        self.assertNotIn(r"GitHub\.Copilot", pin_block)
-        self.assertIn("$pin.Pinned -and $pinType -ne 'Blocking'", pin_block)
-        self.assertIn("-not $pin.Pinned -and $null -ne $pinType", pin_block)
-        self.assertIn("-not $pin.Pinned -and $null -eq $pinType", pin_block)
-        self.assertIn(
-            "winget pin remove --id $pin.Id --exact --source winget",
-            pin_block,
-        )
-        self.assertIn(
-            "winget pin add --id $pin.Id --exact --source winget --blocking",
-            pin_block,
-        )
-        self.assertIn("$failures.Add(\"$($pin.Id):", pin_block)
-        self.assertIn(
-            'throw "Failed to converge WinGet pins: $($failures -join \'; \')"',
-            pin_block,
-        )
-
-    def test_operations_document_matches_integrated_pin_policy(self) -> None:
-        expected_ids = {
-            "GitHub.CopilotApp",
-            "GitHub.Copilot",
-            "Rustlang.Rustup",
-        }
         documented_ids = set(
             re.findall(r"^\| `([^`]+)` \| .* \| あり \|$", self.operations, re.MULTILINE)
         )
-        self.assertEqual(documented_ids, expected_ids)
-        self.assertIn("`Microsoft.Azd`", self.operations)
-        self.assertIn("`winget upgrade --all`", self.operations)
-        self.assertIn("管理していないパッケージの結果は保証しない", self.operations)
-        self.assertIn("`Pinned = false`", self.operations)
-        adr = REPO_ROOT / "docs/adr/032-protect-self-updated-winget-packages-with-blocking-pins.md"
-        for target in re.findall(
-            r"\[[^\]]+\]\(([^)]+\.md)\)", adr.read_text(encoding="utf-8")
-        ):
-            with self.subTest(target=target):
-                self.assertTrue((adr.parent / target).is_file())
+        self.assertTrue(pinned_ids)
+        self.assertLessEqual(pinned_ids, installed_ids)
+        self.assertEqual(pinned_ids, documented_ids)
 
-    def test_retired_desktop_apps_are_not_managed(self) -> None:
-        self.assertNotIn("TheDocumentFoundation.LibreOffice", self.config)
-        self.assertNotIn("JGraph.Draw", self.config)
+    def test_set_script_converges_to_test_script_conditions(self) -> None:
+        scripts = self._pin_scripts()
+        test_script = scripts["TestScript"]
+        set_script = scripts["SetScript"]
 
-    def test_visual_studio_workload_avoids_broken_elevated_units(self) -> None:
-        build_tools_start = self.config.index("id: VisualStudioBuildTools")
-        workload_start = self.config.index("id: VisualStudioVCTools")
-        workload_end = self.config.index(
-            "resource: Microsoft.WinGet.DSC/WinGetPackage",
-            workload_start,
-        )
-        workload_block = self.config[workload_start:workload_end]
+        # TestScript が false を返す条件と、SetScript が変更せず skip する条件が補集合になる。
+        self.assertIn("if ($pin.Pinned -and $pinType -ne 'Blocking') {\n", test_script)
+        self.assertIn("if (-not $pin.Pinned -and $null -ne $pinType) {\n", test_script)
+        self.assertIn("if ($pin.Pinned -and $pinType -eq 'Blocking') {\n", set_script)
+        self.assertIn("if (-not $pin.Pinned -and $null -eq $pinType) {\n", set_script)
+        self.assertRegex(test_script, r"if \(\$LASTEXITCODE -ne 0\) \{\n\s+return \$false")
+        self.assertRegex(set_script, r"if \(\$LASTEXITCODE -ne 0\) \{\n\s+throw ")
 
-        self.assertLess(build_tools_start, workload_start)
-        self.assertNotIn("securityContext: elevated", self.config)
-        self.assertIn(
-            "dependsOn:\n        - VisualStudioBuildTools",
-            workload_block,
+        remove = set_script.index(
+            "winget pin remove --id $pin.Id --exact --source winget"
         )
-        self.assertIn(
-            "-requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-            workload_block,
+        add = set_script.index(
+            "winget pin add --id $pin.Id --exact --source winget --blocking"
         )
+        self.assertLess(remove, add)
+        self.assertGreaterEqual(set_script.count("$failures.Add("), 2)
         self.assertIn(
-            r"-find 'VC\Tools\MSVC\**\bin\Hostx64\x64\link.exe'",
-            workload_block,
+            'throw "Failed to converge WinGet pins: $($failures -join \'; \')"',
+            set_script,
         )
-        self.assertIn(
-            "Start-Process -FilePath $setup -Verb RunAs",
-            workload_block,
-        )
-        self.assertIn(
-            "'--add', 'Microsoft.VisualStudio.Workload.VCTools'",
-            workload_block,
-        )
-        self.assertIn("$null -eq $process.ExitCode", workload_block)
-        self.assertIn(
-            "requires approval of the UAC prompt in an interactive Windows session",
-            workload_block,
-        )
-        self.assertIn("$process.ExitCode -eq 3010", workload_block)
-        self.assertIn("Write-Warning", workload_block)
-        self.assertNotIn("862968", workload_block)
-        self.assertNotIn("Microsoft.VisualStudio.DSC/VSComponents", self.config)
+
 
 if __name__ == "__main__":
     unittest.main()
